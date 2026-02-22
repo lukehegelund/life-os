@@ -189,22 +189,47 @@ async function loadNotes(s) {
 }
 
 function noteRow(n) {
+  // Build class options for inline edit
+  const classOpts = `<option value="">— No class —</option>` +
+    allClasses.map(c => `<option value="${c.id}" ${n.class_id == c.id ? 'selected' : ''}>${c.name}</option>`).join('');
+
   return `
-    <div class="note-row-desktop swipe-note-item" data-id="${n.id}">
-      <div data-swipe-inner style="flex:1;min-width:0">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start">
-          <div style="font-size:14px;flex:1">${n.note || '—'}</div>
-          <div style="font-size:12px;color:var(--gray-400);white-space:nowrap;margin-left:8px">${fmtDate(n.date)}</div>
+    <div class="note-row-desktop swipe-note-item" data-id="${n.id}" style="flex-direction:column;align-items:stretch;gap:0">
+      <!-- Main row -->
+      <div style="display:flex;align-items:flex-start;gap:8px">
+        <div data-swipe-inner style="flex:1;min-width:0;cursor:pointer" onclick="toggleNoteEdit(${n.id}, event)">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div style="font-size:14px;flex:1">${n.note || '—'}</div>
+            <div style="font-size:12px;color:var(--gray-400);white-space:nowrap;margin-left:8px">${fmtDate(n.date)}</div>
+          </div>
+          <div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap">
+            ${n.show_in_overview ? '<span class="flag-badge flag-overview">Overview</span>' : ''}
+            ${n.is_todo ? '<span class="flag-badge flag-todo">To-do</span>' : ''}
+            ${n.tell_parent ? '<span class="flag-badge flag-parent">Tell Parent</span>' : ''}
+          </div>
         </div>
-        <div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap">
-          ${n.show_in_overview ? '<span class="flag-badge flag-overview">👁 Overview</span>' : ''}
-          ${n.is_todo ? '<span class="flag-badge flag-todo">✅ To-do</span>' : ''}
-          ${n.tell_parent ? '<span class="flag-badge flag-parent">📞 Parent</span>' : ''}
+        <div style="display:flex;gap:4px;flex-shrink:0;align-self:center">
+          <button onclick="logNote(${n.id}, event)" class="btn btn-sm" style="background:var(--green);color:white;padding:4px 8px;border:none;border-radius:6px;cursor:pointer" title="Log note">✓</button>
+          <button onclick="deleteNote(${n.id}, event)" class="btn btn-sm" style="background:var(--red);color:white;padding:4px 8px;border:none;border-radius:6px;cursor:pointer" title="Delete note">✕</button>
         </div>
       </div>
-      <div style="display:flex;gap:4px;flex-shrink:0;align-self:center">
-        <button onclick="logNote(${n.id}, event)" class="btn btn-sm" style="background:var(--green);color:white;padding:4px 8px;border:none;border-radius:6px;cursor:pointer" title="Log note">✓</button>
-        <button onclick="deleteNote(${n.id}, event)" class="btn btn-sm" style="background:var(--red);color:white;padding:4px 8px;border:none;border-radius:6px;cursor:pointer" title="Delete note">✕</button>
+      <!-- Inline edit panel (hidden by default, tap note text to open) -->
+      <div id="note-edit-${n.id}" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--gray-100)">
+        <select id="note-class-${n.id}" class="form-input" style="width:100%;font-size:13px;margin-bottom:8px">
+          ${classOpts}
+        </select>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px;font-size:13px">
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+            <input type="checkbox" id="note-overview-${n.id}" ${n.show_in_overview ? 'checked' : ''}> Overview
+          </label>
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+            <input type="checkbox" id="note-todo-${n.id}" ${n.is_todo ? 'checked' : ''}> To-do
+          </label>
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+            <input type="checkbox" id="note-parent-${n.id}" ${n.tell_parent ? 'checked' : ''}> Tell Parent
+          </label>
+        </div>
+        <button onclick="saveNoteEdit(${n.id}, event)" class="btn btn-primary btn-sm" style="width:100%">Save</button>
       </div>
     </div>`;
 }
@@ -220,6 +245,32 @@ window.deleteNote = async (noteId, e) => {
   e?.stopPropagation();
   await supabase.from('student_notes').delete().eq('id', noteId);
   toast('Note deleted', 'info');
+  loadNotes(studentData);
+};
+
+window.toggleNoteEdit = (noteId, e) => {
+  e?.stopPropagation();
+  const panel = document.getElementById(`note-edit-${noteId}`);
+  if (!panel) return;
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+};
+
+window.saveNoteEdit = async (noteId, e) => {
+  e?.stopPropagation();
+  const classId = document.getElementById(`note-class-${noteId}`)?.value || null;
+  const showInOverview = document.getElementById(`note-overview-${noteId}`)?.checked ?? false;
+  const isTodo = document.getElementById(`note-todo-${noteId}`)?.checked ?? false;
+  const tellParent = document.getElementById(`note-parent-${noteId}`)?.checked ?? false;
+
+  const { error } = await supabase.from('student_notes').update({
+    class_id: classId ? Number(classId) : null,
+    show_in_overview: showInOverview,
+    is_todo: isTodo,
+    tell_parent: tellParent,
+  }).eq('id', noteId);
+
+  if (error) { toast('Error: ' + error.message, 'error'); return; }
+  toast('Note updated ✓', 'success');
   loadNotes(studentData);
 };
 
