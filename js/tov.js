@@ -1,7 +1,7 @@
 // Life OS — TOV Overview
 import { supabase } from './supabase.js';
 import { today, fmtDate, fmtMoney, badge, showSpinner, showEmpty, toast } from './utils.js';
-import { startPolling } from './polling.js';
+// No polling — user-driven
 
 const T = today();
 const thisYear = new Date().getFullYear();
@@ -134,4 +134,3 @@ window.submitExpense = async () => {
 };
 
 load();
-startPolling(load, 10000);
