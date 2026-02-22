@@ -156,39 +156,12 @@ function noteRow(n) {
     </div>`;
 }
 
-// ── Pages Analytics + class assignment warnings ───────────────────────────
+// ── Pages Analytics (no warnings) ────────────────────────────────────────
 async function loadPagesAnalytics(s) {
   const el = document.getElementById('pages-analytics');
   if (!el) return;
 
-  // Check assignments
-  const warnings = [];
-  const englishClasses = allClasses.filter(c => c.track_pages === 'English');
-  const mathClasses = allClasses.filter(c => c.track_pages === 'Math');
-
-  // Check if student is enrolled in english/math page tracking classes
-  const enrRes = await supabase.from('class_enrollments')
-    .select('class_id, classes(id, name, track_pages)')
-    .eq('student_id', studentId)
-    .is('enrolled_until', null);
-  const enrolledClassIds = new Set((enrRes.data || []).map(e => e.class_id));
-  const enrolledClasses = (enrRes.data || []).map(e => e.classes).filter(Boolean);
-
-  const enrolledEnglish = enrolledClasses.filter(c => c.track_pages === 'English');
-  const enrolledMath = enrolledClasses.filter(c => c.track_pages === 'Math');
-
-  if (enrolledEnglish.length === 0) {
-    warnings.push({ type: 'missing', subject: 'English', msg: 'Not enrolled in any English pages class' });
-  } else if (enrolledEnglish.length > 1) {
-    warnings.push({ type: 'duplicate', subject: 'English', msg: `Enrolled in ${enrolledEnglish.length} English pages classes: ${enrolledEnglish.map(c => c.name).join(', ')}` });
-  }
-  if (enrolledMath.length === 0) {
-    warnings.push({ type: 'missing', subject: 'Math', msg: 'Not enrolled in any Math pages class' });
-  } else if (enrolledMath.length > 1) {
-    warnings.push({ type: 'duplicate', subject: 'Math', msg: `Enrolled in ${enrolledMath.length} Math pages classes: ${enrolledMath.map(c => c.name).join(', ')}` });
-  }
-
-  // Fetch pages history
+  // Fetch pages history (last 14 days)
   const weekAgo = new Date(Date.now() - 14 * 86400000).toISOString().split('T')[0];
   const pagesRes = await supabase.from('student_pages')
     .select('*, classes(name, track_pages)')
@@ -197,36 +170,29 @@ async function loadPagesAnalytics(s) {
     .order('date', { ascending: false });
   const pages = pagesRes.data || [];
 
-  let html = '';
-
-  if (warnings.length) {
-    html += warnings.map(w => `
-      <div style="background:${w.type === 'duplicate' ? '#FEF3C7' : '#FEE2E2'};border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:13px">
-        <strong>${w.type === 'duplicate' ? '⚠️' : '❗'} ${w.subject} Pages:</strong> ${w.msg}
-      </div>`).join('');
+  if (!pages.length) {
+    el.innerHTML = '<div style="color:var(--gray-400);font-size:14px">No pages logged in the last 2 weeks</div>';
+    return;
   }
 
-  if (pages.length) {
-    const byClass = {};
-    for (const p of pages) {
-      const key = p.class_id;
-      if (!byClass[key]) byClass[key] = { name: p.classes?.name || 'Class', entries: [] };
-      byClass[key].entries.push(p);
-    }
-    for (const [cid, group] of Object.entries(byClass)) {
-      const total = group.entries.reduce((sum, p) => sum + (p.total_pages || 0), 0);
-      html += `
-        <div style="margin-bottom:10px">
-          <div style="font-size:12px;font-weight:700;color:var(--gray-400);margin-bottom:4px">${group.name}</div>
-          ${group.entries.slice(0,7).map(p => `
-            <div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;border-bottom:1px solid var(--gray-100)">
-              <span>${fmtDate(p.date)}</span>
-              <span style="font-weight:600">${p.total_pages}p ${p.gold_delta !== 0 ? `(${p.gold_delta > 0 ? '+' : ''}${p.gold_delta}🪙)` : ''}</span>
-            </div>`).join('')}
-        </div>`;
-    }
-  } else if (!warnings.length) {
-    html = '<div style="color:var(--gray-400);font-size:14px">No pages logged in the last 2 weeks</div>';
+  const byClass = {};
+  for (const p of pages) {
+    const key = p.class_id;
+    if (!byClass[key]) byClass[key] = { name: p.classes?.name || 'Class', entries: [] };
+    byClass[key].entries.push(p);
+  }
+
+  let html = '';
+  for (const [cid, group] of Object.entries(byClass)) {
+    html += `
+      <div style="margin-bottom:10px">
+        <div style="font-size:12px;font-weight:700;color:var(--gray-400);margin-bottom:4px">${group.name}</div>
+        ${group.entries.slice(0,7).map(p => `
+          <div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;border-bottom:1px solid var(--gray-100)">
+            <span>${fmtDate(p.date)}</span>
+            <span style="font-weight:600">${p.total_pages}p ${p.gold_delta !== 0 ? `(${p.gold_delta > 0 ? '+' : ''}${p.gold_delta}🪙)` : ''}</span>
+          </div>`).join('')}
+      </div>`;
   }
 
   el.innerHTML = html;
