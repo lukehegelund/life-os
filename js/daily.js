@@ -1,7 +1,6 @@
-// Life OS — Daily Recap
+// Life OS — Daily Recap (no polling — user-driven)
 import { supabase } from './supabase.js';
 import { today, fmtDate, fmtDateLong, goldStr, goldClass, catBadge, toast, attendanceBadge, showSpinner } from './utils.js';
-import { startPolling } from './polling.js';
 
 let selectedDate = today();
 
@@ -58,12 +57,28 @@ async function loadGoldOwed() {
 }
 
 async function distributeAll() {
-  const res = await supabase.from('gold_transactions')
+  // 1. Get all undistributed transactions to find which students are affected
+  const txRes = await supabase.from('gold_transactions')
+    .select('student_id, amount')
+    .eq('distributed', false)
+    .lte('date', selectedDate);
+  if (txRes.error) { toast('Error: ' + txRes.error.message, 'error'); return; }
+
+  // 2. Mark all undistributed transactions as distributed
+  const markRes = await supabase.from('gold_transactions')
     .update({ distributed: true, distributed_at: new Date().toISOString() })
     .eq('distributed', false)
     .lte('date', selectedDate);
-  if (res.error) { toast('Error: ' + res.error.message, 'error'); return; }
-  toast('All gold marked as distributed!', 'success');
+  if (markRes.error) { toast('Error: ' + markRes.error.message, 'error'); return; }
+
+  // 3. Zero out current_gold for every affected student
+  //    (current_gold only tracks pending/undistributed balance)
+  const affectedIds = [...new Set((txRes.data || []).map(t => t.student_id))];
+  for (const sid of affectedIds) {
+    await supabase.from('students').update({ current_gold: 0 }).eq('id', sid);
+  }
+
+  toast(`Distributed! ${affectedIds.length} student${affectedIds.length !== 1 ? 's' : ''} reset to 0 🪙`, 'success');
   loadGoldOwed();
 }
 window.distributeAll = distributeAll;
@@ -162,4 +177,3 @@ document.getElementById('date-today').addEventListener('click', () => {
 
 // Init
 load();
-startPolling(load, 10000);
