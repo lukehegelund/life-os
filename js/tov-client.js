@@ -6,7 +6,7 @@ const clientId = qp('id');
 if (!clientId) { window.location.href = 'tov.html'; }
 
 async function load() {
-  const res = await supabase.table('tov_clients').select('*').eq('id', clientId).single();
+  const res = await supabase.from('tov_clients').select('*').eq('id', clientId).single();
   const c = res.data;
   if (!c) return;
 
@@ -48,7 +48,7 @@ async function load() {
 
 async function loadPayments(c) {
   const el = document.getElementById('payments-list');
-  const res = await supabase.table('tov_payments').select('*').eq('client_id', clientId).order('date', { ascending: false });
+  const res = await supabase.from('tov_payments').select('*').eq('client_id', clientId).order('date', { ascending: false });
   const payments = res.data || [];
   if (!payments.length) { showEmpty(el, '💳', 'No payments recorded'); return; }
   el.innerHTML = payments.map(p => `
@@ -63,7 +63,7 @@ async function loadPayments(c) {
 
 async function loadContracts(c) {
   const el = document.getElementById('contracts-list');
-  const res = await supabase.table('tov_contracts').select('*').eq('client_id', clientId).order('created_at', { ascending: false });
+  const res = await supabase.from('tov_contracts').select('*').eq('client_id', clientId).order('created_at', { ascending: false });
   const contracts = res.data || [];
   if (!contracts.length) { el.innerHTML = '<div style="color:var(--gray-400);font-size:14px">No contracts on file</div>'; return; }
   const colors = { Draft: 'gray', Sent: 'blue', Signed: 'green', Void: 'red' };
@@ -79,7 +79,7 @@ async function loadContracts(c) {
 
 async function loadInquiry(c) {
   const el = document.getElementById('inquiry-notes');
-  const res = await supabase.table('tov_inquiries').select('*').eq('client_id', clientId).order('received_at', { ascending: false });
+  const res = await supabase.from('tov_inquiries').select('*').eq('client_id', clientId).order('received_at', { ascending: false });
   const inquiries = res.data || [];
   if (!inquiries.length) { el.innerHTML = '<div style="color:var(--gray-400);font-size:14px">No inquiry records</div>'; return; }
   el.innerHTML = inquiries.map(i => `
@@ -105,14 +105,14 @@ function setupPaymentForm(c) {
     const dest = document.getElementById('pay-tithe-dest').value.trim();
     if (isNaN(amount) || !date) { toast('Fill in amount and date', 'error'); return; }
 
-    const { error } = await supabase.table('tov_payments').insert({
+    const { error } = await supabase.from('tov_payments').insert({
       client_id: Number(clientId), amount, type, method, date, tithe_allocated: tithe, tithe_destination: dest || null
     });
     if (error) { toast('Error: ' + error.message, 'error'); return; }
 
     // Update total_paid on client
     const newPaid = (c.total_paid || 0) + amount;
-    await supabase.table('tov_clients').update({ total_paid: newPaid }).eq('id', clientId);
+    await supabase.from('tov_clients').update({ total_paid: newPaid }).eq('id', clientId);
 
     toast('Payment recorded!', 'success');
     window.closePaymentModal();
