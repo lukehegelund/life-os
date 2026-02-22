@@ -1,7 +1,7 @@
 // Life OS — Student List
 import { supabase } from './supabase.js';
 import { goldStr, goldClass, badge, showSpinner, showEmpty } from './utils.js';
-import { startPolling } from './polling.js';
+// No polling — user-driven
 
 let allStudents = [];
 let query = '';
@@ -75,4 +75,3 @@ async function loadFollowups() {
 
 load();
 loadFollowups();
-startPolling(load, 10000);
