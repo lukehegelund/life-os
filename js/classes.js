@@ -3,7 +3,7 @@ import { supabase } from './supabase.js';
 import { today, showSpinner, showEmpty } from './utils.js';
 
 async function load() {
-  const res = await supabase.table('classes').select('id, name, subject, day_of_week, time_start, room, current_unit').order('name');
+  const res = await supabase.from('classes').select('id, name, subject, day_of_week, time_start, room, current_unit').order('name');
   const classes = res.data || [];
 
   const el = document.getElementById('class-list');
