@@ -5,13 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Life OS — Dashboard</title>
 <link rel="stylesheet" href="css/main.css">
-<style>
-.module-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px; }
-.module-card { background:var(--white); border-radius:var(--radius); box-shadow:var(--shadow); padding:14px; text-decoration:none; color:inherit; display:flex; align-items:center; gap:10px; }
-.module-card:active { opacity:0.8; }
-.module-icon { font-size:22px; }
-.module-label { font-weight:600; font-size:14px; }
-</style>
 </head>
 <body>
 
@@ -19,7 +12,7 @@
   <div class="header-row">
     <div>
       <h1>Life OS</h1>
-      <div class="subtitle" id="date-display"></div>
+      <div class="subtitle" id="today-date"></div>
     </div>
     <a href="daily.html" class="btn btn-gold btn-sm">📋 Daily</a>
   </div>
@@ -27,32 +20,32 @@
 
 <main class="content">
 
-  <!-- Pending alerts -->
-  <div id="pending"></div>
-
-  <!-- Stats -->
-  <div id="stats" class="stats-grid">
-    <div class="stat-card"><div class="label">Loading...</div></div>
+  <!-- Stats grid (filled by dashboard.js) -->
+  <div id="stats-grid" class="stats-grid">
+    <div class="stat-card" style="border-top:3px solid var(--gray-200)">
+      <div class="stat-num" style="color:var(--gray-400)">—</div>
+      <div class="stat-lbl">Loading…</div>
+    </div>
   </div>
 
-  <!-- Quick nav -->
-  <div class="card-title">Modules</div>
-  <div class="module-grid">
-    <a href="students.html" class="module-card"><span class="module-icon">👥</span><span class="module-label">Students</span></a>
-    <a href="classes.html" class="module-card"><span class="module-icon">📚</span><span class="module-label">Classes</span></a>
-    <a href="tov.html" class="module-card"><span class="module-icon">💍</span><span class="module-label">Take One Visuals</span></a>
-    <a href="health.html" class="module-card"><span class="module-icon">🏃</span><span class="module-label">Health</span></a>
-    <a href="languages.html" class="module-card"><span class="module-icon">🌍</span><span class="module-label">Languages</span></a>
-    <a href="tasks.html" class="module-card"><span class="module-icon">✅</span><span class="module-label">Tasks</span></a>
+  <!-- Health prompts (food / exercise) — hidden until needed -->
+  <div id="health-prompts" style="display:none"></div>
+
+  <!-- Urgent items (reminders, gold, tasks, follow-ups) -->
+  <div class="card-title">Urgent / Action Items</div>
+  <div id="urgent-items">
+    <div class="card"><div class="spinner"></div></div>
   </div>
 
   <!-- Today's classes -->
   <div class="card">
     <div class="card-header">
       <div class="card-title" style="margin:0">Today's Classes</div>
-      <a href="classes.html" style="font-size:13px;color:var(--blue)">All classes →</a>
+      <a href="classes.html" style="font-size:13px;color:var(--blue)">All →</a>
     </div>
-    <div id="today-classes"></div>
+    <div id="todays-classes">
+      <div class="spinner"></div>
+    </div>
   </div>
 
   <!-- Upcoming TOV -->
@@ -61,7 +54,9 @@
       <div class="card-title" style="margin:0">Upcoming Weddings</div>
       <a href="tov.html" style="font-size:13px;color:var(--green)">All clients →</a>
     </div>
-    <div id="upcoming-tov"></div>
+    <div id="upcoming-weddings">
+      <div class="spinner"></div>
+    </div>
   </div>
 
 </main>
@@ -79,9 +74,9 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
     Students
   </a>
-  <a href="tov.html" class="nav-item">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-    TOV
+  <a href="calendar.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><circle cx="8" cy="16" r="1" fill="currentColor"/><circle cx="12" cy="16" r="1" fill="currentColor"/></svg>
+    Calendar
   </a>
   <a href="tasks.html" class="nav-item">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
@@ -89,9 +84,6 @@
   </a>
 </nav>
 
-<script>
-  document.getElementById('date-display').textContent = new Date().toLocaleDateString('en-US', {weekday:'long',month:'long',day:'numeric'});
-</script>
 <script type="module" src="js/dashboard.js"></script>
 </body>
 </html>
