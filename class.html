@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Class — Life OS</title>
+<link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+
+<header class="page-header">
+  <div class="header-row">
+    <div>
+      <h1 id="class-name">Loading...</h1>
+      <div class="subtitle" id="class-subtitle"></div>
+    </div>
+    <a href="classes.html" class="btn btn-ghost btn-sm">← All</a>
+  </div>
+  <div id="class-unit" style="font-size:13px;color:var(--blue);margin-top:4px"></div>
+</header>
+
+<main class="content">
+
+  <!-- Gold adder — most important, top of page -->
+  <div class="card">
+    <div class="card-title">🪙 Quick Gold</div>
+    <div id="gold-adder"></div>
+  </div>
+
+  <!-- Today's roster + attendance -->
+  <div class="card">
+    <div class="card-title">👥 Roster & Attendance (Today)</div>
+    <div id="roster"></div>
+  </div>
+
+  <!-- Attendance grid -->
+  <div class="card">
+    <div class="card-title">📅 Attendance Grid (Last 10 Days)</div>
+    <div id="att-grid"></div>
+  </div>
+
+  <!-- Recent notes -->
+  <div class="card">
+    <div class="card-title">📝 Recent Notes</div>
+    <div id="recent-notes"></div>
+  </div>
+
+</main>
+
+<nav class="bottom-nav">
+  <a href="index.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+    Home
+  </a>
+  <a href="daily.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/></svg>
+    Daily
+  </a>
+  <a href="students.html" class="nav-item active">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+    Students
+  </a>
+  <a href="tov.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+    TOV
+  </a>
+  <a href="tasks.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/></svg>
+    Tasks
+  </a>
+</nav>
+
+<script type="module" src="js/class.js"></script>
+</body>
+</html>
