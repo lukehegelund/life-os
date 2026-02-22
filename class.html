@@ -14,23 +14,44 @@
       <h1 id="class-name">Loading...</h1>
       <div class="subtitle" id="class-subtitle"></div>
     </div>
-    <a href="classes.html" class="btn btn-ghost btn-sm">← All</a>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="btn btn-ghost btn-sm" onclick="openClassSettings()" title="Class Settings">⚙️</button>
+      <a href="classes.html" class="btn btn-ghost btn-sm">← All</a>
+    </div>
   </div>
-  <div id="class-unit" style="font-size:13px;color:var(--blue);margin-top:4px"></div>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:4px">
+    <div id="class-unit" style="font-size:13px;color:var(--blue)"></div>
+    <span id="class-settings-badge" style="display:none;font-size:12px;background:var(--blue-light);color:var(--blue);padding:2px 8px;border-radius:10px;font-weight:600"></span>
+  </div>
 </header>
 
 <main class="content">
 
-  <!-- Gold adder — most important, top of page -->
+  <!-- Roster & Attendance (expandable) -->
+  <div class="card">
+    <div class="card-title">👥 Roster & Attendance
+      <span style="font-size:11px;color:var(--gray-400);font-weight:400;margin-left:8px">▶ expand · tap name = profile</span>
+    </div>
+    <div id="roster"></div>
+  </div>
+
+  <!-- Gold adder -->
   <div class="card">
     <div class="card-title">🪙 Quick Gold</div>
     <div id="gold-adder"></div>
   </div>
 
-  <!-- Today's roster + attendance -->
+  <!-- Recent class notes (with swipe) -->
   <div class="card">
-    <div class="card-title">👥 Roster & Attendance (Today)</div>
-    <div id="roster"></div>
+    <div class="card-title">📝 Class Notes
+      <span style="font-size:11px;color:var(--gray-400);font-weight:400;margin-left:8px">← delete · → log</span>
+    </div>
+    <div id="recent-notes"></div>
+  </div>
+
+  <!-- Analytics (hidden for non-page-tracking classes) -->
+  <div class="card" id="analytics-section" style="display:none">
+    <!-- Filled by loadAnalytics() -->
   </div>
 
   <!-- Attendance grid -->
@@ -39,13 +60,27 @@
     <div id="att-grid"></div>
   </div>
 
-  <!-- Recent notes -->
-  <div class="card">
-    <div class="card-title">📝 Recent Notes</div>
-    <div id="recent-notes"></div>
-  </div>
-
 </main>
+
+<!-- Class Settings Modal -->
+<div id="class-settings-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:500;align-items:flex-end;justify-content:center">
+  <div style="background:var(--white);border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:600px">
+    <div style="font-size:17px;font-weight:700;margin-bottom:16px">⚙️ Class Settings</div>
+    <div class="form-group">
+      <label class="form-label">Pages Tracking</label>
+      <select class="form-select" id="track-pages-select">
+        <option value="None">None (no page tracking)</option>
+        <option value="English">English Pages</option>
+        <option value="Math">Math Pages</option>
+      </select>
+      <div style="font-size:12px;color:var(--gray-400);margin-top:4px">Each page = ±2 gold automatically</div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn btn-primary" style="flex:1" onclick="saveClassSettings()">Save Settings</button>
+      <button class="btn btn-ghost" onclick="closeClassSettings()">Cancel</button>
+    </div>
+  </div>
+</div>
 
 <nav class="bottom-nav">
   <a href="index.html" class="nav-item">
