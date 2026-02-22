@@ -75,7 +75,7 @@ async function loadAttendance() {
   const dayShort = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(selectedDate + 'T00:00:00').getDay()];
 
   const [classRes, sessRes] = await Promise.all([
-    supabase.from('classes').select('id, name, time_start').or(`day_of_week.ilike.%${dayShort}%,day_of_week.ilike.%${dayOfWeek}%`),
+    supabase.from('classes').select('id, name, time_start').or(`day_of_week.ilike.%${dayShort}%,day_of_week.ilike.%${dayOfWeek}%`).order('time_start', { ascending: true }),
     supabase.from('daily_sessions').select('class_id, status, gold_distributed').eq('date', selectedDate)
   ]);
 
