@@ -291,6 +291,217 @@ body {
 .alert-success { background: var(--green-light);  color: #065F46; }
 .alert-icon    { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
 
+/* ── Stat cards (new dashboard style) ──────────────────────────────────────── */
+.stat-num { font-size: 26px; font-weight: 700; line-height: 1.1; }
+.stat-lbl { font-size: 12px; color: var(--gray-400); font-weight: 500; margin-top: 2px; }
+
+/* ── Health prompt card ─────────────────────────────────────────────────────── */
+.prompt-row { padding: 8px 0; }
+.prompt-row + .prompt-row { border-top: 1px solid var(--gray-100); }
+.prompt-text { font-size: 14px; color: var(--gray-800); }
+
+/* ── Urgent sections (dashboard) ────────────────────────────────────────────── */
+.urgent-section { padding: 12px 16px; }
+.urgent-section + .urgent-section { border-top: 1px solid var(--gray-100); }
+.urgent-section-red    { background: #fff5f5; }
+.urgent-section-gold   { background: #fffbeb; }
+.urgent-section-orange { background: #fff7ed; }
+.urgent-section-blue   { background: #eff6ff; }
+.urgent-section-header {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--gray-600);
+  margin-bottom: 8px;
+}
+.urgent-module-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--gray-400);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 8px 0 4px;
+}
+.urgent-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(0,0,0,0.04);
+}
+.urgent-row:last-child { border-bottom: none; }
+.urgent-row-link { text-decoration: none; color: inherit; cursor: pointer; }
+.urgent-row-link:active { opacity: 0.7; }
+.urgent-row-text  { font-size: 14px; color: var(--gray-800); }
+.urgent-row-meta  { font-size: 12px; color: var(--gray-400); }
+
+/* ── Badge variants ─────────────────────────────────────────────────────────── */
+.badge-orange { background: var(--orange-light); color: var(--orange); }
+
+/* ── Tap-to-cycle attendance buttons ────────────────────────────────────────── */
+.att-btn {
+  padding: 5px 12px;
+  border-radius: 20px;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.att-btn:active { opacity: 0.7; }
+.att-present  { background: var(--green-light);  color: var(--green); }
+.att-absent   { background: var(--coral-light);  color: var(--red); }
+.att-late     { background: var(--orange-light); color: var(--orange); }
+.att-excused  { background: var(--gray-100);     color: var(--gray-600); }
+.att-none     { background: var(--gray-100);     color: var(--gray-400); }
+
+/* ── Bulk gold checkboxes ────────────────────────────────────────────────────── */
+.gold-bulk-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--gray-100);
+}
+.gold-bulk-row:last-child { border-bottom: none; }
+.gold-bulk-check { width: 20px; height: 20px; cursor: pointer; accent-color: var(--gold); }
+.gold-bulk-name  { flex: 1; font-weight: 600; font-size: 15px; }
+.gold-bulk-bal   { font-size: 13px; color: var(--gray-400); }
+
+/* ── Language tabs ───────────────────────────────────────────────────────────── */
+.tab-bar {
+  display: flex;
+  border-bottom: 2px solid var(--gray-200);
+  margin-bottom: 16px;
+  gap: 0;
+}
+.tab-item {
+  flex: 1;
+  text-align: center;
+  padding: 10px 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gray-400);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color 0.15s, border-color 0.15s;
+  user-select: none;
+}
+.tab-item.active { color: var(--blue); border-bottom-color: var(--blue); }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* ── Calendar ────────────────────────────────────────────────────────────────── */
+.cal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.cal-month-label { font-size: 17px; font-weight: 700; }
+.cal-nav-btn {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: var(--gray-100);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  margin-bottom: 16px;
+}
+.cal-day-label {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--gray-400);
+  padding: 4px 0;
+}
+.cal-day {
+  min-height: 52px;
+  padding: 4px;
+  border-radius: 6px;
+  background: var(--white);
+  position: relative;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.cal-day:active { background: var(--gray-100); }
+.cal-day.other-month { background: transparent; }
+.cal-day.other-month .cal-day-num { color: var(--gray-200); }
+.cal-day.today { background: var(--blue-light); }
+.cal-day.today .cal-day-num { color: var(--blue); font-weight: 700; }
+.cal-day.selected { outline: 2px solid var(--blue); }
+.cal-day-num { font-size: 13px; font-weight: 500; color: var(--gray-800); line-height: 1; }
+.cal-dots { display: flex; gap: 2px; flex-wrap: wrap; margin-top: 3px; }
+.cal-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.cal-events-list { display: flex; flex-direction: column; gap: 8px; }
+.cal-event-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--white);
+  box-shadow: var(--shadow);
+}
+.cal-event-stripe { width: 4px; border-radius: 2px; align-self: stretch; flex-shrink: 0; }
+.cal-event-content { flex: 1; min-width: 0; }
+.cal-event-title { font-weight: 600; font-size: 14px; }
+.cal-event-meta  { font-size: 12px; color: var(--gray-400); margin-top: 2px; }
+
+/* ── Tasks page improvements ─────────────────────────────────────────────────── */
+.task-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0 6px;
+  border-bottom: 2px solid var(--gray-100);
+  margin-bottom: 4px;
+}
+.task-group-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--gray-600);
+}
+.task-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--gray-100);
+}
+.task-row:last-child { border-bottom: none; }
+.task-check {
+  width: 22px; height: 22px;
+  border-radius: 6px;
+  border: 2px solid var(--gray-200);
+  background: var(--white);
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-top: 1px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.task-check.urgent-check { border-color: var(--red); }
+.task-check:active { opacity: 0.7; }
+.task-content { flex: 1; min-width: 0; }
+.task-title { font-size: 15px; font-weight: 500; color: var(--gray-800); }
+.task-meta  { font-size: 12px; color: var(--gray-400); margin-top: 2px; }
+
 /* ── Gold adder (class page) ─────────────────────────────────────────────── */
 .gold-adder-row {
   display: flex;
