@@ -7,7 +7,7 @@ let allStudents = [];
 let query = '';
 
 async function load() {
-  const res = await supabase.table('students')
+  const res = await supabase.from('students')
     .select('id, name, grade_level, current_gold, status')
     .order('name');
   allStudents = res.data || [];
@@ -63,7 +63,7 @@ document.getElementById('search-input').addEventListener('input', e => {
 
 // Followup banner
 async function loadFollowups() {
-  const res = await supabase.table('student_notes')
+  const res = await supabase.from('student_notes')
     .select('id', { count: 'exact', head: true })
     .eq('followup_needed', true);
   const count = res.count ?? 0;
