@@ -11,7 +11,7 @@ async function load() {
 
 async function loadTasks() {
   const el = document.getElementById('tasks-list');
-  const res = await supabase.table('tasks')
+  const res = await supabase.from('tasks')
     .select('*, students(name), tov_clients(name)')
     .in('status', ['open', 'in_progress'])
     .order('priority')
@@ -53,7 +53,7 @@ async function loadTasks() {
 
 async function loadReminders() {
   const el = document.getElementById('reminders-list');
-  const res = await supabase.table('reminders')
+  const res = await supabase.from('reminders')
     .select('*')
     .eq('status', 'active')
     .order('due_date');
@@ -78,7 +78,7 @@ async function loadReminders() {
 
 window.markDone = async (id, checked) => {
   if (!checked) return;
-  const { error } = await supabase.table('tasks').update({ status: 'done', completed_at: new Date().toISOString() }).eq('id', id);
+  const { error } = await supabase.from('tasks').update({ status: 'done', completed_at: new Date().toISOString() }).eq('id', id);
   if (error) { toast('Error: ' + error.message, 'error'); return; }
   const el = document.getElementById(`task-${id}`);
   if (el) {
@@ -90,7 +90,7 @@ window.markDone = async (id, checked) => {
 };
 
 window.dismissReminder = async (id) => {
-  await supabase.table('reminders').update({ status: 'dismissed' }).eq('id', id);
+  await supabase.from('reminders').update({ status: 'dismissed' }).eq('id', id);
   load();
 };
 
@@ -104,7 +104,7 @@ window.submitTask = async () => {
   const due = document.getElementById('task-due').value || null;
   const notes = document.getElementById('task-notes').value.trim();
   if (!title) { toast('Enter a title', 'error'); return; }
-  const { error } = await supabase.table('tasks').insert({ title, module, priority, due_date: due, notes: notes || null });
+  const { error } = await supabase.from('tasks').insert({ title, module, priority, due_date: due, notes: notes || null });
   if (error) { toast('Error: ' + error.message, 'error'); return; }
   toast('Task added!', 'success');
   window.closeTaskModal();
