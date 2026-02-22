@@ -45,6 +45,21 @@ async function load() {
       ${s.notes ? `<div style="margin-top:10px;font-size:13px;color:var(--gray-600);padding-top:10px;border-top:1px solid var(--gray-100)">${s.notes}</div>` : ''}
     </div>`;
 
+  // Populate class selector in add-note form
+  const classSelect = document.getElementById('new-note-class');
+  if (classSelect) {
+    allClasses.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = c.name;
+      classSelect.appendChild(opt);
+    });
+    // Pre-select the student's first enrolled class if available
+    const enrRes = await supabase.from('class_enrollments')
+      .select('class_id').eq('student_id', studentId).is('enrolled_until', null).limit(1);
+    if (enrRes.data?.[0]) classSelect.value = enrRes.data[0].class_id;
+  }
+
   await Promise.all([
     loadNotes(s),
     loadGold(s),
@@ -54,6 +69,40 @@ async function load() {
     loadPagesAnalytics(s),
   ]);
 }
+
+// ── Add Note ──────────────────────────────────────────────────────────────
+window.saveNote = async () => {
+  const text = document.getElementById('new-note-text')?.value.trim();
+  if (!text) { toast('Enter a note first', 'error'); return; }
+
+  const classId = document.getElementById('new-note-class')?.value || null;
+  const showInOverview = document.getElementById('new-note-overview')?.checked ?? false;
+  const isTodo = document.getElementById('new-note-todo')?.checked ?? false;
+  const tellParent = document.getElementById('new-note-parent')?.checked ?? false;
+
+  const { error } = await supabase.from('student_notes').insert({
+    student_id: Number(studentId),
+    class_id: classId ? Number(classId) : null,
+    date: T,
+    note: text,
+    category: classId ? 'Class Note' : 'General',
+    show_in_overview: showInOverview,
+    is_todo: isTodo,
+    tell_parent: tellParent,
+    logged: false,
+  });
+
+  if (error) { toast('Error: ' + error.message, 'error'); return; }
+
+  // Reset form
+  document.getElementById('new-note-text').value = '';
+  document.getElementById('new-note-overview').checked = false;
+  document.getElementById('new-note-todo').checked = true;
+  document.getElementById('new-note-parent').checked = false;
+
+  toast('Note added ✓', 'success');
+  loadNotes(studentData);
+};
 
 // ── Notes (grouped by class, with flags + swipe) ──────────────────────────
 async function loadNotes(s) {
@@ -141,8 +190,8 @@ async function loadNotes(s) {
 
 function noteRow(n) {
   return `
-    <div class="swipe-note-item list-item" data-id="${n.id}" style="padding:10px 12px;margin-bottom:4px;border-radius:8px;background:var(--gray-50);position:relative;overflow:hidden;touch-action:pan-y">
-      <div data-swipe-inner style="width:100%">
+    <div class="note-row-desktop swipe-note-item" data-id="${n.id}">
+      <div data-swipe-inner style="flex:1;min-width:0">
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
           <div style="font-size:14px;flex:1">${n.note || '—'}</div>
           <div style="font-size:12px;color:var(--gray-400);white-space:nowrap;margin-left:8px">${fmtDate(n.date)}</div>
@@ -153,8 +202,26 @@ function noteRow(n) {
           ${n.tell_parent ? '<span class="flag-badge flag-parent">📞 Parent</span>' : ''}
         </div>
       </div>
+      <div style="display:flex;gap:4px;flex-shrink:0;align-self:center">
+        <button onclick="logNote(${n.id}, event)" class="btn btn-sm" style="background:var(--green);color:white;padding:4px 8px;border:none;border-radius:6px;cursor:pointer" title="Log note">✓</button>
+        <button onclick="deleteNote(${n.id}, event)" class="btn btn-sm" style="background:var(--red);color:white;padding:4px 8px;border:none;border-radius:6px;cursor:pointer" title="Delete note">✕</button>
+      </div>
     </div>`;
 }
+
+window.logNote = async (noteId, e) => {
+  e?.stopPropagation();
+  await supabase.from('student_notes').update({ logged: true, logged_at: new Date().toISOString() }).eq('id', noteId);
+  toast('Note logged ✓', 'success');
+  loadNotes(studentData);
+};
+
+window.deleteNote = async (noteId, e) => {
+  e?.stopPropagation();
+  await supabase.from('student_notes').delete().eq('id', noteId);
+  toast('Note deleted', 'info');
+  loadNotes(studentData);
+};
 
 // ── Pages Analytics (no warnings) ────────────────────────────────────────
 async function loadPagesAnalytics(s) {
