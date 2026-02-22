@@ -15,8 +15,8 @@ async function loadFinancials() {
   const yearStart = `${thisYear}-01-01`;
 
   const [paymentsRes, expensesRes] = await Promise.all([
-    supabase.table('tov_payments').select('amount, tithe_allocated').gte('date', yearStart),
-    supabase.table('tov_expenses').select('amount').eq('fiscal_year', thisYear)
+    supabase.from('tov_payments').select('amount, tithe_allocated').gte('date', yearStart),
+    supabase.from('tov_expenses').select('amount').eq('fiscal_year', thisYear)
   ]);
 
   const revenue = (paymentsRes.data || []).reduce((s, r) => s + (r.amount || 0), 0);
@@ -49,7 +49,7 @@ async function loadClients() {
   const el = document.getElementById('clients-list');
   showSpinner(el);
 
-  const res = await supabase.table('tov_clients')
+  const res = await supabase.from('tov_clients')
     .select('*')
     .not('contract_status', 'eq', 'Void')
     .order('wedding_date');
@@ -91,7 +91,7 @@ async function loadClients() {
 
 async function loadInquiries() {
   const el = document.getElementById('inquiries-list');
-  const res = await supabase.table('tov_inquiries')
+  const res = await supabase.from('tov_inquiries')
     .select('*')
     .in('status', ['New', 'Responded'])
     .order('received_at', { ascending: false });
@@ -126,7 +126,7 @@ window.submitExpense = async () => {
   const cat = document.getElementById('exp-cat').value;
   const date = document.getElementById('exp-date').value;
   if (!desc || isNaN(amount) || !date) { toast('Fill in all fields', 'error'); return; }
-  const { error } = await supabase.table('tov_expenses').insert({ date, description: desc, amount, category: cat, fiscal_year: new Date(date).getFullYear() });
+  const { error } = await supabase.from('tov_expenses').insert({ date, description: desc, amount, category: cat, fiscal_year: new Date(date).getFullYear() });
   if (error) { toast('Error: ' + error.message, 'error'); return; }
   toast('Expense logged!', 'success');
   window.closeExpenseModal();
