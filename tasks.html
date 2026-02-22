@@ -15,24 +15,32 @@
 
 <header class="page-header">
   <div class="header-row">
-    <h1>Tasks</h1>
+    <div>
+      <h1>Tasks</h1>
+      <div class="subtitle" id="tasks-summary"></div>
+    </div>
     <button class="btn btn-primary btn-sm" onclick="showTaskForm()">+ Task</button>
+  </div>
+  <!-- Module filter tabs -->
+  <div style="display:flex;gap:6px;margin-top:8px;overflow-x:auto;padding-bottom:2px">
+    <button class="btn btn-sm btn-primary mod-btn" id="mod-All" onclick="setModule('All')">All</button>
+    <button class="btn btn-sm btn-ghost mod-btn" id="mod-RT" onclick="setModule('RT')">🏫 RT</button>
+    <button class="btn btn-sm btn-ghost mod-btn" id="mod-TOV" onclick="setModule('TOV')">💍 TOV</button>
+    <button class="btn btn-sm btn-ghost mod-btn" id="mod-Personal" onclick="setModule('Personal')">👤 Personal</button>
+    <button class="btn btn-sm btn-ghost mod-btn" id="mod-Health" onclick="setModule('Health')">🏃 Health</button>
   </div>
 </header>
 
 <main class="content">
 
-  <!-- Reminders -->
-  <div class="card">
-    <div class="card-title">🔔 Reminders</div>
-    <div id="reminders-list"></div>
-  </div>
+  <!-- Overdue Reminders -->
+  <div id="reminders-section"></div>
 
-  <!-- Tasks -->
-  <div class="card">
-    <div class="card-title">✅ Open Tasks</div>
-    <div id="tasks-list"></div>
-  </div>
+  <!-- Urgent Tasks -->
+  <div id="urgent-tasks-section"></div>
+
+  <!-- All other open tasks grouped by module -->
+  <div id="tasks-section"></div>
 
 </main>
 
@@ -47,8 +55,10 @@
     <div class="form-group">
       <label class="form-label">Module</label>
       <select class="form-select" id="task-module">
-        <option>Personal</option><option>RT</option><option>TOV</option>
-        <option>Health</option><option>Languages</option><option>System</option>
+        <option value="Personal">Personal</option>
+        <option value="RT">RT (River Tech)</option>
+        <option value="TOV">TOV (Take One Visuals)</option>
+        <option value="Health">Health</option>
       </select>
     </div>
     <div class="form-group">
@@ -56,7 +66,6 @@
       <select class="form-select" id="task-priority">
         <option value="normal">Normal</option>
         <option value="urgent">Urgent</option>
-        <option value="someday">Someday</option>
       </select>
     </div>
     <div class="form-group">
@@ -80,16 +89,16 @@
     Home
   </a>
   <a href="daily.html" class="nav-item">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/></svg>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
     Daily
   </a>
   <a href="students.html" class="nav-item">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
     Students
   </a>
-  <a href="tov.html" class="nav-item">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-    TOV
+  <a href="calendar.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><circle cx="8" cy="16" r="1" fill="currentColor"/><circle cx="12" cy="16" r="1" fill="currentColor"/></svg>
+    Calendar
   </a>
   <a href="tasks.html" class="nav-item active">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
