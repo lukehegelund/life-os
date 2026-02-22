@@ -1,7 +1,7 @@
 // Life OS — Tasks & Reminders (Phase 2 — with swipe)
 import { supabase } from './supabase.js';
 import { today, fmtDate, toast, showEmpty } from './utils.js';
-import { startPolling } from './polling.js';
+// No polling on tasks page
 import { initSwipe } from './swipe-handler.js';
 
 const T = today();
@@ -163,8 +163,8 @@ async function loadTasks() {
 
 function renderTaskGroup(tasks) {
   return tasks.map(t => `
-    <div class="task-row task-swipe-row" id="task-${t.id}" data-id="${t.id}" style="touch-action:pan-y;overflow:hidden;position:relative">
-      <div data-swipe-inner style="display:flex;align-items:flex-start;gap:10px;width:100%">
+    <div class="task-row task-swipe-row" id="task-${t.id}" data-id="${t.id}" style="touch-action:pan-y;overflow:hidden;position:relative;display:flex;align-items:center;gap:8px">
+      <div data-swipe-inner style="display:flex;align-items:flex-start;gap:10px;flex:1">
         <div class="task-check ${t.priority === 'urgent' ? 'urgent-check' : ''}" onclick="markDone(${t.id}, this)">
           <svg width="13" height="13" viewBox="0 0 13 13" fill="none" style="display:none" id="check-${t.id}">
             <polyline points="2,6 5,10 11,3" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -179,8 +179,29 @@ function renderTaskGroup(tasks) {
           </div>
         </div>
       </div>
+      <div style="display:flex;gap:4px;flex-shrink:0">
+        <button class="btn btn-sm" style="background:var(--green-light);color:var(--green);border:none;font-size:11px;padding:3px 8px" onclick="markDoneById(${t.id}, event)" title="Mark done">✓</button>
+        <button class="btn btn-sm" style="background:var(--coral-light);color:var(--red);border:none;font-size:11px;padding:3px 8px" onclick="deleteTask(${t.id}, event)" title="Delete task">✕</button>
+      </div>
     </div>`).join('');
 }
+
+window.markDoneById = async (id, e) => {
+  e?.stopPropagation();
+  const row = document.getElementById(`task-${id}`);
+  if (row) { row.style.opacity = '0.4'; row.style.transition = 'opacity 0.3s'; }
+  await supabase.from('tasks').update({ status: 'done', completed_at: new Date().toISOString() }).eq('id', id);
+  toast('Task done! ✅', 'success');
+  setTimeout(() => load(), 300);
+};
+window.deleteTask = async (id, e) => {
+  e?.stopPropagation();
+  const row = document.getElementById(`task-${id}`);
+  if (row) { row.style.opacity = '0.3'; row.style.transition = 'opacity 0.3s'; }
+  await supabase.from('tasks').update({ status: 'cancelled' }).eq('id', id);
+  toast('Task deleted', 'info');
+  setTimeout(() => load(), 300);
+};
 
 window.markDone = async (id, checkEl) => {
   checkEl.style.background = 'var(--green)';
@@ -232,4 +253,3 @@ window.submitTask = async () => {
 };
 
 load();
-startPolling(load, 15000);
