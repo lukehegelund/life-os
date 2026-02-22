@@ -16,8 +16,8 @@ async function load() {
 
 async function loadStats() {
   const [totalRes, dueRes] = await Promise.all([
-    supabase.table('vocab_words').select('language, srs_stage', { count: 'exact' }),
-    supabase.table('vocab_words').select('language', { count: 'exact' }).lte('next_review', T)
+    supabase.from('vocab_words').select('language, srs_stage', { count: 'exact' }),
+    supabase.from('vocab_words').select('language', { count: 'exact' }).lte('next_review', T)
   ]);
 
   const words = totalRes.data || [];
@@ -40,7 +40,7 @@ async function loadStats() {
 
 async function loadDueWords() {
   const el = document.getElementById('flashcard-section');
-  const query = supabase.table('vocab_words').select('*').lte('next_review', T);
+  const query = supabase.from('vocab_words').select('*').lte('next_review', T);
   if (activeLanguage !== 'All') query.eq('language', activeLanguage);
   const res = await query.order('next_review').limit(20);
   dueWords = res.data || [];
@@ -99,7 +99,7 @@ window.reviewWord = async (wordId, result) => {
 
   const now = new Date().toISOString();
   await Promise.all([
-    supabase.table('vocab_words').update({
+    supabase.from('vocab_words').update({
       srs_stage: newStage,
       next_review: nextReview,
       last_reviewed: now,
@@ -107,7 +107,7 @@ window.reviewWord = async (wordId, result) => {
       times_correct: w.times_correct + (result === 'correct' ? 1 : 0),
       times_wrong: w.times_wrong + (result === 'wrong' ? 1 : 0)
     }).eq('id', wordId),
-    supabase.table('srs_reviews').insert({
+    supabase.from('srs_reviews').insert({
       word_id: wordId, reviewed_at: now, result, old_stage: oldStage, new_stage: newStage
     })
   ]);
@@ -119,7 +119,7 @@ window.reviewWord = async (wordId, result) => {
 
 async function loadBrowser() {
   const el = document.getElementById('vocab-browser');
-  const query = supabase.table('vocab_words').select('*').order('language').order('srs_stage').order('english');
+  const query = supabase.from('vocab_words').select('*').order('language').order('srs_stage').order('english');
   if (activeLanguage !== 'All') query.eq('language', activeLanguage);
   const res = await query;
   const words = res.data || [];
