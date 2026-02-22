@@ -5,28 +5,261 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Calendar — Life OS</title>
 <link rel="stylesheet" href="css/main.css?v=2">
+<style>
+/* ── Calendar-specific styles ─────────────────────────────────────── */
+.cal-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 16px 8px;
+}
+.cal-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cal-nav-btn {
+  background: none;
+  border: 1px solid var(--gray-200);
+  border-radius: 8px;
+  width: 32px; height: 32px;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--gray-600);
+}
+.cal-nav-btn:active { background: var(--gray-100); }
+.cal-today-btn {
+  background: none;
+  border: 1px solid var(--gray-200);
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--gray-600);
+}
+.cal-month-label {
+  font-size: 16px;
+  font-weight: 700;
+  min-width: 160px;
+  text-align: center;
+}
+.cal-view-toggle {
+  display: flex;
+  border: 1px solid var(--gray-200);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.cal-view-btn {
+  background: none;
+  border: none;
+  padding: 5px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--gray-500);
+  font-weight: 500;
+}
+.cal-view-btn.active {
+  background: var(--blue);
+  color: #fff;
+}
+
+/* Month view */
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+}
+.cal-day-label {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--gray-400);
+  padding: 6px 2px;
+  text-transform: uppercase;
+}
+.cal-day {
+  min-height: 56px;
+  border: 1px solid var(--gray-100);
+  padding: 4px;
+  cursor: pointer;
+  position: relative;
+}
+.cal-day:hover { background: var(--gray-50); }
+.cal-day.other-month .cal-day-num { color: var(--gray-300); }
+.cal-day.today .cal-day-num {
+  background: var(--blue);
+  color: white;
+  border-radius: 50%;
+  width: 22px; height: 22px;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700;
+}
+.cal-day.selected { background: #EFF6FF; }
+.cal-day-num { font-size: 12px; font-weight: 500; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; }
+.cal-dots {
+  display: flex;
+  gap: 2px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+.cal-dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Week view */
+.week-grid {
+  overflow-x: auto;
+}
+.week-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 480px;
+  font-size: 13px;
+}
+.week-day-header {
+  text-align: center;
+  padding: 8px 4px;
+  border-bottom: 2px solid var(--gray-100);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gray-500);
+}
+.week-day-header.today-col {
+  color: var(--blue);
+  border-bottom-color: var(--blue);
+}
+.week-day-date {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--gray-800);
+  display: block;
+}
+.week-day-date.today-num {
+  background: var(--blue);
+  color: white;
+  border-radius: 50%;
+  width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 2px;
+}
+.week-cell {
+  vertical-align: top;
+  padding: 4px;
+  border-left: 1px solid var(--gray-100);
+  min-height: 80px;
+}
+.week-event {
+  border-radius: 5px;
+  padding: 3px 6px;
+  margin-bottom: 3px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.3;
+  cursor: pointer;
+  text-decoration: none;
+  display: block;
+  color: white;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Day events panel */
+.cal-legend {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--gray-400);
+  padding: 4px 16px 10px;
+}
+.cal-legend-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 3px;
+  vertical-align: middle;
+}
+.cal-day-panel {
+  margin: 0 0 12px;
+}
+.cal-day-panel-header {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gray-600);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+  padding: 0 4px;
+}
+.cal-event-item {
+  display: flex;
+  align-items: stretch;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--gray-50);
+  margin-bottom: 6px;
+  text-decoration: none;
+  color: inherit;
+  border: 1px solid var(--gray-100);
+}
+.cal-event-item:hover { background: var(--gray-100); }
+.cal-event-stripe {
+  width: 4px;
+  flex-shrink: 0;
+}
+.cal-event-content {
+  padding: 8px 10px;
+  flex: 1;
+}
+.cal-event-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--gray-800);
+}
+.cal-event-meta {
+  font-size: 12px;
+  color: var(--gray-400);
+  margin-top: 2px;
+}
+.no-events {
+  text-align: center;
+  color: var(--gray-400);
+  font-size: 14px;
+  padding: 24px 0;
+}
+</style>
 </head>
 <body>
 
-<header class="page-header">
-  <div class="cal-header">
-    <button class="cal-nav-btn" onclick="prevMonth()">‹</button>
-    <div class="cal-month-label" id="month-label">Loading…</div>
-    <button class="cal-nav-btn" onclick="nextMonth()">›</button>
+<header class="page-header" style="padding-bottom:0">
+  <div class="cal-toolbar">
+    <div class="cal-nav">
+      <button class="cal-nav-btn" onclick="prev()">‹</button>
+      <button class="cal-today-btn" onclick="goToday()">Today</button>
+      <button class="cal-nav-btn" onclick="next()">›</button>
+    </div>
+    <div class="cal-month-label" id="period-label">Loading…</div>
+    <div class="cal-view-toggle">
+      <button class="cal-view-btn active" id="btn-month" onclick="setView('month')">Month</button>
+      <button class="cal-view-btn" id="btn-week" onclick="setView('week')">Week</button>
+    </div>
   </div>
-  <!-- Legend -->
-  <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--gray-400);margin-top:6px">
-    <span><span class="cal-dot" style="background:var(--blue);display:inline-block;vertical-align:middle"></span> Class</span>
-    <span><span class="cal-dot" style="background:var(--orange);display:inline-block;vertical-align:middle"></span> Task</span>
-    <span><span class="cal-dot" style="background:var(--red);display:inline-block;vertical-align:middle"></span> Reminder</span>
-    <span><span class="cal-dot" style="background:var(--green);display:inline-block;vertical-align:middle"></span> Wedding</span>
+  <div class="cal-legend">
+    <span><span class="cal-legend-dot" style="background:var(--blue)"></span>Class</span>
+    <span><span class="cal-legend-dot" style="background:var(--orange)"></span>Task</span>
+    <span><span class="cal-legend-dot" style="background:var(--red)"></span>Reminder</span>
+    <span><span class="cal-legend-dot" style="background:var(--green)"></span>Wedding</span>
   </div>
 </header>
 
 <main class="content">
 
-  <!-- Monthly grid -->
-  <div class="card" style="padding:12px">
+  <!-- Calendar grid (month or week) -->
+  <div class="card" style="padding:8px;overflow:hidden" id="cal-card">
     <div class="cal-grid" id="cal-day-labels">
       <div class="cal-day-label">Sun</div>
       <div class="cal-day-label">Mon</div>
@@ -36,14 +269,14 @@
       <div class="cal-day-label">Fri</div>
       <div class="cal-day-label">Sat</div>
     </div>
-    <div class="cal-grid" id="cal-grid">
-      <!-- Filled by calendar.js -->
-    </div>
+    <div id="cal-grid"><!-- filled by JS --></div>
   </div>
 
-  <!-- Selected day events -->
-  <div id="selected-day-header" style="font-size:13px;font-weight:700;color:var(--gray-600);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px"></div>
-  <div id="day-events" class="cal-events-list"></div>
+  <!-- Selected day events panel -->
+  <div class="cal-day-panel">
+    <div class="cal-day-panel-header" id="selected-day-header"></div>
+    <div id="day-events"></div>
+  </div>
 
 </main>
 
@@ -70,6 +303,6 @@
   </a>
 </nav>
 
-<script type="module" src="js/calendar.js"></script>
+<script type="module" src="js/calendar.js?v=2"></script>
 </body>
 </html>
