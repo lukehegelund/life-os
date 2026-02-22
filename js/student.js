@@ -7,7 +7,7 @@ if (!studentId) { window.location.href = 'students.html'; }
 
 async function load() {
   const [studentRes] = await Promise.all([
-    supabase.table('students').select('*').eq('id', studentId).single()
+    supabase.from('students').select('*').eq('id', studentId).single()
   ]);
   const s = studentRes.data;
   if (!s) { document.getElementById('student-name').textContent = 'Not found'; return; }
@@ -44,7 +44,7 @@ async function load() {
 async function loadNotes(s) {
   const el = document.getElementById('notes-list');
   showSpinner(el);
-  const res = await supabase.table('student_notes')
+  const res = await supabase.from('student_notes')
     .select('*')
     .eq('student_id', studentId)
     .order('date', { ascending: false })
@@ -76,7 +76,7 @@ async function loadNotes(s) {
 
 async function loadGold(s) {
   const el = document.getElementById('gold-list');
-  const res = await supabase.table('gold_transactions')
+  const res = await supabase.from('gold_transactions')
     .select('*')
     .eq('student_id', studentId)
     .order('date', { ascending: false })
@@ -107,7 +107,7 @@ async function loadGold(s) {
 
 async function loadAttendance(s) {
   const el = document.getElementById('attendance-summary');
-  const res = await supabase.table('attendance')
+  const res = await supabase.from('attendance')
     .select('*, classes(name)')
     .eq('student_id', studentId)
     .order('date', { ascending: false })
@@ -129,7 +129,7 @@ async function loadAttendance(s) {
 
 async function loadGrades(s) {
   const el = document.getElementById('grades-list');
-  const res = await supabase.table('grades')
+  const res = await supabase.from('grades')
     .select('*, classes(name)')
     .eq('student_id', studentId)
     .order('date', { ascending: false })
@@ -155,7 +155,7 @@ async function loadGrades(s) {
 
 async function loadClasses(s) {
   const el = document.getElementById('classes-list');
-  const res = await supabase.table('class_enrollments')
+  const res = await supabase.from('class_enrollments')
     .select('*, classes(id, name, subject, day_of_week)')
     .eq('student_id', studentId)
     .is('enrolled_until', null);
@@ -175,7 +175,7 @@ async function loadClasses(s) {
 
 async function loadFollowups(s) {
   const el = document.getElementById('followups-list');
-  const res = await supabase.table('student_notes')
+  const res = await supabase.from('student_notes')
     .select('*')
     .eq('student_id', studentId)
     .eq('followup_needed', true)
