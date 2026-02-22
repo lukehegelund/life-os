@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Client — Life OS</title>
+<link rel="stylesheet" href="css/main.css">
+<style>
+.modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:500; align-items:flex-end; justify-content:center; }
+.modal-sheet { background:var(--white); border-radius:16px 16px 0 0; padding:20px; width:100%; max-width:600px; }
+.modal-title { font-size:17px; font-weight:700; margin-bottom:16px; }
+</style>
+</head>
+<body>
+
+<header class="page-header">
+  <div class="header-row">
+    <div>
+      <h1 id="client-name">Loading...</h1>
+    </div>
+    <a href="tov.html" class="btn btn-ghost btn-sm">← TOV</a>
+  </div>
+</header>
+
+<main class="content">
+
+  <div id="client-header"></div>
+
+  <!-- Quick actions -->
+  <div style="display:flex;gap:8px;margin-bottom:12px">
+    <button class="btn btn-green" style="flex:1" onclick="showPaymentForm()">+ Payment</button>
+  </div>
+
+  <!-- Payments -->
+  <div class="card">
+    <div class="card-title">💳 Payments</div>
+    <div id="payments-list"></div>
+  </div>
+
+  <!-- Contracts -->
+  <div class="card">
+    <div class="card-title">📄 Contracts</div>
+    <div id="contracts-list"></div>
+  </div>
+
+  <!-- Inquiry notes -->
+  <div class="card">
+    <div class="card-title">📥 Inquiry History</div>
+    <div id="inquiry-notes"></div>
+  </div>
+
+</main>
+
+<!-- Payment modal -->
+<div class="modal-overlay" id="payment-modal">
+  <div class="modal-sheet">
+    <div class="modal-title">Log Payment</div>
+    <div class="form-group">
+      <label class="form-label">Date</label>
+      <input type="date" class="form-input" id="pay-date">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Amount ($)</label>
+      <input type="number" class="form-input" id="pay-amount" placeholder="0.00" step="0.01">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Type</label>
+      <select class="form-select" id="pay-type">
+        <option>Deposit</option><option>Final</option><option>Partial</option><option>Refund</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Method (Venmo, check, etc.)</label>
+      <input type="text" class="form-input" id="pay-method" placeholder="Venmo">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Tithe Amount ($)</label>
+      <input type="number" class="form-input" id="pay-tithe" placeholder="0" step="0.01">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Tithe Destination</label>
+      <input type="text" class="form-input" id="pay-tithe-dest" placeholder="Sun City, River Tech...">
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-green" style="flex:1" onclick="submitPayment()">Save</button>
+      <button class="btn btn-ghost" onclick="closePaymentModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<nav class="bottom-nav">
+  <a href="index.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+    Home
+  </a>
+  <a href="daily.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/></svg>
+    Daily
+  </a>
+  <a href="students.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+    Students
+  </a>
+  <a href="tov.html" class="nav-item active">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+    TOV
+  </a>
+  <a href="tasks.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/></svg>
+    Tasks
+  </a>
+</nav>
+
+<script type="module" src="js/tov-client.js"></script>
+</body>
+</html>
