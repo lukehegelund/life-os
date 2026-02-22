@@ -12,9 +12,9 @@ async function load() {
 async function loadStats() {
   const el = document.getElementById('stats');
   const [studentsRes, clientsRes, vocabRes] = await Promise.all([
-    supabase.table('students').select('id', { count: 'exact', head: true }).eq('status', 'Active'),
-    supabase.table('tov_clients').select('id', { count: 'exact', head: true }).not('contract_status', 'eq', 'Void'),
-    supabase.table('vocab_words').select('id', { count: 'exact', head: true }).lte('next_review', T)
+    supabase.from('students').select('id', { count: 'exact', head: true }).eq('status', 'Active'),
+    supabase.from('tov_clients').select('id', { count: 'exact', head: true }).not('contract_status', 'eq', 'Void'),
+    supabase.from('vocab_words').select('id', { count: 'exact', head: true }).lte('next_review', T)
   ]);
   const students = studentsRes.count ?? 0;
   const clients = clientsRes.count ?? 0;
@@ -42,7 +42,7 @@ async function loadStats() {
     </div>
   `;
   // Load last exercise
-  const exRes = await supabase.table('exercise_log').select('date').order('date', { ascending: false }).limit(1);
+  const exRes = await supabase.from('exercise_log').select('date').order('date', { ascending: false }).limit(1);
   if (exRes.data && exRes.data.length) {
     const last = new Date(exRes.data[0].date + 'T00:00:00');
     const diff = Math.floor((new Date(T) - last) / 86400000);
@@ -55,9 +55,9 @@ async function loadStats() {
 async function loadPending() {
   const el = document.getElementById('pending');
   const [goldRes, followupRes, mealsRes] = await Promise.all([
-    supabase.table('gold_transactions').select('student_id', { count: 'exact', head: true }).eq('distributed', false),
-    supabase.table('student_notes').select('id', { count: 'exact', head: true }).eq('followup_needed', true),
-    supabase.table('food_log').select('date').gte('date', new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0])
+    supabase.from('gold_transactions').select('student_id', { count: 'exact', head: true }).eq('distributed', false),
+    supabase.from('student_notes').select('id', { count: 'exact', head: true }).eq('followup_needed', true),
+    supabase.from('food_log').select('date').gte('date', new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0])
   ]);
   const goldCount = goldRes.count ?? 0;
   const followupCount = followupRes.count ?? 0;
@@ -89,7 +89,7 @@ async function loadToday() {
   const dayOfWeek = new Date(T + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long' });
   const dayShort = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(T + 'T00:00:00').getDay()];
 
-  const res = await supabase.table('classes').select('id, name, time_start, subject').or(`day_of_week.ilike.%${dayShort}%,day_of_week.ilike.%${dayOfWeek}%`);
+  const res = await supabase.from('classes').select('id, name, time_start, subject').or(`day_of_week.ilike.%${dayShort}%,day_of_week.ilike.%${dayOfWeek}%`);
   const classes = res.data || [];
 
   if (!classes.length) {
@@ -99,7 +99,7 @@ async function loadToday() {
 
   // Check which have attendance logged
   const classIds = classes.map(c => c.id);
-  const attRes = await supabase.table('attendance').select('class_id').eq('date', T).in('class_id', classIds);
+  const attRes = await supabase.from('attendance').select('class_id').eq('date', T).in('class_id', classIds);
   const logged = new Set((attRes.data || []).map(a => a.class_id));
 
   el.innerHTML = classes.map(c => `
@@ -120,7 +120,7 @@ async function loadToday() {
 async function loadUpcoming() {
   const el = document.getElementById('upcoming-tov');
   const next30 = new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0];
-  const res = await supabase.table('tov_clients').select('id, name, wedding_date, package, contract_status')
+  const res = await supabase.from('tov_clients').select('id, name, wedding_date, package, contract_status')
     .gte('wedding_date', T).lte('wedding_date', next30).order('wedding_date');
   const clients = res.data || [];
   if (!clients.length) {
