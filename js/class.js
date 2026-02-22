@@ -1,6 +1,6 @@
 // Life OS — Class Dashboard
 import { supabase } from './supabase.js';
-import { qp, today, fmtDate, goldStr, goldClass, attendanceBadge, toast, showSpinner, showEmpty } from './utils.js';
+import { qp, today, fmtDate, goldStr, goldClass, catBadge, toast, showSpinner, showEmpty } from './utils.js';
 import { startPolling } from './polling.js';
 
 const classId = qp('id');
@@ -15,135 +15,223 @@ async function load() {
 
   document.title = cls.name + ' — Life OS';
   document.getElementById('class-name').textContent = cls.name;
-  document.getElementById('class-subtitle').textContent = `${cls.subject || ''} · ${cls.day_of_week || ''}${cls.room ? ' · ' + cls.room : ''}`;
+  document.getElementById('class-subtitle').textContent =
+    [cls.subject, cls.day_of_week, cls.room ? 'Room ' + cls.room : null]
+      .filter(Boolean).join(' · ');
   if (cls.current_unit) document.getElementById('class-unit').textContent = '📖 ' + cls.current_unit;
 
-  await Promise.all([loadRoster(cls), loadGoldAdder(cls), loadRecentNotes(cls), loadAttendanceGrid(cls)]);
+  await Promise.all([
+    loadRoster(cls),
+    loadGoldBulk(cls),
+    loadRecentNotes(cls),
+    loadAttendanceGrid(cls),
+  ]);
 }
+
+// ── Roster + tap-to-cycle attendance ─────────────────────────────────────────
+const ATT_CYCLE = ['Present', 'Late', 'Absent', 'Excused'];
+const attMap = {};  // student_id → current status string
 
 async function loadRoster(cls) {
   const el = document.getElementById('roster');
-  const res = await supabase.from('class_enrollments')
-    .select('*, students(id, name, current_gold)')
-    .eq('class_id', classId)
-    .is('enrolled_until', null);
-  const enrollments = res.data || [];
+  showSpinner(el);
+
+  const [enrRes, attRes] = await Promise.all([
+    supabase.from('class_enrollments')
+      .select('*, students(id, name, current_gold)')
+      .eq('class_id', classId)
+      .is('enrolled_until', null),
+    supabase.from('attendance')
+      .select('*')
+      .eq('class_id', classId)
+      .eq('date', T),
+  ]);
+
+  const enrollments = enrRes.data || [];
   if (!enrollments.length) { showEmpty(el, '👥', 'No students enrolled'); return; }
 
-  // Load today's attendance
-  const ids = enrollments.map(e => e.student_id);
-  const attRes = await supabase.from('attendance').select('*').eq('class_id', classId).eq('date', T).in('student_id', ids);
-  const attMap = Object.fromEntries((attRes.data || []).map(a => [a.student_id, a]));
+  // Seed the attMap
+  for (const a of (attRes.data || [])) {
+    attMap[a.student_id] = a.status;
+  }
 
+  renderRoster(enrollments);
+}
+
+function renderRoster(enrollments) {
+  const el = document.getElementById('roster');
   el.innerHTML = enrollments.map(e => {
     const s = e.students;
-    const att = attMap[s.id];
+    const status = attMap[s.id] || null;
     return `
       <div class="list-item">
         <div class="list-item-left">
           <a href="student.html?id=${s.id}" style="text-decoration:none">
             <div class="list-item-name">${s.name}</div>
           </a>
-          <div class="list-item-sub">${s.current_gold ?? 0} 🪙${e.skip_days ? ' · skips ' + e.skip_days : ''}</div>
+          <div class="list-item-sub">${s.current_gold ?? 0} 🪙</div>
         </div>
         <div class="list-item-right">
-          ${att ? attendanceBadge(att.status) : '<span class="badge badge-gray">—</span>'}
-          <select class="form-select" style="width:auto;padding:4px 8px;font-size:13px" onchange="logAtt(${s.id}, this.value)">
-            <option value="">Mark...</option>
-            <option value="Present" ${att?.status === 'Present' ? 'selected' : ''}>Present</option>
-            <option value="Absent" ${att?.status === 'Absent' ? 'selected' : ''}>Absent</option>
-            <option value="Late" ${att?.status === 'Late' ? 'selected' : ''}>Late</option>
-            <option value="Excused" ${att?.status === 'Excused' ? 'selected' : ''}>Excused</option>
-          </select>
+          <button class="att-btn ${attBtnClass(status)}"
+            onclick="cycleAtt(${s.id}, '${status || ''}')"
+            id="att-btn-${s.id}">
+            ${status || 'Mark'}
+          </button>
         </div>
       </div>`;
   }).join('');
 }
 
-async function logAtt(studentId, status) {
-  if (!status) return;
-  const { error } = await supabase.from('attendance').upsert({
-    student_id: studentId, class_id: classId, date: T, status
-  }, { onConflict: 'student_id,class_id,date' });
-  if (error) toast('Error: ' + error.message, 'error');
-  else toast('Attendance saved', 'success');
+function attBtnClass(status) {
+  if (status === 'Present') return 'att-present';
+  if (status === 'Absent')  return 'att-absent';
+  if (status === 'Late')    return 'att-late';
+  if (status === 'Excused') return 'att-excused';
+  return 'att-none';
 }
-window.logAtt = logAtt;
 
-async function loadGoldAdder(cls) {
+window.cycleAtt = async (studentId, current) => {
+  const idx = ATT_CYCLE.indexOf(current);
+  const next = idx === -1 ? ATT_CYCLE[0] : ATT_CYCLE[(idx + 1) % ATT_CYCLE.length];
+
+  // Optimistic UI update
+  attMap[studentId] = next;
+  const btn = document.getElementById(`att-btn-${studentId}`);
+  if (btn) {
+    btn.textContent = next;
+    btn.className = `att-btn ${attBtnClass(next)}`;
+    btn.setAttribute('onclick', `cycleAtt(${studentId}, '${next}')`);
+  }
+
+  const { error } = await supabase.from('attendance').upsert({
+    student_id: studentId, class_id: classId, date: T, status: next
+  }, { onConflict: 'student_id,class_id,date' });
+
+  if (error) {
+    toast('Error saving attendance', 'error');
+    attMap[studentId] = current;
+    if (btn) {
+      btn.textContent = current || 'Mark';
+      btn.className = `att-btn ${attBtnClass(current || null)}`;
+      btn.setAttribute('onclick', `cycleAtt(${studentId}, '${current}')`);
+    }
+  }
+};
+
+// ── Bulk Gold ─────────────────────────────────────────────────────────────────
+// State: which student IDs are checked, plus the amount + reason
+const goldChecked = new Set();
+
+async function loadGoldBulk(cls) {
   const el = document.getElementById('gold-adder');
   const res = await supabase.from('class_enrollments')
-    .select('student_id, students(id, name)')
+    .select('student_id, students(id, name, current_gold)')
     .eq('class_id', classId)
     .is('enrolled_until', null);
   const enrollments = res.data || [];
-
-  // Pending gold state per student
-  const pending = {};
-  enrollments.forEach(e => { pending[e.student_id] = 0; });
-
-  function renderAdder() {
-    el.innerHTML = `
-      <div style="margin-bottom:12px">
-        <input type="text" class="form-input" id="gold-reason" placeholder="Reason (e.g. great participation)">
-      </div>
-      ${enrollments.map(e => `
-        <div class="gold-adder-row">
-          <div class="gold-adder-name">${e.students.name}</div>
-          <button class="gold-btn gold-btn-minus" onclick="adjustGold(${e.student_id}, -1)">−</button>
-          <div class="gold-pending ${pending[e.student_id] > 0 ? 'gold-pos' : pending[e.student_id] < 0 ? 'gold-neg' : ''}" id="gp-${e.student_id}">${pending[e.student_id] === 0 ? '—' : goldStr(pending[e.student_id])}</div>
-          <button class="gold-btn gold-btn-plus" onclick="adjustGold(${e.student_id}, 1)">+</button>
-        </div>`).join('')}
-      <div style="margin-top:14px;display:flex;gap:8px">
-        <button class="btn btn-gold" style="flex:1" onclick="submitGold()">Submit Gold</button>
-        <button class="btn btn-ghost" onclick="resetGold()">Reset</button>
-      </div>`;
-  }
-
-  window.adjustGold = (sid, delta) => {
-    pending[sid] = (pending[sid] || 0) + delta;
-    const el2 = document.getElementById(`gp-${sid}`);
-    if (el2) {
-      el2.textContent = pending[sid] === 0 ? '—' : goldStr(pending[sid]);
-      el2.className = `gold-pending ${pending[sid] > 0 ? 'gold-pos' : pending[sid] < 0 ? 'gold-neg' : ''}`;
-    }
-  };
-
-  window.submitGold = async () => {
-    const reason = document.getElementById('gold-reason').value.trim() || 'Class gold';
-    const entries = Object.entries(pending).filter(([,v]) => v !== 0);
-    if (!entries.length) { toast('No gold to submit', 'info'); return; }
-    const inserts = entries.map(([sid, amount]) => ({
-      student_id: Number(sid), class_id: Number(classId), date: T,
-      amount, reason,
-      category: amount > 0 ? 'Participation' : 'Behavior',
-      distributed: false
-    }));
-    const { error } = await supabase.from('gold_transactions').insert(inserts);
-    if (error) { toast('Error: ' + error.message, 'error'); return; }
-    // Update student balances
-    for (const [sid, amount] of entries) {
-      await supabase.rpc('increment_gold', { p_student_id: Number(sid), p_amount: amount }).catch(() => {
-        // Fallback: manual update
-        supabase.from('students').select('current_gold').eq('id', sid).single().then(r => {
-          const cur = r.data?.current_gold ?? 0;
-          supabase.from('students').update({ current_gold: cur + amount }).eq('id', sid);
-        });
-      });
-    }
-    Object.keys(pending).forEach(k => { pending[k] = 0; });
-    toast(`Gold submitted for ${entries.length} student${entries.length > 1 ? 's' : ''}!`, 'success');
-    renderAdder();
-  };
-
-  window.resetGold = () => {
-    Object.keys(pending).forEach(k => { pending[k] = 0; });
-    renderAdder();
-  };
-
-  renderAdder();
+  renderGoldBulk(enrollments);
 }
 
+function renderGoldBulk(enrollments) {
+  const el = document.getElementById('gold-adder');
+  el.innerHTML = `
+    <!-- Amount + Reason inputs -->
+    <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
+      <input type="number" id="gold-amount" class="form-input" placeholder="Amount" min="1" max="999" style="width:90px;text-align:center">
+      <input type="text" id="gold-reason" class="form-input" placeholder="Reason" style="flex:1">
+    </div>
+
+    <!-- Quick-select buttons -->
+    <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
+      <button class="btn btn-sm btn-ghost" onclick="selectAll()">Select All</button>
+      <button class="btn btn-sm btn-ghost" onclick="selectNone()">Clear</button>
+      <button class="btn btn-sm" style="background:var(--orange-light);color:var(--orange);border:none" onclick="setAmount(5)">+5</button>
+      <button class="btn btn-sm" style="background:var(--orange-light);color:var(--orange);border:none" onclick="setAmount(10)">+10</button>
+      <button class="btn btn-sm" style="background:var(--orange-light);color:var(--orange);border:none" onclick="setAmount(25)">+25</button>
+      <button class="btn btn-sm" style="background:var(--coral-light);color:var(--red);border:none" onclick="setAmount(-5)">−5</button>
+      <button class="btn btn-sm" style="background:var(--coral-light);color:var(--red);border:none" onclick="setAmount(-10)">−10</button>
+    </div>
+
+    <!-- Student list with checkboxes -->
+    ${enrollments.map(e => {
+      const s = e.students;
+      return `
+        <div class="gold-bulk-row">
+          <input type="checkbox" class="gold-bulk-check" id="gc-${s.id}"
+            ${goldChecked.has(s.id) ? 'checked' : ''}
+            onchange="toggleGoldCheck(${s.id}, this.checked)">
+          <label for="gc-${s.id}" class="gold-bulk-name" style="cursor:pointer">${s.name}</label>
+          <span class="gold-bulk-bal">${s.current_gold ?? 0} 🪙</span>
+        </div>`;
+    }).join('')}
+
+    <!-- Submit button -->
+    <div style="margin-top:14px">
+      <button class="btn btn-gold btn-full" onclick="submitBulkGold()">🪙 Submit Gold</button>
+    </div>`;
+}
+
+window.toggleGoldCheck = (id, checked) => {
+  if (checked) goldChecked.add(id);
+  else goldChecked.delete(id);
+};
+
+window.selectAll = () => {
+  document.querySelectorAll('.gold-bulk-check').forEach(cb => {
+    cb.checked = true;
+    goldChecked.add(Number(cb.id.replace('gc-', '')));
+  });
+};
+
+window.selectNone = () => {
+  document.querySelectorAll('.gold-bulk-check').forEach(cb => {
+    cb.checked = false;
+  });
+  goldChecked.clear();
+};
+
+window.setAmount = (val) => {
+  const inp = document.getElementById('gold-amount');
+  if (inp) inp.value = val;
+};
+
+window.submitBulkGold = async () => {
+  const amountRaw = parseInt(document.getElementById('gold-amount').value, 10);
+  const reason = document.getElementById('gold-reason').value.trim() || 'Class gold';
+  if (!amountRaw || amountRaw === 0) { toast('Enter an amount first', 'info'); return; }
+  if (!goldChecked.size) { toast('Select at least one student', 'info'); return; }
+
+  const inserts = [];
+  for (const sid of goldChecked) {
+    inserts.push({
+      student_id: sid,
+      class_id: Number(classId),
+      date: T,
+      amount: amountRaw,
+      reason,
+      category: amountRaw > 0 ? 'Participation' : 'Behavior',
+      distributed: false,
+    });
+  }
+
+  const { error } = await supabase.from('gold_transactions').insert(inserts);
+  if (error) { toast('Error: ' + error.message, 'error'); return; }
+
+  // Update student balances (manual fallback — increment_gold RPC may not exist)
+  for (const sid of goldChecked) {
+    const r = await supabase.from('students').select('current_gold').eq('id', sid).single();
+    const cur = r.data?.current_gold ?? 0;
+    await supabase.from('students').update({ current_gold: cur + amountRaw }).eq('id', sid);
+  }
+
+  toast(`Gold submitted for ${goldChecked.size} student${goldChecked.size > 1 ? 's' : ''}!`, 'success');
+  goldChecked.clear();
+
+  // Refresh gold balances display
+  loadGoldBulk();
+};
+
+// ── Recent Notes ──────────────────────────────────────────────────────────────
 async function loadRecentNotes(cls) {
   const el = document.getElementById('recent-notes');
   const res = await supabase.from('student_notes')
@@ -153,51 +241,55 @@ async function loadRecentNotes(cls) {
     .limit(20);
   const notes = res.data || [];
   if (!notes.length) { showEmpty(el, '📝', 'No notes for this class'); return; }
+
   el.innerHTML = notes.map(n => `
     <div class="list-item">
       <div class="list-item-left">
         <div style="display:flex;align-items:center;gap:6px">
           <strong style="font-size:14px">${n.students?.name || '—'}</strong>
-          <span class="badge badge-${catColor(n.category)}">${n.category}</span>
+          ${catBadge(n.category)}
+          ${n.followup_needed ? '<span style="font-size:13px">📌</span>' : ''}
         </div>
-        <div class="list-item-sub">${fmtDate(n.date)}${n.followup_needed ? ' 📌' : ''}</div>
-        <div style="font-size:14px;margin-top:2px">${n.note || '—'}</div>
+        <div class="list-item-sub">${fmtDate(n.date)}</div>
+        <div style="font-size:14px;margin-top:2px;color:var(--gray-800)">${n.note || '—'}</div>
       </div>
     </div>`).join('');
 }
 
-function catColor(cat) {
-  const m = { Academic:'blue', Behavior:'red', Social:'purple', Administrative:'gray', Pattern:'gold', Parent:'green', Health:'red' };
-  return m[cat] || 'gray';
-}
-
+// ── Attendance Grid ────────────────────────────────────────────────────────────
 async function loadAttendanceGrid(cls) {
   const el = document.getElementById('att-grid');
-  // Last 14 days
-  const end = T;
   const start = new Date(Date.now() - 14 * 86400000).toISOString().split('T')[0];
 
   const [rosterRes, attRes] = await Promise.all([
-    supabase.from('class_enrollments').select('student_id, students(id, name)').eq('class_id', classId).is('enrolled_until', null),
-    supabase.from('attendance').select('*').eq('class_id', classId).gte('date', start).lte('date', end)
+    supabase.from('class_enrollments')
+      .select('student_id, students(id, name)')
+      .eq('class_id', classId)
+      .is('enrolled_until', null),
+    supabase.from('attendance')
+      .select('*')
+      .eq('class_id', classId)
+      .gte('date', start)
+      .lte('date', T),
   ]);
 
   const students = (rosterRes.data || []).map(e => e.students);
   const attRecords = attRes.data || [];
-  const attMap = {};
+  const histMap = {};
   for (const a of attRecords) {
-    if (!attMap[a.student_id]) attMap[a.student_id] = {};
-    attMap[a.student_id][a.date] = a.status;
+    if (!histMap[a.student_id]) histMap[a.student_id] = {};
+    histMap[a.student_id][a.date] = a.status;
   }
 
-  // Only show class days
   const days = [];
-  for (let i = 14; i >= 0; i--) {
-    const d = new Date(Date.now() - i * 86400000).toISOString().split('T')[0];
-    days.push(d);
+  for (let i = 13; i >= 0; i--) {
+    days.push(new Date(Date.now() - i * 86400000).toISOString().split('T')[0]);
   }
 
-  const colors = { Present: 'var(--green)', Absent: 'var(--red)', Late: 'var(--orange)', Excused: 'var(--gray-400)' };
+  const colors = {
+    Present: 'var(--green)', Absent: 'var(--red)',
+    Late: 'var(--orange)', Excused: 'var(--gray-400)'
+  };
 
   el.innerHTML = `
     <div style="overflow-x:auto">
@@ -208,9 +300,11 @@ async function loadAttendanceGrid(cls) {
         </tr>
         ${students.map(s => `
           <tr>
-            <td style="padding:4px 8px;font-weight:600;white-space:nowrap"><a href="student.html?id=${s.id}" style="color:inherit;text-decoration:none">${s.name}</a></td>
+            <td style="padding:4px 8px;font-weight:600;white-space:nowrap">
+              <a href="student.html?id=${s.id}" style="color:inherit;text-decoration:none">${s.name}</a>
+            </td>
             ${days.slice(-10).map(d => {
-              const st = attMap[s.id]?.[d];
+              const st = histMap[s.id]?.[d];
               return `<td style="padding:4px;text-align:center">
                 <div title="${st || '—'}" style="width:12px;height:12px;border-radius:50%;margin:auto;background:${st ? colors[st] : 'var(--gray-200)'}"></div>
               </td>`;
