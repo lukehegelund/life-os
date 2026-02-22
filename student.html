@@ -39,6 +39,31 @@
     <div class="card-title">📝 Notes
       <span style="font-size:11px;color:var(--gray-400);font-weight:400;margin-left:8px">← delete · → log</span>
     </div>
+
+    <!-- Add Note Form -->
+    <div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--gray-100)">
+      <textarea id="new-note-text" class="form-input" rows="2"
+        placeholder="Add a note…"
+        style="width:100%;resize:none;margin-bottom:8px;font-size:14px"></textarea>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+        <select id="new-note-class" class="form-input" style="flex:1;min-width:120px;font-size:13px">
+          <option value="">— No class —</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+        <label style="display:flex;align-items:center;gap:4px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="new-note-overview"> 👁 Overview
+        </label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="new-note-todo" checked> ✅ To-do
+        </label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="new-note-parent"> 📞 Tell Parent
+        </label>
+      </div>
+      <button onclick="saveNote()" class="btn btn-primary btn-sm" style="width:100%">Add Note</button>
+    </div>
+
     <div id="notes-list"></div>
   </div>
 
