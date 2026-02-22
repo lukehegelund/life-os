@@ -1,19 +1,130 @@
-// Life OS — Dashboard
+// Life OS — Dashboard (Phase 2)
 import { supabase } from './supabase.js';
-import { today, fmtDate, fmtDateLong, toast } from './utils.js';
+import { today, fmtDate, fmtDateLong, fmtTime, toast } from './utils.js';
 import { startPolling } from './polling.js';
+import { initSwipe } from './swipe-handler.js';
 
 const T = today();
 
 async function load() {
   document.getElementById('today-date').textContent = fmtDateLong(T);
   await Promise.all([
+    loadCurrentBanner(),
     loadStats(),
     loadHealthPrompts(),
     loadUrgentItems(),
     loadTodaysClasses(),
     loadUpcomingWeddings(),
   ]);
+}
+
+// ── Sticky current-item banner ─────────────────────────────────────────────
+async function loadCurrentBanner() {
+  const el = document.getElementById('current-banner');
+  if (!el) return;
+
+  const now = new Date();
+  const timeStr = now.toTimeString().slice(0,5); // HH:MM
+
+  // Find current class (within time window)
+  const dow = now.toLocaleDateString('en-US', { weekday: 'long' });
+  const isWeekday = ['Monday','Tuesday','Wednesday','Thursday'].includes(dow);
+  const isFriday = dow === 'Friday';
+
+  const classRes = await supabase.from('classes').select('*').order('time_start');
+  const allClasses = classRes.data || [];
+
+  const todayClasses = allClasses.filter(c => {
+    const d = (c.day_of_week || '').trim();
+    if (d === 'Mon-Thu') return isWeekday;
+    if (d === 'Tue-Thu') return ['Tuesday','Wednesday','Thursday'].includes(dow);
+    if (d === 'Friday') return isFriday;
+    if (d === 'Monday') return dow === 'Monday';
+    return d.toLowerCase().includes(dow.toLowerCase());
+  });
+
+  // Find class currently happening (within 15 min before start to end time)
+  let currentClass = null;
+  for (const c of todayClasses) {
+    if (!c.time_start) continue;
+    const start = c.time_start.slice(0,5);
+    const end = c.time_end?.slice(0,5);
+    const startMinus = subtractMinutes(start, 5);
+    if (timeStr >= startMinus && (!end || timeStr <= end)) {
+      currentClass = c;
+      break;
+    }
+  }
+
+  if (currentClass) {
+    el.style.display = 'block';
+    el.innerHTML = `
+      <a href="class.html?id=${currentClass.id}" class="current-banner-inner current-banner-class">
+        <div class="current-banner-icon">🏫</div>
+        <div class="current-banner-content">
+          <div class="current-banner-label">NOW IN CLASS</div>
+          <div class="current-banner-title">${currentClass.name}</div>
+          ${currentClass.time_start ? `<div class="current-banner-meta">${fmtTime(currentClass.time_start)}${currentClass.time_end ? ' – ' + fmtTime(currentClass.time_end) : ''} · ${currentClass.room ? 'Room ' + currentClass.room : ''}</div>` : ''}
+        </div>
+        <div class="current-banner-arrow">→</div>
+      </a>`;
+    return;
+  }
+
+  // No current class — show top urgent task with swipe
+  const taskRes = await supabase.from('tasks')
+    .select('*')
+    .eq('status', 'open')
+    .eq('priority', 'urgent')
+    .order('due_date')
+    .limit(1);
+  const task = taskRes.data?.[0];
+
+  if (task) {
+    el.style.display = 'block';
+    el.innerHTML = `
+      <div class="current-banner-inner current-banner-task swipe-item" data-id="${task.id}" style="touch-action:pan-y;overflow:hidden;position:relative">
+        <div data-swipe-inner style="display:flex;align-items:center;gap:12px;width:100%">
+          <div class="current-banner-icon">🔴</div>
+          <div class="current-banner-content">
+            <div class="current-banner-label">URGENT TASK ${task.due_date ? '· Due ' + fmtDate(task.due_date) : ''}</div>
+            <div class="current-banner-title">${task.title}</div>
+            <div class="current-banner-meta">${task.module} · swipe ← delete · → done</div>
+          </div>
+        </div>
+      </div>`;
+
+    const swipeEl = el.querySelector('.swipe-item');
+    if (swipeEl) {
+      initSwipe(swipeEl,
+        // LEFT = delete task
+        async () => {
+          await supabase.from('tasks').update({ status: 'cancelled' }).eq('id', task.id);
+          toast('Task removed', 'info');
+          loadCurrentBanner();
+          loadUrgentItems();
+        },
+        // RIGHT = mark done
+        async () => {
+          await supabase.from('tasks').update({ status: 'done', completed_at: new Date().toISOString() }).eq('id', task.id);
+          toast('Task done! ✅', 'success');
+          loadCurrentBanner();
+          loadUrgentItems();
+        }
+      );
+    }
+    return;
+  }
+
+  el.style.display = 'none';
+}
+
+function subtractMinutes(timeStr, mins) {
+  const [h, m] = timeStr.split(':').map(Number);
+  const total = h * 60 + m - mins;
+  const hh = Math.floor(Math.max(0, total) / 60).toString().padStart(2, '0');
+  const mm = (Math.max(0, total) % 60).toString().padStart(2, '0');
+  return `${hh}:${mm}`;
 }
 
 // ── Stats ──────────────────────────────────────────────────────────────────
@@ -51,6 +162,10 @@ async function loadStats() {
     <a href="tasks.html" class="stat-card" style="border-top:3px solid var(--orange)">
       <div class="stat-num">${tasksRes.count ?? 0}</div>
       <div class="stat-lbl">Open Tasks</div>
+    </a>
+    <a href="parents.html" class="stat-card" style="border-top:3px solid var(--coral)">
+      <div class="stat-num">📞</div>
+      <div class="stat-lbl">Parent CRM</div>
     </a>
   `;
 }
@@ -132,7 +247,7 @@ window.logExercisePrompt = async () => {
   loadHealthPrompts();
 };
 
-// ── Urgent Items ──────────────────────────────────────────────────────────
+// ── Urgent Items (with swipe on tasks) ────────────────────────────────────
 async function loadUrgentItems() {
   const el = document.getElementById('urgent-items');
   if (!el) return;
@@ -185,20 +300,17 @@ async function loadUrgentItems() {
   }
 
   if (urgentTasks.length) {
-    const byModule = {};
-    urgentTasks.forEach(t => {
-      if (!byModule[t.module]) byModule[t.module] = [];
-      byModule[t.module].push(t);
-    });
     html += `<div class="urgent-section urgent-section-orange">
-      <div class="urgent-section-header">🔴 Urgent Tasks (${urgentTasks.length})</div>
-      ${Object.entries(byModule).map(([mod, tasks]) => `
-        <div class="urgent-module-label">${mod}</div>
-        ${tasks.map(t => `
-          <div class="urgent-row">
+      <div class="urgent-section-header">🔴 Urgent Tasks (${urgentTasks.length})
+        <span style="font-size:11px;font-weight:400;margin-left:8px">← cancel · → done</span>
+      </div>
+      ${urgentTasks.map(t => `
+        <div class="swipe-item urgent-row" data-id="${t.id}" style="touch-action:pan-y;overflow:hidden;position:relative">
+          <div data-swipe-inner>
             <div class="urgent-row-text">${t.title}</div>
-            ${t.due_date ? `<div class="urgent-row-meta">Due ${fmtDate(t.due_date)}</div>` : ''}
-          </div>`).join('')}`).join('')}
+            ${t.due_date ? `<div class="urgent-row-meta">Due ${fmtDate(t.due_date)} · ${t.module}</div>` : `<div class="urgent-row-meta">${t.module}</div>`}
+          </div>
+        </div>`).join('')}
     </div>`;
   }
 
@@ -208,13 +320,34 @@ async function loadUrgentItems() {
       ${followups.map(n => `
         <a href="student.html?id=${n.student_id}" class="urgent-row urgent-row-link">
           <div class="urgent-row-text"><strong>${n.students?.name}</strong>: ${n.note.slice(0, 90)}${n.note.length > 90 ? '…' : ''}</div>
-          <div class="urgent-row-meta">${n.category} · ${fmtDate(n.date)}</div>
+          <div class="urgent-row-meta">${fmtDate(n.date)}</div>
         </a>`).join('')}
     </div>`;
   }
 
   html += '</div>';
   el.innerHTML = html;
+
+  // Apply swipe to urgent task rows
+  el.querySelectorAll('.urgent-section-orange .swipe-item').forEach(item => {
+    const taskId = item.dataset.id;
+    initSwipe(item,
+      // LEFT = cancel/delete
+      async () => {
+        await supabase.from('tasks').update({ status: 'cancelled' }).eq('id', taskId);
+        toast('Task removed', 'info');
+        loadUrgentItems();
+        loadCurrentBanner();
+      },
+      // RIGHT = done
+      async () => {
+        await supabase.from('tasks').update({ status: 'done', completed_at: new Date().toISOString() }).eq('id', taskId);
+        toast('Task done! ✅', 'success');
+        loadUrgentItems();
+        loadCurrentBanner();
+      }
+    );
+  });
 }
 
 // ── Today's Classes ───────────────────────────────────────────────────────
@@ -265,7 +398,7 @@ async function loadTodaysClasses() {
       <a href="class.html?id=${c.id}" class="list-item" style="text-decoration:none">
         <div class="list-item-left">
           <div class="list-item-name">${c.name}</div>
-          <div class="list-item-sub">${timeStr}${c.room ? ' · Room ' + c.room : ''}</div>
+          <div class="list-item-sub">${timeStr}${c.room ? ' · Room ' + c.room : ''}${c.track_pages && c.track_pages !== 'None' ? ' · 📄' : ''}</div>
         </div>
         <div class="list-item-right">
           ${taken
