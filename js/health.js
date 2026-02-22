@@ -15,7 +15,7 @@ async function loadFoodLog() {
   showSpinner(el);
   // Last 7 days
   const since = new Date(Date.now() - 6 * 86400000).toISOString().split('T')[0];
-  const res = await supabase.table('food_log').select('*').gte('date', since).order('date', { ascending: false }).order('meal');
+  const res = await supabase.from('food_log').select('*').gte('date', since).order('date', { ascending: false }).order('meal');
   const entries = res.data || [];
 
   if (!entries.length) { showEmpty(el, '🍽️', 'No food logged recently'); return; }
@@ -48,7 +48,7 @@ async function loadPendingMeals() {
     days.push(d);
   }
   const since = days[0];
-  const res = await supabase.table('food_log').select('date, meal').gte('date', since);
+  const res = await supabase.from('food_log').select('date, meal').gte('date', since);
   const logged = {};
   for (const r of (res.data || [])) {
     if (!logged[r.date]) logged[r.date] = new Set();
@@ -67,7 +67,7 @@ async function loadPendingMeals() {
 
 async function loadExercise() {
   const el = document.getElementById('exercise-log');
-  const res = await supabase.table('exercise_log').select('*').order('date', { ascending: false }).limit(15);
+  const res = await supabase.from('exercise_log').select('*').order('date', { ascending: false }).limit(15);
   const entries = res.data || [];
   if (!entries.length) { showEmpty(el, '🏃', 'No exercise logged'); return; }
 
@@ -92,7 +92,7 @@ async function loadExercise() {
 
 async function loadHealthNotes() {
   const el = document.getElementById('health-notes');
-  const res = await supabase.table('health_notes').select('*').order('date', { ascending: false }).limit(10);
+  const res = await supabase.from('health_notes').select('*').order('date', { ascending: false }).limit(10);
   const notes = res.data || [];
   if (!notes.length) { showEmpty(el, '💊', 'No health notes'); return; }
   const colors = { Medication: 'blue', Recovery: 'orange', General: 'gray', Dental: 'purple', Sleep: 'gold' };
@@ -117,7 +117,7 @@ window.submitMeal = async () => {
   const desc = document.getElementById('meal-desc').value.trim();
   const date = document.getElementById('meal-date').value;
   if (!desc || !date) { toast('Fill in all fields', 'error'); return; }
-  const { error } = await supabase.table('food_log').insert({ date, meal, description: desc });
+  const { error } = await supabase.from('food_log').insert({ date, meal, description: desc });
   if (error) { toast('Error: ' + error.message, 'error'); return; }
   toast('Meal logged!', 'success');
   window.closeMealModal();
@@ -136,7 +136,7 @@ window.submitExercise = async () => {
   const date = document.getElementById('ex-date').value;
   const notes = document.getElementById('ex-notes').value.trim();
   if (!type || !date) { toast('Fill in type and date', 'error'); return; }
-  const { error } = await supabase.table('exercise_log').insert({ date, type, duration_minutes: duration, notes: notes || null });
+  const { error } = await supabase.from('exercise_log').insert({ date, type, duration_minutes: duration, notes: notes || null });
   if (error) { toast('Error: ' + error.message, 'error'); return; }
   toast('Exercise logged!', 'success');
   window.closeExerciseModal();
