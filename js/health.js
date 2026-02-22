@@ -1,7 +1,7 @@
 // Life OS — Health
 import { supabase } from './supabase.js';
 import { today, fmtDate, fmtDateFull, badge, toast, showSpinner, showEmpty } from './utils.js';
-import { startPolling } from './polling.js';
+// No polling — user-driven
 
 const T = today();
 let selectedDate = T;
@@ -144,4 +144,3 @@ window.submitExercise = async () => {
 };
 
 load();
-startPolling(load, 30000); // Health can poll slower
