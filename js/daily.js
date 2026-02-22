@@ -15,7 +15,7 @@ async function loadGoldOwed() {
   const el = document.getElementById('gold-owed');
   showSpinner(el);
 
-  const res = await supabase.table('gold_transactions')
+  const res = await supabase.from('gold_transactions')
     .select('*, students(name)')
     .eq('distributed', false)
     .lte('date', selectedDate);
@@ -58,7 +58,7 @@ async function loadGoldOwed() {
 }
 
 async function distributeAll() {
-  const res = await supabase.table('gold_transactions')
+  const res = await supabase.from('gold_transactions')
     .update({ distributed: true, distributed_at: new Date().toISOString() })
     .eq('distributed', false)
     .lte('date', selectedDate);
@@ -75,8 +75,8 @@ async function loadAttendance() {
   const dayShort = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(selectedDate + 'T00:00:00').getDay()];
 
   const [classRes, sessRes] = await Promise.all([
-    supabase.table('classes').select('id, name, time_start').or(`day_of_week.ilike.%${dayShort}%,day_of_week.ilike.%${dayOfWeek}%`),
-    supabase.table('daily_sessions').select('class_id, status, gold_distributed').eq('date', selectedDate)
+    supabase.from('classes').select('id, name, time_start').or(`day_of_week.ilike.%${dayShort}%,day_of_week.ilike.%${dayOfWeek}%`),
+    supabase.from('daily_sessions').select('class_id, status, gold_distributed').eq('date', selectedDate)
   ]);
 
   const classes = classRes.data || [];
@@ -105,7 +105,7 @@ async function loadAttendance() {
 // ── Followups ─────────────────────────────────────────────────────────────────
 async function loadFollowups() {
   const el = document.getElementById('followups');
-  const res = await supabase.table('student_notes')
+  const res = await supabase.from('student_notes')
     .select('*, students(name)')
     .eq('followup_needed', true)
     .eq('date', selectedDate);
@@ -127,7 +127,7 @@ async function loadFollowups() {
 // ── Notes Summary ─────────────────────────────────────────────────────────────
 async function loadNotesSummary() {
   const el = document.getElementById('notes-summary');
-  const res = await supabase.table('student_notes').select('category').eq('date', selectedDate);
+  const res = await supabase.from('student_notes').select('category').eq('date', selectedDate);
   const notes = res.data || [];
   if (!notes.length) {
     el.innerHTML = '<div style="color:var(--gray-400);font-size:14px">No notes logged for today</div>';
