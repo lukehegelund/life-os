@@ -9,14 +9,19 @@ if (!studentId) { window.location.href = 'students.html'; }
 const T = new Date().toISOString().split('T')[0];
 let studentData = null;
 let allClasses = [];
+let enrolledClasses = []; // only classes this student is currently enrolled in
 
 async function load() {
-  const [studentRes, classesRes] = await Promise.all([
+  const [studentRes, classesRes, enrRes] = await Promise.all([
     supabase.from('students').select('*').eq('id', studentId).single(),
     supabase.from('classes').select('id, name, track_pages'),
+    supabase.from('class_enrollments').select('class_id').eq('student_id', studentId).is('enrolled_until', null),
   ]);
   studentData = studentRes.data;
   allClasses = classesRes.data || [];
+  // Build enrolled-only class list for note selectors
+  const enrolledIds = new Set((enrRes.data || []).map(e => e.class_id));
+  enrolledClasses = allClasses.filter(c => enrolledIds.has(c.id));
   const s = studentData;
   if (!s) { document.getElementById('student-name').textContent = 'Not found'; return; }
 
@@ -45,19 +50,17 @@ async function load() {
       ${s.notes ? `<div style="margin-top:10px;font-size:13px;color:var(--gray-600);padding-top:10px;border-top:1px solid var(--gray-100)">${s.notes}</div>` : ''}
     </div>`;
 
-  // Populate class selector in add-note form
+  // Populate class selector in add-note form (only enrolled classes)
   const classSelect = document.getElementById('new-note-class');
   if (classSelect) {
-    allClasses.forEach(c => {
+    enrolledClasses.forEach(c => {
       const opt = document.createElement('option');
       opt.value = c.id;
       opt.textContent = c.name;
       classSelect.appendChild(opt);
     });
-    // Pre-select the student's first enrolled class if available
-    const enrRes = await supabase.from('class_enrollments')
-      .select('class_id').eq('student_id', studentId).is('enrolled_until', null).limit(1);
-    if (enrRes.data?.[0]) classSelect.value = enrRes.data[0].class_id;
+    // Pre-select first enrolled class
+    if (enrolledClasses.length > 0) classSelect.value = enrolledClasses[0].id;
   }
 
   await Promise.all([
@@ -189,9 +192,9 @@ async function loadNotes(s) {
 }
 
 function noteRow(n) {
-  // Build class options for inline edit
+  // Build class options for inline edit — only enrolled classes
   const classOpts = `<option value="">— No class —</option>` +
-    allClasses.map(c => `<option value="${c.id}" ${n.class_id == c.id ? 'selected' : ''}>${c.name}</option>`).join('');
+    enrolledClasses.map(c => `<option value="${c.id}" ${n.class_id == c.id ? 'selected' : ''}>${c.name}</option>`).join('');
 
   return `
     <div class="note-row-desktop swipe-note-item" data-id="${n.id}" style="flex-direction:column;align-items:stretch;gap:0">
@@ -274,41 +277,61 @@ window.saveNoteEdit = async (noteId, e) => {
   loadNotes(studentData);
 };
 
-// ── Pages Analytics (no warnings) ────────────────────────────────────────
+// ── Pages Analytics ───────────────────────────────────────────────────────
 async function loadPagesAnalytics(s) {
   const el = document.getElementById('pages-analytics');
   if (!el) return;
 
-  // Fetch pages history (last 14 days)
-  const weekAgo = new Date(Date.now() - 14 * 86400000).toISOString().split('T')[0];
+  // Fetch 30 days of pages history
+  const thirtyAgo = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
+  const sevenAgo  = new Date(Date.now() -  7 * 86400000).toISOString().split('T')[0];
+
   const pagesRes = await supabase.from('student_pages')
     .select('*, classes(name, track_pages)')
     .eq('student_id', studentId)
-    .gte('date', weekAgo)
+    .gte('date', thirtyAgo)
     .order('date', { ascending: false });
   const pages = pagesRes.data || [];
 
   if (!pages.length) {
-    el.innerHTML = '<div style="color:var(--gray-400);font-size:14px">No pages logged in the last 2 weeks</div>';
+    el.innerHTML = '<div style="color:var(--gray-400);font-size:14px">No pages logged in the last 30 days</div>';
     return;
   }
 
+  // Group by class and compute stats
   const byClass = {};
   for (const p of pages) {
     const key = p.class_id;
-    if (!byClass[key]) byClass[key] = { name: p.classes?.name || 'Class', entries: [] };
+    if (!byClass[key]) byClass[key] = { name: p.classes?.name || 'Class', entries: [], total7: 0, total30: 0, lastDate: null };
     byClass[key].entries.push(p);
+    byClass[key].total30 += p.pages_delta || 0;
+    if (p.date >= sevenAgo) byClass[key].total7 += p.pages_delta || 0;
+    if (!byClass[key].lastDate || p.date > byClass[key].lastDate) byClass[key].lastDate = p.date;
   }
 
   let html = '';
   for (const [cid, group] of Object.entries(byClass)) {
     html += `
-      <div style="margin-bottom:10px">
-        <div style="font-size:12px;font-weight:700;color:var(--gray-400);margin-bottom:4px">${group.name}</div>
-        ${group.entries.slice(0,7).map(p => `
+      <div style="margin-bottom:14px">
+        <div style="font-size:12px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px">${group.name}</div>
+        <div style="display:flex;gap:10px;margin-bottom:8px;flex-wrap:wrap">
+          <div style="flex:1;min-width:80px;background:var(--gray-50);border-radius:8px;padding:8px 10px;text-align:center">
+            <div style="font-size:18px;font-weight:700;color:var(--primary)">${group.total7}</div>
+            <div style="font-size:11px;color:var(--gray-400)">pages / 7 days</div>
+          </div>
+          <div style="flex:1;min-width:80px;background:var(--gray-50);border-radius:8px;padding:8px 10px;text-align:center">
+            <div style="font-size:18px;font-weight:700;color:var(--primary)">${group.total30}</div>
+            <div style="font-size:11px;color:var(--gray-400)">pages / 30 days</div>
+          </div>
+          <div style="flex:1;min-width:80px;background:var(--gray-50);border-radius:8px;padding:8px 10px;text-align:center">
+            <div style="font-size:13px;font-weight:600;color:var(--gray-600)">${group.lastDate ? fmtDate(group.lastDate) : '—'}</div>
+            <div style="font-size:11px;color:var(--gray-400)">last logged</div>
+          </div>
+        </div>
+        ${group.entries.slice(0,5).map(p => `
           <div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;border-bottom:1px solid var(--gray-100)">
-            <span>${fmtDate(p.date)}</span>
-            <span style="font-weight:600">${p.total_pages}p ${p.gold_delta !== 0 ? `(${p.gold_delta > 0 ? '+' : ''}${p.gold_delta}🪙)` : ''}</span>
+            <span style="color:var(--gray-500)">${fmtDate(p.date)}</span>
+            <span style="font-weight:600">${p.total_pages}p ${p.gold_delta !== 0 ? `<span style="color:var(--gold);font-size:12px">(${p.gold_delta > 0 ? '+' : ''}${p.gold_delta}🪙)</span>` : ''}</span>
           </div>`).join('')}
       </div>`;
   }
