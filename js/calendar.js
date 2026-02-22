@@ -183,6 +183,10 @@ async function fetchEvents() {
 function renderMonthGrid() {
   document.getElementById('period-label').textContent = `${MONTHS[viewMonth]} ${viewYear}`;
   document.getElementById('cal-day-labels').style.display = 'grid';
+  // Ensure cal-grid uses grid layout (in case class is missing from HTML)
+  const gridEl = document.getElementById('cal-grid');
+  gridEl.style.display = 'grid';
+  gridEl.style.gridTemplateColumns = 'repeat(7, 1fr)';
 
   const firstDay = new Date(viewYear, viewMonth, 1);
   const lastDay = new Date(viewYear, viewMonth + 1, 0);
@@ -214,6 +218,10 @@ function renderMonthGrid() {
 // ── Week grid ─────────────────────────────────────────────────────────────────
 function renderWeekGrid() {
   document.getElementById('cal-day-labels').style.display = 'none';
+  // Reset cal-grid to block so the week table fills naturally
+  const gridEl = document.getElementById('cal-grid');
+  gridEl.style.display = 'block';
+  gridEl.style.gridTemplateColumns = '';
 
   const weekEnd = addDays(viewWeekStart, 6);
   const startLabel = viewWeekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
