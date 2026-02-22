@@ -1,7 +1,6 @@
-// Life OS — Class Dashboard (Phase 2)
+// Life OS — Class Dashboard (Phase 2, v3 — no polling, single-expand, desktop buttons)
 import { supabase } from './supabase.js';
 import { qp, today, fmtDate, fmtTime, goldStr, goldClass, toast, showSpinner, showEmpty } from './utils.js';
-import { startPolling } from './polling.js';
 import { initSwipe } from './swipe-handler.js';
 
 const classId = qp('id');
@@ -10,8 +9,8 @@ if (!classId) { window.location.href = 'classes.html'; }
 const T = today();
 let cls = null;
 
-// ── Expand/collapse state for roster dropdowns
-const expandedStudents = new Set();
+// ── Expand state: only ONE open at a time ─────────────────────────────────
+let expandedStudent = null;  // single student id, not a Set
 
 async function load() {
   const res = await supabase.from('classes').select('*').eq('id', classId).single();
@@ -25,7 +24,6 @@ async function load() {
       .filter(Boolean).join(' · ');
   if (cls.current_unit) document.getElementById('class-unit').textContent = '📖 ' + cls.current_unit;
 
-  // Settings gear icon — show/hide page tracking badge
   renderClassSettingsBadge(cls);
 
   await Promise.all([
@@ -49,8 +47,8 @@ function renderClassSettingsBadge(cls) {
 }
 
 // ── Roster + side-by-side attendance buttons ──────────────────────────────
-const attMap = {};  // student_id → current status string
-let enrollments = [];  // cached for re-renders
+const attMap = {};
+let enrollments = [];
 
 async function loadRoster(cls) {
   const el = document.getElementById('roster');
@@ -76,18 +74,20 @@ async function loadRoster(cls) {
   enrollments = enrRes.data || [];
   if (!enrollments.length) { showEmpty(el, '👥', 'No students enrolled'); return; }
 
-  // Seed attMap
   for (const a of (attRes.data || [])) {
     attMap[a.student_id] = a.status;
   }
 
-  // Pages map
   const pagesMap = {};
   for (const p of (pagesRes.data || [])) {
     pagesMap[p.student_id] = p.total_pages;
   }
 
   renderRoster(enrollments, pagesMap);
+  // Re-expand if one was open
+  if (expandedStudent) {
+    loadOverviewNotes(expandedStudent);
+  }
 }
 
 function renderRoster(enrs, pagesMap = {}) {
@@ -97,7 +97,7 @@ function renderRoster(enrs, pagesMap = {}) {
   el.innerHTML = enrs.map(e => {
     const s = e.students;
     const status = attMap[s.id] || null;
-    const isExpanded = expandedStudents.has(s.id);
+    const isExpanded = expandedStudent === s.id;
     const pages = pagesMap[s.id] ?? null;
 
     const attButtons = ['Present','Late','Absent','Excused'].map(opt => {
@@ -114,10 +114,10 @@ function renderRoster(enrs, pagesMap = {}) {
     return `
       <div class="roster-row" id="roster-row-${s.id}">
         <div class="roster-main">
-          <button class="roster-expand-btn" onclick="toggleExpand(${s.id})" title="Show details">
+          <button class="roster-expand-btn" onclick="toggleExpand(${s.id})" title="Expand">
             ${isExpanded ? '▼' : '▶'}
           </button>
-          <a href="student.html?id=${s.id}" class="roster-name" style="text-decoration:none;color:inherit;font-weight:600">
+          <a href="student.html?id=${s.id}" class="roster-name">
             ${s.name}
           </a>
           <span class="roster-gold">${s.current_gold ?? 0}🪙</span>
@@ -131,7 +131,7 @@ function renderRoster(enrs, pagesMap = {}) {
 
 function renderExpandedStudent(s, pages) {
   const trackPages = cls?.track_pages !== 'None';
-  const trackType = cls?.track_pages; // 'English', 'Math', or 'None'
+  const trackType = cls?.track_pages;
 
   return `
     <div class="roster-expanded" id="expanded-${s.id}">
@@ -148,33 +148,46 @@ function renderExpandedStudent(s, pages) {
         <div style="color:var(--gray-400);font-size:13px">Loading notes…</div>
       </div>
       <div class="quick-note-form">
-        <input type="text" id="quick-note-input-${s.id}" class="form-input" placeholder="Quick note for ${s.name}…" style="font-size:13px">
-        <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
-          <label class="flag-toggle"><input type="checkbox" id="qn-overview-${s.id}"> 👁 Overview</label>
-          <label class="flag-toggle"><input type="checkbox" id="qn-todo-${s.id}"> ✅ To-do</label>
-          <label class="flag-toggle"><input type="checkbox" id="qn-parent-${s.id}"> 📞 Tell Parent</label>
+        <input type="text" id="quick-note-input-${s.id}" class="form-input"
+          placeholder="Quick note for ${s.name}…"
+          style="font-size:13px"
+          onclick="event.stopPropagation()">
+        <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center">
+          <label class="flag-toggle" onclick="event.stopPropagation()">
+            <input type="checkbox" id="qn-overview-${s.id}"> 👁 Overview
+          </label>
+          <label class="flag-toggle" onclick="event.stopPropagation()">
+            <input type="checkbox" id="qn-todo-${s.id}" checked> ✅ To-do
+          </label>
+          <label class="flag-toggle" onclick="event.stopPropagation()">
+            <input type="checkbox" id="qn-parent-${s.id}"> 📞 Tell Parent
+          </label>
           <button class="btn btn-sm btn-primary" onclick="submitQuickNote(${s.id})">Add Note</button>
         </div>
       </div>
     </div>`;
 }
 
+// ── Single-expand: close previous, open new ────────────────────────────────
 window.toggleExpand = async (studentId) => {
-  if (expandedStudents.has(studentId)) {
-    expandedStudents.delete(studentId);
+  if (expandedStudent === studentId) {
+    // Close this one
+    expandedStudent = null;
   } else {
-    expandedStudents.add(studentId);
+    // Open this one, close any previous
+    expandedStudent = studentId;
   }
-  // Re-render roster preserving pages
+
+  // Rebuild pagesMap from current DOM
   const pagesMap = {};
   document.querySelectorAll('[id^="pages-display-"]').forEach(el => {
-    const sid = el.id.replace('pages-display-', '');
+    const sid = parseInt(el.id.replace('pages-display-', ''), 10);
     pagesMap[sid] = parseInt(el.textContent, 10) || 0;
   });
   renderRoster(enrollments, pagesMap);
-  // Load overview notes for expanded
-  if (expandedStudents.has(studentId)) {
-    loadOverviewNotes(studentId);
+
+  if (expandedStudent) {
+    loadOverviewNotes(expandedStudent);
   }
 };
 
@@ -182,54 +195,51 @@ async function loadOverviewNotes(studentId) {
   const el = document.getElementById(`overview-notes-${studentId}`);
   if (!el) return;
 
-  const res = await supabase.from('student_notes')
-    .select('id, note, is_todo, tell_parent, logged, date, class_id')
-    .eq('student_id', studentId)
-    .eq('class_id', classId)
-    .eq('show_in_overview', true)
-    .eq('logged', false)
-    .order('date', { ascending: false })
-    .limit(5);
+  // Fetch all classes student is enrolled in (for the class selector)
+  const [notesRes, enrRes] = await Promise.all([
+    supabase.from('student_notes')
+      .select('id, note, is_todo, tell_parent, logged, date, class_id')
+      .eq('student_id', studentId)
+      .eq('class_id', classId)
+      .eq('show_in_overview', true)
+      .eq('logged', false)
+      .order('date', { ascending: false })
+      .limit(5),
+    Promise.resolve(null)
+  ]);
 
-  const notes = res.data || [];
+  const notes = notesRes.data || [];
   if (!notes.length) {
     el.innerHTML = '<div style="color:var(--gray-400);font-size:13px;padding:4px 0">No overview notes for this class.</div>';
     return;
   }
 
   el.innerHTML = notes.map(n => `
-    <div class="overview-note-row swipe-item" data-id="${n.id}">
-      <div data-swipe-inner class="overview-note-inner">
-        <div style="font-size:13px">${n.note}</div>
-        <div style="display:flex;gap:6px;margin-top:4px">
-          ${n.is_todo ? '<span class="flag-badge flag-todo">✅ To-do</span>' : ''}
-          ${n.tell_parent ? '<span class="flag-badge flag-parent">📞 Parent</span>' : ''}
+    <div class="overview-note-row" data-id="${n.id}" style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px solid var(--gray-100)">
+      <div style="flex:1;font-size:13px">${n.note}
+        <div style="display:flex;gap:4px;margin-top:3px;flex-wrap:wrap">
+          ${n.is_todo ? '<span class="flag-badge flag-todo">✅</span>' : ''}
+          ${n.tell_parent ? '<span class="flag-badge flag-parent">📞</span>' : ''}
         </div>
       </div>
+      <div style="display:flex;gap:4px;flex-shrink:0">
+        <button class="btn btn-sm" style="background:var(--green-light);color:var(--green);border:none;font-size:11px;padding:2px 6px" onclick="logNote('${n.id}',${studentId})">✓ Log</button>
+        <button class="btn btn-sm" style="background:var(--coral-light);color:var(--red);border:none;font-size:11px;padding:2px 6px" onclick="deleteNote('${n.id}',${studentId})">✕</button>
+      </div>
     </div>`).join('');
-
-  // Apply swipe gestures
-  el.querySelectorAll('.swipe-item').forEach(item => {
-    const noteId = item.dataset.id;
-    initSwipe(item,
-      // LEFT = delete
-      async () => {
-        await supabase.from('student_notes').delete().eq('id', noteId);
-        toast('Note deleted', 'info');
-        loadOverviewNotes(studentId);
-      },
-      // RIGHT = log it
-      async () => {
-        await supabase.from('student_notes').update({
-          logged: true,
-          logged_at: new Date().toISOString()
-        }).eq('id', noteId);
-        toast('Note logged ✓', 'success');
-        loadOverviewNotes(studentId);
-      }
-    );
-  });
 }
+
+window.logNote = async (noteId, studentId) => {
+  await supabase.from('student_notes').update({ logged: true, logged_at: new Date().toISOString() }).eq('id', noteId);
+  toast('Note logged ✓', 'success');
+  loadOverviewNotes(studentId);
+};
+
+window.deleteNote = async (noteId, studentId) => {
+  await supabase.from('student_notes').delete().eq('id', noteId);
+  toast('Note deleted', 'info');
+  loadOverviewNotes(studentId);
+};
 
 window.submitQuickNote = async (studentId) => {
   const input = document.getElementById(`quick-note-input-${studentId}`);
@@ -245,6 +255,7 @@ window.submitQuickNote = async (studentId) => {
     class_id: Number(classId),
     date: T,
     note,
+    category: 'Class Note',   // satisfy NOT NULL constraint
     show_in_overview: showInOverview,
     is_todo: isTodo,
     tell_parent: tellParent,
@@ -253,7 +264,6 @@ window.submitQuickNote = async (studentId) => {
 
   if (error) { toast('Error: ' + error.message, 'error'); return; }
 
-  // If tell_parent, add to parent_crm
   if (tellParent) {
     await supabase.from('parent_crm').insert({
       student_id: studentId,
@@ -266,36 +276,39 @@ window.submitQuickNote = async (studentId) => {
   toast('Note added!', 'success');
   if (input) input.value = '';
   loadOverviewNotes(studentId);
+  // Don't re-render full roster — just refresh notes
 };
 
 // ── Attendance: side-by-side buttons ─────────────────────────────────────
 window.setAtt = async (studentId, status) => {
+  // Toggle off if same status clicked again
+  const newStatus = attMap[studentId] === status ? null : status;
   const prev = attMap[studentId];
-  attMap[studentId] = status;
+  attMap[studentId] = newStatus;
 
-  // Refresh just this student's buttons
+  // Update pills in-place
   const row = document.getElementById(`roster-row-${studentId}`);
   if (row) {
     const colors = { Present: 'var(--green)', Late: 'var(--orange)', Absent: 'var(--red)', Excused: 'var(--gray-400)' };
-    row.querySelectorAll('.att-pill').forEach(btn => {
-      const opt = { P: 'Present', L: 'Late', A: 'Absent', E: 'Excused' }[btn.textContent] || btn.textContent;
-      const opts = ['Present','Late','Absent','Excused'];
-      const idx = opts.findIndex(o => o[0] === btn.textContent);
+    const opts = ['Present','Late','Absent','Excused'];
+    row.querySelectorAll('.att-pill').forEach((btn, idx) => {
       const optName = opts[idx];
-      const sel = optName === status;
+      const sel = optName === newStatus;
       btn.className = `att-pill ${sel ? 'att-pill-selected' : ''}`;
       btn.style.background = sel ? colors[optName] : '';
       btn.style.color = sel ? '#fff' : '';
     });
   }
 
-  const { error } = await supabase.from('attendance').upsert({
-    student_id: studentId, class_id: Number(classId), date: T, status
-  }, { onConflict: 'student_id,class_id,date' });
-
-  if (error) {
-    toast('Error saving attendance', 'error');
-    attMap[studentId] = prev;
+  if (newStatus) {
+    const { error } = await supabase.from('attendance').upsert({
+      student_id: studentId, class_id: Number(classId), date: T, status: newStatus
+    }, { onConflict: 'student_id,class_id,date' });
+    if (error) { toast('Error saving attendance', 'error'); attMap[studentId] = prev; }
+  } else {
+    // Remove attendance record
+    await supabase.from('attendance').delete()
+      .eq('student_id', studentId).eq('class_id', Number(classId)).eq('date', T);
   }
 };
 
@@ -304,22 +317,17 @@ window.adjustPages = async (studentId, delta) => {
   const displayEl = document.getElementById(`pages-display-${studentId}`);
   const currentPages = parseInt(displayEl?.textContent || '0', 10);
   const newPages = Math.max(0, currentPages + delta);
-  const goldDelta = delta * 2; // ±2 gold per page
+  const goldDelta = delta * 2;
 
-  // Optimistic UI
   if (displayEl) displayEl.textContent = newPages;
 
-  // Get student current gold
   const studentEnr = enrollments.find(e => e.students?.id === studentId);
   const studentData = studentEnr?.students;
   const currentGold = studentData?.current_gold ?? 0;
   const newGold = currentGold + goldDelta;
 
-  // Update gold display in roster
-  const goldEls = document.querySelectorAll(`[id="roster-row-${studentId}"] .roster-gold`);
-  goldEls.forEach(el => el.textContent = newGold + '🪙');
+  document.querySelectorAll(`#roster-row-${studentId} .roster-gold`).forEach(el => el.textContent = newGold + '🪙');
 
-  // Upsert to student_pages (same day)
   const { error: pagesErr } = await supabase.from('student_pages').upsert({
     student_id: studentId,
     class_id: Number(classId),
@@ -331,10 +339,7 @@ window.adjustPages = async (studentId, delta) => {
 
   if (pagesErr) { toast('Pages error: ' + pagesErr.message, 'error'); return; }
 
-  // Update student gold
   await supabase.from('students').update({ current_gold: newGold }).eq('id', studentId);
-
-  // Gold transaction
   await supabase.from('gold_transactions').insert({
     student_id: studentId,
     class_id: Number(classId),
@@ -344,24 +349,21 @@ window.adjustPages = async (studentId, delta) => {
     category: 'Participation',
     distributed: false,
   });
+
+  // Refresh analytics without full reload
+  if (cls?.track_pages !== 'None') loadAnalytics();
 };
 
-// ── Bulk Gold (polling-safe: don't re-render if inputs have values) ────────
+// ── Bulk Gold (no polling — user-driven only) ─────────────────────────────
 const goldChecked = new Set();
 let goldBulkRendered = false;
 
 async function loadGoldBulk() {
-  // If user is actively typing, skip re-render
-  const amountVal = document.getElementById('gold-amount')?.value;
-  const reasonVal = document.getElementById('gold-reason')?.value;
-  if (goldBulkRendered && (amountVal || reasonVal)) return;
-
   const res = await supabase.from('class_enrollments')
     .select('student_id, students(id, name, current_gold)')
     .eq('class_id', classId)
     .is('enrolled_until', null);
-  const enrs = res.data || [];
-  renderGoldBulk(enrs);
+  renderGoldBulk(res.data || []);
   goldBulkRendered = true;
 }
 
@@ -444,70 +446,80 @@ window.submitBulkGold = async () => {
   goldChecked.clear();
   document.getElementById('gold-amount').value = '';
   document.getElementById('gold-reason').value = '';
-  goldBulkRendered = false;
   loadGoldBulk();
 };
 
-// ── Recent Notes (class-level, with flags + swipe) ────────────────────────
+// ── Recent Notes (class-level) — desktop action buttons + swipe ───────────
 async function loadRecentNotes() {
   const el = document.getElementById('recent-notes');
   const res = await supabase.from('student_notes')
-    .select('*, students(name)')
+    .select('*, students(id, name), classes(name)')
     .eq('class_id', classId)
     .eq('logged', false)
     .order('date', { ascending: false })
     .limit(20);
   const notes = res.data || [];
+
+  // Fetch all classes for the class-change dropdown
+  const classesRes = await supabase.from('classes').select('id, name').order('name');
+  const allClasses = classesRes.data || [];
+
   if (!notes.length) { showEmpty(el, '📝', 'No active notes for this class'); return; }
 
   el.innerHTML = notes.map(n => `
-    <div class="swipe-item list-item" data-id="${n.id}" style="padding:10px 12px;position:relative;overflow:hidden;touch-action:pan-y">
-      <div data-swipe-inner style="display:flex;width:100%;gap:8px;align-items:flex-start">
-        <div style="flex:1">
-          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-            <strong style="font-size:14px">${n.students?.name || '—'}</strong>
-            ${n.show_in_overview ? '<span class="flag-badge flag-overview">👁</span>' : ''}
-            ${n.is_todo ? '<span class="flag-badge flag-todo">✅</span>' : ''}
-            ${n.tell_parent ? '<span class="flag-badge flag-parent">📞</span>' : ''}
-          </div>
-          <div class="list-item-sub">${fmtDate(n.date)}</div>
-          <div style="font-size:14px;margin-top:2px;color:var(--gray-800)">${n.note || '—'}</div>
+    <div class="note-row-desktop" data-id="${n.id}" id="note-${n.id}">
+      <div style="flex:1">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <strong style="font-size:14px">${n.students?.name || '—'}</strong>
+          ${n.show_in_overview ? '<span class="flag-badge flag-overview">👁</span>' : ''}
+          ${n.is_todo ? '<span class="flag-badge flag-todo">✅</span>' : ''}
+          ${n.tell_parent ? '<span class="flag-badge flag-parent">📞</span>' : ''}
         </div>
+        <div style="font-size:13px;color:var(--gray-600);margin-top:2px">${n.note || '—'}</div>
+        <div style="font-size:12px;color:var(--gray-400);margin-top:2px;display:flex;align-items:center;gap:6px">
+          ${fmtDate(n.date)}
+          <select class="note-class-select" onchange="changeNoteClass('${n.id}', this.value)" style="font-size:11px;border:1px solid var(--gray-200);border-radius:4px;padding:1px 4px;color:var(--gray-600)">
+            ${allClasses.map(c => `<option value="${c.id}" ${c.id === n.class_id ? 'selected' : ''}>${c.name}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:4px;flex-shrink:0;align-items:flex-start">
+        <button class="btn btn-sm" style="background:var(--green-light);color:var(--green);border:none;font-size:11px;padding:3px 7px" onclick="logRecentNote('${n.id}')">✓ Log</button>
+        <button class="btn btn-sm" style="background:var(--coral-light);color:var(--red);border:none;font-size:11px;padding:3px 7px" onclick="deleteRecentNote('${n.id}')">✕ Del</button>
       </div>
     </div>`).join('');
 
-  // Swipe gestures on notes
-  el.querySelectorAll('.swipe-item').forEach(item => {
+  // Also attach swipe for mobile
+  el.querySelectorAll('.note-row-desktop').forEach(item => {
     const noteId = item.dataset.id;
     initSwipe(item,
-      // LEFT = delete (with 3s undo)
-      async () => {
-        let undone = false;
-        const t = toast('Note deleted — tap to undo', 'info');
-        const toastEl = document.querySelector('.life-os-toast');
-        if (toastEl) {
-          toastEl.style.cursor = 'pointer';
-          toastEl.onclick = () => { undone = true; loadRecentNotes(); };
-        }
-        setTimeout(async () => {
-          if (!undone) {
-            await supabase.from('student_notes').delete().eq('id', noteId);
-            loadRecentNotes();
-          }
-        }, 3000);
-      },
-      // RIGHT = log it
-      async () => {
-        await supabase.from('student_notes').update({
-          logged: true,
-          logged_at: new Date().toISOString()
-        }).eq('id', noteId);
-        toast('Note logged ✓', 'success');
-        loadRecentNotes();
-      }
+      async () => { await deleteRecentNoteById(noteId); loadRecentNotes(); },
+      async () => { await logRecentNoteById(noteId); loadRecentNotes(); }
     );
   });
 }
+
+async function logRecentNoteById(noteId) {
+  await supabase.from('student_notes').update({ logged: true, logged_at: new Date().toISOString() }).eq('id', noteId);
+  toast('Note logged ✓', 'success');
+}
+async function deleteRecentNoteById(noteId) {
+  await supabase.from('student_notes').delete().eq('id', noteId);
+  toast('Note deleted', 'info');
+}
+
+window.logRecentNote = async (noteId) => {
+  await logRecentNoteById(noteId);
+  loadRecentNotes();
+};
+window.deleteRecentNote = async (noteId) => {
+  await deleteRecentNoteById(noteId);
+  loadRecentNotes();
+};
+window.changeNoteClass = async (noteId, newClassId) => {
+  await supabase.from('student_notes').update({ class_id: Number(newClassId) }).eq('id', noteId);
+  toast('Note moved', 'success');
+};
 
 // ── Attendance Grid ────────────────────────────────────────────────────────
 async function loadAttendanceGrid() {
@@ -574,7 +586,7 @@ async function loadAnalytics() {
 
   const [pagesRes, enrRes] = await Promise.all([
     supabase.from('student_pages')
-      .select('student_id, total_pages, date')
+      .select('student_id, total_pages, pages_delta, date')
       .eq('class_id', classId)
       .gte('date', weekAgo)
       .lte('date', T),
@@ -587,7 +599,6 @@ async function loadAnalytics() {
   const pagesData = pagesRes.data || [];
   const students = (enrRes.data || []).map(e => e.students);
 
-  // Pages by student (sum this week)
   const weekTotals = {};
   const daysWithPages = {};
   for (const p of pagesData) {
@@ -596,12 +607,10 @@ async function loadAnalytics() {
     daysWithPages[p.student_id].add(p.date);
   }
 
-  // Leaderboard
   const ranked = students
     .map(s => ({ ...s, weekPages: weekTotals[s.id] || 0, activeDays: daysWithPages[s.id]?.size || 0 }))
     .sort((a, b) => b.weekPages - a.weekPages);
 
-  // Who did pages today
   const todayPages = pagesData.filter(p => p.date === T);
   const todaySet = new Set(todayPages.map(p => p.student_id));
 
@@ -639,7 +648,6 @@ window.openClassSettings = async () => {
   const modal = document.getElementById('class-settings-modal');
   if (!modal) return;
   modal.style.display = 'flex';
-  // Set current track_pages value
   const sel = document.getElementById('track-pages-select');
   if (sel && cls) sel.value = cls.track_pages || 'None';
 };
@@ -659,8 +667,8 @@ window.saveClassSettings = async () => {
   renderClassSettingsBadge(cls);
   toast('Settings saved!', 'success');
   closeClassSettings();
-  load(); // Reload to show/hide pages features
+  load();
 };
 
 load();
-startPolling(load, 10000);
+// No polling — data updates happen manually via user actions
