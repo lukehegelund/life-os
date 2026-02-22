@@ -1,7 +1,7 @@
 // Life OS — Languages (Flashcards + Translator + Vocab Browser)
 import { supabase } from './supabase.js';
 import { today, fmtDate, toast, showSpinner, showEmpty } from './utils.js';
-import { startPolling } from './polling.js';
+// No polling — user-driven
 
 const T = today();
 
@@ -307,4 +307,3 @@ async function loadBrowser() {
 }
 
 load();
-startPolling(load, 30000);
