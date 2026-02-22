@@ -328,14 +328,34 @@ window.adjustPages = async (studentId, delta) => {
 
   document.querySelectorAll(`#roster-row-${studentId} .roster-gold`).forEach(el => el.textContent = newGold + '🪙');
 
-  const { error: pagesErr } = await supabase.from('student_pages').upsert({
-    student_id: studentId,
-    class_id: Number(classId),
-    date: T,
-    pages_delta: delta,
-    total_pages: newPages,
-    gold_delta: goldDelta,
-  }, { onConflict: 'student_id,class_id,date' });
+  // Fetch existing row for today first, then update or insert
+  const { data: existingRows } = await supabase.from('student_pages')
+    .select('id, total_pages, gold_delta, pages_delta')
+    .eq('student_id', studentId)
+    .eq('class_id', Number(classId))
+    .eq('date', T)
+    .limit(1);
+
+  let pagesErr;
+  if (existingRows && existingRows.length > 0) {
+    const existing = existingRows[0];
+    const result = await supabase.from('student_pages').update({
+      pages_delta: (existing.pages_delta || 0) + delta,
+      total_pages: newPages,
+      gold_delta: (existing.gold_delta || 0) + goldDelta,
+    }).eq('id', existing.id);
+    pagesErr = result.error;
+  } else {
+    const result = await supabase.from('student_pages').insert({
+      student_id: studentId,
+      class_id: Number(classId),
+      date: T,
+      pages_delta: delta,
+      total_pages: newPages,
+      gold_delta: goldDelta,
+    });
+    pagesErr = result.error;
+  }
 
   if (pagesErr) { toast('Pages error: ' + pagesErr.message, 'error'); return; }
 
