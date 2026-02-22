@@ -1,7 +1,7 @@
 // Life OS — Dashboard (Phase 2)
 import { supabase } from './supabase.js';
 import { today, fmtDate, fmtDateLong, fmtTime, toast } from './utils.js';
-import { startPolling } from './polling.js';
+// No polling on dashboard
 import { initSwipe } from './swipe-handler.js';
 
 const T = today();
@@ -305,10 +305,14 @@ async function loadUrgentItems() {
         <span style="font-size:11px;font-weight:400;margin-left:8px">← cancel · → done</span>
       </div>
       ${urgentTasks.map(t => `
-        <div class="swipe-item urgent-row" data-id="${t.id}" style="touch-action:pan-y;overflow:hidden;position:relative">
-          <div data-swipe-inner>
+        <div class="swipe-item urgent-row" data-id="${t.id}" style="touch-action:pan-y;overflow:hidden;position:relative;display:flex;align-items:center;gap:8px">
+          <div data-swipe-inner style="flex:1">
             <div class="urgent-row-text">${t.title}</div>
             ${t.due_date ? `<div class="urgent-row-meta">Due ${fmtDate(t.due_date)} · ${t.module}</div>` : `<div class="urgent-row-meta">${t.module}</div>`}
+          </div>
+          <div style="display:flex;gap:4px;flex-shrink:0">
+            <button class="btn btn-sm" style="background:var(--green-light);color:var(--green);border:none;font-size:11px;padding:3px 7px" onclick="doneTask(${t.id}, event)">✓</button>
+            <button class="btn btn-sm" style="background:var(--coral-light);color:var(--red);border:none;font-size:11px;padding:3px 7px" onclick="cancelTask(${t.id}, event)">✕</button>
           </div>
         </div>`).join('')}
     </div>`;
@@ -446,5 +450,20 @@ async function loadUpcomingWeddings() {
   }).join('');
 }
 
+// ── Desktop task action buttons ────────────────────────────────────────────
+window.doneTask = async (id, e) => {
+  e?.stopPropagation();
+  await supabase.from('tasks').update({ status: 'done', completed_at: new Date().toISOString() }).eq('id', id);
+  toast('Task done! ✅', 'success');
+  loadUrgentItems();
+  loadCurrentBanner();
+};
+window.cancelTask = async (id, e) => {
+  e?.stopPropagation();
+  await supabase.from('tasks').update({ status: 'cancelled' }).eq('id', id);
+  toast('Task removed', 'info');
+  loadUrgentItems();
+  loadCurrentBanner();
+};
+
 load();
-startPolling(load);
