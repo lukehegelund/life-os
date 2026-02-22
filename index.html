@@ -18,9 +18,12 @@
   </div>
 </header>
 
+<!-- Sticky current-item banner (below header, above content) -->
+<div id="current-banner" style="display:none;background:var(--white);border-bottom:1px solid var(--gray-200);position:sticky;top:57px;z-index:90;padding:0 20px"></div>
+
 <main class="content">
 
-  <!-- Stats grid (filled by dashboard.js) -->
+  <!-- Stats grid -->
   <div id="stats-grid" class="stats-grid">
     <div class="stat-card" style="border-top:3px solid var(--gray-200)">
       <div class="stat-num" style="color:var(--gray-400)">—</div>
@@ -28,10 +31,10 @@
     </div>
   </div>
 
-  <!-- Health prompts (food / exercise) — hidden until needed -->
+  <!-- Health prompts -->
   <div id="health-prompts" style="display:none"></div>
 
-  <!-- Urgent items (reminders, gold, tasks, follow-ups) -->
+  <!-- Urgent items -->
   <div class="card-title">Urgent / Action Items</div>
   <div id="urgent-items">
     <div class="card"><div class="spinner"></div></div>
