@@ -9,7 +9,7 @@ if (!classId) { window.location.href = 'classes.html'; }
 const T = today();
 
 async function load() {
-  const res = await supabase.table('classes').select('*').eq('id', classId).single();
+  const res = await supabase.from('classes').select('*').eq('id', classId).single();
   const cls = res.data;
   if (!cls) return;
 
@@ -23,7 +23,7 @@ async function load() {
 
 async function loadRoster(cls) {
   const el = document.getElementById('roster');
-  const res = await supabase.table('class_enrollments')
+  const res = await supabase.from('class_enrollments')
     .select('*, students(id, name, current_gold)')
     .eq('class_id', classId)
     .is('enrolled_until', null);
@@ -32,7 +32,7 @@ async function loadRoster(cls) {
 
   // Load today's attendance
   const ids = enrollments.map(e => e.student_id);
-  const attRes = await supabase.table('attendance').select('*').eq('class_id', classId).eq('date', T).in('student_id', ids);
+  const attRes = await supabase.from('attendance').select('*').eq('class_id', classId).eq('date', T).in('student_id', ids);
   const attMap = Object.fromEntries((attRes.data || []).map(a => [a.student_id, a]));
 
   el.innerHTML = enrollments.map(e => {
@@ -62,7 +62,7 @@ async function loadRoster(cls) {
 
 async function logAtt(studentId, status) {
   if (!status) return;
-  const { error } = await supabase.table('attendance').upsert({
+  const { error } = await supabase.from('attendance').upsert({
     student_id: studentId, class_id: classId, date: T, status
   }, { onConflict: 'student_id,class_id,date' });
   if (error) toast('Error: ' + error.message, 'error');
@@ -72,7 +72,7 @@ window.logAtt = logAtt;
 
 async function loadGoldAdder(cls) {
   const el = document.getElementById('gold-adder');
-  const res = await supabase.table('class_enrollments')
+  const res = await supabase.from('class_enrollments')
     .select('student_id, students(id, name)')
     .eq('class_id', classId)
     .is('enrolled_until', null);
@@ -119,15 +119,15 @@ async function loadGoldAdder(cls) {
       category: amount > 0 ? 'Participation' : 'Behavior',
       distributed: false
     }));
-    const { error } = await supabase.table('gold_transactions').insert(inserts);
+    const { error } = await supabase.from('gold_transactions').insert(inserts);
     if (error) { toast('Error: ' + error.message, 'error'); return; }
     // Update student balances
     for (const [sid, amount] of entries) {
       await supabase.rpc('increment_gold', { p_student_id: Number(sid), p_amount: amount }).catch(() => {
         // Fallback: manual update
-        supabase.table('students').select('current_gold').eq('id', sid).single().then(r => {
+        supabase.from('students').select('current_gold').eq('id', sid).single().then(r => {
           const cur = r.data?.current_gold ?? 0;
-          supabase.table('students').update({ current_gold: cur + amount }).eq('id', sid);
+          supabase.from('students').update({ current_gold: cur + amount }).eq('id', sid);
         });
       });
     }
@@ -146,7 +146,7 @@ async function loadGoldAdder(cls) {
 
 async function loadRecentNotes(cls) {
   const el = document.getElementById('recent-notes');
-  const res = await supabase.table('student_notes')
+  const res = await supabase.from('student_notes')
     .select('*, students(name)')
     .eq('class_id', classId)
     .order('date', { ascending: false })
@@ -178,8 +178,8 @@ async function loadAttendanceGrid(cls) {
   const start = new Date(Date.now() - 14 * 86400000).toISOString().split('T')[0];
 
   const [rosterRes, attRes] = await Promise.all([
-    supabase.table('class_enrollments').select('student_id, students(id, name)').eq('class_id', classId).is('enrolled_until', null),
-    supabase.table('attendance').select('*').eq('class_id', classId).gte('date', start).lte('date', end)
+    supabase.from('class_enrollments').select('student_id, students(id, name)').eq('class_id', classId).is('enrolled_until', null),
+    supabase.from('attendance').select('*').eq('class_id', classId).gte('date', start).lte('date', end)
   ]);
 
   const students = (rosterRes.data || []).map(e => e.students);
