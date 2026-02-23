@@ -29,6 +29,7 @@ async function load() {
   await Promise.all([
     loadRoster(cls),
     loadGoldBulk(),
+    loadLessonPlans(),
     loadRecentNotes(),
     loadAttendanceGrid(),
     cls.track_pages !== 'None' ? loadAnalytics() : Promise.resolve(),
@@ -736,6 +737,118 @@ window.saveClassSettings = async () => {
   toast('Settings saved!', 'success');
   closeClassSettings();
   load();
+};
+
+// ── Lesson Plans ──────────────────────────────────────────────────────────
+async function loadLessonPlans() {
+  const el = document.getElementById('lesson-plans-content');
+  if (!el) return;
+  showSpinner(el);
+
+  const { data, error } = await supabase
+    .from('lesson_plans')
+    .select('*')
+    .eq('class_id', classId)
+    .order('date', { ascending: false })
+    .limit(20);
+
+  if (error || !data) { el.innerHTML = '<div class="empty-state">Could not load plans</div>'; return; }
+  if (!data.length) {
+    el.innerHTML = '<div style="text-align:center;color:var(--gray-400);font-size:13px;padding:16px 0">No lesson plans yet. Tap + Plan to add one.</div>';
+    return;
+  }
+
+  const today = T; // "YYYY-MM-DD"
+  el.innerHTML = data.map(p => {
+    const isToday = p.date === today;
+    const isPast  = p.date < today;
+    const dateLabel = isToday ? '📌 Today' : fmtDate(p.date);
+    const statusDot = p.completed
+      ? '<span style="display:inline-block;width:8px;height:8px;background:var(--green);border-radius:50%;margin-left:6px;vertical-align:middle" title="Completed"></span>'
+      : '';
+    return `<div class="lesson-plan-item${isToday ? ' lp-today' : ''}${isPast && !p.completed ? ' lp-past' : ''}"
+      style="border-left:3px solid ${isToday ? 'var(--blue)' : p.completed ? 'var(--green)' : 'var(--gray-200)'};
+             padding:10px 12px;margin-bottom:8px;border-radius:0 6px 6px 0;background:${isToday ? 'var(--blue-light,#EFF6FF)' : 'var(--gray-50)'}">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <div>
+          <span style="font-size:12px;font-weight:700;color:${isToday ? 'var(--blue)' : 'var(--gray-500)'}">${dateLabel}</span>${statusDot}
+          ${p.title ? `<div style="font-size:14px;font-weight:600;color:var(--gray-800);margin-top:2px">${p.title}</div>` : ''}
+        </div>
+        <div style="display:flex;gap:4px;flex-shrink:0">
+          ${!p.completed ? `<button onclick="markLessonDone('${p.id}')" style="padding:4px 8px;border:none;border-radius:5px;background:var(--green);color:white;font-size:11px;font-weight:600;cursor:pointer" title="Mark done">✓</button>` : ''}
+          <button onclick="editLessonPlan('${p.id}')" style="padding:4px 8px;border:1px solid var(--gray-200);border-radius:5px;background:var(--white);color:var(--gray-600);font-size:11px;cursor:pointer">✏️</button>
+          <button onclick="deleteLessonPlan('${p.id}')" style="padding:4px 8px;border:none;border-radius:5px;background:#FEF2F2;color:var(--red);font-size:11px;cursor:pointer">🗑</button>
+        </div>
+      </div>
+      ${p.objectives ? `<div style="font-size:12px;color:var(--gray-500);margin-top:4px"><strong>Objectives:</strong> ${p.objectives}</div>` : ''}
+      ${p.materials ? `<div style="font-size:12px;color:var(--gray-500);margin-top:2px"><strong>Materials:</strong> ${p.materials}</div>` : ''}
+      ${p.notes ? `<div style="font-size:12px;color:var(--gray-400);margin-top:2px;font-style:italic">${p.notes}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+window.openLessonPlanModal = (prefill = {}) => {
+  const modal = document.getElementById('lesson-plan-modal');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  document.getElementById('lp-modal-title').textContent = prefill.id ? '✏️ Edit Lesson Plan' : '📋 New Lesson Plan';
+  document.getElementById('lp-edit-id').value = prefill.id || '';
+  document.getElementById('lp-date').value = prefill.date || T;
+  document.getElementById('lp-title').value = prefill.title || '';
+  document.getElementById('lp-objectives').value = prefill.objectives || '';
+  document.getElementById('lp-materials').value = prefill.materials || '';
+  document.getElementById('lp-notes').value = prefill.notes || '';
+  setTimeout(() => document.getElementById('lp-title').focus(), 80);
+};
+
+window.closeLessonPlanModal = () => {
+  const modal = document.getElementById('lesson-plan-modal');
+  if (modal) modal.style.display = 'none';
+};
+
+window.saveLessonPlan = async () => {
+  const editId  = document.getElementById('lp-edit-id').value;
+  const date    = document.getElementById('lp-date').value;
+  const title   = document.getElementById('lp-title').value.trim();
+  const objectives = document.getElementById('lp-objectives').value.trim() || null;
+  const materials  = document.getElementById('lp-materials').value.trim() || null;
+  const notes      = document.getElementById('lp-notes').value.trim() || null;
+
+  if (!date) { toast('Please pick a date', 'error'); return; }
+
+  const payload = { class_id: parseInt(classId), date, title: title || null, objectives, materials, notes };
+
+  let error;
+  if (editId) {
+    ({ error } = await supabase.from('lesson_plans').update(payload).eq('id', editId));
+  } else {
+    ({ error } = await supabase.from('lesson_plans').insert(payload));
+  }
+
+  if (error) { toast('Error saving plan: ' + error.message, 'error'); return; }
+  toast(editId ? 'Plan updated ✅' : 'Plan added ✅', 'success');
+  closeLessonPlanModal();
+  loadLessonPlans();
+};
+
+window.editLessonPlan = async (id) => {
+  const { data } = await supabase.from('lesson_plans').select('*').eq('id', id).single();
+  if (!data) return;
+  openLessonPlanModal(data);
+};
+
+window.markLessonDone = async (id) => {
+  const { error } = await supabase.from('lesson_plans').update({ completed: true }).eq('id', id);
+  if (error) { toast('Error', 'error'); return; }
+  toast('Marked done ✅', 'success');
+  loadLessonPlans();
+};
+
+window.deleteLessonPlan = async (id) => {
+  const { error } = await supabase.from('lesson_plans').delete().eq('id', id);
+  if (error) { toast('Error deleting plan', 'error'); return; }
+  toast('Plan deleted', 'success');
+  loadLessonPlans();
 };
 
 load();
