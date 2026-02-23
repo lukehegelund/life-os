@@ -49,13 +49,14 @@ function renderClassSettingsBadge(cls) {
 
 // ── Roster + side-by-side attendance buttons ──────────────────────────────
 const attMap = {};
+const partMap = {}; // participation scores: { studentId: score }
 let enrollments = [];
 
 async function loadRoster(cls) {
   const el = document.getElementById('roster');
   showSpinner(el);
 
-  const [enrRes, attRes, pagesRes] = await Promise.all([
+  const [enrRes, attRes, pagesRes, partRes] = await Promise.all([
     supabase.from('class_enrollments')
       .select('*, students(id, name, current_gold, english_pages_class_id, math_pages_class_id)')
       .eq('class_id', classId)
@@ -70,6 +71,10 @@ async function loadRoster(cls) {
           .eq('class_id', classId)
           .eq('date', T)
       : Promise.resolve({ data: [] }),
+    supabase.from('participation_scores')
+      .select('student_id, score')
+      .eq('class_id', classId)
+      .eq('date', T),
   ]);
 
   enrollments = enrRes.data || [];
@@ -77,6 +82,10 @@ async function loadRoster(cls) {
 
   for (const a of (attRes.data || [])) {
     attMap[a.student_id] = a.status;
+  }
+
+  for (const p of (partRes.data || [])) {
+    partMap[p.student_id] = p.score;
   }
 
   const pagesMap = {};
@@ -112,9 +121,24 @@ function renderRoster(enrs, pagesMap = {}) {
         onclick="setAtt(${s.id},'${opt}')">${opt[0]}</button>`;
     }).join('');
 
+    const partScore = partMap[s.id] ?? null;
+    const partColors = ['#ef4444','#f97316','#eab308','#84cc16','#22c55e']; // 1=red … 5=green
+    const partLabels = ['1','2','3','4','5'];
+    const partButtons = partLabels.map((lbl, idx) => {
+      const val = idx + 1;
+      const sel = partScore === val;
+      return `<button class="part-pill ${sel ? 'part-pill-selected' : ''}"
+        id="part-pill-${s.id}-${val}"
+        style="width:26px;height:26px;border-radius:50%;border:2px solid ${partColors[idx]};
+               background:${sel ? partColors[idx] : 'transparent'};
+               color:${sel ? '#fff' : partColors[idx]};
+               font-size:11px;font-weight:700;cursor:pointer;padding:0;flex-shrink:0"
+        onclick="setParticipation(${s.id},${val})">${lbl}</button>`;
+    }).join('');
+
     return `
       <div class="roster-row" id="roster-row-${s.id}">
-        <div class="roster-main">
+        <div class="roster-main" style="flex-wrap:wrap;gap:4px">
           <button class="roster-expand-btn" onclick="toggleExpand(${s.id})" title="Expand">
             ${isExpanded ? '▼' : '▶'}
           </button>
@@ -124,6 +148,10 @@ function renderRoster(enrs, pagesMap = {}) {
           <span class="roster-gold">${s.current_gold ?? 0}🪙</span>
           ${trackPages && pages !== null ? `<span class="roster-pages">${pages}p</span>` : ''}
           <div class="att-pills">${attButtons}</div>
+          <div class="part-pills" style="display:flex;gap:3px;align-items:center;margin-left:4px" title="Participation (1–5)">
+            <span style="font-size:10px;color:var(--gray-400);margin-right:2px">⭐</span>
+            ${partButtons}
+          </div>
         </div>
         ${isExpanded ? renderExpandedStudent(s, pages) : ''}
       </div>`;
@@ -357,6 +385,37 @@ window.setAtt = async (studentId, status) => {
   } else {
     // Remove attendance record
     await supabase.from('attendance').delete()
+      .eq('student_id', studentId).eq('class_id', Number(classId)).eq('date', T);
+  }
+};
+
+// ── Participation Score ───────────────────────────────────────────────────
+window.setParticipation = async (studentId, score) => {
+  const prev = partMap[studentId];
+  // Toggle off if same score clicked again
+  const newScore = prev === score ? null : score;
+  partMap[studentId] = newScore;
+
+  // Update pills in-place
+  const partColors = ['#ef4444','#f97316','#eab308','#84cc16','#22c55e'];
+  for (let v = 1; v <= 5; v++) {
+    const btn = document.getElementById(`part-pill-${studentId}-${v}`);
+    if (!btn) continue;
+    const sel = v === newScore;
+    btn.style.background = sel ? partColors[v-1] : 'transparent';
+    btn.style.color = sel ? '#fff' : partColors[v-1];
+  }
+
+  if (newScore !== null) {
+    const { error } = await supabase.from('participation_scores').upsert({
+      student_id: studentId,
+      class_id: Number(classId),
+      date: T,
+      score: newScore,
+    }, { onConflict: 'student_id,class_id,date' });
+    if (error) { toast('Error saving participation', 'error'); partMap[studentId] = prev; }
+  } else {
+    await supabase.from('participation_scores').delete()
       .eq('student_id', studentId).eq('class_id', Number(classId)).eq('date', T);
   }
 };
