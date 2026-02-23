@@ -118,7 +118,7 @@ async function fetchEvents() {
     supabase.from('classes').select('id, name, day_of_week, time_start, time_end, subject'),
     supabase.from('calendar_events')
       .select('id, title, start_time, end_time, all_day, calendar_name, color, is_busy')
-      .gte('start_time', startStr + 'T00:00:00')
+      .gte('start_time', startStr)
       .lte('start_time', endStr + 'T23:59:59'),
     supabase.from('time_blocks')
       .select('id, date, start_time, end_time, title, block_type, assigned_tasks, status, description')
@@ -183,10 +183,10 @@ async function fetchEvents() {
 
   // Add Google Calendar events
   for (const ev of (calEventsRes.data || [])) {
-    // Parse date key from start_time (ISO string, stored in UTC but represents local time)
-    const startDt = new Date(ev.start_time);
-    const key = `${startDt.getFullYear()}-${pad(startDt.getMonth()+1)}-${pad(startDt.getDate())}`;
-    if (!eventCache[key]) continue;
+    // start_time is stored as ISO with +00:00 but the time values represent local time
+    // (i.e. "07:30:00+00:00" means 7:30am local, not UTC). Extract date from the ISO string directly.
+    const key = ev.start_time ? ev.start_time.slice(0, 10) : null; // "YYYY-MM-DD"
+    if (!key || !eventCache[key]) continue;
     const startLocal = ev.start_time ? ev.start_time.slice(11, 16) : null; // "HH:MM"
     const endLocal   = ev.end_time   ? ev.end_time.slice(11, 16)   : null;
     // Map Google Calendar color names to hex; default teal
@@ -282,8 +282,8 @@ function renderMonthGrid() {
 }
 
 // ── Week grid (Google Calendar style, proportional blocks) ───────────────────
-const WEEK_HOUR_START = 7;  // 7am
-const WEEK_HOUR_END   = 20; // 8pm
+const WEEK_HOUR_START = 6;  // 6am
+const WEEK_HOUR_END   = 21; // 9pm
 const HOUR_HEIGHT_PX  = 56; // px per hour
 const TOTAL_HEIGHT    = (WEEK_HOUR_END - WEEK_HOUR_START) * HOUR_HEIGHT_PX;
 
