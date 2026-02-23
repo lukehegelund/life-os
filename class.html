@@ -41,6 +41,15 @@
     <div id="gold-adder"></div>
   </div>
 
+  <!-- Lesson Plans -->
+  <div class="card" id="lesson-plans-card">
+    <div class="card-header">
+      <div class="card-title" style="margin:0">📋 Lesson Plans</div>
+      <button class="btn btn-sm btn-primary" onclick="openLessonPlanModal()">+ Plan</button>
+    </div>
+    <div id="lesson-plans-content"></div>
+  </div>
+
   <!-- Recent class notes (with swipe) -->
   <div class="card">
     <div class="card-title">📝 Class Notes
@@ -61,6 +70,38 @@
   </div>
 
 </main>
+
+<!-- Lesson Plan Modal -->
+<div id="lesson-plan-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:500;align-items:flex-end;justify-content:center">
+  <div style="background:var(--white);border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:600px;max-height:90vh;overflow-y:auto">
+    <div style="font-size:17px;font-weight:700;margin-bottom:16px" id="lp-modal-title">📋 New Lesson Plan</div>
+    <input type="hidden" id="lp-edit-id" />
+    <div class="form-group">
+      <label class="form-label">Date</label>
+      <input type="date" class="form-input" id="lp-date" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Lesson Title</label>
+      <input type="text" class="form-input" id="lp-title" placeholder="e.g. Introduction to fractions" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Objectives</label>
+      <textarea class="form-input" id="lp-objectives" rows="2" placeholder="What students will learn…" style="resize:vertical"></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Materials</label>
+      <input type="text" class="form-input" id="lp-materials" placeholder="e.g. Whiteboard, worksheets" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Notes</label>
+      <textarea class="form-input" id="lp-notes" rows="3" placeholder="Additional notes, homework, reminders…" style="resize:vertical"></textarea>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn btn-primary" style="flex:1" onclick="saveLessonPlan()">Save Plan</button>
+      <button class="btn btn-ghost" onclick="closeLessonPlanModal()">Cancel</button>
+    </div>
+  </div>
+</div>
 
 <!-- Class Settings Modal -->
 <div id="class-settings-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:500;align-items:flex-end;justify-content:center">
