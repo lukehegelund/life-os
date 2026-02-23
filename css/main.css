@@ -460,6 +460,16 @@ body {
 .cal-event-content { flex: 1; min-width: 0; }
 .cal-event-title { font-weight: 600; font-size: 14px; }
 .cal-event-meta  { font-size: 12px; color: var(--gray-400); margin-top: 2px; }
+.cal-event-time  { font-size: 11px; color: var(--gray-500); margin-top: 1px; font-variant-numeric: tabular-nums; }
+.cal-event-done .cal-event-title { text-decoration: line-through; opacity: 0.55; }
+.cal-tb-tasks {
+  margin: 5px 0 0 0;
+  padding-left: 14px;
+  font-size: 11px;
+  color: var(--gray-600);
+  line-height: 1.5;
+}
+.cal-tb-tasks li { list-style: disc; }
 
 /* ── Tasks page improvements ─────────────────────────────────────────────────── */
 .task-group-header {
