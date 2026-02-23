@@ -2,99 +2,479 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Languages — Life OS</title>
 <link rel="stylesheet" href="css/main.css?v=2">
+<style>
+/* ── Languages page overrides ─────────────────────────────────────────────── */
+
+/* Tab switcher at top */
+.lang-tabs {
+  display: flex;
+  border-bottom: 2px solid var(--gray-100);
+  background: var(--white);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.lang-tab {
+  flex: 1;
+  padding: 12px 8px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--gray-400);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.2s;
+}
+.lang-tab.active {
+  color: var(--blue);
+  border-bottom-color: var(--blue);
+}
+
+.lang-panel { display: none; }
+.lang-panel.active { display: block; }
+
+/* ─── TRANSLATOR PANEL ──────────────────────────────────────────────────── */
+.tx-body { padding: 0 0 80px; }
+
+.tx-header {
+  padding: 14px 16px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.tx-header h2 { font-size: 1rem; font-weight: 700; }
+.tx-save-indicator {
+  font-size: 0.72rem;
+  color: var(--green);
+  opacity: 0;
+  transition: opacity 0.3s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.tx-save-indicator.show { opacity: 1; }
+.tx-save-dot { width: 6px; height: 6px; background: var(--green); border-radius: 50%; }
+
+.tx-lang-section { padding: 12px 16px 0; }
+.tx-lang-pills { display: flex; align-items: center; gap: 8px; }
+.tx-lang-group {
+  display: flex;
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 3px;
+  flex: 1;
+}
+.tx-lang-pill {
+  flex: 1; padding: 7px 10px; border: none; border-radius: 8px;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  background: transparent; color: var(--gray-400); text-align: center;
+  transition: all 0.2s;
+}
+.tx-lang-pill.active { background: var(--blue); color: white; }
+.tx-swap-btn {
+  width: 36px; height: 36px; background: var(--gray-50);
+  border: 1px solid var(--gray-200); border-radius: 10px;
+  color: var(--blue); font-size: 1.1rem; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; transition: all 0.2s;
+}
+.tx-swap-btn:active { background: var(--gray-100); transform: scale(0.92); }
+.tx-dir-label {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  margin-top: 8px; font-size: 13px; font-weight: 700;
+  background: var(--gray-50); border: 1px solid var(--gray-200);
+  border-radius: 8px; padding: 7px 14px;
+}
+.tx-dir-arrow { color: var(--blue); }
+
+.tx-card {
+  margin: 12px 16px 0;
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+.tx-input-area { padding: 14px; border-bottom: 1px solid var(--gray-100); }
+.tx-textarea {
+  width: 100%; background: transparent; border: none; outline: none;
+  color: var(--gray-800); font-size: 1rem; line-height: 1.5; resize: none;
+  min-height: 68px; font-family: inherit;
+}
+.tx-textarea::placeholder { color: var(--gray-400); }
+.tx-input-actions {
+  display: flex; align-items: center; justify-content: space-between; margin-top: 6px;
+}
+.tx-char-count { font-size: 11px; color: var(--gray-400); }
+.tx-clear-btn {
+  background: var(--gray-50); border: 1px solid var(--gray-200);
+  color: var(--gray-600); cursor: pointer; font-size: 12px; font-weight: 600;
+  padding: 4px 10px; border-radius: 7px; transition: all 0.2s;
+}
+.tx-clear-btn:active { background: var(--gray-100); }
+.tx-result-area { padding: 14px; min-height: 70px; }
+.tx-result-text { font-size: 1rem; line-height: 1.6; color: var(--blue); font-weight: 500; white-space: pre-wrap; word-break: break-word; }
+.tx-result-placeholder { color: var(--gray-400); font-size: 0.95rem; }
+.tx-result-actions {
+  display: flex; align-items: center; justify-content: space-between; margin-top: 10px; gap: 6px;
+}
+.tx-status-badge {
+  font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 20px;
+  opacity: 0; transition: opacity 0.3s; flex: 1;
+}
+.tx-status-badge.show { opacity: 1; }
+.tx-status-badge.translating { background: rgba(37,99,235,0.1); color: var(--blue); }
+.tx-status-badge.saved { background: rgba(22,163,74,0.1); color: var(--green); }
+.tx-status-badge.error { background: rgba(220,38,38,0.1); color: var(--red); }
+.tx-speak-btn, .tx-copy-btn, .tx-delete-btn {
+  background: var(--gray-50); border: 1px solid var(--gray-200);
+  color: var(--gray-500); border-radius: 7px; padding: 5px 10px;
+  font-size: 12px; cursor: pointer; transition: all 0.2s; white-space: nowrap;
+}
+.tx-speak-btn.speaking { color: var(--blue); border-color: var(--blue); background: rgba(37,99,235,0.06); }
+.tx-speak-btn.hidden, .tx-delete-btn.hidden { display: none; }
+.tx-delete-btn { color: var(--red); border-color: rgba(220,38,38,0.3); background: none; }
+
+.tx-translate-btn {
+  display: block; width: calc(100% - 32px); margin: 10px 16px 0;
+  padding: 14px; background: var(--blue); color: white; border: none;
+  border-radius: 12px; font-size: 1rem; font-weight: 700; cursor: pointer;
+  transition: all 0.2s; letter-spacing: 0.02em;
+}
+.tx-translate-btn:active { transform: scale(0.98); opacity: 0.9; }
+.tx-translate-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+.tx-divider { height: 1px; background: var(--gray-100); margin: 14px 16px; }
+
+.tx-section-label {
+  font-size: 11px; font-weight: 700; color: var(--gray-400);
+  letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 0 16px; margin-bottom: 8px;
+}
+.tx-history-item {
+  padding: 10px 16px; border-bottom: 1px solid var(--gray-50); cursor: pointer;
+  transition: background 0.15s;
+}
+.tx-history-item:active { background: var(--gray-50); }
+.tx-history-orig { font-size: 13px; color: var(--gray-500); margin-bottom: 2px; }
+.tx-history-trans { font-size: 14px; font-weight: 600; color: var(--gray-800); }
+.tx-history-meta { font-size: 11px; color: var(--gray-400); margin-top: 4px; display: flex; align-items: center; gap: 5px; }
+.tx-lang-tag { background: rgba(37,99,235,0.1); color: var(--blue); padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; }
+.tx-add-word-form { padding: 0 16px 16px; }
+
+.tx-settings { padding: 0 16px; }
+.tx-settings details summary {
+  font-size: 12px; color: var(--gray-400); cursor: pointer; user-select: none;
+  list-style: none; display: flex; align-items: center; gap: 5px;
+}
+.tx-settings details summary::before { content: '⚙'; }
+.tx-settings-inner {
+  margin-top: 8px; background: var(--gray-50); border: 1px solid var(--gray-200);
+  border-radius: 10px; padding: 10px;
+}
+.tx-settings-inner label { font-size: 11px; color: var(--gray-400); display: block; margin-bottom: 4px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+.tx-settings-inner input {
+  width: 100%; background: var(--white); border: 1px solid var(--gray-200);
+  border-radius: 7px; padding: 7px 10px; color: var(--gray-800); font-size: 13px; outline: none;
+}
+.tx-settings-inner input:focus { border-color: var(--blue); }
+.tx-settings-save-btn { margin-top: 6px; padding: 7px 14px; background: var(--blue); color: white; border: none; border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer; }
+
+/* ─── FLASHCARD PANEL ───────────────────────────────────────────────────── */
+.fc-body { padding: 0 0 80px; }
+
+.fc-lang-filter { display: flex; gap: 6px; padding: 12px 16px 0; flex-wrap: wrap; }
+.fc-lang-pill {
+  padding: 5px 13px; border-radius: 20px; font-size: 12px; font-weight: 600;
+  border: 1.5px solid var(--gray-200); background: var(--white); color: var(--gray-500);
+  cursor: pointer; transition: all 0.18s;
+}
+.fc-lang-pill.active { background: var(--blue); border-color: var(--blue); color: white; }
+
+.fc-progress-wrap { padding: 10px 16px 0; }
+.fc-progress-info { display: flex; justify-content: space-between; font-size: 11px; color: var(--gray-400); margin-bottom: 5px; }
+.fc-progress-bar { height: 4px; background: var(--gray-100); border-radius: 4px; overflow: hidden; }
+.fc-progress-fill { height: 100%; background: var(--blue); border-radius: 4px; transition: width 0.4s ease; }
+
+.fc-card-area {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 20px 16px; gap: 16px;
+}
+
+/* 3D flip card */
+.fc-card-wrap { width: 100%; max-width: 400px; perspective: 1000px; }
+.fc-card {
+  width: 100%; min-height: 200px; position: relative;
+  transform-style: preserve-3d; transition: transform 0.5s cubic-bezier(0.4,0,0.2,1);
+  cursor: pointer;
+}
+.fc-card.flipped { transform: rotateY(180deg); }
+.fc-card-face {
+  position: absolute; width: 100%; min-height: 200px;
+  border-radius: 16px; backface-visibility: hidden; -webkit-backface-visibility: hidden;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 24px 20px; gap: 8px;
+}
+.fc-card-front { background: var(--white); border: 1.5px solid var(--gray-200); box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+.fc-card-back { background: linear-gradient(135deg, #eff6ff, #f5f3ff); border: 1.5px solid var(--blue); transform: rotateY(180deg); box-shadow: 0 2px 12px rgba(37,99,235,0.12); }
+
+.fc-lang-badge { position: absolute; top: 12px; right: 12px; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; color: var(--gray-400); background: var(--gray-50); padding: 2px 8px; border-radius: 8px; border: 1px solid var(--gray-200); }
+.fc-stage-badge { position: absolute; top: 12px; left: 12px; font-size: 10px; font-weight: 600; color: var(--blue); background: rgba(37,99,235,0.08); padding: 2px 8px; border-radius: 8px; }
+.fc-card-label { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; color: var(--gray-400); text-transform: uppercase; }
+.fc-card-word { font-size: 1.9rem; font-weight: 700; text-align: center; line-height: 1.2; }
+.fc-card-front .fc-card-word { color: var(--gray-800); }
+.fc-card-back .fc-card-word { color: var(--blue); }
+.fc-tap-hint { font-size: 12px; color: var(--gray-400); margin-top: 4px; }
+
+.fc-stage-dots { display: flex; gap: 4px; }
+.fc-stage-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gray-200); }
+.fc-stage-dot.filled { background: var(--blue); }
+
+.fc-speak-btn {
+  margin-top: 8px; background: rgba(37,99,235,0.08); border: 1.5px solid rgba(37,99,235,0.2);
+  color: var(--blue); border-radius: 18px; padding: 5px 14px; font-size: 13px; cursor: pointer;
+  transition: all 0.18s;
+}
+.fc-speak-btn:active { background: rgba(37,99,235,0.18); transform: scale(0.95); }
+.fc-speak-btn.speaking { animation: fc-pulse 1s infinite; }
+@keyframes fc-pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+.fc-srs-info {
+  display: flex; gap: 10px; align-items: center;
+  font-size: 12px; color: var(--gray-400); opacity: 0; transition: opacity 0.3s;
+}
+.fc-srs-info.visible { opacity: 1; }
+.fc-srs-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+.fc-answer-btns {
+  display: flex; gap: 10px; width: 100%; max-width: 400px;
+  opacity: 0; pointer-events: none; transform: translateY(8px); transition: all 0.3s ease;
+}
+.fc-answer-btns.visible { opacity: 1; pointer-events: all; transform: translateY(0); }
+.fc-btn-wrong, .fc-btn-correct {
+  flex: 1; padding: 14px; border-radius: 12px; border: none;
+  font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.18s;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+}
+.fc-btn-wrong { background: rgba(220,38,38,0.07); border: 1.5px solid rgba(220,38,38,0.25); color: var(--red); }
+.fc-btn-wrong:active { background: rgba(220,38,38,0.15); transform: scale(0.97); }
+.fc-btn-correct { background: rgba(22,163,74,0.07); border: 1.5px solid rgba(22,163,74,0.25); color: var(--green); }
+.fc-btn-correct:active { background: rgba(22,163,74,0.15); transform: scale(0.97); }
+
+.fc-delete-wrap {
+  width: 100%; max-width: 400px; display: flex; justify-content: center;
+  opacity: 0; pointer-events: none; transition: opacity 0.3s; margin-top: -4px;
+}
+.fc-delete-wrap.visible { opacity: 1; pointer-events: all; }
+.fc-delete-btn { background: none; border: none; color: var(--gray-400); font-size: 12px; cursor: pointer; padding: 4px 10px; border-radius: 6px; transition: color 0.2s; }
+.fc-delete-btn:hover, .fc-delete-btn:active { color: var(--red); }
+
+/* State screens */
+.fc-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 28px; text-align: center; gap: 12px; }
+.fc-state-emoji { font-size: 2.8rem; }
+.fc-state-title { font-size: 1.2rem; font-weight: 700; color: var(--gray-800); }
+.fc-state-sub { font-size: 14px; color: var(--gray-400); line-height: 1.5; max-width: 280px; }
+.fc-session-stats { display: flex; gap: 20px; margin-top: 4px; }
+.fc-stat-box { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.fc-stat-num { font-size: 1.5rem; font-weight: 800; }
+.fc-stat-label { font-size: 11px; color: var(--gray-400); }
+.fc-stat-correct .fc-stat-num { color: var(--green); }
+.fc-stat-wrong .fc-stat-num { color: var(--red); }
+.fc-stat-total .fc-stat-num { color: var(--blue); }
+
+/* Swipe overlay */
+.fc-swipe-overlay {
+  position: fixed; inset: 0; pointer-events: none;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 5rem; opacity: 0; transition: opacity 0.15s; z-index: 200;
+}
+
+/* ─── VOCABULARY PANEL ──────────────────────────────────────────────────── */
+.vocab-body { padding: 12px 0 80px; }
+
+/* Loading/spinner for lang panels */
+.lang-loading { display: flex; align-items: center; justify-content: center; padding: 40px 0; }
+.lang-spinner { width: 28px; height: 28px; border: 2.5px solid var(--gray-200); border-top-color: var(--blue); border-radius: 50%; animation: spin 0.7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
 </head>
 <body>
 
-<header class="page-header">
+<header class="page-header" style="padding-bottom:0">
   <div class="header-row">
     <div>
       <h1>Languages</h1>
-      <div class="subtitle" id="lang-summary"></div>
+      <div class="subtitle" id="lang-summary">Loading…</div>
     </div>
   </div>
-  <!-- Language filter -->
-  <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
-    <button class="btn btn-sm btn-primary lang-btn" id="lang-All" onclick="setLanguage('All')">All</button>
-    <button class="btn btn-sm btn-ghost lang-btn" id="lang-Spanish" onclick="setLanguage('Spanish')">🇪🇸 Spanish</button>
-    <button class="btn btn-sm btn-ghost lang-btn" id="lang-Danish" onclick="setLanguage('Danish')">🇩🇰 Danish</button>
-    <button class="btn btn-sm btn-ghost lang-btn" id="lang-Russian" onclick="setLanguage('Russian')">🇷🇺 Russian</button>
+  <!-- Top-level tab bar -->
+  <div class="lang-tabs">
+    <div class="lang-tab active" id="ltab-translator" onclick="switchLangTab('translator')">🌐 Translator</div>
+    <div class="lang-tab" id="ltab-flashcards" onclick="switchLangTab('flashcards')">⚡ Flashcards</div>
+    <div class="lang-tab" id="ltab-vocab" onclick="switchLangTab('vocab')">📖 Vocabulary</div>
   </div>
 </header>
 
-<main class="content">
+<main class="content" style="padding:0">
 
-  <!-- Tab bar -->
-  <div class="tab-bar">
-    <div class="tab-item active" id="tab-flashcards" onclick="switchTab('flashcards')">🃏 Flashcards</div>
-    <div class="tab-item" id="tab-translator" onclick="switchTab('translator')">🔍 Translator</div>
-    <div class="tab-item" id="tab-vocab" onclick="switchTab('vocab')">📖 Vocabulary</div>
-  </div>
+<!-- ═══════════════════════════════════════════════════════ TRANSLATOR ═══ -->
+<div class="lang-panel active" id="panel-translator">
+<div class="tx-body">
 
-  <!-- FLASHCARDS TAB -->
-  <div class="tab-panel active" id="panel-flashcards">
-    <div id="flashcard-section">
-      <div class="spinner"></div>
+  <div class="tx-header">
+    <h2>Translator</h2>
+    <div class="tx-save-indicator" id="txSaveIndicator">
+      <div class="tx-save-dot"></div>Saved
     </div>
   </div>
 
-  <!-- TRANSLATOR TAB -->
-  <div class="tab-panel" id="panel-translator">
-    <div class="card">
-      <div class="card-title">🔍 Lookup / Translate</div>
-      <div class="form-group">
-        <input type="text" id="trans-input" class="form-input" placeholder="Type a word or phrase in English or the target language…" oninput="handleTranslatorInput()">
+  <div class="tx-lang-section">
+    <div class="tx-lang-pills">
+      <div class="tx-lang-group">
+        <button class="tx-lang-pill active" data-lang="es" onclick="txSelectLang('es')">🇪🇸 Spanish</button>
+        <button class="tx-lang-pill" data-lang="da" onclick="txSelectLang('da')">🇩🇰 Danish</button>
+        <button class="tx-lang-pill" data-lang="ru" onclick="txSelectLang('ru')">🇷🇺 Russian</button>
       </div>
-      <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
-        <button class="btn btn-sm btn-ghost trans-lang-btn" id="tlang-All" onclick="setTransLang('All')">All</button>
-        <button class="btn btn-sm btn-ghost trans-lang-btn" id="tlang-Spanish" onclick="setTransLang('Spanish')">🇪🇸 ES</button>
-        <button class="btn btn-sm btn-ghost trans-lang-btn" id="tlang-Danish" onclick="setTransLang('Danish')">🇩🇰 DA</button>
-        <button class="btn btn-sm btn-ghost trans-lang-btn" id="tlang-Russian" onclick="setTransLang('Russian')">🇷🇺 RU</button>
-      </div>
-      <div id="trans-results">
-        <div style="color:var(--gray-400);font-size:14px;text-align:center;padding:20px">Type to search your vocabulary…</div>
-      </div>
+      <button class="tx-swap-btn" onclick="txToggleDir()" title="Swap">⇄</button>
     </div>
-    <div class="card">
-      <div class="card-title">➕ Add Word to Vocabulary</div>
-      <div class="form-group">
-        <label class="form-label">English</label>
-        <input type="text" id="add-english" class="form-input" placeholder="English word or phrase">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Translation</label>
-        <input type="text" id="add-translation" class="form-input" placeholder="Translation">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Language</label>
-        <select id="add-language" class="form-select">
-          <option value="Spanish">Spanish</option>
-          <option value="Danish">Danish</option>
-          <option value="Russian">Russian</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Example sentence (optional)</label>
-        <input type="text" id="add-example" class="form-input" placeholder="Example sentence">
-      </div>
-      <button class="btn btn-primary btn-full" onclick="addWord()">Add to Vocabulary</button>
+    <div class="tx-dir-label">
+      <span id="txFromLabel">English</span>
+      <span class="tx-dir-arrow">→</span>
+      <span id="txToLabel">Spanish</span>
     </div>
   </div>
 
-  <!-- VOCABULARY TAB -->
-  <div class="tab-panel" id="panel-vocab">
-    <div class="card">
-      <div class="card-header">
-        <div class="card-title" style="margin:0">All Words</div>
-        <div id="vocab-count" style="font-size:13px;color:var(--gray-400)"></div>
+  <div class="tx-card">
+    <div class="tx-input-area">
+      <textarea id="txInput" class="tx-textarea" placeholder="Type to translate…" oninput="txUpdateCharCount()" onkeydown="txHandleKey(event)" rows="3"></textarea>
+      <div class="tx-input-actions">
+        <span class="tx-char-count" id="txCharCount">0 chars</span>
+        <button class="tx-clear-btn" onclick="txClearAll()">Clear</button>
       </div>
-      <div id="vocab-browser">
-        <div class="spinner"></div>
+    </div>
+    <div class="tx-result-area">
+      <div id="txResultContent" class="tx-result-placeholder">Translation appears here</div>
+      <div class="tx-result-actions">
+        <span class="tx-status-badge" id="txStatusBadge"></span>
+        <button class="tx-delete-btn hidden" id="txDeleteBtn" onclick="txDeleteLast()">✕ Undo</button>
+        <button class="tx-speak-btn hidden" id="txSpeakBtn" onclick="txSpeakResult()">🔊</button>
+        <button class="tx-copy-btn" onclick="txCopyResult()">Copy</button>
       </div>
     </div>
   </div>
+
+  <button class="tx-translate-btn" id="txTranslateBtn" onclick="txDoTranslate()">Translate</button>
+
+  <div class="tx-divider"></div>
+
+  <!-- Add word to Supabase directly -->
+  <div class="tx-section-label">Add to Vocabulary</div>
+  <div class="tx-add-word-form">
+    <div class="form-group">
+      <label class="form-label">English</label>
+      <input type="text" id="txAddEnglish" class="form-input" placeholder="English word or phrase">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Translation</label>
+      <input type="text" id="txAddTranslation" class="form-input" placeholder="Translation">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Language</label>
+      <select id="txAddLang" class="form-select">
+        <option value="Spanish">Spanish</option>
+        <option value="Danish">Danish</option>
+        <option value="Russian">Russian</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Example sentence (optional)</label>
+      <input type="text" id="txAddExample" class="form-input" placeholder="Optional example">
+    </div>
+    <button class="btn btn-primary btn-full" onclick="txAddWord()">Add to Vocabulary</button>
+  </div>
+
+  <div class="tx-divider"></div>
+
+  <div class="tx-settings">
+    <details>
+      <summary>Sheet Webhook (Google Sheets sync)</summary>
+      <div class="tx-settings-inner">
+        <label>Apps Script Webhook URL</label>
+        <input type="url" id="txWebhookInput" placeholder="https://script.google.com/macros/s/…">
+        <button class="tx-settings-save-btn" onclick="txSaveWebhook()">Save</button>
+      </div>
+    </details>
+  </div>
+
+  <div class="tx-divider"></div>
+
+  <div class="tx-section-label">Recent Translations</div>
+  <div id="txHistory"></div>
+
+</div><!-- /tx-body -->
+</div><!-- /panel-translator -->
+
+<!-- ══════════════════════════════════════════════════════ FLASHCARDS ═══ -->
+<div class="lang-panel" id="panel-flashcards">
+<div class="fc-body">
+
+  <!-- Language filter -->
+  <div class="fc-lang-filter">
+    <button class="fc-lang-pill active" data-lang="all" onclick="fcSetLang('all')">All</button>
+    <button class="fc-lang-pill" data-lang="Spanish" onclick="fcSetLang('Spanish')">🇪🇸 Spanish</button>
+    <button class="fc-lang-pill" data-lang="Danish" onclick="fcSetLang('Danish')">🇩🇰 Danish</button>
+    <button class="fc-lang-pill" data-lang="Russian" onclick="fcSetLang('Russian')">🇷🇺 Russian</button>
+  </div>
+
+  <!-- Progress -->
+  <div class="fc-progress-wrap">
+    <div class="fc-progress-info">
+      <span id="fcProgressText">— / —</span>
+      <span id="fcProgressPct">—</span>
+    </div>
+    <div class="fc-progress-bar"><div class="fc-progress-fill" id="fcProgressFill" style="width:0%"></div></div>
+  </div>
+
+  <!-- Card area -->
+  <div id="fcCardArea" class="fc-card-area">
+    <div class="lang-loading"><div class="lang-spinner"></div></div>
+  </div>
+
+</div><!-- /fc-body -->
+</div><!-- /panel-flashcards -->
+
+<!-- ══════════════════════════════════════════════════════ VOCABULARY ════ -->
+<div class="lang-panel" id="panel-vocab">
+<div class="vocab-body">
+
+  <div style="padding:12px 16px 8px;display:flex;align-items:center;justify-content:space-between">
+    <div class="tx-section-label" style="margin:0">All Words</div>
+    <div id="vocabCount" style="font-size:12px;color:var(--gray-400)"></div>
+  </div>
+
+  <!-- Search -->
+  <div style="padding:0 16px 10px">
+    <input type="text" id="vocabSearch" class="form-input" placeholder="Search…" oninput="vocabFilter()">
+  </div>
+
+  <!-- Language filter for vocab -->
+  <div style="display:flex;gap:6px;padding:0 16px 10px;flex-wrap:wrap">
+    <button class="fc-lang-pill active" data-lang="all" onclick="setVocabLang('all')">All</button>
+    <button class="fc-lang-pill" data-lang="Spanish" onclick="setVocabLang('Spanish')">🇪🇸 Spanish</button>
+    <button class="fc-lang-pill" data-lang="Danish" onclick="setVocabLang('Danish')">🇩🇰 Danish</button>
+    <button class="fc-lang-pill" data-lang="Russian" onclick="setVocabLang('Russian')">🇷🇺 Russian</button>
+  </div>
+
+  <div id="vocabList"></div>
+
+</div>
+</div><!-- /panel-vocab -->
 
 </main>
 
@@ -121,6 +501,613 @@
   </a>
 </nav>
 
-<script type="module" src="js/languages.js"></script>
+<div class="fc-swipe-overlay" id="fcSwipeOverlay"></div>
+
+<script type="module">
+import { supabase } from './js/supabase.js';
+import { today } from './js/utils.js';
+
+const T = today();
+
+// ══════════════════════════════════════════════════════════ TABS ══════════
+window.switchLangTab = (tab) => {
+  document.querySelectorAll('.lang-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.lang-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById(`ltab-${tab}`).classList.add('active');
+  document.getElementById(`panel-${tab}`).classList.add('active');
+  if (tab === 'flashcards' && fcQueue.length === 0) fcInit();
+  if (tab === 'vocab') vocabLoad();
+};
+
+// ══════════════════════════════════════════════════════════ STATS ════════
+async function loadStats() {
+  const [totalRes, dueRes] = await Promise.all([
+    supabase.from('vocab_words').select('language, srs_stage'),
+    supabase.from('vocab_words').select('language').lte('next_review', T),
+  ]);
+  const words = totalRes.data || [];
+  const langs = ['Spanish','Danish','Russian'];
+  const dueByLang = {};
+  for (const w of (dueRes.data || [])) dueByLang[w.language] = (dueByLang[w.language]||0) + 1;
+  const parts = langs.map(l => {
+    const cnt = words.filter(w => w.language === l).length;
+    if (!cnt) return null;
+    const due = dueByLang[l] || 0;
+    return `${l}: ${cnt} (${due} due)`;
+  }).filter(Boolean);
+  const sumEl = document.getElementById('lang-summary');
+  if (sumEl) sumEl.textContent = parts.join(' · ') || 'No words yet';
+}
+loadStats();
+
+// ═══════════════════════════════════════════════════════ TRANSLATOR ══════
+const DEFAULT_WEBHOOK = 'https://script.google.com/macros/s/AKfycby4o-w87Yu3SMTmD7i-eT39d1BUpJIkebXbPSivGOLx7bFFiwgoGHTNS2wZWxzsyxPljw/exec';
+
+const TX_LANG_CONFIG = {
+  es: { code: 'es', name: 'Spanish', tab: 'Spanish' },
+  da: { code: 'da', name: 'Danish',  tab: 'Danish'  },
+  ru: { code: 'ru', name: 'Russian', tab: 'Russian' },
+};
+
+const TX_TTS_LOCALE = { es: 'es-ES', da: 'da-DK', ru: 'ru-RU', en: 'en-US' };
+
+let txCurrentLang   = localStorage.getItem('txCurrentLang') || 'es';
+let txDirEnFirst    = localStorage.getItem('txDirEnFirst') !== 'false';
+let txTranslation   = null;
+let txLastSaved     = null;
+let txHistory       = JSON.parse(localStorage.getItem('txHistory2') || '[]');
+
+// Init
+(function txInit() {
+  if (!TX_LANG_CONFIG[txCurrentLang]) txCurrentLang = 'es';
+  document.getElementById('txWebhookInput').value = localStorage.getItem('srsWebhookUrl') || DEFAULT_WEBHOOK;
+  txUpdateUI();
+  txRenderHistory();
+})();
+
+window.txSelectLang = (lang) => {
+  txCurrentLang = lang;
+  localStorage.setItem('txCurrentLang', lang);
+  txUpdateUI();
+  txClearResult();
+};
+
+window.txToggleDir = () => {
+  txDirEnFirst = !txDirEnFirst;
+  localStorage.setItem('txDirEnFirst', txDirEnFirst);
+  if (txTranslation) {
+    document.getElementById('txInput').value = txTranslation;
+    txUpdateCharCount();
+    txClearResult();
+  }
+  txUpdateUI();
+};
+
+function txUpdateUI() {
+  document.querySelectorAll('.tx-lang-pill').forEach(b => b.classList.toggle('active', b.dataset.lang === txCurrentLang));
+  const name = TX_LANG_CONFIG[txCurrentLang].name;
+  document.getElementById('txFromLabel').textContent = txDirEnFirst ? 'English' : name;
+  document.getElementById('txToLabel').textContent   = txDirEnFirst ? name : 'English';
+}
+
+window.txUpdateCharCount = () => {
+  document.getElementById('txCharCount').textContent = document.getElementById('txInput').value.length + ' chars';
+};
+
+window.txHandleKey = (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); txDoTranslate(); }
+};
+
+window.txDoTranslate = async () => {
+  const text = document.getElementById('txInput').value.trim();
+  if (!text) return;
+  const cfg  = TX_LANG_CONFIG[txCurrentLang];
+  const from = txDirEnFirst ? 'en' : cfg.code;
+  const to   = txDirEnFirst ? cfg.code : 'en';
+
+  txSetStatus('Translating…', 'translating');
+  txSetResult(null);
+  document.getElementById('txTranslateBtn').disabled = true;
+
+  try {
+    const url = 'https://api.mymemory.translated.net/get?q='
+      + encodeURIComponent(text) + '&langpair=' + from + '|' + to
+      + '&de=lukehegelund@gmail.com';
+    const data = await (await fetch(url)).json();
+    if (data.responseStatus === 200) {
+      txTranslation = data.responseData.translatedText;
+      txSetResult(txTranslation);
+      txSetStatus('', '');
+      const toCode = txDirEnFirst ? cfg.code : 'en';
+      txSpeak(txTranslation, TX_TTS_LOCALE[toCode] || toCode);
+      txAutoSave(text, txTranslation, cfg);
+    } else {
+      txSetStatus('Failed — try again', 'error');
+    }
+  } catch(err) {
+    txSetStatus('Network error', 'error');
+  }
+  document.getElementById('txTranslateBtn').disabled = false;
+};
+
+async function txAutoSave(original, translated, cfg) {
+  const now = new Date().toLocaleString();
+  const englishText = txDirEnFirst ? original : translated;
+  const targetText  = txDirEnFirst ? translated : original;
+
+  // Save to local history
+  txHistory.unshift({ original, translated, langName: cfg.name, time: now, dirEnFirst: txDirEnFirst });
+  if (txHistory.length > 50) txHistory = txHistory.slice(0, 50);
+  localStorage.setItem('txHistory2', JSON.stringify(txHistory));
+  txRenderHistory();
+
+  // Auto-add to Supabase vocab_words (stage 0, due today) — deduplicate by english+language
+  try {
+    const { data: existing } = await supabase.from('vocab_words')
+      .select('id')
+      .eq('english', englishText.toLowerCase().trim())
+      .eq('language', cfg.tab)
+      .maybeSingle();
+
+    if (!existing) {
+      await supabase.from('vocab_words').insert({
+        english: englishText, translation: targetText, language: cfg.tab,
+        srs_stage: 0, next_review: T,
+        times_seen: 0, times_correct: 0, times_wrong: 0,
+      });
+    }
+  } catch(e) { /* silent */ }
+
+  // Also POST to Google Sheets webhook if configured
+  const webhookUrl = localStorage.getItem('srsWebhookUrl') || DEFAULT_WEBHOOK;
+  const entry = { action: 'save_translation', original: englishText, translated: targetText, language: cfg.tab, time: now, langCode: cfg.code };
+  txLastSaved = entry;
+  document.getElementById('txDeleteBtn').classList.remove('hidden');
+  try {
+    const resp = await fetch(webhookUrl, {
+      method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(entry)
+    });
+    if (resp.ok) txShowSaved();
+  } catch(e) { txShowSaved(); } // show saved even if webhook fails, since Supabase worked
+
+  loadStats();
+}
+
+window.txDeleteLast = async () => {
+  if (!txLastSaved) return;
+  const entry = txLastSaved; txLastSaved = null;
+  document.getElementById('txDeleteBtn').classList.add('hidden');
+  // Remove from Supabase
+  try {
+    await supabase.from('vocab_words')
+      .delete()
+      .eq('english', entry.original)
+      .eq('language', entry.language);
+  } catch(e) {}
+  // Also fire webhook delete
+  const webhookUrl = localStorage.getItem('srsWebhookUrl') || DEFAULT_WEBHOOK;
+  try { await fetch(webhookUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'delete_translation', ...entry }) }); } catch(e) {}
+  txHistory = txHistory.filter((h, i) => i !== 0);
+  localStorage.setItem('txHistory2', JSON.stringify(txHistory));
+  txRenderHistory();
+  txSetStatus('Deleted', 'error');
+  setTimeout(() => txSetStatus('', ''), 2000);
+  loadStats();
+};
+
+function txShowSaved() {
+  const el = document.getElementById('txSaveIndicator');
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+window.txCopyResult = () => {
+  if (!txTranslation) return;
+  navigator.clipboard.writeText(txTranslation).then(() => {
+    txSetStatus('Copied!', 'saved'); setTimeout(() => txSetStatus('',''), 2000);
+  });
+};
+
+window.txClearAll = () => {
+  document.getElementById('txInput').value = '';
+  txUpdateCharCount(); txClearResult(); txSetStatus('', '');
+};
+
+function txClearResult() {
+  txTranslation = null; txLastSaved = null;
+  document.getElementById('txDeleteBtn').classList.add('hidden');
+  txSetResult(null);
+}
+
+window.txSaveWebhook = () => {
+  localStorage.setItem('srsWebhookUrl', document.getElementById('txWebhookInput').value.trim());
+  txSetStatus('Webhook saved!', 'saved'); setTimeout(() => txSetStatus('',''), 2000);
+};
+
+function txSetStatus(msg, type) {
+  const el = document.getElementById('txStatusBadge');
+  el.textContent = msg;
+  el.className = 'tx-status-badge' + (msg ? ' show ' + type : '');
+}
+
+function txSetResult(text) {
+  const el = document.getElementById('txResultContent');
+  const speakBtn = document.getElementById('txSpeakBtn');
+  if (text) {
+    el.textContent = text; el.className = 'tx-result-text';
+    speakBtn.classList.remove('hidden');
+  } else {
+    el.textContent = 'Translation appears here'; el.className = 'tx-result-placeholder';
+    speakBtn.classList.add('hidden');
+    window.speechSynthesis && window.speechSynthesis.cancel();
+  }
+}
+
+window.txSpeakResult = () => {
+  if (!txTranslation) return;
+  const cfg = TX_LANG_CONFIG[txCurrentLang];
+  const toCode = txDirEnFirst ? cfg.code : 'en';
+  txSpeak(txTranslation, TX_TTS_LOCALE[toCode] || toCode);
+};
+
+function txSpeak(text, locale) {
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const btn = document.getElementById('txSpeakBtn');
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang = locale;
+  const tryVoice = () => {
+    const voices = window.speechSynthesis.getVoices();
+    const exact = voices.find(v => v.lang === locale);
+    const partial = voices.find(v => v.lang.startsWith(locale.split('-')[0]));
+    if (exact) utter.voice = exact; else if (partial) utter.voice = partial;
+  };
+  tryVoice();
+  if (window.speechSynthesis.onvoiceschanged !== undefined) window.speechSynthesis.onvoiceschanged = tryVoice;
+  utter.rate = locale.startsWith('da') ? 0.82 : 0.92;
+  utter.onstart = () => btn && btn.classList.add('speaking');
+  utter.onend = utter.onerror = () => btn && btn.classList.remove('speaking');
+  window.speechSynthesis.speak(utter);
+}
+
+function txRenderHistory() {
+  const el = document.getElementById('txHistory');
+  if (!txHistory.length) { el.innerHTML = '<div style="padding:12px 16px;font-size:13px;color:var(--gray-400)">No translations yet</div>'; return; }
+  el.innerHTML = txHistory.slice(0, 8).map((item, i) => `
+    <div class="tx-history-item" onclick="txReuseHistory(${i})">
+      <div class="tx-history-orig">${esc(item.original)}</div>
+      <div class="tx-history-trans">${esc(item.translated)}</div>
+      <div class="tx-history-meta"><span class="tx-lang-tag">${item.langName}</span>${item.time}</div>
+    </div>`).join('');
+}
+
+window.txReuseHistory = (i) => {
+  const item = txHistory[i];
+  document.getElementById('txInput').value = item.original;
+  txUpdateCharCount();
+  const match = Object.keys(TX_LANG_CONFIG).find(k => TX_LANG_CONFIG[k].name === item.langName);
+  if (match) txSelectLang(match);
+  txDirEnFirst = item.dirEnFirst !== false;
+  localStorage.setItem('txDirEnFirst', txDirEnFirst);
+  txUpdateUI(); txClearResult();
+};
+
+window.txAddWord = async () => {
+  const english     = document.getElementById('txAddEnglish').value.trim();
+  const translation = document.getElementById('txAddTranslation').value.trim();
+  const language    = document.getElementById('txAddLang').value;
+  const example_sentence = document.getElementById('txAddExample').value.trim() || null;
+  if (!english || !translation) { txSetStatus('Fill in English + Translation', 'error'); return; }
+  const { error } = await supabase.from('vocab_words').insert({
+    english, translation, language, example_sentence,
+    srs_stage: 0, next_review: T,
+    times_seen: 0, times_correct: 0, times_wrong: 0,
+  });
+  if (error) { txSetStatus('Error: ' + error.message, 'error'); return; }
+  txSetStatus(`"${english}" added!`, 'saved');
+  setTimeout(() => txSetStatus('', ''), 2500);
+  document.getElementById('txAddEnglish').value = '';
+  document.getElementById('txAddTranslation').value = '';
+  document.getElementById('txAddExample').value = '';
+  loadStats();
+};
+
+// ═══════════════════════════════════════════════════════ FLASHCARDS ══════
+const FC_SRS_INTERVALS = {0:1, 1:3, 2:7, 3:14, 4:30, 5:90, 6:180};
+const FC_STAGE_LABELS  = {0:'New', 1:'Day 3', 2:'Week', 3:'2 Wks', 4:'Month', 5:'3 Mo', 6:'Mastered'};
+const FC_STAGE_COLORS  = {0:'#2563EB', 1:'#7c3aed', 2:'#16a34a', 3:'#16a34a', 4:'#d97706', 5:'#d97706', 6:'#ca8a04'};
+const FC_TTS_LOCALE    = { Spanish:'es-ES', Danish:'da-DK', Russian:'ru-RU' };
+const FC_MAX_STAGE = 6;
+
+let fcAllWords   = [];
+let fcQueue      = [];
+let fcCurrentIdx = 0;
+let fcFlipped    = false;
+let fcLang       = 'all';
+let fcSessionOK  = 0;
+let fcSessionBad = 0;
+
+async function fcInit() {
+  const areaEl = document.getElementById('fcCardArea');
+  areaEl.innerHTML = '<div class="lang-loading"><div class="lang-spinner"></div></div>';
+  try {
+    let query = supabase.from('vocab_words').select('*').lte('next_review', T);
+    if (fcLang !== 'all') query = query.eq('language', fcLang);
+    const res = await query.order('srs_stage').limit(50);
+    fcAllWords = res.data || [];
+    fcBuildQueue();
+  } catch(e) {
+    areaEl.innerHTML = `<div class="fc-state"><div class="fc-state-emoji">⚠️</div><div class="fc-state-title">Couldn't load</div><div class="fc-state-sub">${e.message}</div><button class="btn btn-primary" onclick="fcInit()">Retry</button></div>`;
+  }
+}
+
+function fcBuildQueue() {
+  fcQueue = [...fcAllWords].sort((a,b) => (a.srs_stage||0) - (b.srs_stage||0));
+  fcCurrentIdx = 0; fcSessionOK = 0; fcSessionBad = 0; fcFlipped = false;
+
+  if (!fcQueue.length) {
+    // Find next review date
+    supabase.from('vocab_words').select('next_review').order('next_review').limit(1).then(({data}) => {
+      const next = data?.[0]?.next_review;
+      const msg = next ? `All caught up! Next review: ${next} 🌟` : 'No words yet — add some in the Translator tab!';
+      document.getElementById('fcCardArea').innerHTML = `
+        <div class="fc-state">
+          <div class="fc-state-emoji">✨</div>
+          <div class="fc-state-title">All caught up!</div>
+          <div class="fc-state-sub">${msg}</div>
+          <button class="btn btn-primary" onclick="fcInit()">Refresh</button>
+        </div>`;
+    });
+    return;
+  }
+
+  document.getElementById('fcProgressText').textContent = '0 / ' + fcQueue.length;
+  document.getElementById('fcProgressPct').textContent = '0%';
+  document.getElementById('fcProgressFill').style.width = '0%';
+  fcShowCard();
+}
+
+function fcShowCard() {
+  const area = document.getElementById('fcCardArea');
+
+  if (fcCurrentIdx >= fcQueue.length) {
+    const pct = fcQueue.length > 0 ? Math.round(fcSessionOK / fcQueue.length * 100) : 0;
+    area.innerHTML = `
+      <div class="fc-state">
+        <div class="fc-state-emoji">🎉</div>
+        <div class="fc-state-title">Session complete!</div>
+        <div class="fc-session-stats">
+          <div class="fc-stat-box fc-stat-total"><div class="fc-stat-num">${fcQueue.length}</div><div class="fc-stat-label">Cards</div></div>
+          <div class="fc-stat-box fc-stat-correct"><div class="fc-stat-num">${fcSessionOK}</div><div class="fc-stat-label">Correct</div></div>
+          <div class="fc-stat-box fc-stat-wrong"><div class="fc-stat-num">${fcSessionBad}</div><div class="fc-stat-label">Missed</div></div>
+        </div>
+        <div class="fc-state-sub">${pct >= 80 ? pct+'% — fantastic! 🌟' : pct >= 60 ? pct+'% — keep it up!' : pct+'% — keep practicing!'}</div>
+        <button class="btn btn-primary" onclick="fcInit()">Review Again</button>
+      </div>`;
+    return;
+  }
+
+  const w     = fcQueue[fcCurrentIdx];
+  const stage = Number(w.srs_stage) || 0;
+  const label = FC_STAGE_LABELS[stage] || 'Stage ' + stage;
+  const pct   = fcQueue.length > 0 ? Math.round(fcCurrentIdx / fcQueue.length * 100) : 0;
+
+  document.getElementById('fcProgressText').textContent = fcCurrentIdx + ' / ' + fcQueue.length;
+  document.getElementById('fcProgressPct').textContent  = pct + '%';
+  document.getElementById('fcProgressFill').style.width = pct + '%';
+
+  // Build dots
+  let dots = '';
+  for (let i = 0; i <= FC_MAX_STAGE; i++) dots += `<div class="fc-stage-dot${i<=stage?' filled':''}"></div>`;
+
+  area.innerHTML = `
+    <div class="fc-card-wrap">
+      <div class="fc-card" id="fcCard" onclick="fcFlipCard()">
+        <div class="fc-card-face fc-card-front">
+          <span class="fc-stage-badge">${label}</span>
+          <span class="fc-lang-badge">${w.language}</span>
+          <div class="fc-card-label">English</div>
+          <div class="fc-card-word">${esc(w.english)}</div>
+          <div class="fc-stage-dots">${dots}</div>
+          <div class="fc-tap-hint">tap to reveal</div>
+        </div>
+        <div class="fc-card-face fc-card-back">
+          <span class="fc-stage-badge">${label}</span>
+          <span class="fc-lang-badge">${w.language}</span>
+          <div class="fc-card-label">${w.language}</div>
+          <div class="fc-card-word">${esc(w.translation)}</div>
+          <button class="fc-speak-btn" id="fcSpeakBtn" onclick="event.stopPropagation();fcSpeakCurrent()">🔊</button>
+        </div>
+      </div>
+    </div>
+    <div class="fc-srs-info" id="fcSrsInfo">
+      <div class="fc-srs-dot" id="fcSrsDot" style="background:${FC_STAGE_COLORS[stage]||'#2563EB'}"></div>
+      <span id="fcSrsText">${label} · Seen ${w.times_seen||0}x · next in ${fcNextLabel(stage)}</span>
+    </div>
+    <div class="fc-answer-btns" id="fcAnswerBtns">
+      <button class="fc-btn-wrong" onclick="fcAnswer(false)">✕ Didn't know</button>
+      <button class="fc-btn-correct" onclick="fcAnswer(true)">✓ Got it</button>
+    </div>
+    <div class="fc-delete-wrap" id="fcDeleteWrap">
+      <button class="fc-delete-btn" onclick="fcDeleteCard()">🗑 Remove this card</button>
+    </div>`;
+
+  fcFlipped = false;
+}
+
+function fcNextLabel(stage) {
+  const days = FC_SRS_INTERVALS[Math.min(stage+1, FC_MAX_STAGE)] || 1;
+  if (days === 1) return 'tomorrow';
+  if (days < 14) return days + ' days';
+  if (days < 60) return Math.round(days/7) + ' weeks';
+  return Math.round(days/30) + ' months';
+}
+
+window.fcFlipCard = () => {
+  if (fcFlipped) return;
+  fcFlipped = true;
+  document.getElementById('fcCard')?.classList.add('flipped');
+  document.getElementById('fcAnswerBtns')?.classList.add('visible');
+  document.getElementById('fcSrsInfo')?.classList.add('visible');
+  document.getElementById('fcDeleteWrap')?.classList.add('visible');
+  setTimeout(() => fcSpeakCurrent(), 550);
+};
+
+window.fcAnswer = async (correct) => {
+  const w = fcQueue[fcCurrentIdx];
+  if (correct) fcSessionOK++; else fcSessionBad++;
+  fcCurrentIdx++;
+  fcShowSwipe(correct);
+  setTimeout(() => fcShowCard(), 350);
+
+  // Update Supabase
+  try {
+    const oldStage = Number(w.srs_stage) || 0;
+    const newStage = correct ? Math.min(oldStage+1, FC_MAX_STAGE) : Math.max(0, oldStage-1);
+    const days     = FC_SRS_INTERVALS[newStage] || 1;
+    const nextRev  = new Date(Date.now() + days * 86400000).toISOString().split('T')[0];
+    const now      = new Date().toISOString();
+    await Promise.all([
+      supabase.from('vocab_words').update({
+        srs_stage: newStage, next_review: nextRev, last_reviewed: now,
+        times_seen:    (Number(w.times_seen)||0) + 1,
+        times_correct: (Number(w.times_correct)||0) + (correct ? 1 : 0),
+        times_wrong:   (Number(w.times_wrong)||0)   + (correct ? 0 : 1),
+      }).eq('id', w.id),
+      supabase.from('srs_reviews').insert({ word_id: w.id, reviewed_at: now, result: correct ? 'correct' : 'wrong', old_stage: oldStage, new_stage: newStage }),
+    ]);
+  } catch(e) { /* silent — will sync next load */ }
+};
+
+window.fcDeleteCard = async () => {
+  const w = fcQueue[fcCurrentIdx];
+  fcAllWords = fcAllWords.filter(c => c.id !== w.id);
+  fcQueue.splice(fcCurrentIdx, 1);
+  fcShowCard();
+  try { await supabase.from('vocab_words').delete().eq('id', w.id); } catch(e) {}
+  loadStats();
+};
+
+function fcShowSwipe(correct) {
+  const el = document.getElementById('fcSwipeOverlay');
+  el.textContent = correct ? '✓' : '✕';
+  el.style.color   = correct ? '#16a34a' : '#dc2626';
+  el.style.opacity = '0.55';
+  setTimeout(() => { el.style.opacity = '0'; }, 300);
+}
+
+window.fcSetLang = (lang) => {
+  fcLang = lang;
+  document.querySelectorAll('.fc-lang-pill').forEach(p => {
+    if (p.closest('#panel-flashcards') || !p.closest('#panel-vocab')) {
+      p.classList.toggle('active', p.dataset.lang === lang);
+    }
+  });
+  fcInit();
+};
+
+function fcSpeakCurrent() {
+  if (fcCurrentIdx >= fcQueue.length) return;
+  const w = fcQueue[fcCurrentIdx];
+  const locale = FC_TTS_LOCALE[w.language] || 'en-US';
+  fcSpeak(w.translation, locale);
+}
+
+function fcSpeak(text, locale) {
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const btn   = document.getElementById('fcSpeakBtn');
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang  = locale;
+  const tryVoice = () => {
+    const voices  = window.speechSynthesis.getVoices();
+    const exact   = voices.find(v => v.lang === locale);
+    const partial = voices.find(v => v.lang.startsWith(locale.split('-')[0]));
+    if (exact) utter.voice = exact; else if (partial) utter.voice = partial;
+  };
+  tryVoice();
+  if (window.speechSynthesis.onvoiceschanged !== undefined) window.speechSynthesis.onvoiceschanged = tryVoice;
+  utter.rate = locale.startsWith('da') ? 0.82 : 0.92;
+  utter.onstart = () => btn && btn.classList.add('speaking');
+  utter.onend = utter.onerror = () => btn && btn.classList.remove('speaking');
+  window.speechSynthesis.speak(utter);
+}
+
+// Keyboard shortcuts for flashcards
+document.addEventListener('keydown', e => {
+  const panel = document.getElementById('panel-flashcards');
+  if (!panel.classList.contains('active')) return;
+  if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); if (!fcFlipped) fcFlipCard(); }
+  else if ((e.key === 'ArrowRight' || e.key === 'k') && fcFlipped) fcAnswer(true);
+  else if ((e.key === 'ArrowLeft'  || e.key === 'j') && fcFlipped) fcAnswer(false);
+});
+
+// ═════════════════════════════════════════════════════ VOCABULARY ════════
+let vocabAll    = [];
+let vocabLang   = 'all';
+let vocabLoaded = false;
+
+async function vocabLoad() {
+  if (!vocabLoaded) {
+    document.getElementById('vocabList').innerHTML = '<div class="lang-loading"><div class="lang-spinner"></div></div>';
+    const res = await supabase.from('vocab_words')
+      .select('id, english, translation, language, srs_stage, next_review, times_correct, times_wrong, example_sentence')
+      .order('language').order('english');
+    vocabAll = res.data || [];
+    vocabLoaded = true;
+  }
+  vocabFilter();
+}
+
+function vocabFilter() {
+  const q = (document.getElementById('vocabSearch')?.value || '').toLowerCase().trim();
+  let pool = vocabLang === 'all' ? vocabAll : vocabAll.filter(w => w.language === vocabLang);
+  if (q) pool = pool.filter(w =>
+    w.english.toLowerCase().includes(q) ||
+    w.translation.toLowerCase().includes(q) ||
+    (w.example_sentence||'').toLowerCase().includes(q)
+  );
+
+  document.getElementById('vocabCount').textContent = pool.length + ' word' + (pool.length !== 1 ? 's' : '');
+
+  const LANG_COLORS = { Spanish: 'var(--coral)', Danish: 'var(--blue)', Russian: 'var(--purple)' };
+  if (!pool.length) {
+    document.getElementById('vocabList').innerHTML = '<div style="padding:24px;text-align:center;color:var(--gray-400);font-size:14px">No matches</div>';
+    return;
+  }
+
+  document.getElementById('vocabList').innerHTML = pool.map(w => `
+    <div class="list-item">
+      <div class="list-item-left">
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:5px;background:${LANG_COLORS[w.language]||'var(--gray-200)'}22;color:${LANG_COLORS[w.language]||'var(--gray-600)'}">${w.language}</span>
+          <strong>${esc(w.english)}</strong>
+          <span style="color:var(--gray-400)">→</span>
+          <span style="color:var(--blue);font-weight:600">${esc(w.translation)}</span>
+        </div>
+        ${w.example_sentence ? `<div class="list-item-sub" style="font-style:italic">"${esc(w.example_sentence)}"</div>` : ''}
+        <div class="list-item-sub">Stage ${w.srs_stage} · ${w.times_correct||0}✓ ${w.times_wrong||0}✗ · Next: ${w.next_review||'—'}</div>
+      </div>
+    </div>`).join('');
+}
+
+window.vocabFilter = vocabFilter;
+
+window.setVocabLang = (lang) => {
+  vocabLang = lang;
+  document.querySelectorAll('#panel-vocab .fc-lang-pill').forEach(p => p.classList.toggle('active', p.dataset.lang === lang));
+  vocabFilter();
+};
+
+// ════════════════════════════════════════════════════════ HELPERS ════════
+function esc(s) {
+  return String(s||'')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ══════════════════════════════════════════ AUTO-INIT on load ═══════════
+fcInit();
+
+</script>
 </body>
 </html>
