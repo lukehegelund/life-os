@@ -1,6 +1,7 @@
 // Life OS — Calendar (Month + Week views, Sunday start)
+// Supports drag/resize/add/delete of calendar_events in week view
 import { supabase } from './supabase.js';
-import { today } from './utils.js';
+import { today, toast } from './utils.js';
 
 const T = today();
 const TODAY = new Date(T + 'T00:00:00');
@@ -181,18 +182,16 @@ async function fetchEvents() {
     cur = addDays(cur, 1);
   }
 
-  // Add Google Calendar events
+  // Add Google Calendar events (editable)
   for (const ev of (calEventsRes.data || [])) {
-    // start_time is stored as ISO with +00:00 but the time values represent local time
-    // (i.e. "07:30:00+00:00" means 7:30am local, not UTC). Extract date from the ISO string directly.
-    const key = ev.start_time ? ev.start_time.slice(0, 10) : null; // "YYYY-MM-DD"
+    const key = ev.start_time ? ev.start_time.slice(0, 10) : null;
     if (!key || !eventCache[key]) continue;
-    const startLocal = ev.start_time ? ev.start_time.slice(11, 16) : null; // "HH:MM"
+    const startLocal = ev.start_time ? ev.start_time.slice(11, 16) : null;
     const endLocal   = ev.end_time   ? ev.end_time.slice(11, 16)   : null;
-    // Map Google Calendar color names to hex; default teal
     const calColor = ev.color || '#0F9D58';
     eventCache[key].push({
       type: 'gcal',
+      id: ev.id,
       title: ev.title,
       meta: ev.calendar_name || 'Calendar',
       color: calColor,
@@ -200,12 +199,13 @@ async function fetchEvents() {
       timeStart: ev.all_day ? null : startLocal,
       timeEnd:   ev.all_day ? null : endLocal,
       isBusy: ev.is_busy,
+      editable: true,
     });
   }
 
   // Add time blocks (focus sessions)
   for (const tb of (timeBlocksRes.data || [])) {
-    const key = tb.date; // 'YYYY-MM-DD'
+    const key = tb.date;
     if (!eventCache[key]) continue;
     const tasks = tb.assigned_tasks || [];
     const taskCount = Array.isArray(tasks) ? tasks.length : 0;
@@ -214,7 +214,6 @@ async function fetchEvents() {
                      : tb.block_type === 'buffer' ? '#6B7280'
                      : tb.block_type === 'open'   ? '#0891B2'
                      : '#7C3AED';
-    // start_time from DB is "HH:MM:SS"
     const tStart = tb.start_time ? tb.start_time.slice(0,5) : null;
     const tEnd   = tb.end_time   ? tb.end_time.slice(0,5)   : null;
     eventCache[key].push({
@@ -237,7 +236,6 @@ async function fetchEvents() {
     eventCache[key].sort((a, b) => {
       const td = (typeOrder[a.type] ?? 2) - (typeOrder[b.type] ?? 2);
       if (td !== 0) return td;
-      // Within same type, sort by start time
       const ta = a.timeStart || '99:99';
       const tb2 = b.timeStart || '99:99';
       return ta.localeCompare(tb2);
@@ -249,7 +247,6 @@ async function fetchEvents() {
 function renderMonthGrid() {
   document.getElementById('period-label').textContent = `${MONTHS[viewMonth]} ${viewYear}`;
   document.getElementById('cal-day-labels').style.display = 'grid';
-  // Ensure cal-grid uses grid layout (in case class is missing from HTML)
   const gridEl = document.getElementById('cal-grid');
   gridEl.style.display = 'grid';
   gridEl.style.gridTemplateColumns = 'repeat(7, 1fr)';
@@ -286,6 +283,7 @@ const WEEK_HOUR_START = 6;  // 6am
 const WEEK_HOUR_END   = 21; // 9pm
 const HOUR_HEIGHT_PX  = 56; // px per hour
 const TOTAL_HEIGHT    = (WEEK_HOUR_END - WEEK_HOUR_START) * HOUR_HEIGHT_PX;
+const SNAP_MINS       = 15; // snap to 15-minute increments
 
 function timeToMinutes(t) {
   if (!t) return null;
@@ -294,11 +292,28 @@ function timeToMinutes(t) {
 }
 
 function minutesToPct(mins) {
-  // Convert absolute minutes to position relative to WEEK_HOUR_START
   const startMins = WEEK_HOUR_START * 60;
   const totalMins = (WEEK_HOUR_END - WEEK_HOUR_START) * 60;
   return Math.max(0, Math.min(100, (mins - startMins) / totalMins * 100));
 }
+
+function minsToTimeStr(mins) {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${pad(h)}:${pad(m)}`;
+}
+
+function snapMins(mins) {
+  return Math.round(mins / SNAP_MINS) * SNAP_MINS;
+}
+
+function pxToMins(px) {
+  // Convert px offset within the time grid body to minutes from midnight
+  return WEEK_HOUR_START * 60 + (px / TOTAL_HEIGHT) * (WEEK_HOUR_END - WEEK_HOUR_START) * 60;
+}
+
+// ── Drag state ────────────────────────────────────────────────────────────────
+let dragState = null; // { type: 'create'|'move'|'resize', ... }
 
 function renderWeekGrid() {
   document.getElementById('cal-day-labels').style.display = 'none';
@@ -317,19 +332,16 @@ function renderWeekGrid() {
     days.push({ date: d, str: dateStr(d) });
   }
 
-  // Build hour labels
   const hours = [];
   for (let h = WEEK_HOUR_START; h < WEEK_HOUR_END; h++) {
     const label = h === 12 ? '12pm' : h < 12 ? `${h}am` : `${h - 12}pm`;
     hours.push(label);
   }
 
-  // Time gutter width
   const gutterW = 36;
 
   let html = `<div class="week-gcal-wrap" style="overflow-x:auto">
   <div class="week-gcal" style="min-width:480px">
-    <!-- Header row: gutter + day names -->
     <div class="wgcal-header" style="display:flex;padding-left:${gutterW}px;border-bottom:1px solid var(--gray-200)">`;
 
   for (const { date, str } of days) {
@@ -343,7 +355,6 @@ function renderWeekGrid() {
   }
   html += `</div><!-- /header -->
 
-    <!-- All-day row for timed=false events -->
     <div class="wgcal-allday" style="display:flex;align-items:flex-start;border-bottom:1px solid var(--gray-100);min-height:28px">
       <div style="width:${gutterW}px;flex-shrink:0;font-size:10px;color:var(--gray-400);padding-top:6px;text-align:right;padding-right:4px">all-day</div>`;
   for (const { str } of days) {
@@ -356,9 +367,7 @@ function renderWeekGrid() {
   }
   html += `</div><!-- /allday -->
 
-    <!-- Time grid body -->
-    <div style="display:flex;overflow-y:auto;max-height:${TOTAL_HEIGHT + 20}px">
-      <!-- Hour gutter -->
+    <div id="wgcal-body" style="display:flex;overflow-y:auto;max-height:${TOTAL_HEIGHT + 20}px">
       <div style="width:${gutterW}px;flex-shrink:0;position:relative;height:${TOTAL_HEIGHT}px">`;
 
   for (let i = 0; i < hours.length; i++) {
@@ -366,20 +375,18 @@ function renderWeekGrid() {
   }
   html += `</div><!-- /gutter -->
 
-      <!-- Day columns -->
-      <div style="flex:1;display:flex;position:relative">
-        <!-- Hour lines -->
+      <div id="wgcal-daycols" style="flex:1;display:flex;position:relative">
         <div style="position:absolute;inset:0;pointer-events:none">`;
   for (let i = 0; i < hours.length; i++) {
     html += `<div style="position:absolute;left:0;right:0;top:${i * HOUR_HEIGHT_PX}px;border-top:1px solid var(--gray-100)"></div>`;
   }
   html += `</div>`;
 
-  // Day columns with timed events
-  for (const { str } of days) {
+  for (let di = 0; di < days.length; di++) {
+    const { str } = days[di];
     const isToday = str === T;
     const timedEvents = (eventCache[str] || []).filter(e => e.timeStart);
-    html += `<div onclick="selectDay('${str}')" style="flex:1;position:relative;height:${TOTAL_HEIGHT}px;border-left:1px solid var(--gray-100);cursor:pointer${isToday ? ';background:rgba(37,99,235,0.03)' : ''}">`;
+    html += `<div class="wgcal-day-col" data-date="${str}" style="flex:1;position:relative;height:${TOTAL_HEIGHT}px;border-left:1px solid var(--gray-100);${isToday ? 'background:rgba(37,99,235,0.03)' : ''}">`;
 
     // Current time indicator
     if (isToday) {
@@ -397,33 +404,27 @@ function renderWeekGrid() {
 
     for (const e of timedEvents) {
       const startMins = timeToMinutes(e.timeStart);
-      const rawEnd = e.timeEnd ? timeToMinutes(e.timeEnd) : startMins + 60; // default 1hr
-      const endMins = Math.max(rawEnd, startMins + 30); // min 30min height
+      const rawEnd = e.timeEnd ? timeToMinutes(e.timeEnd) : startMins + 60;
+      const endMins = Math.max(rawEnd, startMins + 30);
       const topPct = minutesToPct(startMins);
-      const heightPct = ((endMins - startMins) / ((WEEK_HOUR_END - WEEK_HOUR_START) * 60)) * 100;
-      const heightPx = (endMins - startMins) / 60 * HOUR_HEIGHT_PX;
+      const heightPx = Math.max(20, (endMins - startMins) / 60 * HOUR_HEIGHT_PX);
       const timeLabel = `${e.timeStart}${e.timeEnd ? '–' + e.timeEnd : ''}`;
+      const isEditable = e.type === 'gcal' && e.id;
+      const cursor = isEditable ? 'grab' : 'pointer';
+      const evId = e.id ? `data-ev-id="${e.id}"` : '';
 
-      html += `<a href="${e.link}" onclick="event.stopPropagation()" style="
-        position:absolute;
-        top:${topPct}%;
-        left:2px;right:2px;
-        min-height:${Math.max(20, heightPx)}px;
-        background:${e.color};
-        border-radius:4px;
-        padding:2px 5px;
-        font-size:10px;
-        font-weight:600;
-        color:white;
-        overflow:hidden;
-        text-decoration:none;
-        z-index:5;
-        display:block;
-        line-height:1.3
-      " title="${e.title} ${timeLabel}">
+      html += `<div class="wcal-ev${isEditable ? ' wcal-ev-editable' : ''}" ${evId}
+        data-date="${str}" data-start="${e.timeStart}" data-end="${e.timeEnd || ''}"
+        style="position:absolute;top:${topPct}%;left:2px;right:2px;
+          min-height:${heightPx}px;background:${e.color};border-radius:4px;
+          padding:2px 5px;font-size:10px;font-weight:600;color:white;
+          overflow:hidden;z-index:5;display:block;line-height:1.3;
+          cursor:${cursor};user-select:none;box-sizing:border-box"
+        title="${e.title} ${timeLabel}">
         <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.title}</div>
         ${heightPx > 28 ? `<div style="font-size:9px;opacity:0.85">${timeLabel}</div>` : ''}
-      </a>`;
+        ${isEditable ? `<div class="wcal-resize-handle" style="position:absolute;bottom:0;left:0;right:0;height:6px;cursor:s-resize;background:rgba(0,0,0,0.15);border-radius:0 0 4px 4px"></div>` : ''}
+      </div>`;
     }
 
     html += `</div>`;
@@ -435,6 +436,405 @@ function renderWeekGrid() {
 </div><!-- /wrap -->`;
 
   document.getElementById('cal-grid').innerHTML = html;
+
+  // Attach interaction listeners after DOM is rendered
+  attachWeekInteractions();
+}
+
+// ── Week view interactions ────────────────────────────────────────────────────
+function attachWeekInteractions() {
+  const dayCols = document.querySelectorAll('.wgcal-day-col');
+  const body = document.getElementById('wgcal-body');
+
+  // Helper: get minutes from a mouse Y relative to the time grid body
+  function yToMins(colEl, clientY) {
+    const rect = colEl.getBoundingClientRect();
+    const py = Math.max(0, Math.min(TOTAL_HEIGHT, clientY - rect.top));
+    return snapMins(Math.round(pxToMins(py)));
+  }
+
+  dayCols.forEach(col => {
+    const dateStr = col.dataset.date;
+
+    // ── Click on column background → create event ─────────────────────────
+    col.addEventListener('mousedown', (e) => {
+      // Only act on direct column clicks (not on events or resize handles)
+      if (e.target !== col) return;
+      e.preventDefault();
+
+      const startM = yToMins(col, e.clientY);
+      const endM   = startM + 60;
+
+      // Create a ghost block
+      const ghost = createGhostBlock(col, startM, endM, dateStr);
+
+      dragState = {
+        type: 'create',
+        col, dateStr, startM, endM,
+        anchorM: startM,
+        ghost,
+      };
+    });
+
+    // ── Mousedown on editable events ──────────────────────────────────────
+    col.querySelectorAll('.wcal-ev-editable').forEach(evEl => {
+      const evId = evEl.dataset.evId;
+      const evDate = evEl.dataset.date;
+      const evStart = evEl.dataset.start;
+      const evEnd   = evEl.dataset.end;
+
+      // Resize handle
+      const resizeHandle = evEl.querySelector('.wcal-resize-handle');
+      if (resizeHandle) {
+        resizeHandle.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dragState = {
+            type: 'resize',
+            evEl, evId, evDate,
+            startM: timeToMinutes(evStart),
+            endM:   timeToMinutes(evEnd) || timeToMinutes(evStart) + 60,
+            col,
+          };
+        });
+      }
+
+      // Move (drag entire event)
+      evEl.addEventListener('mousedown', (e) => {
+        if (e.target === resizeHandle) return;
+        e.preventDefault();
+        e.stopPropagation();
+
+        const clickMins = yToMins(col, e.clientY);
+        const sMins = timeToMinutes(evStart);
+        const eMins = timeToMinutes(evEnd) || sMins + 60;
+        dragState = {
+          type: 'move',
+          evEl, evId, evDate: dateStr,
+          startM: sMins,
+          endM:   eMins,
+          duration: eMins - sMins,
+          offsetM: clickMins - sMins,
+          col,
+        };
+        evEl.style.opacity = '0.6';
+        evEl.style.cursor = 'grabbing';
+      });
+
+      // Click (no drag) → open detail popup
+      evEl.addEventListener('click', (e) => {
+        if (dragState) return; // was a drag, not a click
+        e.stopPropagation();
+        openEventPopup(evId, evStart, evEnd, evEl.title.replace(` ${evStart}–${evEnd}`, '').trim(), evDate, evEl);
+      });
+    });
+  });
+
+  // ── Global mouse move ─────────────────────────────────────────────────────
+  document.addEventListener('mousemove', handleMouseMove);
+  document.addEventListener('mouseup', handleMouseUp);
+
+  function handleMouseMove(e) {
+    if (!dragState) return;
+
+    if (dragState.type === 'create') {
+      const m = yToMins(dragState.col, e.clientY);
+      if (m > dragState.anchorM) {
+        dragState.startM = dragState.anchorM;
+        dragState.endM = m;
+      } else {
+        dragState.startM = m;
+        dragState.endM = dragState.anchorM;
+      }
+      dragState.endM = Math.max(dragState.startM + SNAP_MINS, dragState.endM);
+      updateGhostBlock(dragState.ghost, dragState.startM, dragState.endM);
+    }
+
+    if (dragState.type === 'resize') {
+      const m = yToMins(dragState.col, e.clientY);
+      dragState.endM = Math.max(dragState.startM + SNAP_MINS, m);
+      const topPct = minutesToPct(dragState.startM);
+      const heightPx = Math.max(20, (dragState.endM - dragState.startM) / 60 * HOUR_HEIGHT_PX);
+      dragState.evEl.style.minHeight = heightPx + 'px';
+      // Update time label
+      const tl = dragState.evEl.querySelector('div:nth-child(2)');
+      if (tl) tl.textContent = `${minsToTimeStr(dragState.startM)}–${minsToTimeStr(dragState.endM)}`;
+    }
+
+    if (dragState.type === 'move') {
+      // Determine which column we're over
+      let targetCol = null;
+      let targetDate = dragState.evDate;
+      document.querySelectorAll('.wgcal-day-col').forEach(col => {
+        const rect = col.getBoundingClientRect();
+        if (e.clientX >= rect.left && e.clientX <= rect.right) {
+          targetCol = col;
+          targetDate = col.dataset.date;
+        }
+      });
+      if (!targetCol) return;
+
+      const m = yToMins(targetCol, e.clientY);
+      dragState.startM = m - dragState.offsetM;
+      dragState.endM   = dragState.startM + dragState.duration;
+      dragState.col = targetCol;
+      dragState.evDate = targetDate;
+
+      const topPct = minutesToPct(dragState.startM);
+      dragState.evEl.style.top = topPct + '%';
+    }
+  }
+
+  function handleMouseUp(e) {
+    if (!dragState) return;
+    const ds = dragState;
+    dragState = null;
+
+    if (ds.type === 'create') {
+      // Remove ghost, open create modal
+      ds.ghost.remove();
+      if (ds.endM - ds.startM < SNAP_MINS) return; // too small, ignore
+      openCreateModal(ds.dateStr, minsToTimeStr(ds.startM), minsToTimeStr(ds.endM));
+    }
+
+    if (ds.type === 'resize') {
+      ds.evEl.style.cursor = '';
+      saveEventTime(ds.evId, ds.evDate, minsToTimeStr(ds.startM), minsToTimeStr(ds.endM));
+    }
+
+    if (ds.type === 'move') {
+      ds.evEl.style.opacity = '';
+      ds.evEl.style.cursor = 'grab';
+      saveEventTime(ds.evId, ds.evDate, minsToTimeStr(ds.startM), minsToTimeStr(ds.endM));
+    }
+
+    // Clean up listeners
+    document.removeEventListener('mousemove', handleMouseMove);
+    document.removeEventListener('mouseup', handleMouseUp);
+  }
+}
+
+function createGhostBlock(col, startM, endM, dateStr) {
+  const ghost = document.createElement('div');
+  ghost.className = 'wcal-ghost';
+  ghost.style.cssText = `
+    position:absolute;left:2px;right:2px;z-index:20;
+    background:rgba(37,99,235,0.25);border:2px dashed var(--blue);
+    border-radius:4px;pointer-events:none;box-sizing:border-box;
+    font-size:10px;color:var(--blue);font-weight:600;padding:2px 5px;
+  `;
+  updateGhostBlock(ghost, startM, endM);
+  col.appendChild(ghost);
+  return ghost;
+}
+
+function updateGhostBlock(ghost, startM, endM) {
+  const topPct = minutesToPct(startM);
+  const heightPx = Math.max(20, (endM - startM) / 60 * HOUR_HEIGHT_PX);
+  ghost.style.top = topPct + '%';
+  ghost.style.minHeight = heightPx + 'px';
+  ghost.textContent = `${minsToTimeStr(startM)}–${minsToTimeStr(endM)}`;
+}
+
+// ── Save event time to Supabase ───────────────────────────────────────────────
+async function saveEventTime(id, dateStr, startTime, endTime) {
+  if (!id) return;
+  const startISO = `${dateStr}T${startTime}:00+00:00`;
+  const endISO   = `${dateStr}T${endTime}:00+00:00`;
+  const { error } = await supabase.from('calendar_events').update({
+    start_time: startISO,
+    end_time: endISO,
+  }).eq('id', id);
+  if (error) { toast('Save failed: ' + error.message, 'error'); }
+  else { render(); }
+}
+
+// ── Create event modal ────────────────────────────────────────────────────────
+function openCreateModal(dateStr, startTime, endTime) {
+  removeModal();
+  const d = new Date(dateStr + 'T00:00:00');
+  const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+  const modal = document.createElement('div');
+  modal.id = 'cal-ev-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:500;display:flex;align-items:center;justify-content:center';
+  modal.innerHTML = `
+    <div style="background:var(--white);border-radius:12px;padding:20px;width:90%;max-width:360px;box-shadow:0 8px 32px rgba(0,0,0,0.2)" onclick="event.stopPropagation()">
+      <div style="font-size:16px;font-weight:700;margin-bottom:4px">New Event</div>
+      <div style="font-size:13px;color:var(--gray-400);margin-bottom:14px">${dayLabel}</div>
+      <input id="cev-title" type="text" placeholder="Event title" autocomplete="off"
+        style="width:100%;border:1.5px solid var(--gray-200);border-radius:8px;padding:9px 12px;font-size:14px;margin-bottom:10px;outline:none;box-sizing:border-box"
+        onfocus="this.style.borderColor='var(--blue)'" onblur="this.style.borderColor='var(--gray-200)'" />
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <div style="flex:1">
+          <label style="font-size:11px;color:var(--gray-400);margin-bottom:3px;display:block">Start</label>
+          <input id="cev-start" type="time" value="${startTime}"
+            style="width:100%;border:1.5px solid var(--gray-200);border-radius:8px;padding:8px 10px;font-size:14px;outline:none;box-sizing:border-box" />
+        </div>
+        <div style="flex:1">
+          <label style="font-size:11px;color:var(--gray-400);margin-bottom:3px;display:block">End</label>
+          <input id="cev-end" type="time" value="${endTime}"
+            style="width:100%;border:1.5px solid var(--gray-200);border-radius:8px;padding:8px 10px;font-size:14px;outline:none;box-sizing:border-box" />
+        </div>
+      </div>
+      <select id="cev-color" style="width:100%;border:1.5px solid var(--gray-200);border-radius:8px;padding:9px 12px;font-size:14px;margin-bottom:14px;outline:none;box-sizing:border-box;background:var(--white)">
+        <option value="#0F9D58">🟢 Green</option>
+        <option value="#2563EB">🔵 Blue</option>
+        <option value="#7C3AED">🟣 Purple</option>
+        <option value="#D97706">🟡 Amber</option>
+        <option value="#DC2626">🔴 Red</option>
+        <option value="#0891B2">🩵 Teal</option>
+      </select>
+      <div style="display:flex;gap:8px">
+        <button onclick="document.getElementById('cal-ev-modal').remove()"
+          style="flex:1;padding:10px;border:1.5px solid var(--gray-200);border-radius:8px;background:var(--white);font-size:14px;font-weight:600;color:var(--gray-600);cursor:pointer">
+          Cancel
+        </button>
+        <button id="cev-save-btn"
+          style="flex:2;padding:10px;border:none;border-radius:8px;background:var(--blue);color:white;font-size:14px;font-weight:700;cursor:pointer">
+          Add Event
+        </button>
+      </div>
+    </div>
+  `;
+  modal.addEventListener('click', () => modal.remove());
+  document.body.appendChild(modal);
+
+  const titleEl = document.getElementById('cev-title');
+  titleEl.focus();
+
+  document.getElementById('cev-save-btn').addEventListener('click', async () => {
+    const title = titleEl.value.trim();
+    if (!title) { titleEl.focus(); return; }
+    const start = document.getElementById('cev-start').value;
+    const end   = document.getElementById('cev-end').value;
+    const color = document.getElementById('cev-color').value;
+    const startISO = `${dateStr}T${start}:00+00:00`;
+    const endISO   = `${dateStr}T${end}:00+00:00`;
+
+    const { error } = await supabase.from('calendar_events').insert({
+      title,
+      start_time: startISO,
+      end_time: endISO,
+      all_day: false,
+      color,
+      calendar_name: 'LifeOS',
+      is_busy: true,
+    });
+    if (error) { toast('Error: ' + error.message, 'error'); return; }
+    toast('Event added ✅', 'success');
+    modal.remove();
+    render();
+  });
+
+  titleEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('cev-save-btn').click();
+    if (e.key === 'Escape') modal.remove();
+  });
+}
+
+// ── Event detail/edit/delete popup ───────────────────────────────────────────
+function openEventPopup(id, startTime, endTime, title, evDate, anchorEl) {
+  removeModal();
+  const rect = anchorEl.getBoundingClientRect();
+
+  const popup = document.createElement('div');
+  popup.id = 'cal-ev-modal';
+  popup.style.cssText = `position:fixed;z-index:500;background:var(--white);border-radius:10px;
+    padding:14px 16px;box-shadow:0 8px 24px rgba(0,0,0,0.2);width:240px;
+    top:${Math.min(rect.bottom + 8, window.innerHeight - 200)}px;
+    left:${Math.min(rect.left, window.innerWidth - 260)}px;
+    border:1px solid var(--gray-200)`;
+  popup.innerHTML = `
+    <div style="font-size:14px;font-weight:700;color:var(--gray-800);margin-bottom:4px">${title}</div>
+    <div style="font-size:12px;color:var(--gray-400);margin-bottom:12px">${evDate} · ${startTime}–${endTime}</div>
+    <div style="display:flex;gap:6px">
+      <button id="ev-edit-btn" style="flex:1;padding:8px;border:1.5px solid var(--gray-200);border-radius:7px;background:var(--white);font-size:13px;font-weight:600;color:var(--gray-700);cursor:pointer">✏️ Edit</button>
+      <button id="ev-del-btn" style="flex:1;padding:8px;border:none;border-radius:7px;background:#FEF2F2;font-size:13px;font-weight:600;color:var(--red);cursor:pointer">🗑 Delete</button>
+    </div>
+  `;
+  document.body.appendChild(popup);
+
+  // Close on outside click
+  setTimeout(() => document.addEventListener('click', () => removeModal(), { once: true }), 10);
+  popup.addEventListener('click', e => e.stopPropagation());
+
+  document.getElementById('ev-del-btn').addEventListener('click', async () => {
+    popup.remove();
+    const { error } = await supabase.from('calendar_events').delete().eq('id', id);
+    if (error) { toast('Delete failed: ' + error.message, 'error'); return; }
+    toast('Event deleted', 'success');
+    render();
+  });
+
+  document.getElementById('ev-edit-btn').addEventListener('click', () => {
+    popup.remove();
+    openEditModal(id, title, evDate, startTime, endTime);
+  });
+}
+
+function openEditModal(id, title, evDate, startTime, endTime) {
+  removeModal();
+  const modal = document.createElement('div');
+  modal.id = 'cal-ev-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:500;display:flex;align-items:center;justify-content:center';
+  modal.innerHTML = `
+    <div style="background:var(--white);border-radius:12px;padding:20px;width:90%;max-width:360px;box-shadow:0 8px 32px rgba(0,0,0,0.2)" onclick="event.stopPropagation()">
+      <div style="font-size:16px;font-weight:700;margin-bottom:14px">Edit Event</div>
+      <input id="eev-title" type="text" value="${title}" autocomplete="off"
+        style="width:100%;border:1.5px solid var(--gray-200);border-radius:8px;padding:9px 12px;font-size:14px;margin-bottom:10px;outline:none;box-sizing:border-box"
+        onfocus="this.style.borderColor='var(--blue)'" onblur="this.style.borderColor='var(--gray-200)'" />
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <div style="flex:1">
+          <label style="font-size:11px;color:var(--gray-400);margin-bottom:3px;display:block">Start</label>
+          <input id="eev-start" type="time" value="${startTime}"
+            style="width:100%;border:1.5px solid var(--gray-200);border-radius:8px;padding:8px 10px;font-size:14px;outline:none;box-sizing:border-box" />
+        </div>
+        <div style="flex:1">
+          <label style="font-size:11px;color:var(--gray-400);margin-bottom:3px;display:block">End</label>
+          <input id="eev-end" type="time" value="${endTime || ''}"
+            style="width:100%;border:1.5px solid var(--gray-200);border-radius:8px;padding:8px 10px;font-size:14px;outline:none;box-sizing:border-box" />
+        </div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="document.getElementById('cal-ev-modal').remove()"
+          style="flex:1;padding:10px;border:1.5px solid var(--gray-200);border-radius:8px;background:var(--white);font-size:14px;font-weight:600;color:var(--gray-600);cursor:pointer">
+          Cancel
+        </button>
+        <button id="eev-save-btn"
+          style="flex:2;padding:10px;border:none;border-radius:8px;background:var(--blue);color:white;font-size:14px;font-weight:700;cursor:pointer">
+          Save
+        </button>
+      </div>
+    </div>
+  `;
+  modal.addEventListener('click', () => modal.remove());
+  document.body.appendChild(modal);
+
+  const titleEl = document.getElementById('eev-title');
+  titleEl.select();
+
+  document.getElementById('eev-save-btn').addEventListener('click', async () => {
+    const newTitle = titleEl.value.trim();
+    if (!newTitle) { titleEl.focus(); return; }
+    const start = document.getElementById('eev-start').value;
+    const end   = document.getElementById('eev-end').value;
+    const startISO = `${evDate}T${start}:00+00:00`;
+    const endISO   = end ? `${evDate}T${end}:00+00:00` : null;
+
+    const { error } = await supabase.from('calendar_events').update({
+      title: newTitle, start_time: startISO, end_time: endISO,
+    }).eq('id', id);
+    if (error) { toast('Error: ' + error.message, 'error'); return; }
+    toast('Event updated ✅', 'success');
+    modal.remove();
+    render();
+  });
+}
+
+function removeModal() {
+  const existing = document.getElementById('cal-ev-modal');
+  if (existing) existing.remove();
 }
 
 // ── Day events panel ──────────────────────────────────────────────────────────
@@ -480,7 +880,7 @@ function renderDayPanel(ds) {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function getWeekStart(d) {
   const result = new Date(d);
-  result.setDate(result.getDate() - result.getDay()); // go back to Sunday
+  result.setDate(result.getDate() - result.getDay());
   return result;
 }
 
