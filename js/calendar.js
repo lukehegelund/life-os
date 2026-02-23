@@ -5,7 +5,7 @@ import { today } from './utils.js';
 const T = today();
 const TODAY = new Date(T + 'T00:00:00');
 
-let viewMode = 'month'; // 'month' | 'week'
+let viewMode = 'week'; // 'month' | 'week'
 let viewYear = TODAY.getFullYear();
 let viewMonth = TODAY.getMonth(); // 0-based
 let viewWeekStart = getWeekStart(TODAY); // Date object = Sunday of current week
