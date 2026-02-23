@@ -265,9 +265,9 @@ window.addWord = async () => {
   document.getElementById('add-translation').value = '';
   document.getElementById('add-example').value = '';
 
-  // Refresh cache + stats
+  // Refresh cache + stats + flashcard queue
   await prefetchAllWords();
-  loadStats();
+  await Promise.all([loadStats(), loadDueWords()]);
   if (activeTab === 'vocab') loadBrowser();
 };
 
