@@ -22,6 +22,10 @@ function injectButtons() {
       style="width:34px;height:34px;border-radius:50%;background:var(--blue);color:white;border:none;
              font-size:20px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;
              box-shadow:var(--shadow);flex-shrink:0">+</button>
+    <button id="topbar-tell-claude" onclick="window.showTellClaude()" title="Tell Claude to do something"
+      style="width:34px;height:34px;border-radius:50%;background:#1e1e2e;color:white;border:none;
+             font-size:15px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;
+             box-shadow:var(--shadow);flex-shrink:0">🤖</button>
     <button id="topbar-feedback" onclick="window.showFeedback()" title="Submit bug or feature request"
       style="width:34px;height:34px;border-radius:50%;background:var(--gray-100);color:var(--gray-600);border:1px solid var(--gray-200);
              font-size:15px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;
@@ -101,6 +105,46 @@ function injectModals() {
             style="flex:2;padding:11px;border:none;border-radius:8px;background:var(--blue);
                    color:white;font-size:14px;font-weight:700;cursor:pointer">
             Add
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tell Claude Modal -->
+    <div id="tc-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1000;align-items:flex-end;justify-content:center"
+         onclick="if(event.target===this)window.hideTellClaude()">
+      <div style="background:#1e1e2e;border-radius:16px 16px 0 0;padding:20px 20px 32px;width:100%;max-width:540px;animation:slideUp 0.2s ease">
+        <div style="font-size:17px;font-weight:700;margin-bottom:6px;color:white">🤖 Tell Claude</div>
+        <div style="font-size:12px;color:#a0a0b8;margin-bottom:14px">I'll add this to my task list and work on it next time you say "Work on LifeOS".</div>
+
+        <!-- Instruction -->
+        <textarea id="tc-instruction" placeholder="e.g. Add a dark mode toggle to the settings page…" rows="3"
+          style="width:100%;border:1.5px solid #3a3a5c;border-radius:8px;padding:10px 12px;
+                 font-size:14px;margin-bottom:10px;outline:none;resize:vertical;font-family:inherit;
+                 background:#2a2a3e;color:white;box-sizing:border-box"
+          onfocus="this.style.borderColor='#7c3aed'" onblur="this.style.borderColor='#3a3a5c'"
+          onkeydown="if(event.key==='Enter'&&(event.metaKey||event.ctrlKey))window.submitTellClaude()"></textarea>
+
+        <!-- Optional context -->
+        <input id="tc-context" type="text" placeholder="Context (optional) — e.g. 'on the calendar page'" autocomplete="off"
+          style="width:100%;border:1.5px solid #3a3a5c;border-radius:8px;padding:9px 12px;
+                 font-size:13px;margin-bottom:14px;outline:none;background:#2a2a3e;color:white;box-sizing:border-box"
+          onfocus="this.style.borderColor='#7c3aed'" onblur="this.style.borderColor='#3a3a5c'" />
+
+        <!-- Pending tasks count -->
+        <div id="tc-pending-count" style="font-size:12px;color:#a0a0b8;margin-bottom:14px;text-align:center"></div>
+
+        <!-- Actions -->
+        <div style="display:flex;gap:8px">
+          <button onclick="window.hideTellClaude()"
+            style="flex:1;padding:11px;border:1.5px solid #3a3a5c;border-radius:8px;
+                   background:transparent;font-size:14px;font-weight:600;color:#a0a0b8;cursor:pointer">
+            Cancel
+          </button>
+          <button onclick="window.submitTellClaude()"
+            style="flex:2;padding:11px;border:none;border-radius:8px;background:#7c3aed;
+                   color:white;font-size:14px;font-weight:700;cursor:pointer">
+            Add to Claude's List
           </button>
         </div>
       </div>
@@ -280,6 +324,47 @@ window.submitFeedback = async () => {
   if (error) { toast('Error: ' + error.message, 'error'); return; }
   toast('Feedback submitted 🙏', 'success');
   window.hideFeedback();
+};
+
+// ── Tell Claude state ─────────────────────────────────────────────────────────
+window.showTellClaude = async () => {
+  const el = document.getElementById('tc-overlay');
+  el.style.display = 'flex';
+  document.getElementById('tc-instruction').value = '';
+  document.getElementById('tc-context').value = '';
+  setTimeout(() => document.getElementById('tc-instruction').focus(), 50);
+
+  // Show count of pending tasks
+  const { data } = await supabase.from('claude_tasks').select('id').eq('status', 'open');
+  const count = data?.length || 0;
+  const countEl = document.getElementById('tc-pending-count');
+  if (countEl) {
+    countEl.textContent = count > 0
+      ? `📋 ${count} task${count !== 1 ? 's' : ''} already in my queue`
+      : '📋 No tasks in queue yet';
+  }
+};
+
+window.hideTellClaude = () => {
+  document.getElementById('tc-overlay').style.display = 'none';
+};
+
+window.submitTellClaude = async () => {
+  const instruction = document.getElementById('tc-instruction').value.trim();
+  const context     = document.getElementById('tc-context').value.trim() || null;
+  if (!instruction) { document.getElementById('tc-instruction').focus(); return; }
+
+  const page = window.location.pathname.split('/').pop() || 'index.html';
+  const { error } = await supabase.from('claude_tasks').insert({
+    instruction,
+    context,
+    page,
+    status: 'open',
+  });
+
+  if (error) { toast('Error: ' + error.message, 'error'); return; }
+  toast('Added to Claude\'s list 🤖', 'success');
+  window.hideTellClaude();
 };
 
 // ── Init ──────────────────────────────────────────────────────────────────────
