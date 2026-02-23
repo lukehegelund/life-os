@@ -22,10 +22,19 @@ function injectButtons() {
       style="width:34px;height:34px;border-radius:50%;background:var(--blue);color:white;border:none;
              font-size:20px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;
              box-shadow:var(--shadow);flex-shrink:0">+</button>
-    <button id="topbar-tell-claude" onclick="window.showTellClaude()" title="Tell Claude to do something"
-      style="width:34px;height:34px;border-radius:50%;background:#1e1e2e;color:white;border:none;
-             font-size:15px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;
-             box-shadow:var(--shadow);flex-shrink:0">🤖</button>
+    <button id="topbar-gold" onclick="window.showGlobalGold()" title="Quick gold — all students"
+      style="width:34px;height:34px;border-radius:50%;background:var(--orange-light,#fff7ed);color:var(--orange,#f97316);border:1px solid var(--orange,#f97316);
+             font-size:16px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;
+             box-shadow:var(--shadow);flex-shrink:0">🪙</button>
+    <div id="topbar-queue-wrap" style="position:relative;flex-shrink:0">
+      <button id="topbar-queue-status" onclick="window.toggleQueueStatus()" title="Claude task queue"
+        style="width:34px;height:34px;border-radius:50%;background:#1e1e2e;color:white;border:none;
+               font-size:15px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;
+               box-shadow:var(--shadow)">🤖</button>
+      <span id="topbar-queue-badge" style="display:none;position:absolute;top:-3px;right:-3px;
+        background:#ef4444;color:white;border-radius:50%;width:16px;height:16px;font-size:10px;
+        font-weight:700;align-items:center;justify-content:center;line-height:1"></span>
+    </div>
     <div id="topbar-bell-wrap" style="position:relative;flex-shrink:0">
       <button id="topbar-bell" onclick="window.toggleNotifications()" title="Notifications"
         style="width:34px;height:34px;border-radius:50%;background:var(--gray-100);color:var(--gray-700);border:1px solid var(--gray-200);
@@ -51,6 +60,7 @@ function injectButtons() {
 
   // Load unread badge on init
   loadBellBadge();
+  loadQueueBadge();
 }
 
 // ── Bell badge ─────────────────────────────────────────────────────────────────
@@ -61,6 +71,23 @@ async function loadBellBadge() {
     .eq('read', false);
   const count = data?.length || 0;
   const badge = document.getElementById('topbar-bell-badge');
+  if (!badge) return;
+  if (count > 0) {
+    badge.textContent = count > 9 ? '9+' : count;
+    badge.style.display = 'flex';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+// ── Queue Badge ────────────────────────────────────────────────────────────────
+async function loadQueueBadge() {
+  const [tasksRes, feedbackRes] = await Promise.all([
+    supabase.from('claude_tasks').select('id').eq('status', 'open'),
+    supabase.from('lifeos_feedback').select('id').eq('status', 'open'),
+  ]);
+  const count = (tasksRes.data?.length || 0) + (feedbackRes.data?.length || 0);
+  const badge = document.getElementById('topbar-queue-badge');
   if (!badge) return;
   if (count > 0) {
     badge.textContent = count > 9 ? '9+' : count;
@@ -318,6 +345,74 @@ function injectModals() {
       </div>
     </div>
 
+    <!-- Queue Status Panel -->
+    <div id="queue-status-panel" style="display:none;position:fixed;top:58px;right:12px;width:320px;max-height:440px;
+         background:#1e1e2e;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.35);
+         border:1px solid #3a3a5c;z-index:999;overflow:hidden;flex-direction:column">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px 10px;
+                  border-bottom:1px solid #3a3a5c;flex-shrink:0">
+        <div style="font-size:14px;font-weight:700;color:white">🤖 Claude Queue</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div id="queue-status-label" style="font-size:11px;color:#a0a0b8"></div>
+          <button onclick="window.hideQueueStatus();window.showTellClaude()"
+            style="font-size:11px;padding:4px 10px;border:1px solid #3a3a5c;border-radius:20px;
+                   background:transparent;color:#a0a0b8;cursor:pointer;white-space:nowrap">+ Add task</button>
+        </div>
+      </div>
+      <div id="queue-status-list" style="overflow-y:auto;flex:1;max-height:380px;padding:4px 0"></div>
+    </div>
+
+    <!-- Global Quick Gold Modal -->
+    <div id="gg-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1000;align-items:flex-end;justify-content:center"
+         onclick="if(event.target===this)window.hideGlobalGold()">
+      <div style="background:var(--white);border-radius:16px 16px 0 0;padding:20px 20px 32px;width:100%;max-width:600px;
+                  max-height:85vh;overflow-y:auto;animation:slideUp 0.2s ease">
+        <div style="font-size:17px;font-weight:700;margin-bottom:4px">🪙 Quick Gold</div>
+        <div style="font-size:12px;color:var(--gray-400);margin-bottom:14px">Give gold to any student — not tied to a class</div>
+
+        <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
+          <input type="number" id="gg-amount" class="form-input" placeholder="Amount" min="-999" max="999"
+            style="width:90px;text-align:center;border:1.5px solid var(--gray-200);border-radius:8px;padding:10px 12px;font-size:14px;outline:none">
+          <input type="text" id="gg-reason" class="form-input" placeholder="Reason"
+            style="flex:1;border:1.5px solid var(--gray-200);border-radius:8px;padding:10px 12px;font-size:14px;outline:none"
+            onkeydown="if(event.key==='Enter')window.submitGlobalGold()">
+        </div>
+
+        <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
+          <button class="btn btn-sm btn-ghost" onclick="window.ggSelectAll()">All</button>
+          <button class="btn btn-sm btn-ghost" onclick="window.ggSelectNone()">Clear</button>
+          <button class="btn btn-sm" style="background:var(--orange-light,#fff7ed);color:var(--orange,#f97316);border:none" onclick="window.ggSetAmount(5)">+5</button>
+          <button class="btn btn-sm" style="background:var(--orange-light,#fff7ed);color:var(--orange,#f97316);border:none" onclick="window.ggSetAmount(10)">+10</button>
+          <button class="btn btn-sm" style="background:var(--orange-light,#fff7ed);color:var(--orange,#f97316);border:none" onclick="window.ggSetAmount(25)">+25</button>
+          <button class="btn btn-sm" style="background:#fee2e2;color:#ef4444;border:none" onclick="window.ggSetAmount(-5)">−5</button>
+          <button class="btn btn-sm" style="background:#fee2e2;color:#ef4444;border:none" onclick="window.ggSetAmount(-10)">−10</button>
+        </div>
+
+        <!-- Search filter -->
+        <input type="text" id="gg-search" placeholder="🔍 Filter students…"
+          style="width:100%;border:1.5px solid var(--gray-200);border-radius:8px;padding:8px 12px;font-size:13px;
+                 margin-bottom:10px;outline:none;box-sizing:border-box"
+          oninput="window.ggFilterStudents(this.value)">
+
+        <div id="gg-student-list" style="margin-bottom:14px">
+          <div style="text-align:center;color:var(--gray-400);padding:20px;font-size:13px">Loading students…</div>
+        </div>
+
+        <div style="display:flex;gap:8px">
+          <button onclick="window.hideGlobalGold()"
+            style="flex:1;padding:11px;border:1.5px solid var(--gray-200);border-radius:8px;
+                   background:var(--white);font-size:14px;font-weight:600;color:var(--gray-600);cursor:pointer">
+            Cancel
+          </button>
+          <button onclick="window.submitGlobalGold()"
+            style="flex:2;padding:11px;border:none;border-radius:8px;background:#f59e0b;
+                   color:white;font-size:14px;font-weight:700;cursor:pointer">
+            🪙 Submit Gold
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Notification Panel -->
     <div id="notif-panel" style="display:none;position:fixed;top:58px;right:12px;width:340px;max-height:480px;
          background:var(--white);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.15);
@@ -351,6 +446,13 @@ function injectModals() {
     if (panel && notifPanelOpen && !panel.contains(e.target) && !bellWrap?.contains(e.target)) {
       panel.style.display = 'none';
       notifPanelOpen = false;
+    }
+    // Close queue panel when clicking outside
+    const qPanel = document.getElementById('queue-status-panel');
+    const qWrap = document.getElementById('topbar-queue-wrap');
+    if (qPanel && queuePanelOpen && !qPanel.contains(e.target) && !qWrap?.contains(e.target)) {
+      qPanel.style.display = 'none';
+      queuePanelOpen = false;
     }
   });
 }
@@ -559,6 +661,181 @@ window.toggleFbQueue = async () => {
         <div style="font-size:10px;color:var(--gray-400);margin-top:2px">${i.sub || ''}</div>
       </div>
     </div>`).join('');
+};
+
+// ── Queue Status Panel ────────────────────────────────────────────────────────
+let queuePanelOpen = false;
+
+window.hideQueueStatus = () => {
+  const panel = document.getElementById('queue-status-panel');
+  if (panel) panel.style.display = 'none';
+  queuePanelOpen = false;
+};
+
+window.toggleQueueStatus = async () => {
+  const panel = document.getElementById('queue-status-panel');
+  if (!panel) return;
+  queuePanelOpen = !queuePanelOpen;
+  if (!queuePanelOpen) { panel.style.display = 'none'; return; }
+  panel.style.display = 'flex';
+
+  const list = document.getElementById('queue-status-list');
+  const label = document.getElementById('queue-status-label');
+  list.innerHTML = '<div style="color:#a0a0b8;font-size:12px;padding:16px 14px">Loading…</div>';
+
+  const [tasksRes, feedbackRes] = await Promise.all([
+    supabase.from('claude_tasks').select('*').eq('status', 'open').order('created_at'),
+    supabase.from('lifeos_feedback').select('*').eq('status', 'open').order('created_at'),
+  ]);
+
+  const tasks = tasksRes.data || [];
+  const feedback = feedbackRes.data || [];
+  const total = tasks.length + feedback.length;
+
+  if (label) {
+    if (total === 0) {
+      label.textContent = '✅ All done';
+      label.style.color = '#22c55e';
+    } else {
+      label.textContent = `${total} pending`;
+      label.style.color = '#ef4444';
+    }
+  }
+
+  if (total === 0) {
+    list.innerHTML = '<div style="color:#6060a0;font-size:13px;padding:20px 14px;text-align:center">Queue is empty 🎉<br><span style="font-size:11px">No pending tasks or feedback</span></div>';
+    return;
+  }
+
+  const all = [
+    ...tasks.map(t => ({ icon: '🤖', label: t.instruction, sub: t.page, date: t.created_at })),
+    ...feedback.map(f => ({ icon: f.type === 'bug' ? '🐛' : '✨', label: f.title, sub: f.page, date: f.created_at })),
+  ];
+
+  list.innerHTML = all.map(i => {
+    const d = new Date(i.date);
+    const ts = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return `
+      <div style="display:flex;gap:10px;padding:10px 14px;border-bottom:1px solid #2a2a3e;align-items:flex-start">
+        <span style="font-size:15px;flex-shrink:0;margin-top:1px">${i.icon}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;color:white;line-height:1.35;word-break:break-word">${i.label}</div>
+          <div style="font-size:10px;color:#6060a0;margin-top:3px">${i.sub || ''} · ${ts}</div>
+        </div>
+      </div>`;
+  }).join('');
+};
+
+// ── Global Quick Gold ─────────────────────────────────────────────────────────
+let ggChecked = new Set();
+let ggAllStudents = [];
+
+window.showGlobalGold = async () => {
+  const el = document.getElementById('gg-overlay');
+  el.style.display = 'flex';
+  document.getElementById('gg-amount').value = '';
+  document.getElementById('gg-reason').value = '';
+  document.getElementById('gg-search').value = '';
+  ggChecked.clear();
+
+  // Load all active students
+  const { data } = await supabase
+    .from('students')
+    .select('id, name, current_gold')
+    .eq('status', 'Active')
+    .order('name');
+  ggAllStudents = data || [];
+  renderGgStudents(ggAllStudents);
+  setTimeout(() => document.getElementById('gg-amount').focus(), 50);
+};
+
+window.hideGlobalGold = () => {
+  document.getElementById('gg-overlay').style.display = 'none';
+};
+
+function renderGgStudents(students) {
+  const el = document.getElementById('gg-student-list');
+  if (!el) return;
+  if (!students.length) {
+    el.innerHTML = '<div style="text-align:center;color:var(--gray-400);padding:16px;font-size:13px">No students found</div>';
+    return;
+  }
+  el.innerHTML = students.map(s => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 2px;border-bottom:1px solid var(--gray-100)">
+      <input type="checkbox" class="gg-check" id="ggc-${s.id}"
+        ${ggChecked.has(s.id) ? 'checked' : ''}
+        onchange="window.ggToggle(${s.id}, this.checked)"
+        style="width:16px;height:16px;accent-color:#f59e0b;flex-shrink:0">
+      <label for="ggc-${s.id}" style="flex:1;font-size:14px;cursor:pointer;color:var(--gray-800)">${s.name}</label>
+      <span style="font-size:12px;color:var(--gray-400);font-weight:500">${s.current_gold ?? 0} 🪙</span>
+    </div>`).join('');
+}
+
+window.ggToggle = (id, checked) => {
+  if (checked) ggChecked.add(id); else ggChecked.delete(id);
+};
+
+window.ggSelectAll = () => {
+  document.querySelectorAll('.gg-check').forEach(cb => {
+    cb.checked = true;
+    ggChecked.add(Number(cb.id.replace('ggc-', '')));
+  });
+};
+
+window.ggSelectNone = () => {
+  document.querySelectorAll('.gg-check').forEach(cb => { cb.checked = false; });
+  ggChecked.clear();
+};
+
+window.ggSetAmount = (val) => {
+  const inp = document.getElementById('gg-amount');
+  if (inp) inp.value = val;
+};
+
+window.ggFilterStudents = (query) => {
+  const q = query.toLowerCase().trim();
+  const filtered = q ? ggAllStudents.filter(s => s.name.toLowerCase().includes(q)) : ggAllStudents;
+  renderGgStudents(filtered);
+};
+
+window.submitGlobalGold = async () => {
+  const amountRaw = parseInt(document.getElementById('gg-amount').value, 10);
+  const reason = document.getElementById('gg-reason').value.trim() || 'Quick gold';
+  if (!amountRaw || amountRaw === 0) { toast('Enter an amount', 'info'); return; }
+  if (!ggChecked.size) { toast('Select at least one student', 'info'); return; }
+
+  const T = today();
+  const inserts = [];
+  for (const sid of ggChecked) {
+    inserts.push({
+      student_id: sid,
+      class_id: null,
+      date: T,
+      amount: amountRaw,
+      reason,
+      category: amountRaw > 0 ? 'Participation' : 'Behavior',
+      distributed: false,
+    });
+  }
+
+  const { error } = await supabase.from('gold_transactions').insert(inserts);
+  if (error) { toast('Error: ' + error.message, 'error'); return; }
+
+  // Update current_gold balances
+  for (const sid of ggChecked) {
+    const r = await supabase.from('students').select('current_gold').eq('id', sid).single();
+    const cur = r.data?.current_gold ?? 0;
+    await supabase.from('students').update({ current_gold: cur + amountRaw }).eq('id', sid);
+  }
+
+  toast(`Gold submitted for ${ggChecked.size} student${ggChecked.size > 1 ? 's' : ''}! 🪙`, 'success');
+  ggChecked.clear();
+  document.getElementById('gg-amount').value = '';
+  document.getElementById('gg-reason').value = '';
+  // Reload to show updated balances
+  const { data } = await supabase.from('students').select('id, name, current_gold').eq('status', 'Active').order('name');
+  ggAllStudents = data || [];
+  renderGgStudents(ggAllStudents);
 };
 
 // ── Init ──────────────────────────────────────────────────────────────────────
