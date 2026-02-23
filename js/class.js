@@ -27,6 +27,7 @@ async function load() {
   renderClassSettingsBadge(cls);
 
   await Promise.all([
+    loadOverviewNotesSection(),
     loadRoster(cls),
     loadGoldBulk(),
     loadLessonPlans(),
@@ -908,6 +909,137 @@ window.deleteLessonPlan = async (id) => {
   if (error) { toast('Error deleting plan', 'error'); return; }
   toast('Plan deleted', 'success');
   loadLessonPlans();
+};
+
+// ── Class Overview Notes ──────────────────────────────────────────────────
+async function loadOverviewNotesSection() {
+  const section = document.getElementById('class-overview-notes-section');
+  if (!section) return;
+
+  const { data: notes } = await supabase
+    .from('class_overview_notes')
+    .select('*')
+    .eq('class_id', classId)
+    .order('sort_order')
+    .order('created_at');
+
+  renderOverviewNotesSection(notes || []);
+}
+
+function renderOverviewNotesSection(notes) {
+  const section = document.getElementById('class-overview-notes-section');
+  if (!section) return;
+
+  section.innerHTML = `
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-header" style="margin-bottom:${notes.length ? '10px' : '0'}">
+        <div class="card-title" style="margin:0">📌 Class Overview Notes</div>
+        <button class="btn btn-sm btn-primary" onclick="addOverviewNote()">+ Note</button>
+      </div>
+      <div id="overview-notes-list">
+        ${notes.length === 0
+          ? '<div style="font-size:13px;color:var(--gray-400);padding:4px 0">No overview notes yet. Add one to keep info visible across all visits.</div>'
+          : notes.map(n => renderOverviewNoteCard(n)).join('')}
+      </div>
+    </div>`;
+}
+
+function renderOverviewNoteCard(n) {
+  const preview = n.note.length > 120 && n.collapsed
+    ? n.note.slice(0, 120) + '…'
+    : n.note;
+  return `
+    <div class="overview-note-card" id="on-card-${n.id}"
+      style="background:var(--gray-50);border-radius:8px;padding:10px 12px;margin-bottom:8px;
+             border-left:3px solid var(--blue)">
+      <div style="display:flex;align-items:flex-start;gap:8px">
+        <div style="flex:1;min-width:0">
+          <div id="on-text-${n.id}" style="font-size:13px;color:var(--gray-800);white-space:pre-wrap;line-height:1.5">${escHtml(preview)}</div>
+          ${n.note.length > 120 ? `
+            <button onclick="toggleOverviewNoteCollapse('${n.id}', ${!n.collapsed})"
+              style="font-size:11px;color:var(--blue);background:none;border:none;cursor:pointer;padding:2px 0;margin-top:4px">
+              ${n.collapsed ? '▼ Show more' : '▲ Collapse'}
+            </button>` : ''}
+        </div>
+        <div style="display:flex;gap:4px;flex-shrink:0">
+          <button onclick="editOverviewNote('${n.id}')"
+            style="padding:4px 7px;border:1px solid var(--gray-200);border-radius:5px;
+                   background:var(--white);color:var(--gray-500);font-size:11px;cursor:pointer">✏️</button>
+          <button onclick="deleteOverviewNote('${n.id}')"
+            style="padding:4px 7px;border:none;border-radius:5px;
+                   background:#FEF2F2;color:var(--red);font-size:11px;cursor:pointer">🗑</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function escHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+window.addOverviewNote = () => openOverviewNoteModal();
+
+window.editOverviewNote = async (id) => {
+  const { data } = await supabase.from('class_overview_notes').select('*').eq('id', id).single();
+  if (data) openOverviewNoteModal(data);
+};
+
+window.deleteOverviewNote = async (id) => {
+  await supabase.from('class_overview_notes').delete().eq('id', id);
+  toast('Note deleted', 'info');
+  loadOverviewNotesSection();
+};
+
+window.toggleOverviewNoteCollapse = async (id, collapsed) => {
+  await supabase.from('class_overview_notes').update({ collapsed }).eq('id', id);
+  loadOverviewNotesSection();
+};
+
+function openOverviewNoteModal(prefill = {}) {
+  // Remove any existing modal
+  document.getElementById('on-modal')?.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'on-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:500;display:flex;align-items:flex-end;justify-content:center';
+  modal.innerHTML = `
+    <div style="background:var(--white);border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:600px">
+      <div style="font-size:17px;font-weight:700;margin-bottom:14px">
+        ${prefill.id ? '✏️ Edit Overview Note' : '📌 New Overview Note'}
+      </div>
+      <textarea id="on-modal-text" rows="5" class="form-input"
+        placeholder="e.g. Class is working on chapters 4–6. Friday quiz on vocab. Monroe needs extra support."
+        style="resize:vertical;font-size:14px;line-height:1.5">${escHtml(prefill.note || '')}</textarea>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="btn btn-primary" style="flex:1" onclick="saveOverviewNote('${prefill.id || ''}')">
+          ${prefill.id ? 'Save Changes' : 'Add Note'}
+        </button>
+        <button class="btn btn-ghost" onclick="document.getElementById('on-modal').remove()">Cancel</button>
+      </div>
+    </div>`;
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.body.appendChild(modal);
+  setTimeout(() => document.getElementById('on-modal-text')?.focus(), 60);
+}
+
+window.saveOverviewNote = async (editId) => {
+  const note = document.getElementById('on-modal-text')?.value.trim();
+  if (!note) { toast('Enter a note', 'error'); return; }
+
+  let error;
+  if (editId) {
+    ({ error } = await supabase.from('class_overview_notes')
+      .update({ note, updated_at: new Date().toISOString() })
+      .eq('id', editId));
+  } else {
+    ({ error } = await supabase.from('class_overview_notes')
+      .insert({ class_id: Number(classId), note }));
+  }
+
+  if (error) { toast('Error saving note: ' + error.message, 'error'); return; }
+  toast(editId ? 'Note updated ✅' : 'Note added ✅', 'success');
+  document.getElementById('on-modal')?.remove();
+  loadOverviewNotesSection();
 };
 
 load();
