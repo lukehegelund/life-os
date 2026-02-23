@@ -26,6 +26,15 @@ function injectButtons() {
       style="width:34px;height:34px;border-radius:50%;background:#1e1e2e;color:white;border:none;
              font-size:15px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;
              box-shadow:var(--shadow);flex-shrink:0">🤖</button>
+    <div id="topbar-bell-wrap" style="position:relative;flex-shrink:0">
+      <button id="topbar-bell" onclick="window.toggleNotifications()" title="Notifications"
+        style="width:34px;height:34px;border-radius:50%;background:var(--gray-100);color:var(--gray-700);border:1px solid var(--gray-200);
+               font-size:16px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;
+               box-shadow:var(--shadow)">🔔</button>
+      <span id="topbar-bell-badge" style="display:none;position:absolute;top:-3px;right:-3px;
+        background:#ef4444;color:white;border-radius:50%;width:16px;height:16px;font-size:10px;
+        font-weight:700;align-items:center;justify-content:center;line-height:1"></span>
+    </div>
     <button id="topbar-feedback" onclick="window.showFeedback()" title="Submit bug or feature request"
       style="width:34px;height:34px;border-radius:50%;background:var(--gray-100);color:var(--gray-600);border:1px solid var(--gray-200);
              font-size:15px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;
@@ -39,7 +48,112 @@ function injectButtons() {
   } else {
     headerRow.appendChild(wrap);
   }
+
+  // Load unread badge on init
+  loadBellBadge();
 }
+
+// ── Bell badge ─────────────────────────────────────────────────────────────────
+async function loadBellBadge() {
+  const { data } = await supabase
+    .from('claude_notifications')
+    .select('id')
+    .eq('read', false);
+  const count = data?.length || 0;
+  const badge = document.getElementById('topbar-bell-badge');
+  if (!badge) return;
+  if (count > 0) {
+    badge.textContent = count > 9 ? '9+' : count;
+    badge.style.display = 'flex';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+// ── Notification Panel ─────────────────────────────────────────────────────────
+let notifPanelOpen = false;
+
+window.toggleNotifications = async () => {
+  const panel = document.getElementById('notif-panel');
+  if (!panel) return;
+
+  notifPanelOpen = !notifPanelOpen;
+  if (notifPanelOpen) {
+    panel.style.display = 'block';
+    await renderNotifications();
+  } else {
+    panel.style.display = 'none';
+  }
+};
+
+async function renderNotifications() {
+  const list = document.getElementById('notif-list');
+  if (!list) return;
+
+  list.innerHTML = '<div style="text-align:center;color:var(--gray-400);padding:20px;font-size:13px">Loading…</div>';
+
+  const { data, error } = await supabase
+    .from('claude_notifications')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(30);
+
+  if (error || !data?.length) {
+    list.innerHTML = '<div style="text-align:center;color:var(--gray-400);padding:24px;font-size:13px">No notifications yet</div>';
+    return;
+  }
+
+  list.innerHTML = data.map(n => {
+    const ts = new Date(n.created_at);
+    const timeStr = ts.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
+                    ' · ' + ts.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    const unreadDot = !n.read
+      ? `<span style="width:8px;height:8px;border-radius:50%;background:#3b82f6;flex-shrink:0;margin-top:3px"></span>`
+      : `<span style="width:8px;height:8px;flex-shrink:0"></span>`;
+    return `
+      <div data-notif-id="${n.id}" onclick="window.markNotifRead('${n.id}', this)"
+        style="display:flex;gap:10px;padding:12px 14px;border-bottom:1px solid var(--gray-100);
+               cursor:pointer;background:${n.read ? 'transparent' : 'rgba(59,130,246,0.04)'};
+               transition:background 0.15s"
+        onmouseenter="this.style.background='var(--gray-50)'"
+        onmouseleave="this.style.background='${n.read ? 'transparent' : 'rgba(59,130,246,0.04)'}'">
+        ${unreadDot}
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:${n.read ? '500' : '600'};color:var(--gray-800);margin-bottom:3px;line-height:1.3">${n.title}</div>
+          ${n.body ? `<div style="font-size:12px;color:var(--gray-500);line-height:1.4;white-space:pre-wrap">${n.body}</div>` : ''}
+          <div style="font-size:11px;color:var(--gray-400);margin-top:4px">${timeStr}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // Mark all as read after viewing
+  const unreadIds = data.filter(n => !n.read).map(n => n.id);
+  if (unreadIds.length > 0) {
+    setTimeout(async () => {
+      await supabase.from('claude_notifications').update({ read: true }).in('id', unreadIds);
+      loadBellBadge();
+    }, 1500);
+  }
+}
+
+window.markNotifRead = async (id, el) => {
+  await supabase.from('claude_notifications').update({ read: true }).eq('id', id);
+  if (el) {
+    el.style.background = 'transparent';
+    const dot = el.querySelector('span');
+    if (dot) dot.style.background = 'transparent';
+    const title = el.querySelector('div > div:first-child');
+    if (title) title.style.fontWeight = '500';
+  }
+  loadBellBadge();
+};
+
+window.markAllNotifsRead = async () => {
+  await supabase.from('claude_notifications').update({ read: true }).eq('read', false);
+  await renderNotifications();
+  loadBellBadge();
+};
 
 // ── Modal HTML ────────────────────────────────────────────────────────────────
 function injectModals() {
@@ -199,6 +313,23 @@ function injectModals() {
       </div>
     </div>
 
+    <!-- Notification Panel -->
+    <div id="notif-panel" style="display:none;position:fixed;top:58px;right:12px;width:340px;max-height:480px;
+         background:var(--white);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.15);
+         border:1px solid var(--gray-200);z-index:999;overflow:hidden;display:none;flex-direction:column">
+      <!-- Header -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px 10px;
+                  border-bottom:1px solid var(--gray-100);flex-shrink:0">
+        <div style="font-size:14px;font-weight:700;color:var(--gray-800)">🔔 Notifications</div>
+        <button onclick="window.markAllNotifsRead()"
+          style="font-size:11px;color:var(--blue);background:none;border:none;cursor:pointer;font-weight:600;padding:2px 4px">
+          Mark all read
+        </button>
+      </div>
+      <!-- List -->
+      <div id="notif-list" style="overflow-y:auto;flex:1;max-height:420px"></div>
+    </div>
+
     <style>
       @keyframes slideUp {
         from { transform: translateY(100%); opacity: 0; }
@@ -207,6 +338,16 @@ function injectModals() {
     </style>
   `;
   document.body.appendChild(div);
+
+  // Close notification panel when clicking outside
+  document.addEventListener('click', (e) => {
+    const panel = document.getElementById('notif-panel');
+    const bellWrap = document.getElementById('topbar-bell-wrap');
+    if (panel && notifPanelOpen && !panel.contains(e.target) && !bellWrap?.contains(e.target)) {
+      panel.style.display = 'none';
+      notifPanelOpen = false;
+    }
+  });
 }
 
 // ── Quick Add state ───────────────────────────────────────────────────────────
@@ -232,11 +373,6 @@ window.qaSetTab = (tab) => {
   qaTab = tab;
   const taskBtn     = document.getElementById('qa-tab-task');
   const reminderBtn = document.getElementById('qa-tab-reminder');
-  const active   = 'background:var(--white);color:var(--gray-800);box-shadow:var(--shadow)';
-  const inactive = 'background:transparent;color:var(--gray-400);box-shadow:none';
-  taskBtn.style.cssText     += tab === 'task'     ? active : inactive;
-  reminderBtn.style.cssText += tab === 'reminder' ? active : inactive;
-  // Re-apply cleanly
   if (tab === 'task') {
     taskBtn.style.background = 'var(--white)'; taskBtn.style.color = 'var(--gray-800)'; taskBtn.style.boxShadow = 'var(--shadow)';
     reminderBtn.style.background = 'transparent'; reminderBtn.style.color = 'var(--gray-400)'; reminderBtn.style.boxShadow = 'none';
