@@ -7,7 +7,8 @@ import { today, toast } from './utils.js';
 
 // ── Inject buttons into header ────────────────────────────────────────────────
 function injectButtons() {
-  const headerRow = document.querySelector('.header-row');
+  // Support both standard .header-row pages and the calendar's .cal-toolbar
+  const headerRow = document.querySelector('.header-row') || document.querySelector('.cal-toolbar');
   if (!headerRow) return;
 
   // Avoid double-injection
