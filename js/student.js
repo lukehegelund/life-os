@@ -70,6 +70,7 @@ async function load() {
     loadGrades(s),
     loadClasses(s),
     loadPagesAnalytics(s),
+    loadEodReminder(s),
   ]);
 }
 
@@ -433,5 +434,54 @@ async function loadClasses(s) {
       </div>
     </div>`).join('');
 }
+
+// ── End of Day Reminder ────────────────────────────────────────────────────
+async function loadEodReminder(s) {
+  const el = document.getElementById('eod-reminder-content');
+  if (!el) return;
+
+  const enabled = s.eod_reminder_enabled || false;
+  const note = s.eod_reminder_note || '';
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:${enabled ? '14px' : '0'}">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex:1">
+        <input type="checkbox" id="eod-enabled" ${enabled ? 'checked' : ''}
+          onchange="window.saveEodReminder()"
+          style="width:18px;height:18px;accent-color:var(--blue);flex-shrink:0">
+        <div>
+          <div style="font-size:14px;font-weight:600;color:var(--gray-800)">Send me a reminder at 2:25pm</div>
+          <div style="font-size:12px;color:var(--gray-400)">You'll get a daily ntfy notification on weekdays</div>
+        </div>
+      </label>
+    </div>
+    <div id="eod-note-wrap" style="display:${enabled ? 'block' : 'none'}">
+      <textarea id="eod-note" rows="2" placeholder="Reminder note (e.g. Check in about homework, mention spelling test tomorrow…)"
+        style="width:100%;border:1.5px solid var(--gray-200);border-radius:8px;padding:10px 12px;
+               font-size:14px;resize:vertical;font-family:inherit;outline:none;box-sizing:border-box;color:var(--gray-800)"
+        onfocus="this.style.borderColor='var(--blue)'" onblur="this.style.borderColor='var(--gray-200)';window.saveEodReminder()"
+        onkeydown="if(event.key==='Enter'&&(event.metaKey||event.ctrlKey))this.blur()"
+        >${note}</textarea>
+      <div style="font-size:11px;color:var(--gray-400);margin-top:4px">Auto-saves on blur · Cmd+Enter to save</div>
+    </div>`;
+
+  // Toggle note visibility when checkbox changes
+  document.getElementById('eod-enabled').addEventListener('change', function() {
+    document.getElementById('eod-note-wrap').style.display = this.checked ? 'block' : 'none';
+  });
+}
+
+window.saveEodReminder = async () => {
+  const enabled = document.getElementById('eod-enabled')?.checked ?? false;
+  const note = document.getElementById('eod-note')?.value?.trim() || '';
+
+  const { error } = await supabase
+    .from('students')
+    .update({ eod_reminder_enabled: enabled, eod_reminder_note: note || null })
+    .eq('id', studentId);
+
+  if (error) { toast('Error saving reminder: ' + error.message, 'error'); return; }
+  toast(enabled ? '🔔 Reminder on' : 'Reminder off', 'success');
+};
 
 load();
