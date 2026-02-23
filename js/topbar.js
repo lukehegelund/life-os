@@ -44,10 +44,10 @@ function injectButtons() {
         background:#ef4444;color:white;border-radius:50%;width:16px;height:16px;font-size:10px;
         font-weight:700;align-items:center;justify-content:center;line-height:1"></span>
     </div>
-    <button id="topbar-feedback" onclick="window.showFeedback()" title="Submit bug or feature request"
-      style="width:34px;height:34px;border-radius:50%;background:var(--gray-100);color:var(--gray-600);border:1px solid var(--gray-200);
+    <button id="topbar-tell-claude" onclick="window.showTellClaude()" title="Tell Claude — bug, feature, or task"
+      style="width:34px;height:34px;border-radius:50%;background:#1e1e2e;color:white;border:none;
              font-size:15px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;
-             box-shadow:var(--shadow);flex-shrink:0">🐛</button>
+             box-shadow:var(--shadow);flex-shrink:0">💬</button>
   `;
 
   // Insert before any existing right-side button (like "+ Task"), or just append
@@ -251,30 +251,51 @@ function injectModals() {
       </div>
     </div>
 
-    <!-- Tell Claude Modal -->
+    <!-- Tell Claude / Feedback Unified Modal -->
     <div id="tc-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1000;align-items:flex-end;justify-content:center"
          onclick="if(event.target===this)window.hideTellClaude()">
       <div style="background:#1e1e2e;border-radius:16px 16px 0 0;padding:20px 20px 32px;width:100%;max-width:540px;animation:slideUp 0.2s ease">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-          <div style="font-size:17px;font-weight:700;color:white">🤖 Tell Claude</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <div style="font-size:17px;font-weight:700;color:white">💬 Tell Claude</div>
           <button onclick="window.toggleTcQueue()" id="tc-queue-toggle"
             style="font-size:11px;padding:4px 10px;border:1px solid #3a3a5c;border-radius:20px;
                    background:transparent;color:#a0a0b8;cursor:pointer">View Queue</button>
         </div>
-        <div style="font-size:12px;color:#a0a0b8;margin-bottom:14px">I'll add this to my task list and work on it next time you say "LifeOS".</div>
 
         <!-- Queue panel (hidden by default) -->
         <div id="tc-queue-panel" style="display:none;background:#2a2a3e;border-radius:8px;padding:10px 12px;margin-bottom:14px;max-height:200px;overflow-y:auto"></div>
 
-        <!-- Single instruction field -->
-        <textarea id="tc-instruction" placeholder="e.g. Add a dark mode toggle to the settings page…" rows="3"
+        <!-- 3-tab switcher -->
+        <div style="display:flex;gap:0;margin-bottom:14px;background:#2a2a3e;border-radius:8px;padding:3px">
+          <button id="tc-tab-bug" onclick="window.tcSetTab('bug')"
+            style="flex:1;padding:7px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;
+                   background:#1e1e2e;color:white;box-shadow:0 1px 4px rgba(0,0,0,0.4)">
+            🐛 Bug
+          </button>
+          <button id="tc-tab-feature" onclick="window.tcSetTab('feature')"
+            style="flex:1;padding:7px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;
+                   background:transparent;color:#6060a0;box-shadow:none">
+            ✨ Feature
+          </button>
+          <button id="tc-tab-task" onclick="window.tcSetTab('task')"
+            style="flex:1;padding:7px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;
+                   background:transparent;color:#6060a0;box-shadow:none">
+            🤖 Task
+          </button>
+        </div>
+
+        <!-- Subtitle that changes per tab -->
+        <div id="tc-subtitle" style="font-size:12px;color:#a0a0b8;margin-bottom:12px">Report something that's broken.</div>
+
+        <!-- Text field -->
+        <textarea id="tc-instruction" placeholder="Describe the bug…" rows="3"
           style="width:100%;border:1.5px solid #3a3a5c;border-radius:8px;padding:10px 12px;
                  font-size:14px;margin-bottom:14px;outline:none;resize:vertical;font-family:inherit;
                  background:#2a2a3e;color:white;box-sizing:border-box"
           onfocus="this.style.borderColor='#7c3aed'" onblur="this.style.borderColor='#3a3a5c'"
           onkeydown="if(event.key==='Enter'&&(event.metaKey||event.ctrlKey))window.submitTellClaude()"></textarea>
 
-        <!-- Pending tasks count -->
+        <!-- Pending count -->
         <div id="tc-pending-count" style="font-size:12px;color:#a0a0b8;margin-bottom:14px;text-align:center"></div>
 
         <!-- Actions -->
@@ -284,60 +305,8 @@ function injectModals() {
                    background:transparent;font-size:14px;font-weight:600;color:#a0a0b8;cursor:pointer">
             Cancel
           </button>
-          <button onclick="window.submitTellClaude()"
+          <button id="tc-submit-btn" onclick="window.submitTellClaude()"
             style="flex:2;padding:11px;border:none;border-radius:8px;background:#7c3aed;
-                   color:white;font-size:14px;font-weight:700;cursor:pointer">
-            Add to Claude's List
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Feedback Modal -->
-    <div id="fb-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1000;align-items:flex-end;justify-content:center"
-         onclick="if(event.target===this)window.hideFeedback()">
-      <div style="background:var(--white);border-radius:16px 16px 0 0;padding:20px 20px 32px;width:100%;max-width:540px;
-                  animation:slideUp 0.2s ease">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-          <div style="font-size:17px;font-weight:700">💬 Send Feedback</div>
-          <button onclick="window.toggleFbQueue()" id="fb-queue-toggle"
-            style="font-size:11px;padding:4px 10px;border:1px solid var(--gray-200);border-radius:20px;
-                   background:transparent;color:var(--gray-500);cursor:pointer">View Queue</button>
-        </div>
-
-        <!-- Queue panel (hidden by default) -->
-        <div id="fb-queue-panel" style="display:none;background:var(--gray-50);border-radius:8px;padding:10px 12px;margin-bottom:14px;max-height:200px;overflow-y:auto"></div>
-
-        <!-- Toggle bug/feature -->
-        <div style="display:flex;gap:0;margin-bottom:14px;background:var(--gray-100);border-radius:8px;padding:3px">
-          <button id="fb-tab-bug" onclick="window.fbSetTab('bug')"
-            style="flex:1;padding:7px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;
-                   background:var(--white);color:var(--gray-800);box-shadow:var(--shadow)">
-            🐛 Bug
-          </button>
-          <button id="fb-tab-feature" onclick="window.fbSetTab('feature')"
-            style="flex:1;padding:7px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;
-                   background:transparent;color:var(--gray-400);box-shadow:none">
-            ✨ Feature
-          </button>
-        </div>
-
-        <!-- Single field -->
-        <textarea id="fb-title" placeholder="Describe the bug or feature…" rows="3"
-          style="width:100%;border:1.5px solid var(--gray-200);border-radius:8px;padding:10px 12px;
-                 font-size:14px;margin-bottom:14px;resize:vertical;font-family:inherit;outline:none;box-sizing:border-box"
-          onfocus="this.style.borderColor='var(--blue)'" onblur="this.style.borderColor='var(--gray-200)'"
-          onkeydown="if(event.key==='Enter'&&(event.metaKey||event.ctrlKey))window.submitFeedback()"></textarea>
-
-        <!-- Actions -->
-        <div style="display:flex;gap:8px">
-          <button onclick="window.hideFeedback()"
-            style="flex:1;padding:11px;border:1.5px solid var(--gray-200);border-radius:8px;
-                   background:var(--white);font-size:14px;font-weight:600;color:var(--gray-600);cursor:pointer">
-            Cancel
-          </button>
-          <button onclick="window.submitFeedback()"
-            style="flex:2;padding:11px;border:none;border-radius:8px;background:var(--purple);
                    color:white;font-size:14px;font-weight:700;cursor:pointer">
             Submit
           </button>
@@ -354,7 +323,7 @@ function injectModals() {
         <div style="font-size:14px;font-weight:700;color:white">🤖 Claude Queue</div>
         <div style="display:flex;align-items:center;gap:8px">
           <div id="queue-status-label" style="font-size:11px;color:#a0a0b8"></div>
-          <button onclick="window.hideQueueStatus();window.showTellClaude()"
+          <button onclick="window.hideQueueStatus();window.showTellClaude('task')"
             style="font-size:11px;padding:4px 10px;border:1px solid #3a3a5c;border-radius:20px;
                    background:transparent;color:#a0a0b8;cursor:pointer;white-space:nowrap">+ Add task</button>
         </div>
@@ -459,7 +428,7 @@ function injectModals() {
 
 // ── Quick Add state ───────────────────────────────────────────────────────────
 let qaTab = 'task';
-let fbTab = 'bug';
+let tcTab = 'bug';
 
 window.showQuickAdd = () => {
   const el = document.getElementById('qa-overlay');
@@ -523,69 +492,34 @@ window.submitQuickAdd = async () => {
   window.hideQuickAdd();
 };
 
-// ── Feedback state ────────────────────────────────────────────────────────────
-window.showFeedback = () => {
-  const el = document.getElementById('fb-overlay');
-  el.style.display = 'flex';
-  document.getElementById('fb-title').value = '';
-  document.getElementById('fb-queue-panel').style.display = 'none';
-  document.getElementById('fb-queue-toggle').textContent = 'View Queue';
-  fbSetTab('bug');
-  setTimeout(() => document.getElementById('fb-title').focus(), 50);
+// ── Tell Claude (unified: Bug / Feature / Task) ───────────────────────────────
+const TC_TABS = {
+  bug:     { subtitle: 'Report something that\'s broken.',            placeholder: 'Describe the bug…',              btn: '🐛 Submit Bug' },
+  feature: { subtitle: 'Suggest a new feature or improvement.',       placeholder: 'Describe the feature request…',  btn: '✨ Request Feature' },
+  task:    { subtitle: 'Add a task to my queue — I\'ll tackle it next LifeOS session.', placeholder: 'e.g. Add a dark mode toggle to settings…', btn: '🤖 Add to Queue' },
 };
 
-window.hideFeedback = () => {
-  document.getElementById('fb-overlay').style.display = 'none';
-};
-
-window.fbSetTab = (tab) => {
-  fbTab = tab;
-  const bugBtn     = document.getElementById('fb-tab-bug');
-  const featureBtn = document.getElementById('fb-tab-feature');
-  if (tab === 'bug') {
-    bugBtn.style.background = 'var(--white)'; bugBtn.style.color = 'var(--gray-800)'; bugBtn.style.boxShadow = 'var(--shadow)';
-    featureBtn.style.background = 'transparent'; featureBtn.style.color = 'var(--gray-400)'; featureBtn.style.boxShadow = 'none';
-  } else {
-    featureBtn.style.background = 'var(--white)'; featureBtn.style.color = 'var(--gray-800)'; featureBtn.style.boxShadow = 'var(--shadow)';
-    bugBtn.style.background = 'transparent'; bugBtn.style.color = 'var(--gray-400)'; bugBtn.style.boxShadow = 'none';
-  }
-};
-
-window.submitFeedback = async () => {
-  const title = document.getElementById('fb-title').value.trim();
-  if (!title) { document.getElementById('fb-title').focus(); return; }
-
-  const page = window.location.pathname.split('/').pop() || 'index.html';
-  const { error } = await supabase.from('lifeos_feedback').insert({
-    type: fbTab,
-    title,
-    description: null,
-    page,
-    status: 'open',
-  });
-
-  if (error) { toast('Error: ' + error.message, 'error'); return; }
-  toast('Feedback submitted 🙏', 'success');
-  window.hideFeedback();
-};
-
-// ── Tell Claude state ─────────────────────────────────────────────────────────
-window.showTellClaude = async () => {
+window.showTellClaude = async (defaultTab) => {
   const el = document.getElementById('tc-overlay');
   el.style.display = 'flex';
   document.getElementById('tc-instruction').value = '';
   document.getElementById('tc-queue-panel').style.display = 'none';
   document.getElementById('tc-queue-toggle').textContent = 'View Queue';
+  tcQueueOpen = false;
+  window.tcSetTab(defaultTab || 'bug');
   setTimeout(() => document.getElementById('tc-instruction').focus(), 50);
 
-  // Show count of pending tasks
-  const { data } = await supabase.from('claude_tasks').select('id').eq('status', 'open');
-  const count = data?.length || 0;
+  // Show pending count
+  const [tasksRes, feedbackRes] = await Promise.all([
+    supabase.from('claude_tasks').select('id').eq('status', 'open'),
+    supabase.from('lifeos_feedback').select('id').eq('status', 'open'),
+  ]);
+  const total = (tasksRes.data?.length || 0) + (feedbackRes.data?.length || 0);
   const countEl = document.getElementById('tc-pending-count');
   if (countEl) {
-    countEl.textContent = count > 0
-      ? `📋 ${count} task${count !== 1 ? 's' : ''} already in my queue`
-      : '📋 No tasks in queue yet';
+    countEl.textContent = total > 0
+      ? `📋 ${total} item${total !== 1 ? 's' : ''} in queue`
+      : '';
   }
 };
 
@@ -593,24 +527,58 @@ window.hideTellClaude = () => {
   document.getElementById('tc-overlay').style.display = 'none';
 };
 
-window.submitTellClaude = async () => {
-  const instruction = document.getElementById('tc-instruction').value.trim();
-  if (!instruction) { document.getElementById('tc-instruction').focus(); return; }
-
-  const page = window.location.pathname.split('/').pop() || 'index.html';
-  const { error } = await supabase.from('claude_tasks').insert({
-    instruction,
-    context: null,
-    page,
-    status: 'open',
+window.tcSetTab = (tab) => {
+  tcTab = tab;
+  const tabs = ['bug', 'feature', 'task'];
+  tabs.forEach(t => {
+    const btn = document.getElementById(`tc-tab-${t}`);
+    if (!btn) return;
+    const active = t === tab;
+    btn.style.background = active ? '#1e1e2e' : 'transparent';
+    btn.style.color = active ? 'white' : '#6060a0';
+    btn.style.boxShadow = active ? '0 1px 4px rgba(0,0,0,0.4)' : 'none';
   });
-
-  if (error) { toast('Error: ' + error.message, 'error'); return; }
-  toast('Added to Claude\'s list 🤖', 'success');
-  window.hideTellClaude();
+  const cfg = TC_TABS[tab];
+  const subtitle = document.getElementById('tc-subtitle');
+  const textarea = document.getElementById('tc-instruction');
+  const submitBtn = document.getElementById('tc-submit-btn');
+  if (subtitle) subtitle.textContent = cfg.subtitle;
+  if (textarea) textarea.placeholder = cfg.placeholder;
+  if (submitBtn) submitBtn.textContent = cfg.btn;
 };
 
-// ── Queue toggle (View queued tasks/feedback) ─────────────────────────────────
+window.submitTellClaude = async () => {
+  const text = document.getElementById('tc-instruction').value.trim();
+  if (!text) { document.getElementById('tc-instruction').focus(); return; }
+
+  const page = window.location.pathname.split('/').pop() || 'index.html';
+  let error;
+
+  if (tcTab === 'task') {
+    ({ error } = await supabase.from('claude_tasks').insert({
+      instruction: text,
+      context: null,
+      page,
+      status: 'open',
+    }));
+    if (!error) toast('Added to Claude\'s queue 🤖', 'success');
+  } else {
+    ({ error } = await supabase.from('lifeos_feedback').insert({
+      type: tcTab,
+      title: text,
+      description: null,
+      page,
+      status: 'open',
+    }));
+    if (!error) toast(tcTab === 'bug' ? 'Bug reported 🐛' : 'Feature requested ✨', 'success');
+  }
+
+  if (error) { toast('Error: ' + error.message, 'error'); return; }
+  window.hideTellClaude();
+  loadQueueBadge();
+};
+
+// ── Queue toggle (inside unified Tell Claude modal) ───────────────────────────
 let tcQueueOpen = false;
 window.toggleTcQueue = async () => {
   const panel = document.getElementById('tc-queue-panel');
@@ -633,32 +601,6 @@ window.toggleTcQueue = async () => {
       <div style="flex:1;min-width:0">
         <div style="font-size:12px;color:white;line-height:1.3;word-break:break-word">${i.label}</div>
         <div style="font-size:10px;color:#6060a0;margin-top:2px">${i.sub || ''}</div>
-      </div>
-    </div>`).join('');
-};
-
-let fbQueueOpen = false;
-window.toggleFbQueue = async () => {
-  const panel = document.getElementById('fb-queue-panel');
-  const btn   = document.getElementById('fb-queue-toggle');
-  fbQueueOpen = !fbQueueOpen;
-  if (!fbQueueOpen) { panel.style.display = 'none'; btn.textContent = 'View Queue'; return; }
-  panel.style.display = 'block';
-  btn.textContent = 'Hide Queue';
-  panel.innerHTML = '<div style="color:var(--gray-400);font-size:12px">Loading…</div>';
-  const { data: tasks } = await supabase.from('claude_tasks').select('*').eq('status','open').order('created_at');
-  const { data: feedback } = await supabase.from('lifeos_feedback').select('*').eq('status','open').order('created_at');
-  const all = [
-    ...(tasks||[]).map(t => ({ icon:'🤖', label: t.instruction, sub: t.page })),
-    ...(feedback||[]).map(f => ({ icon: f.type==='bug'?'🐛':'✨', label: f.title, sub: f.page })),
-  ];
-  if (!all.length) { panel.innerHTML = '<div style="color:var(--gray-400);font-size:12px">Queue is empty 🎉</div>'; return; }
-  panel.innerHTML = all.map(i => `
-    <div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--gray-100);align-items:flex-start">
-      <span style="font-size:14px;flex-shrink:0">${i.icon}</span>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:12px;color:var(--gray-800);line-height:1.3;word-break:break-word">${i.label}</div>
-        <div style="font-size:10px;color:var(--gray-400);margin-top:2px">${i.sub || ''}</div>
       </div>
     </div>`).join('');
 };
