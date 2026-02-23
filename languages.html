@@ -529,7 +529,7 @@ window.switchLangTab = (tab) => {
   document.querySelectorAll('.lang-panel').forEach(p => p.classList.remove('active'));
   document.getElementById(`ltab-${tab}`).classList.add('active');
   document.getElementById(`panel-${tab}`).classList.add('active');
-  if (tab === 'flashcards' && fcQueue.length === 0) fcInit();
+  if (tab === 'flashcards') fcInit();
   if (tab === 'vocab') vocabLoad();
 };
 
@@ -669,6 +669,8 @@ async function txAutoSave(original, translated, cfg) {
         srs_stage: 0, next_review: T,
         times_seen: 0, times_correct: 0, times_wrong: 0,
       });
+      // Refresh flashcard queue so word shows up immediately
+      fcInit();
     }
   } catch(e) { /* silent */ }
 
@@ -766,22 +768,25 @@ window.txSpeakResult = () => {
 
 function txSpeak(text, locale) {
   if (!window.speechSynthesis) return;
-  window.speechSynthesis.cancel();
   const btn = document.getElementById('txSpeakBtn');
-  const utter = new SpeechSynthesisUtterance(text);
-  utter.lang = locale;
-  const tryVoice = () => {
-    const voices = window.speechSynthesis.getVoices();
-    const exact = voices.find(v => v.lang === locale);
-    const partial = voices.find(v => v.lang.startsWith(locale.split('-')[0]));
-    if (exact) utter.voice = exact; else if (partial) utter.voice = partial;
-  };
-  tryVoice();
-  if (window.speechSynthesis.onvoiceschanged !== undefined) window.speechSynthesis.onvoiceschanged = tryVoice;
-  utter.rate = locale.startsWith('da') ? 0.82 : 0.92;
-  utter.onstart = () => btn && btn.classList.add('speaking');
-  utter.onend = utter.onerror = () => btn && btn.classList.remove('speaking');
-  window.speechSynthesis.speak(utter);
+  if (btn) btn.classList.remove('speaking');
+  window.speechSynthesis.cancel();
+  setTimeout(() => {
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = locale;
+    const tryVoice = () => {
+      const voices = window.speechSynthesis.getVoices();
+      const exact = voices.find(v => v.lang === locale);
+      const partial = voices.find(v => v.lang.startsWith(locale.split('-')[0]));
+      if (exact) utter.voice = exact; else if (partial) utter.voice = partial;
+    };
+    tryVoice();
+    if (window.speechSynthesis.onvoiceschanged !== undefined) window.speechSynthesis.onvoiceschanged = tryVoice;
+    utter.rate = locale.startsWith('da') ? 0.82 : 0.92;
+    utter.onstart = () => btn && btn.classList.add('speaking');
+    utter.onend = utter.onerror = () => btn && btn.classList.remove('speaking');
+    window.speechSynthesis.speak(utter);
+  }, 100);
 }
 
 function txRenderHistory() {
@@ -824,10 +829,12 @@ window.txAddWord = async () => {
   document.getElementById('txAddTranslation').value = '';
   document.getElementById('txAddExample').value = '';
   loadStats();
+  // Refresh flashcard queue so word shows up immediately
+  fcInit();
 };
 
 // ═══════════════════════════════════════════════════════ FLASHCARDS ══════
-const FC_SRS_INTERVALS = {0:1, 1:3, 2:7, 3:14, 4:30, 5:90, 6:180};
+const FC_SRS_INTERVALS = {0:0, 1:3, 2:7, 3:14, 4:30, 5:90, 6:180};
 const FC_STAGE_LABELS  = {0:'New', 1:'Day 3', 2:'Week', 3:'2 Wks', 4:'Month', 5:'3 Mo', 6:'Mastered'};
 const FC_STAGE_COLORS  = {0:'#2563EB', 1:'#7c3aed', 2:'#16a34a', 3:'#16a34a', 4:'#d97706', 5:'#d97706', 6:'#ca8a04'};
 const FC_TTS_LOCALE    = { Spanish:'es-ES', Danish:'da-DK', Russian:'ru-RU' };
@@ -1070,22 +1077,26 @@ function fcSpeakCurrent() {
 
 function fcSpeak(text, locale) {
   if (!window.speechSynthesis) return;
+  const btn = document.getElementById('fcSpeakBtn');
+  if (btn) btn.classList.remove('speaking');
   window.speechSynthesis.cancel();
-  const btn   = document.getElementById('fcSpeakBtn');
-  const utter = new SpeechSynthesisUtterance(text);
-  utter.lang  = locale;
-  const tryVoice = () => {
-    const voices  = window.speechSynthesis.getVoices();
-    const exact   = voices.find(v => v.lang === locale);
-    const partial = voices.find(v => v.lang.startsWith(locale.split('-')[0]));
-    if (exact) utter.voice = exact; else if (partial) utter.voice = partial;
-  };
-  tryVoice();
-  if (window.speechSynthesis.onvoiceschanged !== undefined) window.speechSynthesis.onvoiceschanged = tryVoice;
-  utter.rate = locale.startsWith('da') ? 0.82 : 0.92;
-  utter.onstart = () => btn && btn.classList.add('speaking');
-  utter.onend = utter.onerror = () => btn && btn.classList.remove('speaking');
-  window.speechSynthesis.speak(utter);
+  // Small delay after cancel so Chrome/Safari don't drop the new utterance
+  setTimeout(() => {
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang  = locale;
+    const tryVoice = () => {
+      const voices  = window.speechSynthesis.getVoices();
+      const exact   = voices.find(v => v.lang === locale);
+      const partial = voices.find(v => v.lang.startsWith(locale.split('-')[0]));
+      if (exact) utter.voice = exact; else if (partial) utter.voice = partial;
+    };
+    tryVoice();
+    if (window.speechSynthesis.onvoiceschanged !== undefined) window.speechSynthesis.onvoiceschanged = tryVoice;
+    utter.rate = locale.startsWith('da') ? 0.82 : 0.92;
+    utter.onstart = () => btn && btn.classList.add('speaking');
+    utter.onend = utter.onerror = () => btn && btn.classList.remove('speaking');
+    window.speechSynthesis.speak(utter);
+  }, 100);
 }
 
 // Keyboard shortcuts for flashcards
