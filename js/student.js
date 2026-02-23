@@ -100,7 +100,7 @@ window.saveNote = async () => {
   // Reset form
   document.getElementById('new-note-text').value = '';
   document.getElementById('new-note-overview').checked = false;
-  document.getElementById('new-note-todo').checked = true;
+  document.getElementById('new-note-todo').checked = false;
   document.getElementById('new-note-parent').checked = false;
 
   toast('Note added ✓', 'success');
