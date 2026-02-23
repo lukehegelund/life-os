@@ -275,6 +275,20 @@
 .fc-delete-btn { background: none; border: none; color: var(--gray-400); font-size: 12px; cursor: pointer; padding: 4px 10px; border-radius: 6px; transition: color 0.2s; }
 .fc-delete-btn:hover, .fc-delete-btn:active { color: var(--red); }
 
+/* Undo button */
+.fc-undo-wrap {
+  width: 100%; max-width: 400px; display: flex; justify-content: center;
+  min-height: 28px; /* reserve space to prevent layout jump */
+}
+.fc-undo-btn {
+  background: none; border: 1.5px solid var(--gray-200); color: var(--gray-500);
+  font-size: 12px; font-weight: 600; cursor: pointer; padding: 5px 16px;
+  border-radius: 20px; transition: all 0.2s; display: flex; align-items: center; gap: 5px;
+  opacity: 0; pointer-events: none; transform: translateY(4px); transition: all 0.25s ease;
+}
+.fc-undo-btn.visible { opacity: 1; pointer-events: all; transform: translateY(0); }
+.fc-undo-btn:active { background: var(--gray-50); transform: scale(0.96); }
+
 /* State screens */
 .fc-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 28px; text-align: center; gap: 12px; }
 .fc-state-emoji { font-size: 2.8rem; }
@@ -826,6 +840,7 @@ let fcFlipped    = false;
 let fcLang       = 'all';
 let fcSessionOK  = 0;
 let fcSessionBad = 0;
+let fcLastAnswer = null; // { word, oldStage, newStage, correct } — for undo
 
 async function fcInit() {
   const areaEl = document.getElementById('fcCardArea');
@@ -928,6 +943,9 @@ function fcShowCard() {
       <button class="fc-btn-wrong" onclick="fcAnswer(false)">✕ Didn't know</button>
       <button class="fc-btn-correct" onclick="fcAnswer(true)">✓ Got it</button>
     </div>
+    <div class="fc-undo-wrap">
+      <button class="fc-undo-btn${fcLastAnswer ? ' visible' : ''}" id="fcUndoBtn" onclick="fcUndo()">↩ Undo last answer</button>
+    </div>
     <div class="fc-delete-wrap" id="fcDeleteWrap">
       <button class="fc-delete-btn" onclick="fcDeleteCard()">🗑 Remove this card</button>
     </div>`;
@@ -956,27 +974,64 @@ window.fcFlipCard = () => {
 window.fcAnswer = async (correct) => {
   const w = fcQueue[fcCurrentIdx];
   if (correct) fcSessionOK++; else fcSessionBad++;
+
+  // Save state for undo (snapshot before advancing)
+  const oldStage = Number(w.srs_stage) || 0;
+  const newStage = correct ? Math.min(oldStage+1, FC_MAX_STAGE) : Math.max(0, oldStage-1);
+  fcLastAnswer = { word: w, oldStage, newStage, correct, idx: fcCurrentIdx };
+
   fcCurrentIdx++;
   fcShowSwipe(correct);
   setTimeout(() => fcShowCard(), 350);
 
   // Update Supabase
   try {
-    const oldStage = Number(w.srs_stage) || 0;
-    const newStage = correct ? Math.min(oldStage+1, FC_MAX_STAGE) : Math.max(0, oldStage-1);
-    const days     = FC_SRS_INTERVALS[newStage] || 1;
-    const nextRev  = new Date(Date.now() + days * 86400000).toISOString().split('T')[0];
-    const now      = new Date().toISOString();
-    await Promise.all([
+    const days    = FC_SRS_INTERVALS[newStage] || 1;
+    const nextRev = new Date(Date.now() + days * 86400000).toISOString().split('T')[0];
+    const now     = new Date().toISOString();
+    // Store the review id so we can delete it on undo
+    const [, reviewRes] = await Promise.all([
       supabase.from('vocab_words').update({
         srs_stage: newStage, next_review: nextRev, last_reviewed: now,
         times_seen:    (Number(w.times_seen)||0) + 1,
         times_correct: (Number(w.times_correct)||0) + (correct ? 1 : 0),
         times_wrong:   (Number(w.times_wrong)||0)   + (correct ? 0 : 1),
       }).eq('id', w.id),
-      supabase.from('srs_reviews').insert({ word_id: w.id, reviewed_at: now, result: correct ? 'correct' : 'wrong', old_stage: oldStage, new_stage: newStage }),
+      supabase.from('srs_reviews').insert({ word_id: w.id, reviewed_at: now, result: correct ? 'correct' : 'wrong', old_stage: oldStage, new_stage: newStage }).select('id').single(),
     ]);
-  } catch(e) { /* silent — will sync next load */ }
+    if (fcLastAnswer && reviewRes?.data?.id) fcLastAnswer.reviewId = reviewRes.data.id;
+  } catch(e) { /* silent */ }
+};
+
+window.fcUndo = async () => {
+  if (!fcLastAnswer) return;
+  const { word, oldStage, correct, idx, reviewId } = fcLastAnswer;
+  fcLastAnswer = null;
+
+  // Reverse session counters
+  if (correct) fcSessionOK = Math.max(0, fcSessionOK - 1);
+  else fcSessionBad = Math.max(0, fcSessionBad - 1);
+
+  // Restore card in queue at original position
+  fcCurrentIdx = idx;
+  // Re-inject original srs_stage into the word object so card renders correctly
+  word.srs_stage = oldStage;
+
+  // Restore Supabase to pre-answer state
+  try {
+    const prevDays   = FC_SRS_INTERVALS[oldStage] || 1;
+    const prevReview = new Date(Date.now() + prevDays * 86400000).toISOString().split('T')[0];
+    await supabase.from('vocab_words').update({
+      srs_stage: oldStage,
+      next_review: prevReview,
+      times_seen:    Math.max(0, (Number(word.times_seen)||0) - 1),
+      times_correct: Math.max(0, (Number(word.times_correct)||0) - (correct ? 1 : 0)),
+      times_wrong:   Math.max(0, (Number(word.times_wrong)||0)   - (correct ? 0 : 1)),
+    }).eq('id', word.id);
+    if (reviewId) await supabase.from('srs_reviews').delete().eq('id', reviewId);
+  } catch(e) { /* silent */ }
+
+  fcShowCard(); // re-render the card (undo button will be hidden since fcLastAnswer is null)
 };
 
 window.fcDeleteCard = async () => {
@@ -1040,6 +1095,7 @@ document.addEventListener('keydown', e => {
   if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); if (!fcFlipped) fcFlipCard(); }
   else if ((e.key === 'ArrowRight' || e.key === 'k') && fcFlipped) fcAnswer(true);
   else if ((e.key === 'ArrowLeft'  || e.key === 'j') && fcFlipped) fcAnswer(false);
+  else if (e.key === 'u' || e.key === 'z') { e.preventDefault(); fcUndo(); }
 });
 
 // ═════════════════════════════════════════════════════ VOCABULARY ════════
