@@ -143,6 +143,9 @@ function renderExpandedStudent(s, pages) {
             <button class="btn btn-sm" style="background:var(--green-light);color:var(--green);border:none;min-width:36px" onclick="adjustPages(${s.id}, 1)">+</button>
           </div>
           <span style="font-size:12px;color:var(--gray-400)">±2🪙 per page</span>
+        </div>
+        <div id="pages-stats-${s.id}" style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+          <div style="color:var(--gray-400);font-size:12px">Loading pace…</div>
         </div>` : ''}
       <div id="overview-notes-${s.id}" class="overview-notes">
         <div style="color:var(--gray-400);font-size:13px">Loading notes…</div>
@@ -157,7 +160,7 @@ function renderExpandedStudent(s, pages) {
             <input type="checkbox" id="qn-overview-${s.id}"> 👁 Overview
           </label>
           <label class="flag-toggle" onclick="event.stopPropagation()">
-            <input type="checkbox" id="qn-todo-${s.id}" checked> ✅ To-do
+            <input type="checkbox" id="qn-todo-${s.id}"> ✅ To-do
           </label>
           <label class="flag-toggle" onclick="event.stopPropagation()">
             <input type="checkbox" id="qn-parent-${s.id}"> 📞 Tell Parent
@@ -195,8 +198,11 @@ async function loadOverviewNotes(studentId) {
   const el = document.getElementById(`overview-notes-${studentId}`);
   if (!el) return;
 
-  // Fetch all classes student is enrolled in (for the class selector)
-  const [notesRes, enrRes] = await Promise.all([
+  const thirtyAgo = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
+  const sevenAgo  = new Date(Date.now() -  7 * 86400000).toISOString().split('T')[0];
+  const trackPages = cls?.track_pages !== 'None';
+
+  const fetches = [
     supabase.from('student_notes')
       .select('id, note, is_todo, tell_parent, logged, date, class_id')
       .eq('student_id', studentId)
@@ -205,8 +211,45 @@ async function loadOverviewNotes(studentId) {
       .eq('logged', false)
       .order('date', { ascending: false })
       .limit(5),
-    Promise.resolve(null)
-  ]);
+  ];
+
+  if (trackPages) {
+    fetches.push(
+      supabase.from('student_pages')
+        .select('date, pages_delta')
+        .eq('student_id', studentId)
+        .eq('class_id', classId)
+        .gte('date', thirtyAgo)
+        .order('date', { ascending: false })
+    );
+  }
+
+  const [notesRes, pagesRes] = await Promise.all(fetches);
+
+  // Populate pages stats tile
+  if (trackPages) {
+    const statsEl = document.getElementById(`pages-stats-${studentId}`);
+    if (statsEl) {
+      const rows = pagesRes?.data || [];
+      const total7  = rows.filter(r => r.date >= sevenAgo).reduce((s, r) => s + (r.pages_delta || 0), 0);
+      const total30 = rows.reduce((s, r) => s + (r.pages_delta || 0), 0);
+      const lastDate = rows.length ? rows[0].date : null;
+
+      if (rows.length === 0) {
+        statsEl.innerHTML = '<div style="color:var(--gray-400);font-size:12px">No pages logged yet</div>';
+      } else {
+        const tile = (label, val) =>
+          `<div style="background:var(--gray-50);border-radius:8px;padding:6px 10px;min-width:80px;text-align:center">
+            <div style="font-size:18px;font-weight:700;color:var(--orange)">${val}</div>
+            <div style="font-size:11px;color:var(--gray-400)">${label}</div>
+          </div>`;
+        statsEl.innerHTML =
+          tile('7d pages', total7) +
+          tile('30d pages', total30) +
+          tile('last logged', lastDate ? lastDate.slice(5) : '—');
+      }
+    }
+  }
 
   const notes = notesRes.data || [];
   if (!notes.length) {
@@ -250,33 +293,38 @@ window.submitQuickNote = async (studentId) => {
   const isTodo = document.getElementById(`qn-todo-${studentId}`)?.checked || false;
   const tellParent = document.getElementById(`qn-parent-${studentId}`)?.checked || false;
 
-  const { error } = await supabase.from('student_notes').insert({
-    student_id: studentId,
-    class_id: Number(classId),
-    date: T,
-    note,
-    category: 'Class Note',   // satisfy NOT NULL constraint
-    show_in_overview: showInOverview,
-    is_todo: isTodo,
-    tell_parent: tellParent,
-    logged: false,
-  });
-
-  if (error) { toast('Error: ' + error.message, 'error'); return; }
-
-  if (tellParent) {
-    await supabase.from('parent_crm').insert({
+  try {
+    const { error } = await supabase.from('student_notes').insert({
       student_id: studentId,
-      title: note.slice(0, 100),
-      notes: note,
-      status: 'pending',
+      class_id: Number(classId),
+      date: T,
+      note,
+      category: 'Class Note',
+      show_in_overview: showInOverview,
+      is_todo: isTodo,
+      tell_parent: tellParent,
+      logged: false,
     });
-  }
 
-  toast('Note added!', 'success');
-  if (input) input.value = '';
-  loadOverviewNotes(studentId);
-  // Don't re-render full roster — just refresh notes
+    if (error) { toast('Note error: ' + error.message, 'error'); return; }
+
+    if (tellParent) {
+      const { error: crmErr } = await supabase.from('parent_crm').insert({
+        student_id: studentId,
+        title: note.slice(0, 100),
+        notes: note,
+        status: 'pending',
+      });
+      if (crmErr) toast('CRM error: ' + crmErr.message, 'error');
+    }
+
+    toast('Note added!', 'success');
+    if (input) input.value = '';
+    loadOverviewNotes(studentId);
+  } catch (e) {
+    toast('Network error: ' + (e.message || 'failed to fetch'), 'error');
+    console.error('submitQuickNote error:', e);
+  }
 };
 
 // ── Attendance: side-by-side buttons ─────────────────────────────────────
