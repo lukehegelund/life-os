@@ -98,7 +98,7 @@ async function fetchEvents() {
     d = addDays(d, 1);
   }
 
-  const [tasksRes, remindersRes, weddingsRes, classesRes] = await Promise.all([
+  const [tasksRes, remindersRes, weddingsRes, classesRes, calEventsRes, timeBlocksRes] = await Promise.all([
     supabase.from('tasks')
       .select('id, title, due_date, priority, module')
       .in('status', ['open', 'in_progress'])
@@ -116,6 +116,14 @@ async function fetchEvents() {
       .gte('wedding_date', startStr)
       .lte('wedding_date', endStr),
     supabase.from('classes').select('id, name, day_of_week, time_start, time_end, subject'),
+    supabase.from('calendar_events')
+      .select('id, title, start_time, end_time, all_day, calendar_name, color, is_busy')
+      .gte('start_time', startStr + 'T00:00:00')
+      .lte('start_time', endStr + 'T23:59:59'),
+    supabase.from('time_blocks')
+      .select('id, date, start_time, end_time, title, block_type, assigned_tasks, status, description')
+      .gte('date', startStr)
+      .lte('date', endStr),
   ]);
 
   for (const t of (tasksRes.data || [])) {
@@ -173,13 +181,66 @@ async function fetchEvents() {
     cur = addDays(cur, 1);
   }
 
-  // Sort each day: classes first (by time), then tasks, reminders, weddings
-  const typeOrder = { class: 0, task: 1, reminder: 2, wedding: 3 };
+  // Add Google Calendar events
+  for (const ev of (calEventsRes.data || [])) {
+    // Parse date key from start_time (ISO string, stored in UTC but represents local time)
+    const startDt = new Date(ev.start_time);
+    const key = `${startDt.getFullYear()}-${pad(startDt.getMonth()+1)}-${pad(startDt.getDate())}`;
+    if (!eventCache[key]) continue;
+    const startLocal = ev.start_time ? ev.start_time.slice(11, 16) : null; // "HH:MM"
+    const endLocal   = ev.end_time   ? ev.end_time.slice(11, 16)   : null;
+    // Map Google Calendar color names to hex; default teal
+    const calColor = ev.color || '#0F9D58';
+    eventCache[key].push({
+      type: 'gcal',
+      title: ev.title,
+      meta: ev.calendar_name || 'Calendar',
+      color: calColor,
+      link: '#',
+      timeStart: ev.all_day ? null : startLocal,
+      timeEnd:   ev.all_day ? null : endLocal,
+      isBusy: ev.is_busy,
+    });
+  }
+
+  // Add time blocks (focus sessions)
+  for (const tb of (timeBlocksRes.data || [])) {
+    const key = tb.date; // 'YYYY-MM-DD'
+    if (!eventCache[key]) continue;
+    const tasks = tb.assigned_tasks || [];
+    const taskCount = Array.isArray(tasks) ? tasks.length : 0;
+    const label = taskCount > 0 ? `${tb.title} · ${taskCount} task${taskCount !== 1 ? 's' : ''}` : tb.title;
+    const blockColor = tb.block_type === 'focus'  ? '#7C3AED'
+                     : tb.block_type === 'buffer' ? '#6B7280'
+                     : tb.block_type === 'open'   ? '#0891B2'
+                     : '#7C3AED';
+    // start_time from DB is "HH:MM:SS"
+    const tStart = tb.start_time ? tb.start_time.slice(0,5) : null;
+    const tEnd   = tb.end_time   ? tb.end_time.slice(0,5)   : null;
+    eventCache[key].push({
+      type: 'timeblock',
+      title: label,
+      meta: tb.status === 'done' ? '✅ Done' : (tb.description || 'Focus block'),
+      color: blockColor,
+      link: '#',
+      timeStart: tStart,
+      timeEnd: tEnd,
+      taskCount,
+      taskList: Array.isArray(tasks) ? tasks : [],
+      isDone: tb.status === 'done',
+    });
+  }
+
+  // Sort each day: gcal + classes first (by time), then time blocks, tasks, reminders, weddings
+  const typeOrder = { gcal: 0, class: 0, timeblock: 1, task: 2, reminder: 3, wedding: 4 };
   for (const key of Object.keys(eventCache)) {
     eventCache[key].sort((a, b) => {
-      const td = (typeOrder[a.type] || 0) - (typeOrder[b.type] || 0);
+      const td = (typeOrder[a.type] ?? 2) - (typeOrder[b.type] ?? 2);
       if (td !== 0) return td;
-      return (a.meta || '').localeCompare(b.meta || '');
+      // Within same type, sort by start time
+      const ta = a.timeStart || '99:99';
+      const tb2 = b.timeStart || '99:99';
+      return ta.localeCompare(tb2);
     });
   }
 }
@@ -392,14 +453,28 @@ function renderDayPanel(ds) {
     return;
   }
 
-  eventsEl.innerHTML = events.map(e => `
-    <a href="${e.link}" class="cal-event-item">
+  eventsEl.innerHTML = events.map(e => {
+    const timeRange = (e.timeStart && e.timeEnd) ? `<div class="cal-event-time">${e.timeStart}–${e.timeEnd}</div>` :
+                      e.timeStart ? `<div class="cal-event-time">${e.timeStart}</div>` : '';
+    let taskHtml = '';
+    if (e.type === 'timeblock' && e.taskList && e.taskList.length > 0) {
+      taskHtml = `<ul class="cal-tb-tasks">${e.taskList.map(t =>
+        `<li>${typeof t === 'object' ? (t.title || t.name || JSON.stringify(t)) : t}</li>`
+      ).join('')}</ul>`;
+    }
+    const href = (e.link && e.link !== '#') ? e.link : null;
+    const tag = href ? 'a' : 'div';
+    const hrefAttr = href ? ` href="${href}"` : '';
+    return `<${tag}${hrefAttr} class="cal-event-item${e.isDone ? ' cal-event-done' : ''}">
       <div class="cal-event-stripe" style="background:${e.color}"></div>
       <div class="cal-event-content">
         <div class="cal-event-title">${e.title}</div>
+        ${timeRange}
         ${e.meta ? `<div class="cal-event-meta">${e.meta}</div>` : ''}
+        ${taskHtml}
       </div>
-    </a>`).join('');
+    </${tag}>`;
+  }).join('');
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
