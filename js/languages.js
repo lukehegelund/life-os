@@ -173,7 +173,7 @@ window.reviewWord = async (wordId, result) => {
   const w = dueWords[currentIdx];
   const oldStage = w.srs_stage;
   const newStage = result === 'correct' ? Math.min(oldStage + 1, 6) : Math.max(0, oldStage - 1);
-  const intervals = [1, 3, 7, 14, 30, 60, 120];
+  const intervals = [0, 3, 7, 14, 30, 60, 120]; // stage 0 = same day, so new words stay reviewable today
   const nextReview = new Date(Date.now() + intervals[newStage] * 86400000).toISOString().split('T')[0];
   const now = new Date().toISOString();
 
