@@ -22,7 +22,7 @@ function injectButtons() {
   wrap.id = 'topbar-btns';
   wrap.style.cssText = 'display:flex;align-items:center;gap:8px;margin-left:auto;flex-shrink:0';
   wrap.innerHTML = `
-    <button id="topbar-quick-add" onclick="window.showQuickAdd()" title="Quick add task or reminder"
+    <button id="topbar-quick-add" onclick="window.showQuickAgregar()" title="Quick add task or reminder"
       style="width:34px;height:34px;border-radius:50%;background:var(--blue);color:white;border:none;
              font-size:20px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;
              box-shadow:var(--shadow);flex-shrink:0">+</button>
@@ -125,7 +125,7 @@ async function renderNotifications() {
   const list = document.getElementById('notif-list');
   if (!list) return;
 
-  list.innerHTML = '<div style="text-align:center;color:var(--gray-400);padding:20px;font-size:13px">Loading…</div>';
+  list.innerHTML = '<div style="text-align:center;color:var(--gray-400);padding:20px;font-size:13px">Cargando…</div>';
 
   const { data, error } = await supabase
     .from('claude_notifications')
@@ -134,7 +134,7 @@ async function renderNotifications() {
     .limit(30);
 
   if (error || !data?.length) {
-    list.innerHTML = '<div style="text-align:center;color:var(--gray-400);padding:24px;font-size:13px">No notifications yet</div>';
+    list.innerHTML = '<div style="text-align:center;color:var(--gray-400);padding:24px;font-size:13px">Sin notificaciones aún</div>';
     return;
   }
 
@@ -184,71 +184,21 @@ window.markNotifRead = async (id, el) => {
   loadBellBadge();
 };
 
-window.markAllNotifsRead = async () => {
+window.markTodosNotifsRead = async () => {
   await supabase.from('claude_notifications').update({ read: true }).eq('read', false);
   await renderNotifications();
   loadBellBadge();
 };
 
-// ── Unified Claude Panel (Chat / Report / Queue) ───────────────────────────────
+// ── Claude Chat Panel (single conversation — no tabs) ─────────────────────────
 let chatPanelOpen = false;
-let claudeActiveTab = 'chat';
+const DRAFT_KEY = 'lifeos_chat_draft';
 
+// Legacy shim — showTellClaude still works but opens report form inline
 window.claudeSetTab = async (tab) => {
-  claudeActiveTab = tab;
-  ['chat','report','queue'].forEach(t => {
-    const btn = document.getElementById(`claude-tab-${t}`);
-    const pane = document.getElementById(`claude-pane-${t}`);
-    const active = t === tab;
-    if (btn) {
-      btn.style.background = active ? '#2a2a3e' : 'transparent';
-      btn.style.color = active ? 'white' : '#6060a0';
-      btn.style.borderBottom = active ? '2px solid #7c3aed' : '2px solid transparent';
-    }
-    if (pane) pane.style.display = active ? 'flex' : 'none';
-  });
-  if (tab === 'chat') await renderChat();
-  if (tab === 'queue') await renderQueuePane();
-  if (tab === 'report') {
-    const [tasksRes, feedbackRes] = await Promise.all([
-      supabase.from('claude_tasks').select('id').eq('status', 'open'),
-      supabase.from('lifeos_feedback').select('id').eq('status', 'open'),
-    ]);
-    const total = (tasksRes.data?.length || 0) + (feedbackRes.data?.length || 0);
-    const countEl = document.getElementById('tc-pending-count');
-    if (countEl) countEl.textContent = total > 0 ? `📋 ${total} item${total !== 1 ? 's' : ''} in queue` : '';
-    document.getElementById('tc-instruction')?.focus();
-  }
+  if (tab === 'report') { window.showTellClaude(); return; }
+  await renderChat();
 };
-
-async function renderQueuePane() {
-  const list = document.getElementById('queue-status-list');
-  if (!list) return;
-  list.innerHTML = '<div style="color:#a0a0b8;font-size:12px;padding:16px 0">Loading…</div>';
-  const [tasksRes, feedbackRes] = await Promise.all([
-    supabase.from('claude_tasks').select('*').eq('status', 'open').order('created_at'),
-    supabase.from('lifeos_feedback').select('*').eq('status', 'open').order('created_at'),
-  ]);
-  const all = [
-    ...(tasksRes.data || []).map(t => ({ icon: '🤖', label: t.instruction, sub: t.page, date: t.created_at })),
-    ...(feedbackRes.data || []).map(f => ({ icon: f.type === 'bug' ? '🐛' : '✨', label: f.title, sub: f.page, date: f.created_at })),
-  ];
-  if (!all.length) {
-    list.innerHTML = '<div style="color:#6060a0;font-size:13px;padding:24px 0;text-align:center">Queue is empty 🎉</div>';
-    return;
-  }
-  list.innerHTML = all.map(i => {
-    const d = new Date(i.date);
-    const ts = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    return `<div style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid #2a2a3e;align-items:flex-start">
-      <span style="font-size:15px;flex-shrink:0;margin-top:1px">${i.icon}</span>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:12px;color:white;line-height:1.35;word-break:break-word">${i.label}</div>
-        <div style="font-size:10px;color:#6060a0;margin-top:3px">${i.sub || ''} · ${ts}</div>
-      </div>
-    </div>`;
-  }).join('');
-}
 
 window.toggleChat = async () => {
   const panel = document.getElementById('chat-panel');
@@ -256,7 +206,15 @@ window.toggleChat = async () => {
   chatPanelOpen = !chatPanelOpen;
   if (chatPanelOpen) {
     panel.style.display = 'flex';
-    await window.claudeSetTab(claudeActiveTab);
+    // Restore draft
+    const input = document.getElementById('chat-input');
+    if (input) {
+      const draft = localStorage.getItem(DRAFT_KEY) || '';
+      input.value = draft;
+      input.style.height = 'auto';
+      if (draft) input.style.height = Math.min(input.scrollHeight, 100) + 'px';
+    }
+    await renderChat();
   } else {
     panel.style.display = 'none';
   }
@@ -267,7 +225,7 @@ async function renderChat() {
   const input = document.getElementById('chat-input');
   if (!list) return;
 
-  list.innerHTML = '<div style="text-align:center;color:#a0a0b8;padding:20px;font-size:13px">Loading…</div>';
+  list.innerHTML = '<div style="text-align:center;color:#a0a0b8;padding:20px;font-size:13px">Cargando…</div>';
 
   // Only fetch messages from the last 3 days
   const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
@@ -342,6 +300,8 @@ window.submitChat = async () => {
   if (!text) return;
   input.value = '';
   input.style.height = 'auto';
+  // Clear saved draft on send
+  localStorage.removeItem(DRAFT_KEY);
 
   const page = window.location.pathname.split('/').pop() || 'index.html';
   await supabase.from('claude_tasks').insert({
@@ -361,9 +321,9 @@ function injectModals() {
   const div = document.createElement('div');
   div.id = 'topbar-modals';
   div.innerHTML = `
-    <!-- Quick Add Modal -->
+    <!-- Quick Agregar Modal -->
     <div id="qa-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1000;align-items:flex-end;justify-content:center"
-         onclick="if(event.target===this)window.hideQuickAdd()">
+         onclick="if(event.target===this)window.hideQuickAgregar()">
       <div style="background:var(--white);border-radius:16px 16px 0 0;padding:20px 20px 32px;width:100%;max-width:540px;
                   animation:slideUp 0.2s ease">
         <!-- Toggle -->
@@ -371,21 +331,21 @@ function injectModals() {
           <button id="qa-tab-task" onclick="window.qaSetTab('task')"
             style="flex:1;padding:7px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;
                    background:var(--white);color:var(--gray-800);box-shadow:var(--shadow)">
-            ✅ Task
+            ✅ Tarea
           </button>
           <button id="qa-tab-reminder" onclick="window.qaSetTab('reminder')"
             style="flex:1;padding:7px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;
                    background:transparent;color:var(--gray-400);box-shadow:none">
-            ⏰ Reminder
+            ⏰ Recordatorio
           </button>
         </div>
 
         <!-- Title -->
-        <input id="qa-title" type="text" placeholder="What needs to be done?" autocomplete="off"
+        <input id="qa-title" type="text" placeholder="¿Qué hay que hacer?" autocomplete="off"
           style="width:100%;border:1.5px solid var(--gray-200);border-radius:8px;padding:10px 12px;
                  font-size:15px;margin-bottom:10px;outline:none"
           onfocus="this.style.borderColor='var(--blue)'" onblur="this.style.borderColor='var(--gray-200)'"
-          onkeydown="if(event.key==='Enter')window.submitQuickAdd()" />
+          onkeydown="if(event.key==='Enter')window.submitQuickAgregar()" />
 
         <!-- Module -->
         <select id="qa-module"
@@ -401,7 +361,7 @@ function injectModals() {
           <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--gray-600);cursor:pointer">
             <input type="checkbox" id="qa-schedule-toggle" onchange="window.qaToggleDate(this.checked)"
               style="width:16px;height:16px;accent-color:var(--blue)">
-            Schedule it
+            Programarlo
           </label>
           <input type="date" id="qa-date" style="display:none;border:1.5px solid var(--gray-200);
             border-radius:8px;padding:7px 10px;font-size:13px;flex:1;outline:none" />
@@ -409,15 +369,15 @@ function injectModals() {
 
         <!-- Actions -->
         <div style="display:flex;gap:8px">
-          <button onclick="window.hideQuickAdd()"
+          <button onclick="window.hideQuickAgregar()"
             style="flex:1;padding:11px;border:1.5px solid var(--gray-200);border-radius:8px;
                    background:var(--white);font-size:14px;font-weight:600;color:var(--gray-600);cursor:pointer">
-            Cancel
+            Cancelarar
           </button>
-          <button onclick="window.submitQuickAdd()"
+          <button onclick="window.submitQuickAgregar()"
             style="flex:2;padding:11px;border:none;border-radius:8px;background:var(--blue);
                    color:white;font-size:14px;font-weight:700;cursor:pointer">
-            Add
+            Agregar
           </button>
         </div>
       </div>
@@ -429,47 +389,47 @@ function injectModals() {
          onclick="if(event.target===this)window.hideGlobalGold()">
       <div style="background:var(--white);border-radius:16px 16px 0 0;padding:20px 20px 32px;width:100%;max-width:600px;
                   max-height:85vh;overflow-y:auto;animation:slideUp 0.2s ease">
-        <div style="font-size:17px;font-weight:700;margin-bottom:4px">🪙 Quick Gold</div>
-        <div style="font-size:12px;color:var(--gray-400);margin-bottom:14px">Give gold to any student — not tied to a class</div>
+        <div style="font-size:17px;font-weight:700;margin-bottom:4px">🪙 Oro Rápido</div>
+        <div style="font-size:12px;color:var(--gray-400);margin-bottom:14px">Da oro a cualquier alumno — no ligado a una clase</div>
 
         <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
-          <input type="number" id="gg-amount" class="form-input" placeholder="Amount" min="-999" max="999"
+          <input type="number" id="gg-amount" class="form-input" placeholder="Cantidad" min="-999" max="999"
             style="width:90px;text-align:center;border:1.5px solid var(--gray-200);border-radius:8px;padding:10px 12px;font-size:14px;outline:none">
-          <input type="text" id="gg-reason" class="form-input" placeholder="Reason"
+          <input type="text" id="gg-reason" class="form-input" placeholder="Razón"
             style="flex:1;border:1.5px solid var(--gray-200);border-radius:8px;padding:10px 12px;font-size:14px;outline:none"
             onkeydown="if(event.key==='Enter')window.submitGlobalGold()">
         </div>
 
         <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
-          <button class="btn btn-sm btn-ghost" onclick="window.ggSelectAll()">All</button>
-          <button class="btn btn-sm btn-ghost" onclick="window.ggSelectNone()">Clear</button>
-          <button class="btn btn-sm" style="background:var(--orange-light,#fff7ed);color:var(--orange,#f97316);border:none" onclick="window.ggSetAmount(5)">+5</button>
-          <button class="btn btn-sm" style="background:var(--orange-light,#fff7ed);color:var(--orange,#f97316);border:none" onclick="window.ggSetAmount(10)">+10</button>
-          <button class="btn btn-sm" style="background:var(--orange-light,#fff7ed);color:var(--orange,#f97316);border:none" onclick="window.ggSetAmount(25)">+25</button>
-          <button class="btn btn-sm" style="background:#fee2e2;color:#ef4444;border:none" onclick="window.ggSetAmount(-5)">−5</button>
-          <button class="btn btn-sm" style="background:#fee2e2;color:#ef4444;border:none" onclick="window.ggSetAmount(-10)">−10</button>
+          <button class="btn btn-sm btn-ghost" onclick="window.ggSelectTodos()">Todos</button>
+          <button class="btn btn-sm btn-ghost" onclick="window.ggSelectNone()">Limpiar</button>
+          <button class="btn btn-sm" style="background:var(--orange-light,#fff7ed);color:var(--orange,#f97316);border:none" onclick="window.ggSetCantidad(5)">+5</button>
+          <button class="btn btn-sm" style="background:var(--orange-light,#fff7ed);color:var(--orange,#f97316);border:none" onclick="window.ggSetCantidad(10)">+10</button>
+          <button class="btn btn-sm" style="background:var(--orange-light,#fff7ed);color:var(--orange,#f97316);border:none" onclick="window.ggSetCantidad(25)">+25</button>
+          <button class="btn btn-sm" style="background:#fee2e2;color:#ef4444;border:none" onclick="window.ggSetCantidad(-5)">−5</button>
+          <button class="btn btn-sm" style="background:#fee2e2;color:#ef4444;border:none" onclick="window.ggSetCantidad(-10)">−10</button>
         </div>
 
         <!-- Search filter -->
-        <input type="text" id="gg-search" placeholder="🔍 Filter students…"
+        <input type="text" id="gg-search" placeholder="🔍 Buscar alumnos…"
           style="width:100%;border:1.5px solid var(--gray-200);border-radius:8px;padding:8px 12px;font-size:13px;
                  margin-bottom:10px;outline:none;box-sizing:border-box"
           oninput="window.ggFilterStudents(this.value)">
 
         <div id="gg-student-list" style="margin-bottom:14px">
-          <div style="text-align:center;color:var(--gray-400);padding:20px;font-size:13px">Loading students…</div>
+          <div style="text-align:center;color:var(--gray-400);padding:20px;font-size:13px">Cargando alumnos…</div>
         </div>
 
         <div style="display:flex;gap:8px">
           <button onclick="window.hideGlobalGold()"
             style="flex:1;padding:11px;border:1.5px solid var(--gray-200);border-radius:8px;
                    background:var(--white);font-size:14px;font-weight:600;color:var(--gray-600);cursor:pointer">
-            Cancel
+            Cancelarar
           </button>
           <button onclick="window.submitGlobalGold()"
             style="flex:2;padding:11px;border:none;border-radius:8px;background:#f59e0b;
                    color:white;font-size:14px;font-weight:700;cursor:pointer">
-            🪙 Submit Gold
+            🪙 Dar Oro
           </button>
         </div>
       </div>
@@ -482,17 +442,17 @@ function injectModals() {
       <!-- Header -->
       <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px 10px;
                   border-bottom:1px solid var(--gray-100);flex-shrink:0">
-        <div style="font-size:14px;font-weight:700;color:var(--gray-800)">🔔 Notifications</div>
-        <button onclick="window.markAllNotifsRead()"
+        <div style="font-size:14px;font-weight:700;color:var(--gray-800)">🔔 Notificaciones</div>
+        <button onclick="window.markTodosNotifsRead()"
           style="font-size:11px;color:var(--blue);background:none;border:none;cursor:pointer;font-weight:600;padding:2px 4px">
-          Mark all read
+          Marcar todo leído
         </button>
       </div>
       <!-- List -->
       <div id="notif-list" style="overflow-y:auto;flex:1;max-height:420px"></div>
     </div>
 
-    <!-- Unified Claude Panel (Chat / Report / Queue) -->
+    <!-- Claude Chat Panel (single conversation) -->
     <div id="chat-panel" style="display:none;position:fixed;top:58px;right:12px;width:480px;height:620px;
          background:#1e1e2e;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.35);
          border:1px solid #3a3a5c;z-index:999;flex-direction:column;overflow:hidden">
@@ -500,64 +460,52 @@ function injectModals() {
       <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px 10px;
                   border-bottom:1px solid #3a3a5c;flex-shrink:0">
         <div style="font-size:14px;font-weight:700;color:white">🤖 Claude</div>
-        <button onclick="window.toggleChat()"
-          style="font-size:18px;color:#6060a0;background:none;border:none;cursor:pointer;line-height:1;padding:0 2px">×</button>
-      </div>
-      <!-- Tabs -->
-      <div style="display:flex;gap:0;padding:8px 10px 0;flex-shrink:0">
-        <button id="claude-tab-chat" onclick="window.claudeSetTab('chat')"
-          style="flex:1;padding:7px 4px;border:none;border-radius:8px 8px 0 0;font-size:12px;font-weight:600;cursor:pointer;
-                 background:#2a2a3e;color:white;border-bottom:2px solid #7c3aed">💬 Chat</button>
-        <button id="claude-tab-report" onclick="window.claudeSetTab('report')"
-          style="flex:1;padding:7px 4px;border:none;border-radius:8px 8px 0 0;font-size:12px;font-weight:600;cursor:pointer;
-                 background:transparent;color:#6060a0;border-bottom:2px solid transparent">🐛 Report</button>
-        <button id="claude-tab-queue" onclick="window.claudeSetTab('queue')"
-          style="flex:1;padding:7px 4px;border:none;border-radius:8px 8px 0 0;font-size:12px;font-weight:600;cursor:pointer;
-                 background:transparent;color:#6060a0;border-bottom:2px solid transparent">📋 Queue</button>
-      </div>
-      <!-- Tab: Chat -->
-      <div id="claude-pane-chat" style="display:flex;flex-direction:column;flex:1;overflow:hidden">
-        <div id="chat-list" style="overflow-y:auto;flex:1;padding:4px 0"></div>
-        <div style="padding:10px 12px;border-top:1px solid #3a3a5c;flex-shrink:0;display:flex;gap:8px;align-items:flex-end">
-          <textarea id="chat-input" placeholder="Message Claude…" rows="1"
-            style="flex:1;background:#2a2a3e;border:1.5px solid #3a3a5c;border-radius:10px;padding:8px 11px;
-                   color:white;font-size:13px;font-family:inherit;resize:none;outline:none;line-height:1.4;max-height:100px;overflow-y:auto"
-            onfocus="this.style.borderColor='#7c3aed'" onblur="this.style.borderColor='#3a3a5c'"
-            oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"
-            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();window.submitChat()}"></textarea>
-          <button onclick="window.submitChat()"
-            style="width:34px;height:34px;border-radius:50%;background:#7c3aed;border:none;color:white;
-                   font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">↑</button>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button onclick="window.showTellClaude()" title="Reportar bug o sugerencia"
+            style="font-size:14px;color:#6060a0;background:none;border:none;cursor:pointer;padding:2px 4px;border-radius:6px;line-height:1"
+            onmouseenter="this.style.color='#a0a0c8'" onmouseleave="this.style.color='#6060a0'">🐛</button>
+          <button onclick="window.toggleChat()"
+            style="font-size:18px;color:#6060a0;background:none;border:none;cursor:pointer;line-height:1;padding:0 2px">×</button>
         </div>
       </div>
-      <!-- Tab: Report (Bug / Feature) -->
-      <div id="claude-pane-report" style="display:none;flex-direction:column;flex:1;overflow-y:auto;padding:14px">
-        <div style="display:flex;gap:0;margin-bottom:12px;background:#2a2a3e;border-radius:8px;padding:3px">
+      <!-- Inline Report Form (hidden by default) -->
+      <div id="claude-report-form" style="display:none;flex-shrink:0;padding:10px 12px;border-bottom:1px solid #3a3a5c;background:#16162a">
+        <div style="display:flex;gap:0;margin-bottom:8px;background:#2a2a3e;border-radius:6px;padding:2px">
           <button id="tc-tab-bug" onclick="window.tcSetTab('bug')"
-            style="flex:1;padding:7px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;
-                   background:#1e1e2e;color:white;box-shadow:0 1px 4px rgba(0,0,0,0.4)">🐛 Bug</button>
+            style="flex:1;padding:5px;border:none;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;
+                   background:#1e1e2e;color:white;box-shadow:0 1px 3px rgba(0,0,0,0.4)">🐛 Bug</button>
           <button id="tc-tab-feature" onclick="window.tcSetTab('feature')"
-            style="flex:1;padding:7px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;
+            style="flex:1;padding:5px;border:none;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;
                    background:transparent;color:#6060a0;box-shadow:none">✨ Feature</button>
           <button id="tc-tab-task" onclick="window.tcSetTab('task')"
-            style="flex:1;padding:7px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;
-                   background:transparent;color:#6060a0;box-shadow:none">🤖 Task</button>
+            style="flex:1;padding:5px;border:none;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;
+                   background:transparent;color:#6060a0;box-shadow:none">🤖 Tarea</button>
         </div>
-        <div id="tc-subtitle" style="font-size:12px;color:#a0a0b8;margin-bottom:10px">Report something that's broken.</div>
-        <textarea id="tc-instruction" placeholder="Describe the bug…" rows="4"
-          style="width:100%;border:1.5px solid #3a3a5c;border-radius:8px;padding:10px 12px;
-                 font-size:14px;margin-bottom:12px;outline:none;resize:vertical;font-family:inherit;
-                 background:#2a2a3e;color:white;box-sizing:border-box"
-          onfocus="this.style.borderColor='#7c3aed'" onblur="this.style.borderColor='#3a3a5c'"
-          onkeydown="if(event.key==='Enter'&&(event.metaKey||event.ctrlKey))window.submitTellClaude()"></textarea>
-        <div id="tc-pending-count" style="font-size:12px;color:#a0a0b8;margin-bottom:12px;text-align:center"></div>
-        <button id="tc-submit-btn" onclick="window.submitTellClaude()"
-          style="width:100%;padding:11px;border:none;border-radius:8px;background:#7c3aed;
-                 color:white;font-size:14px;font-weight:700;cursor:pointer">🐛 Submit Bug</button>
+        <div style="display:flex;gap:6px;align-items:flex-end">
+          <textarea id="tc-instruction" placeholder="Describe the bug…" rows="2"
+            style="flex:1;border:1.5px solid #3a3a5c;border-radius:7px;padding:7px 10px;
+                   font-size:13px;outline:none;resize:none;font-family:inherit;
+                   background:#2a2a3e;color:white;box-sizing:border-box"
+            onfocus="this.style.borderColor='#7c3aed'" onblur="this.style.borderColor='#3a3a5c'"
+            onkeydown="if(event.key==='Enter'&&(event.metaKey||event.ctrlKey))window.submitTellClaude()"></textarea>
+          <button id="tc-submit-btn" onclick="window.submitTellClaude()"
+            style="padding:7px 12px;border:none;border-radius:7px;background:#7c3aed;
+                   color:white;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0">Enviar</button>
+        </div>
       </div>
-      <!-- Tab: Queue -->
-      <div id="claude-pane-queue" style="display:none;flex-direction:column;flex:1;overflow-y:auto;padding:14px">
-        <div id="queue-status-list" style="flex:1"></div>
+      <!-- Chat messages -->
+      <div id="chat-list" style="overflow-y:auto;flex:1;padding:4px 0"></div>
+      <!-- Input bar -->
+      <div style="padding:10px 12px;border-top:1px solid #3a3a5c;flex-shrink:0;display:flex;gap:8px;align-items:flex-end">
+        <textarea id="chat-input" placeholder="Mensaje para Claude…" rows="1"
+          style="flex:1;background:#2a2a3e;border:1.5px solid #3a3a5c;border-radius:10px;padding:8px 11px;
+                 color:white;font-size:13px;font-family:inherit;resize:none;outline:none;line-height:1.4;max-height:100px;overflow-y:auto"
+          onfocus="this.style.borderColor='#7c3aed'" onblur="this.style.borderColor='#3a3a5c'"
+          oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px';localStorage.setItem('lifeos_chat_draft',this.value)"
+          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();window.submitChat()}"></textarea>
+        <button onclick="window.submitChat()"
+          style="width:34px;height:34px;border-radius:50%;background:#7c3aed;border:none;color:white;
+                 font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">↑</button>
       </div>
     </div>
 
@@ -589,11 +537,11 @@ function injectModals() {
   });
 }
 
-// ── Quick Add state ───────────────────────────────────────────────────────────
+// ── Quick Agregar state ───────────────────────────────────────────────────────────
 let qaTab = 'task';
 let tcTab = 'bug';
 
-window.showQuickAdd = () => {
+window.showQuickAgregar = () => {
   const el = document.getElementById('qa-overlay');
   el.style.display = 'flex';
   document.getElementById('qa-title').value = '';
@@ -604,7 +552,7 @@ window.showQuickAdd = () => {
   setTimeout(() => document.getElementById('qa-title').focus(), 50);
 };
 
-window.hideQuickAdd = () => {
+window.hideQuickAgregar = () => {
   document.getElementById('qa-overlay').style.display = 'none';
 };
 
@@ -629,7 +577,7 @@ window.qaToggleDate = (show) => {
   }
 };
 
-window.submitQuickAdd = async () => {
+window.submitQuickAgregar = async () => {
   const title  = document.getElementById('qa-title').value.trim();
   const module = document.getElementById('qa-module').value;
   const date   = document.getElementById('qa-schedule-toggle').checked
@@ -652,29 +600,47 @@ window.submitQuickAdd = async () => {
 
   if (error) { toast('Error: ' + error.message, 'error'); return; }
   toast(`${qaTab === 'task' ? 'Task' : 'Reminder'} added ✅`, 'success');
-  window.hideQuickAdd();
+  window.hideQuickAgregar();
 };
 
 // ── Tell Claude (unified: Bug / Feature / Task) ───────────────────────────────
 const TC_TABS = {
   bug:     { subtitle: 'Report something that\'s broken.',            placeholder: 'Describe the bug…',              btn: '🐛 Submit Bug' },
   feature: { subtitle: 'Suggest a new feature or improvement.',       placeholder: 'Describe the feature request…',  btn: '✨ Request Feature' },
-  task:    { subtitle: 'Add a task to my queue — I\'ll tackle it next LifeOS session.', placeholder: 'e.g. Add a dark mode toggle to settings…', btn: '🤖 Add to Queue' },
+  task:    { subtitle: 'Agregar a task to my queue — I\'ll tackle it next LifeOS session.', placeholder: 'e.g. Agregar a dark mode toggle to settings…', btn: '🤖 Agregar to Queue' },
 };
 
-// showTellClaude / hideTellClaude now route to the unified chat panel
+// showTellClaude — opens chat panel and expands the inline report form
 window.showTellClaude = async (defaultTab) => {
   const panel = document.getElementById('chat-panel');
   if (!panel) return;
-  chatPanelOpen = true;
-  panel.style.display = 'flex';
-  document.getElementById('tc-instruction').value = '';
-  window.tcSetTab(defaultTab || 'bug');
-  await window.claudeSetTab('report');
+  if (!chatPanelOpen) {
+    chatPanelOpen = true;
+    panel.style.display = 'flex';
+    const input = document.getElementById('chat-input');
+    if (input) {
+      const draft = localStorage.getItem(DRAFT_KEY) || '';
+      input.value = draft;
+      input.style.height = 'auto';
+      if (draft) input.style.height = Math.min(input.scrollHeight, 100) + 'px';
+    }
+    await renderChat();
+  }
+  const reportForm = document.getElementById('claude-report-form');
+  if (reportForm) {
+    const isOpen = reportForm.style.display !== 'none';
+    reportForm.style.display = isOpen ? 'none' : 'block';
+    if (!isOpen) {
+      document.getElementById('tc-instruction').value = '';
+      window.tcSetTab(defaultTab || 'bug');
+      setTimeout(() => document.getElementById('tc-instruction')?.focus(), 50);
+    }
+  }
 };
 
 window.hideTellClaude = () => {
-  window.toggleChat();
+  const reportForm = document.getElementById('claude-report-form');
+  if (reportForm) reportForm.style.display = 'none';
 };
 
 window.tcSetTab = (tab) => {
@@ -711,7 +677,7 @@ window.submitTellClaude = async () => {
       page,
       status: 'open',
     }));
-    if (!error) toast('Added to Claude\'s queue 🤖', 'success');
+    if (!error) toast('Agregado a la cola de Claude 🤖', 'success');
   } else {
     ({ error } = await supabase.from('lifeos_feedback').insert({
       type: tcTab,
@@ -720,12 +686,14 @@ window.submitTellClaude = async () => {
       page,
       status: 'open',
     }));
-    if (!error) toast(tcTab === 'bug' ? 'Bug reported 🐛' : 'Feature requested ✨', 'success');
+    if (!error) toast(tcTab === 'bug' ? 'Bug reportado 🐛' : 'Función solicitada ✨', 'success');
   }
 
   if (error) { toast('Error: ' + error.message, 'error'); return; }
   document.getElementById('tc-instruction').value = '';
-  await window.claudeSetTab('chat');
+  // Close the inline report form
+  const reportForm = document.getElementById('claude-report-form');
+  if (reportForm) reportForm.style.display = 'none';
   loadChatBadge();
 };
 
@@ -738,7 +706,7 @@ window.toggleQueueStatus = () => window.toggleChat();
 
 // ── Global Quick Gold ─────────────────────────────────────────────────────────
 let ggChecked = new Set();
-let ggAllStudents = [];
+let ggTodosStudents = [];
 
 window.showGlobalGold = async () => {
   const el = document.getElementById('gg-overlay');
@@ -754,8 +722,8 @@ window.showGlobalGold = async () => {
     .select('id, name, current_gold')
     .eq('status', 'Active')
     .order('name');
-  ggAllStudents = data || [];
-  renderGgStudents(ggAllStudents);
+  ggTodosStudents = data || [];
+  renderGgStudents(ggTodosStudents);
   setTimeout(() => document.getElementById('gg-amount').focus(), 50);
 };
 
@@ -767,7 +735,7 @@ function renderGgStudents(students) {
   const el = document.getElementById('gg-student-list');
   if (!el) return;
   if (!students.length) {
-    el.innerHTML = '<div style="text-align:center;color:var(--gray-400);padding:16px;font-size:13px">No students found</div>';
+    el.innerHTML = '<div style="text-align:center;color:var(--gray-400);padding:16px;font-size:13px">Sin alumnos</div>';
     return;
   }
   el.innerHTML = students.map(s => `
@@ -785,34 +753,34 @@ window.ggToggle = (id, checked) => {
   if (checked) ggChecked.add(id); else ggChecked.delete(id);
 };
 
-window.ggSelectAll = () => {
-  document.querySelectorAll('.gg-check').forEach(cb => {
+window.ggSelectTodos = () => {
+  document.querySelectorTodos('.gg-check').forEach(cb => {
     cb.checked = true;
     ggChecked.add(Number(cb.id.replace('ggc-', '')));
   });
 };
 
 window.ggSelectNone = () => {
-  document.querySelectorAll('.gg-check').forEach(cb => { cb.checked = false; });
+  document.querySelectorTodos('.gg-check').forEach(cb => { cb.checked = false; });
   ggChecked.clear();
 };
 
-window.ggSetAmount = (val) => {
+window.ggSetCantidad = (val) => {
   const inp = document.getElementById('gg-amount');
   if (inp) inp.value = val;
 };
 
 window.ggFilterStudents = (query) => {
   const q = query.toLowerCase().trim();
-  const filtered = q ? ggAllStudents.filter(s => s.name.toLowerCase().includes(q)) : ggAllStudents;
+  const filtered = q ? ggTodosStudents.filter(s => s.name.toLowerCase().includes(q)) : ggTodosStudents;
   renderGgStudents(filtered);
 };
 
 window.submitGlobalGold = async () => {
   const amountRaw = parseInt(document.getElementById('gg-amount').value, 10);
   const reason = document.getElementById('gg-reason').value.trim() || 'Quick gold';
-  if (!amountRaw || amountRaw === 0) { toast('Enter an amount', 'info'); return; }
-  if (!ggChecked.size) { toast('Select at least one student', 'info'); return; }
+  if (!amountRaw || amountRaw === 0) { toast('Ingresa una cantidad', 'info'); return; }
+  if (!ggChecked.size) { toast('Selecciona al menos un alumno', 'info'); return; }
 
   const T = today();
   const inserts = [];
@@ -838,14 +806,14 @@ window.submitGlobalGold = async () => {
     await supabase.from('students').update({ current_gold: cur + amountRaw }).eq('id', sid);
   }
 
-  toast(`Gold submitted for ${ggChecked.size} student${ggChecked.size > 1 ? 's' : ''}! 🪙`, 'success');
+  toast(`¡Oro dado a ${ggChecked.size} student${ggChecked.size > 1 ? 's' : ''}! 🪙`, 'success');
   ggChecked.clear();
   document.getElementById('gg-amount').value = '';
   document.getElementById('gg-reason').value = '';
   // Reload to show updated balances
   const { data } = await supabase.from('students').select('id, name, current_gold').eq('status', 'Active').order('name');
-  ggAllStudents = data || [];
-  renderGgStudents(ggAllStudents);
+  ggTodosStudents = data || [];
+  renderGgStudents(ggTodosStudents);
 };
 
 // ── Init ──────────────────────────────────────────────────────────────────────
