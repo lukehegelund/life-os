@@ -9,6 +9,20 @@
 .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:500; align-items:flex-end; justify-content:center; }
 .modal-sheet { background:var(--white); border-radius:16px 16px 0 0; padding:20px; width:100%; max-width:600px; }
 .modal-title { font-size:17px; font-weight:700; margin-bottom:16px; }
+
+/* Schedule picker sheet */
+#schedule-picker { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:600; align-items:flex-end; justify-content:center; }
+.schedule-sheet { background:var(--white); border-radius:16px 16px 0 0; padding:20px; width:100%; max-width:600px; }
+.schedule-sheet-title { font-size:16px; font-weight:700; margin-bottom:14px; color:var(--gray-700); }
+.sched-btn {
+  display:flex; align-items:center; gap:10px;
+  width:100%; padding:12px 14px; border:1.5px solid var(--gray-200);
+  border-radius:10px; background:var(--white); font-size:14px;
+  cursor:pointer; margin-bottom:8px; text-align:left;
+  transition: background 0.1s, border-color 0.1s;
+}
+.sched-btn:hover { background:var(--gray-50); }
+.sched-btn .sched-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
 </style>
 </head>
 <body>
@@ -33,13 +47,7 @@
 
 <main class="content">
 
-  <!-- Overdue Reminders -->
-  <div id="reminders-section"></div>
-
-  <!-- Urgent Tareas -->
-  <div id="urgent-tasks-section"></div>
-
-  <!-- All other open tasks grouped by module -->
+  <!-- Today + All tasks (no reminders) -->
   <div id="tasks-section"></div>
 
   <!-- Recurring Tareas -->
@@ -49,6 +57,55 @@
   <div id="future-projects-section"></div>
 
 </main>
+
+<!-- Schedule Picker sheet -->
+<div id="schedule-picker">
+  <div class="schedule-sheet">
+    <div class="schedule-sheet-title">📅 Schedule this task</div>
+
+    <button class="sched-btn" data-label="Today" onclick="applyScheduleLabel('Today')">
+      <span class="sched-dot" style="background:#f59e0b"></span>
+      <div>
+        <div style="font-weight:600">Today</div>
+        <div style="font-size:12px;color:var(--gray-400)">Show at the top — I'm doing this today</div>
+      </div>
+    </button>
+
+    <button class="sched-btn" data-label="Next Up" onclick="applyScheduleLabel('Next Up')">
+      <span class="sched-dot" style="background:var(--blue)"></span>
+      <div>
+        <div style="font-weight:600">Next Up</div>
+        <div style="font-size:12px;color:var(--gray-400)">Coming up soon, after Today items</div>
+      </div>
+    </button>
+
+    <button class="sched-btn" data-label="Later" onclick="applyScheduleLabel('Later')">
+      <span class="sched-dot" style="background:#7c3aed"></span>
+      <div>
+        <div style="font-weight:600">Later</div>
+        <div style="font-size:12px;color:var(--gray-400)">Not urgent, but on the radar</div>
+      </div>
+    </button>
+
+    <button class="sched-btn" data-label="Down the Road" onclick="applyScheduleLabel('Down the Road')">
+      <span class="sched-dot" style="background:var(--gray-300)"></span>
+      <div>
+        <div style="font-weight:600">Down the Road</div>
+        <div style="font-size:12px;color:var(--gray-400)">Someday — no rush</div>
+      </div>
+    </button>
+
+    <button class="sched-btn" data-label="none" onclick="applyScheduleLabel('none')" style="border-style:dashed">
+      <span class="sched-dot" style="background:var(--gray-200)"></span>
+      <div>
+        <div style="font-weight:600;color:var(--gray-500)">Remove label</div>
+        <div style="font-size:12px;color:var(--gray-400)">Clear any schedule label</div>
+      </div>
+    </button>
+
+    <button class="btn btn-ghost" style="width:100%;margin-top:4px" onclick="closeSchedulePicker()">Cancel</button>
+  </div>
+</div>
 
 <!-- Add Recurring Task modal -->
 <div class="modal-overlay" id="recurring-modal">
@@ -187,7 +244,7 @@
   </a>
 </nav>
 
-<script type="module" src="js/tasks.js?v=7"></script>
+<script type="module" src="js/tasks.js?v=8"></script>
 <script type="module" src="js/topbar.js"></script>
 </body>
 </html>

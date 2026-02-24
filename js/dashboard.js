@@ -65,17 +65,23 @@ async function loadCurrentBanner() {
     return;
   }
 
+  // Show first "Today" task in banner (or fall back to urgent)
   const taskRes = await supabase.from('tasks')
-    .select('*').eq('status', 'open').eq('priority', 'urgent').order('due_date').limit(1);
-  const task = taskRes.data?.[0];
+    .select('*').in('status', ['open', 'in_progress']).order('created_at');
+  const allBannerTasks = taskRes.data || [];
+  const todayBannerTask = allBannerTasks.find(t => {
+    try { const p = JSON.parse(t.notes || '{}'); return p?.schedule_label === 'Today'; } catch { return false; }
+  }) || allBannerTasks.find(t => t.priority === 'urgent');
+  const task = todayBannerTask;
   if (task) {
+    const isToday = (() => { try { return JSON.parse(task.notes || '{}')?.schedule_label === 'Today'; } catch { return false; } })();
     el.style.display = 'block';
     el.innerHTML = `
       <div class="current-banner-inner current-banner-task swipe-item" data-id="${task.id}" style="touch-action:pan-y;overflow:hidden;position:relative">
         <div data-swipe-inner style="display:flex;align-items:center;gap:12px;width:100%">
-          <div class="current-banner-icon">🔴</div>
+          <div class="current-banner-icon">${isToday ? '📅' : '🔴'}</div>
           <div class="current-banner-content">
-            <div class="current-banner-label">URGENT TASK ${task.due_date ? '· Due ' + fmtDate(task.due_date) : ''}</div>
+            <div class="current-banner-label">${isToday ? 'TODAY' : 'URGENT TASK'} ${task.due_date ? '· Due ' + fmtDate(task.due_date) : ''}</div>
             <div class="current-banner-title">${task.title}</div>
             <div class="current-banner-meta">${task.module} · swipe ← delete · → done</div>
           </div>
@@ -106,12 +112,17 @@ async function loadGlance() {
   const el = document.getElementById('glance-grid');
   if (!el) return;
 
-  const [studentsRes, tasksRes, goldRes, wordsRes] = await Promise.all([
+  const [studentsRes, allTasksRes, goldRes, wordsRes] = await Promise.all([
     supabase.from('students').select('id', { count: 'exact' }).eq('status', 'Active'),
-    supabase.from('tasks').select('id', { count: 'exact' }).eq('status', 'open').eq('priority', 'urgent'),
+    supabase.from('tasks').select('notes').in('status', ['open', 'in_progress']),
     supabase.from('gold_transactions').select('id', { count: 'exact' }).eq('distributed', false),
     supabase.from('vocab_words').select('id', { count: 'exact' }).lte('next_review', T),
   ]);
+
+  // Count Today tasks
+  const todayCount = (allTasksRes.data || []).filter(t => {
+    try { return JSON.parse(t.notes || '{}')?.schedule_label === 'Today'; } catch { return false; }
+  }).length;
 
   const tile = (icon, val, label, href, color) =>
     `<a href="${href}" style="text-decoration:none;background:var(--gray-50);border-radius:8px;border:1px solid var(--gray-100);padding:12px;display:flex;flex-direction:column;gap:2px">
@@ -121,7 +132,7 @@ async function loadGlance() {
 
   el.innerHTML =
     tile('🎓', studentsRes.count ?? 0, 'Students', 'students.html', 'var(--blue)') +
-    tile('🔴', tasksRes.count ?? 0, 'Urgent', 'tasks.html', (tasksRes.count ?? 0) > 0 ? 'var(--red)' : 'var(--gray-400)') +
+    tile('📅', todayCount, 'Today', 'tasks.html', todayCount > 0 ? '#f59e0b' : 'var(--gray-400)') +
     tile('🪙', goldRes.count ?? 0, 'Gold Pending', 'daily.html', (goldRes.count ?? 0) > 0 ? 'var(--orange)' : 'var(--gray-400)') +
     tile('🌍', wordsRes.count ?? 0, 'Words Due', 'languages.html', (wordsRes.count ?? 0) > 0 ? 'var(--purple)' : 'var(--gray-400)');
 }
@@ -192,38 +203,56 @@ window.quickLogMeal = async (meal) => {
   loadHealthStatus();
 };
 
-// ── Urgent Items ───────────────────────────────────────────────────────────
+// ── Helpers for notes JSON (same as tasks.js) ──────────────────────────────
+function parseNotesD(t) {
+  if (!t.notes) return {};
+  try { const p = JSON.parse(t.notes); return typeof p === 'object' && p !== null ? p : {}; } catch { return {}; }
+}
+function getScheduleLabelD(t) { return parseNotesD(t).schedule_label || null; }
+function isRTAdminD(t) { return parseNotesD(t).rt_admin === true; }
+function displayModuleD(t) { return isRTAdminD(t) ? 'RT Admin' : (t.module || 'Personal'); }
+
+const MODULE_ICONS_D = { RT: '🏫', 'RT Admin': '🏛️', TOV: '💍', Personal: '👤', Health: '🏃' };
+
+// ── Urgent Items (now: Today Tasks + Gold + Follow-ups) ────────────────────
 async function loadUrgentItems() {
   const el = document.getElementById('urgent-items');
   if (!el) return;
 
-  const [tasksRes, remindersRes, goldRes, followupsRes] = await Promise.all([
-    supabase.from('tasks').select('*').eq('status', 'open').eq('priority', 'urgent').order('module'),
-    supabase.from('reminders').select('*').eq('status', 'active').not('due_date', 'is', null).lte('due_date', T),
+  const [tasksRes, goldRes, followupsRes] = await Promise.all([
+    supabase.from('tasks').select('*').in('status', ['open', 'in_progress']).order('created_at'),
     supabase.from('gold_transactions').select('*, students(name)').eq('distributed', false),
     supabase.from('student_notes').select('*, students(name)').eq('followup_needed', true).order('date', { ascending: false }).limit(6),
   ]);
 
-  const urgentTasks       = tasksRes.data || [];
-  const overdueReminders  = remindersRes.data || [];
+  const allTasks          = tasksRes.data || [];
+  const todayTasks        = allTasks.filter(t => getScheduleLabelD(t) === 'Today');
   const undistributedGold = goldRes.data || [];
   const followups         = followupsRes.data || [];
 
-  const hasAnything = urgentTasks.length || overdueReminders.length || undistributedGold.length || followups.length;
+  const hasAnything = todayTasks.length || undistributedGold.length || followups.length;
   if (!hasAnything) {
-    el.innerHTML = `<div class="card" style="text-align:center;color:var(--text-muted);padding:16px;font-size:14px">✅ All clear — nothing urgent</div>`;
+    el.innerHTML = `<div class="card" style="text-align:center;color:var(--text-muted);padding:16px;font-size:14px">✅ All clear — no tasks for today</div>`;
     return;
   }
 
   let html = '<div class="card" style="padding:0;overflow:hidden">';
 
-  if (overdueReminders.length) {
-    html += `<div class="urgent-section urgent-section-red">
-      <div class="urgent-section-header">⏰ Overdue Reminders (${overdueReminders.length})</div>
-      ${overdueReminders.map(r => `
-        <div class="urgent-row">
-          <div class="urgent-row-text">${r.title}</div>
-          <div class="urgent-row-meta">${r.module || ''} · Due ${fmtDate(r.due_date)}</div>
+  if (todayTasks.length) {
+    html += `<div class="urgent-section" style="background:#fffbeb;border-bottom:1px solid #fde68a">
+      <div class="urgent-section-header" style="color:#92400e">📅 Today (${todayTasks.length})
+        <span style="font-size:11px;font-weight:400;margin-left:8px">← cancel · → done</span>
+      </div>
+      ${todayTasks.map(t => `
+        <div class="swipe-item urgent-row" data-id="${t.id}" style="touch-action:pan-y;overflow:hidden;position:relative;display:flex;align-items:center;gap:8px">
+          <div data-swipe-inner style="flex:1">
+            <div class="urgent-row-text">${t.title}</div>
+            <div class="urgent-row-meta">${MODULE_ICONS_D[displayModuleD(t)] || ''} ${displayModuleD(t)}${t.due_date ? ' · Due ' + fmtDate(t.due_date) : ''}</div>
+          </div>
+          <div style="display:flex;gap:4px;flex-shrink:0">
+            <button class="btn btn-sm" style="background:var(--green-light);color:var(--green);border:none;font-size:11px;padding:3px 7px" onclick="doneTask(${t.id}, event)">✓</button>
+            <button class="btn btn-sm" style="background:var(--coral-light);color:var(--red);border:none;font-size:11px;padding:3px 7px" onclick="cancelTask(${t.id}, event)">✕</button>
+          </div>
         </div>`).join('')}
     </div>`;
   }
@@ -237,25 +266,6 @@ async function loadUrgentItems() {
         <div class="urgent-row">
           <div class="urgent-row-text">${name}</div>
           <div class="urgent-row-meta">+${amt} gold pending</div>
-        </div>`).join('')}
-    </div>`;
-  }
-
-  if (urgentTasks.length) {
-    html += `<div class="urgent-section urgent-section-orange">
-      <div class="urgent-section-header">🔴 Urgent Tasks (${urgentTasks.length})
-        <span style="font-size:11px;font-weight:400;margin-left:8px">← cancel · → done</span>
-      </div>
-      ${urgentTasks.map(t => `
-        <div class="swipe-item urgent-row" data-id="${t.id}" style="touch-action:pan-y;overflow:hidden;position:relative;display:flex;align-items:center;gap:8px">
-          <div data-swipe-inner style="flex:1">
-            <div class="urgent-row-text">${t.title}</div>
-            ${t.due_date ? `<div class="urgent-row-meta">Due ${fmtDate(t.due_date)} · ${t.module}</div>` : `<div class="urgent-row-meta">${t.module}</div>`}
-          </div>
-          <div style="display:flex;gap:4px;flex-shrink:0">
-            <button class="btn btn-sm" style="background:var(--green-light);color:var(--green);border:none;font-size:11px;padding:3px 7px" onclick="doneTask(${t.id}, event)">✓</button>
-            <button class="btn btn-sm" style="background:var(--coral-light);color:var(--red);border:none;font-size:11px;padding:3px 7px" onclick="cancelTask(${t.id}, event)">✕</button>
-          </div>
         </div>`).join('')}
     </div>`;
   }
@@ -274,7 +284,7 @@ async function loadUrgentItems() {
   html += '</div>';
   el.innerHTML = html;
 
-  el.querySelectorAll('.urgent-section-orange .swipe-item').forEach(item => {
+  el.querySelectorAll('.swipe-item').forEach(item => {
     const taskId = item.dataset.id;
     initSwipe(item,
       async () => { await supabase.from('tasks').update({ status: 'cancelled' }).eq('id', taskId); toast('Task removed', 'info'); loadUrgentItems(); loadCurrentBanner(); },
