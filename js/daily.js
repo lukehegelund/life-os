@@ -6,7 +6,7 @@ let selectedDate = today();
 
 async function load() {
   document.getElementById('date-label').textContent = fmtDateLong(selectedDate);
-  await Promise.all([loadGoldOwed(), loadAttendance(), loadFollowups(), loadNotesSummary()]);
+  await Promise.all([loadGoldOwed(), loadAttendance(), loadFollowups(), loadNotesSummary(), loadPastLogs()]);
 }
 
 // ── Gold Owed ─────────────────────────────────────────────────────────────────
@@ -162,6 +162,128 @@ async function loadNotesSummary() {
     <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--gray-100)">
       <span>${catBadge(cat)}</span><span style="font-weight:700">${n}</span>
     </div>`).join('');
+}
+
+// ── Log & Close Day ──────────────────────────────────────────────────────────
+window.logAndCloseDay = async () => {
+  const btn = document.getElementById('log-day-btn');
+  const statusEl = document.getElementById('log-day-status');
+  btn.disabled = true;
+  btn.textContent = '⏳ Logging…';
+
+  const T = today();
+
+  // 1. Gather attendance stats for today
+  const [attRes, pagesRes, partRes, classRes] = await Promise.all([
+    supabase.from('attendance').select('class_id, status').eq('date', T),
+    supabase.from('student_pages').select('student_id, class_id, pages_delta, total_pages').eq('date', T),
+    supabase.from('participation_scores').select('student_id, class_id, score').eq('date', T),
+    supabase.from('classes').select('id, name'),
+  ]);
+
+  const classMap = {};
+  for (const c of (classRes.data || [])) classMap[c.id] = c.name;
+
+  // Attendance summary
+  const attByClass = {};
+  for (const a of (attRes.data || [])) {
+    if (!attByClass[a.class_id]) attByClass[a.class_id] = { P:0, L:0, A:0, E:0 };
+    const s = { Present:'P', Late:'L', Absent:'A', Excused:'E' }[a.status] || 'A';
+    attByClass[a.class_id][s]++;
+  }
+
+  // Pages summary
+  const pagesByClass = {};
+  for (const p of (pagesRes.data || [])) {
+    if (!pagesByClass[p.class_id]) pagesByClass[p.class_id] = { pages: 0, students: 0 };
+    pagesByClass[p.class_id].pages += p.pages_delta || 0;
+    pagesByClass[p.class_id].students++;
+  }
+
+  // Participation summary
+  const partByClass = {};
+  for (const p of (partRes.data || [])) {
+    if (!partByClass[p.class_id]) partByClass[p.class_id] = { total: 0, count: 0 };
+    partByClass[p.class_id].total += p.score || 0;
+    partByClass[p.class_id].count++;
+  }
+
+  // Build snapshot body text
+  const allClassIds = new Set([
+    ...Object.keys(attByClass),
+    ...Object.keys(pagesByClass),
+    ...Object.keys(partByClass),
+  ].map(Number));
+
+  let lines = [];
+  for (const cid of [...allClassIds].sort((a,b) => a - b)) {
+    const name = classMap[cid] || `Class ${cid}`;
+    const att = attByClass[cid];
+    const pg = pagesByClass[cid];
+    const pt = partByClass[cid];
+    let parts = [];
+    if (att) parts.push(`att: ${att.P}P ${att.L}L ${att.A}A ${att.E}E`);
+    if (pg) parts.push(`pages: ${pg.pages}p (${pg.students} students)`);
+    if (pt && pt.count) parts.push(`part: ${(pt.total/pt.count).toFixed(1)}/5`);
+    if (parts.length) lines.push(`• ${name}: ${parts.join(' | ')}`);
+  }
+  const body = lines.length ? lines.join('\n') : '(No activity logged today)';
+
+  // 2. Save snapshot to claude_notifications
+  const { error: logErr } = await supabase.from('claude_notifications').insert({
+    title: `📊 Daily Log: ${T}`,
+    body,
+    read: false,
+  });
+
+  if (logErr) {
+    toast('Error saving log: ' + logErr.message, 'error');
+    btn.disabled = false; btn.textContent = '📊 Log & Close Day';
+    return;
+  }
+
+  // 3. Reset student_pages total_pages counter for today (set total_pages = 0 for all of today's entries)
+  await supabase.from('student_pages').update({ total_pages: 0 }).eq('date', T);
+
+  // 4. Update UI
+  statusEl.textContent = `Logged at ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`;
+  btn.textContent = '✅ Day Logged';
+  btn.style.background = 'var(--green)';
+  toast('Day logged and counters reset! 📊', 'success');
+  loadPastLogs();
+};
+
+// ── Past Logs ─────────────────────────────────────────────────────────────────
+async function loadPastLogs() {
+  const el = document.getElementById('past-logs');
+  if (!el) return;
+
+  const { data } = await supabase.from('claude_notifications')
+    .select('id, title, body, created_at')
+    .like('title', '📊 Daily Log:%')
+    .order('created_at', { ascending: false })
+    .limit(30);
+
+  const logs = data || [];
+  if (!logs.length) {
+    el.innerHTML = '<div style="color:var(--gray-400);font-size:14px">No daily logs yet</div>';
+    return;
+  }
+
+  el.innerHTML = logs.map(log => {
+    const dateStr = log.title.replace('📊 Daily Log: ', '');
+    const lines = (log.body || '').split('\n');
+    return `
+      <details style="margin-bottom:8px;border-bottom:1px solid var(--gray-100);padding-bottom:8px">
+        <summary style="font-size:14px;font-weight:600;cursor:pointer;padding:4px 0">
+          ${fmtDate(dateStr)}
+          <span style="font-size:12px;font-weight:400;color:var(--gray-400);margin-left:8px">${lines.length} class${lines.length !== 1 ? 'es' : ''}</span>
+        </summary>
+        <div style="margin-top:8px;font-size:13px;color:var(--gray-600)">
+          ${lines.map(l => `<div style="padding:2px 0">${l}</div>`).join('')}
+        </div>
+      </details>`;
+  }).join('');
 }
 
 // ── Date navigation ───────────────────────────────────────────────────────────
