@@ -34,6 +34,10 @@ function injectButtons() {
       style="width:34px;height:34px;border-radius:50%;background:var(--gray-100);color:var(--gray-700);border:1px solid var(--gray-200);
              font-size:16px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;
              box-shadow:var(--shadow);flex-shrink:0;text-decoration:none">🌍</a>
+    <a href="schedule.html" id="topbar-schedule" title="Scheduled Tasks"
+      style="width:34px;height:34px;border-radius:50%;background:var(--gray-100);color:var(--gray-700);border:1px solid var(--gray-200);
+             font-size:16px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;
+             box-shadow:var(--shadow);flex-shrink:0;text-decoration:none">⏰</a>
     <div id="topbar-chat-wrap" style="position:relative;flex-shrink:0">
       <button id="topbar-chat" onclick="window.toggleChat()" title="Chat with Claude"
         style="width:34px;height:34px;border-radius:50%;background:#1e1e2e;color:white;border:none;
