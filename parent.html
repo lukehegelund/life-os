@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parent Profile — Life OS</title>
+<link rel="stylesheet" href="css/main.css?v=2">
+</head>
+<body>
+
+<header class="page-header">
+  <div class="header-row">
+    <div>
+      <h1 id="parent-name">Loading…</h1>
+      <div class="subtitle" id="parent-subtitle"></div>
+    </div>
+    <a href="parents.html?tab=parents" class="btn btn-ghost btn-sm">← Parents</a>
+  </div>
+</header>
+
+<main class="content">
+
+  <!-- Parent Info Card -->
+  <div class="card" id="parent-header-card">
+    <div class="spinner"></div>
+  </div>
+
+  <!-- Notes from student profiles (all students linked to this parent) -->
+  <div class="card">
+    <div class="card-title">📝 Notes (across all students)</div>
+
+    <!-- Add Note Form -->
+    <div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--gray-100)">
+      <select id="note-student-sel" class="form-input" style="width:100%;margin-bottom:8px;font-size:14px">
+        <option value="">— Select student —</option>
+      </select>
+      <textarea id="note-text" class="form-input" rows="2"
+        placeholder="Add a note…"
+        style="width:100%;resize:none;margin-bottom:8px;font-size:14px"></textarea>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+        <select id="note-class-sel" class="form-input" style="flex:1;min-width:120px;font-size:13px">
+          <option value="">— No class —</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px;font-size:13px">
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+          <input type="checkbox" id="note-overview"> Overview
+        </label>
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+          <input type="checkbox" id="note-todo" checked> To-do
+        </label>
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+          <input type="checkbox" id="note-parent"> Tell Parent
+        </label>
+      </div>
+      <button onclick="saveParentNote()" class="btn btn-primary btn-sm" style="width:100%">Add Note</button>
+    </div>
+
+    <div id="parent-notes-list"></div>
+  </div>
+
+  <!-- Contact Log (parent_contacts) -->
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div class="card-title" style="margin:0">📋 Contact Log</div>
+      <button onclick="toggleAddContact()" class="btn btn-sm btn-ghost">+ Log Contact</button>
+    </div>
+
+    <!-- Add Contact Form (hidden by default) -->
+    <div id="add-contact-form" style="display:none;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--gray-100)">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+        <select id="contact-method" class="form-input" style="flex:1;min-width:120px;font-size:13px">
+          <option value="Email">Email</option>
+          <option value="Phone">Phone</option>
+          <option value="In-person">In-person</option>
+          <option value="Text">Text</option>
+          <option value="App">App</option>
+        </select>
+        <select id="contact-initiated" class="form-input" style="flex:1;min-width:120px;font-size:13px">
+          <option value="Luke">Luke</option>
+          <option value="Parent">Parent</option>
+        </select>
+      </div>
+      <textarea id="contact-summary" class="form-input" rows="2"
+        placeholder="Summary of contact…"
+        style="width:100%;resize:none;margin-bottom:8px;font-size:14px"></textarea>
+      <input type="text" id="contact-outcome" class="form-input"
+        placeholder="Outcome (optional)"
+        style="width:100%;margin-bottom:8px;font-size:14px">
+      <input type="text" id="contact-next-action" class="form-input"
+        placeholder="Next action (optional)"
+        style="width:100%;margin-bottom:8px;font-size:14px">
+      <button onclick="saveContact()" class="btn btn-primary btn-sm" style="width:100%">Log Contact</button>
+    </div>
+
+    <div id="contact-log-list"></div>
+  </div>
+
+</main>
+
+<nav class="bottom-nav">
+  <a href="school.html" class="nav-item active">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>
+    Escuela
+  </a>
+  <a href="apps.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+    Apps
+  </a>
+  <a href="index.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    Panel
+  </a>
+  <a href="calendar.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><circle cx="8" cy="16" r="1" fill="currentColor"/><circle cx="12" cy="16" r="1" fill="currentColor"/></svg>
+    Calendario
+  </a>
+  <a href="tasks.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+    Tareas
+  </a>
+</nav>
+
+<script type="module" src="js/parent.js?v=1"></script>
+<script type="module" src="js/topbar.js"></script>
+</body>
+</html>
