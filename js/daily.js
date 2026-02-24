@@ -89,32 +89,40 @@ async function loadAttendance() {
   const dayOfWeek = new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long' });
   const dayShort = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(selectedDate + 'T00:00:00').getDay()];
 
-  const [classRes, sessRes] = await Promise.all([
+  const [classRes, attRes] = await Promise.all([
     supabase.from('classes').select('id, name, time_start').or(`day_of_week.ilike.%${dayShort}%,day_of_week.ilike.%${dayOfWeek}%`).order('time_start', { ascending: true }),
-    supabase.from('daily_sessions').select('class_id, status, gold_distributed').eq('date', selectedDate)
+    supabase.from('attendance').select('class_id, status').eq('date', selectedDate)
   ]);
 
   const classes = classRes.data || [];
-  const sessions = Object.fromEntries((sessRes.data || []).map(s => [s.class_id, s]));
+
+  // Build a count map: class_id → number of attendance records
+  const attCountByClass = {};
+  for (const r of (attRes.data || [])) {
+    attCountByClass[r.class_id] = (attCountByClass[r.class_id] || 0) + 1;
+  }
 
   if (!classes.length) {
     el.innerHTML = '<div style="color:var(--gray-400);font-size:14px">No classes scheduled for this day</div>';
     return;
   }
 
-  el.innerHTML = classes.map(c => `
+  el.innerHTML = classes.map(c => {
+    const count = attCountByClass[c.id] || 0;
+    return `
     <div class="list-item">
       <div class="list-item-left">
         <div class="list-item-name">${c.name}</div>
         <div class="list-item-sub">${c.time_start ? c.time_start.slice(0,5) : ''}</div>
       </div>
       <div class="list-item-right">
-        ${sessions[c.id]
-          ? `<span class="badge badge-green">${sessions[c.id].status}</span>`
+        ${count > 0
+          ? `<span class="badge badge-green">Logged (${count})</span>`
           : '<span class="badge badge-gray">Not logged</span>'}
-        <a href="class.html?id=${c.id}&date=${selectedDate}" class="btn btn-sm btn-ghost">Log →</a>
+        <a href="class.html?id=${c.id}&date=${selectedDate}" class="btn btn-sm btn-ghost">View →</a>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 // ── Followups ─────────────────────────────────────────────────────────────────
