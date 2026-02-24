@@ -662,16 +662,17 @@ async function txAutoSave(original, translated, cfg) {
       .maybeSingle();
 
     if (!existing) {
-      await supabase.from('vocab_words').insert({
+      const { error: insertErr } = await supabase.from('vocab_words').insert({
         english: englishText.toLowerCase().trim(), translation: targetText, language: cfg.tab,
-        srs_stage: 0, next_review: T,
+        srs_stage: 0, next_review: T, added_date: T,
         times_seen: 0, times_correct: 0, times_wrong: 0,
       });
+      if (insertErr) { txSetStatus('Save error: ' + insertErr.message, 'error'); return; }
       // Refresh flashcard queue and vocab cache so word shows up immediately
       vocabLoaded = false;
       fcInit();
     }
-  } catch(e) { /* silent */ }
+  } catch(e) { txSetStatus('Save error: ' + e.message, 'error'); }
 
   // Also POST to Google Sheets webhook if configured
   const webhookUrl = localStorage.getItem('srsWebhookUrl') || DEFAULT_WEBHOOK;
@@ -818,7 +819,7 @@ window.txAddWord = async () => {
   if (!english || !translation) { txSetStatus('Fill in English + Translation', 'error'); return; }
   const { error } = await supabase.from('vocab_words').insert({
     english, translation, language, example_sentence,
-    srs_stage: 0, next_review: T,
+    srs_stage: 0, next_review: T, added_date: T,
     times_seen: 0, times_correct: 0, times_wrong: 0,
   });
   if (error) { txSetStatus('Error: ' + error.message, 'error'); return; }
