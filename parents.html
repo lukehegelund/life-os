@@ -11,22 +11,73 @@
 <header class="page-header">
   <div class="header-row">
     <div>
-      <h1>📞 CRM de Padres</h1>
-      <div class="subtitle" id="crm-summary"></div>
+      <h1 id="page-title">📞 Parents</h1>
+      <div class="subtitle" id="page-subtitle"></div>
     </div>
   </div>
-  <!-- Filter tabs -->
-  <div style="display:flex;gap:6px;margin-top:8px;overflow-x:auto;padding-bottom:2px">
-    <button class="btn btn-sm btn-primary mod-btn" id="filter-all" onclick="setFilter('all')">All</button>
-    <button class="btn btn-sm btn-ghost mod-btn" id="filter-pending" onclick="setFilter('pending')">Pending</button>
-    <button class="btn btn-sm btn-ghost mod-btn" id="filter-communicated" onclick="setFilter('communicated')">Done</button>
+  <!-- Tab bar -->
+  <div style="display:flex;gap:0;margin-top:10px;border-bottom:2px solid var(--gray-100)">
+    <button class="crm-tab crm-tab-active" id="tab-comms" onclick="switchTab('comms')">Communications</button>
+    <button class="crm-tab" id="tab-parents" onclick="switchTab('parents')">Parent List</button>
   </div>
 </header>
 
 <main class="content">
-  <div id="crm-list">
-    <div class="card"><div class="spinner"></div></div>
+
+  <!-- COMMUNICATIONS TAB -->
+  <div id="view-comms">
+    <!-- Filter pills -->
+    <div style="display:flex;gap:6px;margin-bottom:12px;overflow-x:auto;padding-bottom:2px">
+      <button class="btn btn-sm btn-primary mod-btn" id="filter-all" onclick="setFilter('all')">All</button>
+      <button class="btn btn-sm btn-ghost mod-btn" id="filter-pending" onclick="setFilter('pending')">📌 Pending</button>
+      <button class="btn btn-sm btn-ghost mod-btn" id="filter-communicated" onclick="setFilter('communicated')">✓ Done</button>
+    </div>
+
+    <!-- Add Note (for any student) -->
+    <div class="card" id="add-note-card">
+      <div class="card-title" style="margin-bottom:10px">➕ Add Note</div>
+      <select id="crm-note-student" class="form-input" style="width:100%;margin-bottom:8px;font-size:14px">
+        <option value="">— Select student —</option>
+      </select>
+      <textarea id="crm-note-text" class="form-input" rows="2"
+        placeholder="Note…"
+        style="width:100%;resize:none;margin-bottom:8px;font-size:14px"></textarea>
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+        <select id="crm-note-class" class="form-input" style="flex:1;min-width:120px;font-size:13px">
+          <option value="">— No class —</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:10px;font-size:13px">
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+          <input type="checkbox" id="crm-note-overview"> Overview
+        </label>
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+          <input type="checkbox" id="crm-note-todo" checked> To-do
+        </label>
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+          <input type="checkbox" id="crm-note-parent" checked> Tell Parent
+        </label>
+      </div>
+      <button onclick="saveCrmNote()" class="btn btn-primary btn-sm" style="width:100%">Add Note</button>
+    </div>
+
+    <div id="crm-list">
+      <div class="card"><div class="spinner"></div></div>
+    </div>
   </div>
+
+  <!-- PARENT LIST TAB -->
+  <div id="view-parents" style="display:none">
+    <div style="margin-bottom:12px">
+      <input type="text" id="parent-search" class="form-input" placeholder="🔍 Search parents…"
+        oninput="filterParents(this.value)"
+        style="width:100%;font-size:14px">
+    </div>
+    <div id="parent-list">
+      <div class="card"><div class="spinner"></div></div>
+    </div>
+  </div>
+
 </main>
 
 <nav class="bottom-nav">
@@ -52,7 +103,68 @@
   </a>
 </nav>
 
-<script type="module" src="js/parents.js?v=2"></script>
+<style>
+.crm-tab {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: var(--gray-400);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+.crm-tab-active {
+  color: var(--blue);
+  border-bottom-color: var(--blue);
+}
+.parent-card {
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  color: var(--gray-800);
+  cursor: pointer;
+  transition: box-shadow 0.15s;
+}
+.parent-card:active { box-shadow: var(--shadow-md); }
+.parent-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--blue);
+  color: white;
+  font-weight: 700;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.parent-info { flex: 1; min-width: 0; }
+.parent-name { font-weight: 700; font-size: 15px; }
+.parent-meta { font-size: 12px; color: var(--gray-400); margin-top: 2px; }
+.parent-students-chip {
+  font-size: 11px;
+  background: var(--blue-light);
+  color: var(--blue);
+  border-radius: 20px;
+  padding: 2px 8px;
+  font-weight: 600;
+  margin-top: 4px;
+  display: inline-block;
+}
+</style>
+
+<script type="module" src="js/parents.js?v=5"></script>
 <script type="module" src="js/topbar.js"></script>
 </body>
 </html>
