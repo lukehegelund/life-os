@@ -1,14 +1,15 @@
-// Life OS — Tasks & Reminders (Phase 2 — with swipe)
+// Life OS — Tasks & Reminders
 import { supabase } from './supabase.js';
 import { today, fmtDate, toast, showEmpty } from './utils.js';
-// No polling on tasks page
 import { initSwipe } from './swipe-handler.js';
 
 const T = today();
 let activeModule = 'All';
+// User-defined category order (persisted in localStorage)
+let categoryOrder = JSON.parse(localStorage.getItem('tasks-cat-order') || 'null') || ['RT', 'TOV', 'Personal', 'Health'];
 
-const MODULE_ICONS = { RT: '🏫', TOV: '💍', Personal: '👤', Health: '🏃' };
-const MODULE_COLORS = { RT: 'var(--blue)', TOV: 'var(--green)', Personal: 'var(--orange)', Health: 'var(--coral)' };
+const MODULE_ICONS   = { RT: '🏫', TOV: '💍', Personal: '👤', Health: '🏃' };
+const MODULE_COLORS  = { RT: 'var(--blue)', TOV: 'var(--green)', Personal: 'var(--orange)', Health: 'var(--coral)' };
 
 window.setModule = (mod) => {
   activeModule = mod;
@@ -20,9 +21,10 @@ window.setModule = (mod) => {
 };
 
 async function load() {
-  await Promise.all([loadReminders(), loadTasks()]);
+  await Promise.all([loadReminders(), loadTasks(), loadFutureProjects()]);
 }
 
+// ── Reminders ─────────────────────────────────────────────────────────────────
 async function loadReminders() {
   const el = document.getElementById('reminders-section');
   let query = supabase.from('reminders').select('*').eq('status', 'active').order('due_date');
@@ -30,7 +32,7 @@ async function loadReminders() {
   let reminders = res.data || [];
   if (activeModule !== 'All') reminders = reminders.filter(r => r.module === activeModule);
 
-  const overdue = reminders.filter(r => r.due_date && r.due_date <= T);
+  const overdue  = reminders.filter(r => r.due_date && r.due_date <= T);
   const upcoming = reminders.filter(r => !r.due_date || r.due_date > T);
 
   let html = '';
@@ -55,23 +57,69 @@ async function loadReminders() {
 }
 
 function reminderRow(r, isOverdue) {
+  const ntfyLabel = r.ntfy_time
+    ? `<span style="color:var(--blue);font-size:11px">🔔 ${r.ntfy_time}</span>`
+    : '';
   return `
-    <div class="list-item">
+    <div class="list-item" style="position:relative">
       <div class="list-item-left">
         <div class="list-item-name">${r.title}</div>
         <div class="list-item-sub">
           ${r.due_date ? (isOverdue ? `<span style="color:var(--red)">Due ${fmtDate(r.due_date)}</span>` : `Due ${fmtDate(r.due_date)}`) : 'No date'}
           ${r.module ? ' · ' + r.module : ''}
           ${r.recurring ? ' · 🔄' : ''}
+          ${r.ntfy_time ? ' · ' : ''}${ntfyLabel}
         </div>
         ${r.notes ? `<div style="font-size:13px;color:var(--gray-600);margin-top:2px">${r.notes}</div>` : ''}
       </div>
-      <div class="list-item-right">
+      <div class="list-item-right" style="display:flex;gap:4px;align-items:center">
+        <button class="btn btn-sm" style="background:var(--blue-light,#eff6ff);color:var(--blue);border:none;font-size:11px;padding:3px 7px"
+          onclick="convertToTask(${r.id}, 'reminder')" title="Convert to task">→ Task</button>
         <button class="btn btn-sm btn-ghost" onclick="dismissReminder(${r.id})" title="Dismiss">✓</button>
       </div>
     </div>`;
 }
 
+// ── Convert reminder ↔ task ───────────────────────────────────────────────────
+window.convertToTask = async (id, sourceType) => {
+  if (sourceType === 'reminder') {
+    // fetch reminder
+    const { data } = await supabase.from('reminders').select('*').eq('id', id).single();
+    if (!data) return;
+    // insert as task
+    const { error } = await supabase.from('tasks').insert({
+      title: data.title,
+      module: data.module || 'Personal',
+      status: 'open',
+      priority: 'normal',
+      due_date: data.due_date || null,
+      notes: data.notes || null,
+    });
+    if (error) { toast('Error: ' + error.message, 'error'); return; }
+    // dismiss the reminder
+    await supabase.from('reminders').update({ status: 'dismissed' }).eq('id', id);
+    toast('Converted to task ✅', 'success');
+    load();
+  }
+};
+
+window.convertToReminder = async (id) => {
+  const { data } = await supabase.from('tasks').select('*').eq('id', id).single();
+  if (!data) return;
+  const { error } = await supabase.from('reminders').insert({
+    title: data.title,
+    module: data.module || 'Personal',
+    status: 'active',
+    due_date: data.due_date || null,
+    notes: data.notes || null,
+  });
+  if (error) { toast('Error: ' + error.message, 'error'); return; }
+  await supabase.from('tasks').update({ status: 'cancelled' }).eq('id', id);
+  toast('Converted to reminder 🔔', 'success');
+  load();
+};
+
+// ── Tasks ─────────────────────────────────────────────────────────────────────
 async function loadTasks() {
   const res = await supabase.from('tasks')
     .select('*')
@@ -104,23 +152,33 @@ async function loadTasks() {
   }
 
   if (normalTasks.length) {
-    const ORDER = ['RT', 'TOV', 'Personal', 'Health'];
     const groups = {};
     for (const t of normalTasks) {
       const m = t.module || 'Personal';
       if (!groups[m]) groups[m] = [];
       groups[m].push(t);
     }
+    // Sort by user-defined order
     const sortedMods = Object.keys(groups).sort((a, b) => {
-      const ai = ORDER.indexOf(a); const bi = ORDER.indexOf(b);
+      const ai = categoryOrder.indexOf(a); const bi = categoryOrder.indexOf(b);
       return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
     });
+
     for (const mod of sortedMods) {
       const color = MODULE_COLORS[mod] || 'var(--blue)';
-      const icon = MODULE_ICONS[mod] || '';
-      html += `<div class="card" style="border-top:3px solid ${color};margin-bottom:12px">
+      const icon  = MODULE_ICONS[mod] || '';
+      html += `<div class="card task-category-card" data-module="${mod}"
+        draggable="true"
+        ondragstart="window.catDragStart(event)"
+        ondragover="window.catDragOver(event)"
+        ondrop="window.catDrop(event)"
+        ondragend="window.catDragEnd(event)"
+        style="border-top:3px solid ${color};margin-bottom:12px;cursor:grab">
         <div class="task-group-header">
-          <div class="task-group-label">${icon} ${mod}</div>
+          <div class="task-group-label" style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:12px;color:var(--gray-300);cursor:grab" title="Drag to reorder">⠿</span>
+            ${icon} ${mod}
+          </div>
           <span class="badge badge-gray">${groups[mod].length}</span>
         </div>
         ${renderTaskGroup(groups[mod])}
@@ -135,23 +193,18 @@ async function loadTasks() {
   document.getElementById('tasks-section').innerHTML = html;
   document.getElementById('urgent-tasks-section').innerHTML = '';
 
-  // Apply swipe gestures to all task rows
+  // Apply swipe gestures
   document.querySelectorAll('.task-swipe-row').forEach(item => {
     const taskId = item.dataset.id;
     initSwipe(item,
-      // LEFT = cancel/delete
       async () => {
         await supabase.from('tasks').update({ status: 'cancelled' }).eq('id', taskId);
         toast('Task removed', 'info');
         load();
       },
-      // RIGHT = mark done
       async () => {
         const checkEl = item.querySelector('.task-check');
-        if (checkEl) {
-          checkEl.style.background = 'var(--green)';
-          checkEl.style.borderColor = 'var(--green)';
-        }
+        if (checkEl) { checkEl.style.background = 'var(--green)'; checkEl.style.borderColor = 'var(--green)'; }
         item.style.opacity = '0.4';
         await supabase.from('tasks').update({ status: 'done', completed_at: new Date().toISOString() }).eq('id', taskId);
         toast('Task done! ✅', 'success');
@@ -180,12 +233,133 @@ function renderTaskGroup(tasks) {
         </div>
       </div>
       <div style="display:flex;gap:4px;flex-shrink:0">
-        <button class="btn btn-sm" style="background:var(--green-light);color:var(--green);border:none;font-size:11px;padding:3px 8px" onclick="markDoneById(${t.id}, event)" title="Mark done">✓</button>
-        <button class="btn btn-sm" style="background:var(--coral-light);color:var(--red);border:none;font-size:11px;padding:3px 8px" onclick="deleteTask(${t.id}, event)" title="Delete task">✕</button>
+        <button class="btn btn-sm" style="background:#eff6ff;color:var(--blue);border:none;font-size:11px;padding:3px 7px"
+          onclick="convertToReminder(${t.id})" title="Convert to reminder">→ 🔔</button>
+        <button class="btn btn-sm" style="background:var(--green-light);color:var(--green);border:none;font-size:11px;padding:3px 8px"
+          onclick="markDoneById(${t.id}, event)" title="Mark done">✓</button>
+        <button class="btn btn-sm" style="background:var(--coral-light);color:var(--red);border:none;font-size:11px;padding:3px 8px"
+          onclick="deleteTask(${t.id}, event)" title="Delete task">✕</button>
       </div>
     </div>`).join('');
 }
 
+// ── Category drag-to-reorder ──────────────────────────────────────────────────
+let dragSrcModule = null;
+
+window.catDragStart = (e) => {
+  const card = e.currentTarget;
+  dragSrcModule = card.dataset.module;
+  card.style.opacity = '0.5';
+  e.dataTransfer.effectAllowed = 'move';
+};
+
+window.catDragOver = (e) => {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const card = e.currentTarget;
+  card.style.outline = '2px dashed var(--blue)';
+};
+
+window.catDrop = (e) => {
+  e.preventDefault();
+  const targetCard = e.currentTarget;
+  const targetModule = targetCard.dataset.module;
+  if (!dragSrcModule || dragSrcModule === targetModule) return;
+
+  // Swap in categoryOrder array
+  const srcIdx = categoryOrder.indexOf(dragSrcModule);
+  const tgtIdx = categoryOrder.indexOf(targetModule);
+  if (srcIdx !== -1 && tgtIdx !== -1) {
+    [categoryOrder[srcIdx], categoryOrder[tgtIdx]] = [categoryOrder[tgtIdx], categoryOrder[srcIdx]];
+  } else if (srcIdx !== -1) {
+    categoryOrder.splice(srcIdx, 1);
+    categoryOrder.splice(tgtIdx, 0, dragSrcModule);
+  }
+  localStorage.setItem('tasks-cat-order', JSON.stringify(categoryOrder));
+  targetCard.style.outline = '';
+  loadTasks(); // re-render with new order
+};
+
+window.catDragEnd = (e) => {
+  e.currentTarget.style.opacity = '';
+  e.currentTarget.style.outline = '';
+  dragSrcModule = null;
+};
+
+// ── Future Projects ───────────────────────────────────────────────────────────
+async function loadFutureProjects() {
+  const el = document.getElementById('future-projects-section');
+  if (!el) return;
+
+  const { data } = await supabase.from('tasks')
+    .select('*')
+    .eq('status', 'future')
+    .order('created_at', { ascending: false });
+
+  const projects = data || [];
+  if (!projects.length) {
+    el.innerHTML = `<div class="card" style="margin-bottom:12px">
+      <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
+        🌱 Future Projects
+        <button class="btn btn-sm btn-ghost" onclick="showFutureForm()">+ Add</button>
+      </div>
+      <div style="text-align:center;color:var(--gray-400);padding:12px;font-size:13px">No future projects yet</div>
+    </div>`;
+    return;
+  }
+
+  el.innerHTML = `<div class="card" style="margin-bottom:12px">
+    <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
+      🌱 Future Projects <span class="badge badge-gray">${projects.length}</span>
+      <button class="btn btn-sm btn-ghost" onclick="showFutureForm()">+ Add</button>
+    </div>
+    ${projects.map(p => `
+      <div class="list-item">
+        <div class="list-item-left">
+          <div class="list-item-name">${p.title}</div>
+          ${p.notes ? `<div class="list-item-sub">${p.notes}</div>` : ''}
+          ${p.module ? `<div class="list-item-sub">${MODULE_ICONS[p.module] || ''} ${p.module}</div>` : ''}
+        </div>
+        <div class="list-item-right" style="display:flex;gap:4px">
+          <button class="btn btn-sm" style="background:var(--blue);color:white;border:none;font-size:11px;padding:3px 8px"
+            onclick="activateProject(${p.id})" title="Move to active tasks">Activate</button>
+          <button class="btn btn-sm" style="background:var(--coral-light);color:var(--red);border:none;font-size:11px;padding:3px 8px"
+            onclick="deleteTask(${p.id}, event)">✕</button>
+        </div>
+      </div>`).join('')}
+  </div>`;
+}
+
+window.showFutureForm = () => {
+  document.getElementById('future-modal').style.display = 'flex';
+  setTimeout(() => document.getElementById('future-title').focus(), 50);
+};
+window.closeFutureModal = () => {
+  document.getElementById('future-modal').style.display = 'none';
+};
+window.submitFutureProject = async () => {
+  const title = document.getElementById('future-title').value.trim();
+  const module = document.getElementById('future-module').value;
+  const notes = document.getElementById('future-notes').value.trim();
+  if (!title) { toast('Enter a title', 'error'); return; }
+  const { error } = await supabase.from('tasks').insert({
+    title, module, notes: notes || null, status: 'future', priority: 'normal',
+  });
+  if (error) { toast('Error: ' + error.message, 'error'); return; }
+  toast('Future project added 🌱', 'success');
+  window.closeFutureModal();
+  document.getElementById('future-title').value = '';
+  document.getElementById('future-notes').value = '';
+  loadFutureProjects();
+};
+
+window.activateProject = async (id) => {
+  await supabase.from('tasks').update({ status: 'open' }).eq('id', id);
+  toast('Project activated! ✅', 'success');
+  load();
+};
+
+// ── Shared task actions ───────────────────────────────────────────────────────
 window.markDoneById = async (id, e) => {
   e?.stopPropagation();
   const row = document.getElementById(`task-${id}`);
@@ -194,6 +368,7 @@ window.markDoneById = async (id, e) => {
   toast('Task done! ✅', 'success');
   setTimeout(() => load(), 300);
 };
+
 window.deleteTask = async (id, e) => {
   e?.stopPropagation();
   const row = document.getElementById(`task-${id}`);
@@ -210,11 +385,9 @@ window.markDone = async (id, checkEl) => {
   if (svg) svg.style.display = 'block';
   const row = document.getElementById(`task-${id}`);
   if (row) { row.style.opacity = '0.4'; row.style.transition = 'opacity 0.3s'; }
-
   const { error } = await supabase.from('tasks')
     .update({ status: 'done', completed_at: new Date().toISOString() })
     .eq('id', id);
-
   if (error) {
     toast('Error: ' + error.message, 'error');
     checkEl.style.background = ''; checkEl.style.borderColor = '';
@@ -231,14 +404,15 @@ window.dismissReminder = async (id) => {
   load();
 };
 
+// ── Add Task modal (kept for showTaskForm() calls from topbar + future) ───────
 window.showTaskForm = () => { document.getElementById('task-modal').style.display = 'flex'; };
 window.closeTaskModal = () => { document.getElementById('task-modal').style.display = 'none'; };
 window.submitTask = async () => {
-  const title = document.getElementById('task-title').value.trim();
-  const module = document.getElementById('task-module').value;
+  const title    = document.getElementById('task-title').value.trim();
+  const module   = document.getElementById('task-module').value;
   const priority = document.getElementById('task-priority').value;
-  const due = document.getElementById('task-due').value || null;
-  const notes = document.getElementById('task-notes').value.trim();
+  const due      = document.getElementById('task-due').value || null;
+  const notes    = document.getElementById('task-notes').value.trim();
   if (!title) { toast('Enter a title', 'error'); return; }
   const { error } = await supabase.from('tasks').insert({
     title, module, priority, due_date: due, notes: notes || null, status: 'open'
