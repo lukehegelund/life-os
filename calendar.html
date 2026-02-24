@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Calendar — Life OS</title>
+<title>Calendario — Life OS</title>
 <link rel="stylesheet" href="css/main.css?v=2">
 <style>
-/* ── Calendar-specific styles ─────────────────────────────────────── */
+/* ── Calendario-specific styles ─────────────────────────────────────── */
 .cal-toolbar {
   display: flex;
   align-items: center;
@@ -76,7 +76,7 @@
   color: #fff;
 }
 
-/* Month view */
+/* Mes view */
 .cal-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
@@ -120,7 +120,7 @@
   flex-shrink: 0;
 }
 
-/* Week view */
+/* Semana view */
 .week-grid {
   overflow-x: auto;
 }
@@ -250,35 +250,35 @@
   <div class="cal-toolbar">
     <div class="cal-nav">
       <button class="cal-nav-btn" onclick="prev()">‹</button>
-      <button class="cal-today-btn" onclick="goToday()">Today</button>
+      <button class="cal-today-btn" onclick="goToday()">Hoy</button>
       <button class="cal-nav-btn" onclick="next()">›</button>
     </div>
     <div class="cal-month-label" id="period-label">Loading…</div>
     <div class="cal-view-toggle">
-      <button class="cal-view-btn" id="btn-month" onclick="setView('month')">Month</button>
-      <button class="cal-view-btn active" id="btn-week" onclick="setView('week')">Week</button>
+      <button class="cal-view-btn" id="btn-month" onclick="setView('month')">Mes</button>
+      <button class="cal-view-btn active" id="btn-week" onclick="setView('week')">Semana</button>
     </div>
   </div>
   <div class="cal-legend">
-    <span><span class="cal-legend-dot" style="background:var(--blue)"></span>Class</span>
-    <span><span class="cal-legend-dot" style="background:var(--orange)"></span>Task</span>
-    <span><span class="cal-legend-dot" style="background:var(--red)"></span>Reminder</span>
-    <span><span class="cal-legend-dot" style="background:var(--green)"></span>Wedding</span>
+    <span><span class="cal-legend-dot" style="background:var(--blue)"></span>Clase</span>
+    <span><span class="cal-legend-dot" style="background:var(--orange)"></span>Tarea</span>
+    <span><span class="cal-legend-dot" style="background:var(--red)"></span>Recordatorio</span>
+    <span><span class="cal-legend-dot" style="background:var(--green)"></span>Boda</span>
   </div>
 </header>
 
 <main class="content">
 
-  <!-- Calendar grid (month or week) -->
+  <!-- Calendario grid (month or week) -->
   <div class="card" style="padding:8px;overflow:hidden" id="cal-card">
     <div class="cal-grid" id="cal-day-labels">
-      <div class="cal-day-label">Sun</div>
-      <div class="cal-day-label">Mon</div>
-      <div class="cal-day-label">Tue</div>
-      <div class="cal-day-label">Wed</div>
-      <div class="cal-day-label">Thu</div>
-      <div class="cal-day-label">Fri</div>
-      <div class="cal-day-label">Sat</div>
+      <div class="cal-day-label">Dom</div>
+      <div class="cal-day-label">Lun</div>
+      <div class="cal-day-label">Mar</div>
+      <div class="cal-day-label">Mié</div>
+      <div class="cal-day-label">Jue</div>
+      <div class="cal-day-label">Vie</div>
+      <div class="cal-day-label">Sáb</div>
     </div>
     <div id="cal-grid" class="cal-grid"><!-- filled by JS --></div>
   </div>
@@ -294,7 +294,7 @@
 <nav class="bottom-nav">
   <a href="school.html" class="nav-item">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>
-    School
+    Escuela
   </a>
   <a href="apps.html" class="nav-item">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
@@ -302,15 +302,15 @@
   </a>
   <a href="index.html" class="nav-item">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-    Dashboard
+    Panel
   </a>
   <a href="calendar.html" class="nav-item active">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><circle cx="8" cy="16" r="1" fill="currentColor"/><circle cx="12" cy="16" r="1" fill="currentColor"/></svg>
-    Calendar
+    Calendario
   </a>
   <a href="tasks.html" class="nav-item">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-    Tasks
+    Tareas
   </a>
 </nav>
 
