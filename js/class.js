@@ -78,7 +78,13 @@ async function loadRoster(cls) {
       .eq('date', T),
   ]);
 
-  enrollments = enrRes.data || [];
+  // Filter out students who skip today's day of week
+  const todayAbbr = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(T + 'T00:00:00').getDay()];
+  enrollments = (enrRes.data || []).filter(e => {
+    if (!e.skip_days) return true;
+    const skipList = e.skip_days.split(',').map(s => s.trim());
+    return !skipList.includes(todayAbbr);
+  });
   if (!enrollments.length) { showEmpty(el, '👥', 'No students enrolled'); return; }
 
   for (const a of (attRes.data || [])) {
@@ -489,10 +495,16 @@ let goldBulkRendered = false;
 
 async function loadGoldBulk() {
   const res = await supabase.from('class_enrollments')
-    .select('student_id, students(id, name, current_gold)')
+    .select('student_id, skip_days, students(id, name, current_gold)')
     .eq('class_id', classId)
     .is('enrolled_until', null);
-  renderGoldBulk(res.data || []);
+  // Filter out students skipping today
+  const todayAbbrG = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(T + 'T00:00:00').getDay()];
+  const filtered = (res.data || []).filter(e => {
+    if (!e.skip_days) return true;
+    return !e.skip_days.split(',').map(s => s.trim()).includes(todayAbbrG);
+  });
+  renderGoldBulk(filtered);
   goldBulkRendered = true;
 }
 
