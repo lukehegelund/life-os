@@ -27,7 +27,7 @@ async function load() {
 // ── Reminders ─────────────────────────────────────────────────────────────────
 async function loadReminders() {
   const el = document.getElementById('reminders-section');
-  let query = supabase.from('reminders').select('*').eq('status', 'active').order('due_date');
+  let query = supabase.from('reminders').select('*').eq('status', 'active').or('recurring.is.null,recurring.eq.false').order('due_date');
   const res = await query;
   let reminders = res.data || [];
   if (activeModule !== 'All') reminders = reminders.filter(r => r.module === activeModule);
