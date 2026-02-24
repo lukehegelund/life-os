@@ -43,6 +43,15 @@
     <button class="btn btn-sm btn-ghost mod-btn" id="mod-Health" onclick="setModule('Health')">🏃 Health</button>
     <button class="btn btn-sm btn-ghost mod-btn" id="mod-RT Admin" onclick="setModule('RT Admin')">🏛️ RT Admin</button>
   </div>
+  <!-- Schedule label filter tabs -->
+  <div style="display:flex;gap:6px;margin-top:6px;overflow-x:auto;padding-bottom:2px">
+    <button class="btn btn-sm btn-ghost sched-filter-btn" id="sf-All" onclick="setScheduleFilter('All')" style="border-radius:20px">All schedules</button>
+    <button class="btn btn-sm btn-ghost sched-filter-btn" id="sf-Today" onclick="setScheduleFilter('Today')" style="border-radius:20px;border-color:#f59e0b;color:#92400e">📅 Today</button>
+    <button class="btn btn-sm btn-ghost sched-filter-btn" id="sf-Next Up" onclick="setScheduleFilter('Next Up')" style="border-radius:20px;border-color:var(--blue);color:var(--blue)">Next Up</button>
+    <button class="btn btn-sm btn-ghost sched-filter-btn" id="sf-Later" onclick="setScheduleFilter('Later')" style="border-radius:20px;border-color:#7c3aed;color:#7c3aed">Later</button>
+    <button class="btn btn-sm btn-ghost sched-filter-btn" id="sf-Down the Road" onclick="setScheduleFilter('Down the Road')" style="border-radius:20px">⬇ Down the Road</button>
+    <button class="btn btn-sm btn-ghost sched-filter-btn" id="sf-Unlabeled" onclick="setScheduleFilter('Unlabeled')" style="border-radius:20px;color:var(--gray-400)">Unlabeled</button>
+  </div>
 </header>
 
 <main class="content">
@@ -110,7 +119,8 @@
 <!-- Add Recurring Task modal -->
 <div class="modal-overlay" id="recurring-modal">
   <div class="modal-sheet">
-    <div class="modal-title">🔄 Add Recurring Task</div>
+    <div class="modal-title">🔄 Add Repeated Task</div>
+    <div style="font-size:13px;color:var(--gray-400);margin-top:-10px;margin-bottom:14px">This task will automatically come back on the schedule you choose.</div>
     <div class="form-group">
       <label class="form-label">Title</label>
       <input type="text" class="form-input" id="rec-title" placeholder="What needs to happen?">
@@ -128,17 +138,27 @@
     <div class="form-group">
       <label class="form-label">Frequency</label>
       <select class="form-select" id="rec-frequency">
-        <option value="weekly:Mon">Every Monday</option>
-        <option value="weekly:Tue">Every Tuesday</option>
-        <option value="weekly:Wed">Every Wednesday</option>
-        <option value="weekly:Thu">Every Thursday</option>
-        <option value="weekly:Fri">Every Friday</option>
-        <option value="weekly:Sat">Every Saturday</option>
-        <option value="weekly:Sun">Every Sunday</option>
-        <option value="weekly:Sat,Sun">Every Weekend (Sat & Sun)</option>
-        <option value="weekly:Mon,Wed,Fri">Mon / Wed / Fri</option>
-        <option value="biweekly:Mon">Every other Monday</option>
-        <option value="monthly">Monthly</option>
+        <optgroup label="Daily">
+          <option value="daily">Every day</option>
+          <option value="weekdays">Every weekday (Mon–Fri)</option>
+          <option value="weekly:Sat,Sun">Every weekend (Sat & Sun)</option>
+        </optgroup>
+        <optgroup label="Weekly">
+          <option value="weekly:Mon">Every Monday</option>
+          <option value="weekly:Tue">Every Tuesday</option>
+          <option value="weekly:Wed">Every Wednesday</option>
+          <option value="weekly:Thu">Every Thursday</option>
+          <option value="weekly:Fri">Every Friday</option>
+          <option value="weekly:Sat">Every Saturday</option>
+          <option value="weekly:Sun">Every Sunday</option>
+          <option value="weekly:Mon,Wed,Fri">Mon / Wed / Fri</option>
+          <option value="weekly:Tue,Thu">Tue / Thu</option>
+        </optgroup>
+        <optgroup label="Less Frequent">
+          <option value="biweekly:Mon">Every other Monday</option>
+          <option value="biweekly:Wed">Every other Wednesday</option>
+          <option value="monthly">Monthly</option>
+        </optgroup>
       </select>
     </div>
     <div class="form-group">

@@ -5,6 +5,7 @@ import { initSwipe } from './swipe-handler.js';
 
 const T = today();
 let activeModule = 'All';
+let activeScheduleFilter = 'All'; // 'All', 'Today', 'Next Up', 'Later', 'Down the Road', 'Unlabeled'
 // User-defined category order (persisted in localStorage)
 let categoryOrder = JSON.parse(localStorage.getItem('tasks-cat-order') || 'null') || ['RT', 'RT Admin', 'TOV', 'Personal', 'Health'];
 
@@ -63,6 +64,23 @@ window.setModule = (mod) => {
   load();
 };
 
+// ── Schedule filter ────────────────────────────────────────────────────────────
+window.setScheduleFilter = (filter) => {
+  activeScheduleFilter = filter;
+  document.querySelectorAll('.sched-filter-btn').forEach(b => {
+    b.style.background = '';
+    b.style.color = b.dataset.defaultColor || '';
+    b.style.fontWeight = '400';
+  });
+  const activeBtn = document.getElementById(`sf-${filter}`);
+  if (activeBtn) {
+    activeBtn.style.background = 'var(--gray-900)';
+    activeBtn.style.color = 'white';
+    activeBtn.style.fontWeight = '600';
+  }
+  loadTasks();
+};
+
 async function load() {
   await Promise.all([loadTasks(), loadFutureProjects(), loadRecurring()]);
 }
@@ -112,23 +130,37 @@ async function loadTasks() {
     tasks = tasks.filter(t => t.module === activeModule && !isRTAdmin(t));
   }
 
+  // Apply schedule filter
+  if (activeScheduleFilter !== 'All') {
+    if (activeScheduleFilter === 'Unlabeled') {
+      tasks = tasks.filter(t => !getScheduleLabel(t));
+    } else {
+      tasks = tasks.filter(t => getScheduleLabel(t) === activeScheduleFilter);
+    }
+  }
+
   const summaryEl = document.getElementById('tasks-summary');
   const todayTasks = tasks.filter(t => getScheduleLabel(t) === 'Today');
   if (summaryEl) {
-    summaryEl.textContent = `${tasks.length} open${todayTasks.length ? ` · ${todayTasks.length} today` : ''}`;
+    const filterLabel = activeScheduleFilter !== 'All' ? ` · filtered: ${activeScheduleFilter}` : '';
+    summaryEl.textContent = `${tasks.length} open${todayTasks.length && activeScheduleFilter === 'All' ? ` · ${todayTasks.length} today` : ''}${filterLabel}`;
   }
 
-  // Separate Today from the rest
-  const nonTodayTasks = tasks.filter(t => getScheduleLabel(t) !== 'Today');
+  // When a schedule filter is active, show all tasks in a flat Today section (or just grouped)
+  // Separate Today from the rest only when showing All schedules
+  const nonTodayTasks = activeScheduleFilter !== 'All'
+    ? tasks // all shown in modules when filtering
+    : tasks.filter(t => getScheduleLabel(t) !== 'Today');
+  const todayDisplay = activeScheduleFilter !== 'All' ? [] : todayTasks;
 
   let html = '';
 
-  // ── Today section ──
-  if (todayTasks.length) {
+  // ── Today section (only when showing All schedules) ──
+  if (todayDisplay.length) {
     html += `<div class="card" style="border-left:4px solid #f59e0b;padding:0;overflow:hidden;margin-bottom:12px">
       <div style="padding:10px 16px;background:#fffbeb">
-        <div class="urgent-section-header" style="color:#92400e">📅 Today (${todayTasks.length})</div>
-        ${renderTaskGroup(todayTasks, true)}
+        <div class="urgent-section-header" style="color:#92400e">📅 Today (${todayDisplay.length})</div>
+        ${renderTaskGroup(todayDisplay, true)}
       </div>
     </div>`;
   }
@@ -233,7 +265,7 @@ function renderTaskGroup(tasks, inTodaySection) {
           </div>
         </div>
       </div>
-      <div style="display:flex;gap:4px;flex-shrink:0;align-items:center">
+      <div style="display:flex;gap:4px;flex-shrink:0;align-items:center" ontouchstart="event.stopPropagation()" onclick="event.stopPropagation()">
         <button class="btn btn-sm" style="background:#f3f4f6;color:#6b7280;border:none;font-size:13px;padding:4px 6px;line-height:1"
           onclick="openSchedulePicker(${t.id}, ${label ? `'${label}'` : 'null'}, event)" title="Schedule">📅</button>
         <button class="btn btn-sm" style="background:var(--green-light);color:var(--green);border:none;font-size:11px;padding:3px 8px"
@@ -433,7 +465,15 @@ const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 function nextOccurrence(pattern, fromDate) {
   const d = new Date(fromDate + 'T00:00:00');
   const [freq, daysStr] = (pattern || 'weekly:Mon').split(':');
-  if (freq === 'weekly' || freq === 'weekly_weekend') {
+  if (freq === 'daily') {
+    const next = new Date(d); next.setDate(d.getDate() + 1);
+    return next.toISOString().split('T')[0];
+  } else if (freq === 'weekdays') {
+    for (let i = 1; i <= 7; i++) {
+      const next = new Date(d); next.setDate(d.getDate() + i);
+      if (next.getDay() >= 1 && next.getDay() <= 5) return next.toISOString().split('T')[0];
+    }
+  } else if (freq === 'weekly' || freq === 'weekly_weekend') {
     const days = freq === 'weekly_weekend' ? ['Sat','Sun'] : (daysStr || 'Mon').split(',').map(s => s.trim());
     const targetNums = days.map(s => DAY_NAMES.indexOf(s)).filter(n => n >= 0);
     for (let i = 1; i <= 14; i++) {
@@ -457,6 +497,8 @@ function nextOccurrence(pattern, fromDate) {
 function patternLabel(pattern) {
   if (!pattern) return 'Recurring';
   const [freq, daysStr] = pattern.split(':');
+  if (freq === 'daily') return 'Every day';
+  if (freq === 'weekdays') return 'Every weekday';
   if (freq === 'weekly_weekend') return 'Every weekend';
   if (freq === 'weekly') {
     const days = (daysStr || '').split(',').map(s => s.trim()).filter(Boolean);
@@ -475,11 +517,12 @@ async function loadRecurring() {
   const { data } = await supabase.from('reminders').select('*').eq('recurring', true).order('title');
   const items = data || [];
 
-  el.innerHTML = `<div class="card" style="margin-bottom:12px">
+  el.innerHTML = `<div class="card" style="margin-bottom:12px;border-top:3px solid #8b5cf6">
     <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
-      <span>🔄 Recurring Tasks${items.length ? ` <span class="badge badge-gray">${items.length}</span>` : ''}</span>
-      <button class="btn btn-sm btn-ghost" onclick="showRecurringForm()">+ Add</button>
+      <span>🔄 Repeated Tasks${items.length ? ` <span class="badge badge-gray">${items.length}</span>` : ''}</span>
+      <button class="btn btn-sm" style="background:#f5f3ff;color:#7c3aed;border:none;font-size:12px" onclick="showRecurringForm()">+ Add Repeated Task</button>
     </div>
+    <div style="font-size:12px;color:var(--gray-400);margin:-4px 0 10px">Tasks that automatically come back on a schedule</div>
     ${!items.length
       ? '<div style="text-align:center;color:var(--gray-400);padding:12px;font-size:13px">No recurring tasks yet</div>'
       : items.map(r => {

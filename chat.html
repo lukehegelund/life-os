@@ -9,8 +9,8 @@
 .chat-wrap {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 120px);
-  padding-bottom: 70px;
+  height: calc(100vh - 57px);
+  padding-bottom: 80px;
 }
 .chat-messages {
   flex: 1;
@@ -21,18 +21,22 @@
   gap: 10px;
 }
 .chat-bubble {
-  max-width: 80%;
+  max-width: min(80%, calc(100vw - 48px));
   padding: 10px 14px;
   border-radius: 16px;
   font-size: 14px;
   line-height: 1.45;
   white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  box-sizing: border-box;
 }
 .chat-bubble.luke {
   align-self: flex-end;
   background: var(--blue);
   color: #fff;
   border-bottom-right-radius: 4px;
+  margin-left: 40px;
 }
 .chat-bubble.claude {
   align-self: flex-start;
@@ -40,6 +44,7 @@
   color: var(--gray-900);
   border: 1px solid var(--gray-200);
   border-bottom-left-radius: 4px;
+  margin-right: 40px;
 }
 .chat-bubble .chat-meta {
   font-size: 11px;
@@ -54,7 +59,7 @@
 }
 .chat-input-bar {
   position: fixed;
-  bottom: 60px;
+  bottom: var(--nav-height, 60px);
   left: 0; right: 0;
   background: var(--white);
   border-top: 1px solid var(--gray-200);
