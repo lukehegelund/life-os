@@ -21,10 +21,32 @@ export function fmtDateLong(d) {
   return dt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 }
 
-/** Today as YYYY-MM-DD string */
+/** Today as YYYY-MM-DD string (browser local time) */
 export function today() {
   const d = new Date();
   return [d.getFullYear(), String(d.getMonth()+1).padStart(2,'0'), String(d.getDate()).padStart(2,'0')].join('-');
+}
+
+/**
+ * Today as YYYY-MM-DD string, always in PST/PDT (America/Los_Angeles).
+ * Use this for SRS / flashcard date logic so the app behaves consistently
+ * regardless of which browser or device Luke is using.
+ */
+export function todayPST() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+}
+
+/**
+ * Return a YYYY-MM-DD date that is `days` days after today in PST.
+ * Pass 0 to get today in PST.
+ */
+export function pstDatePlusDays(days) {
+  // Get today's midnight in PST as a UTC timestamp, then add days
+  const pstTodayStr = todayPST(); // "YYYY-MM-DD"
+  const [y, m, d] = pstTodayStr.split('-').map(Number);
+  const base = new Date(Date.UTC(y, m - 1, d)); // midnight UTC for that PST date
+  base.setUTCDate(base.getUTCDate() + days);
+  return base.toISOString().split('T')[0];
 }
 
 /** Format gold amount with color class */
