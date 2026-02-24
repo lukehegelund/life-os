@@ -272,17 +272,18 @@ async function loadOverviewNotes(studentId) {
       const lastDate = rows.length ? rows[0].date : null;
 
       if (rows.length === 0) {
-        statsEl.innerHTML = '<div style="color:var(--gray-400);font-size:12px">No pages logged yet</div>';
+        statsEl.innerHTML = '<div style="color:var(--gray-400);font-size:12px">No pages logged yet for this class</div>';
       } else {
         const tile = (label, val) =>
-          `<div style="background:var(--gray-50);border-radius:8px;padding:6px 10px;min-width:80px;text-align:center">
+          `<div style="background:var(--gray-50);border-radius:8px;padding:6px 10px;min-width:80px;text-align:center;flex:1">
             <div style="font-size:18px;font-weight:700;color:var(--orange)">${val}</div>
             <div style="font-size:11px;color:var(--gray-400)">${label}</div>
           </div>`;
         statsEl.innerHTML =
-          tile('7d pages', total7) +
-          tile('30d pages', total30) +
-          tile('last logged', lastDate ? lastDate.slice(5) : '—');
+          `<div style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:0.04em;width:100%;margin-bottom:4px">📄 Pages — This Class</div>` +
+          tile('7 days', total7) +
+          tile('30 days', total30) +
+          tile('last logged', lastDate ? fmtDate(lastDate) : '—');
       }
     }
   }
