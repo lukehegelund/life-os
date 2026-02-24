@@ -6,10 +6,33 @@ import { initSwipe } from './swipe-handler.js';
 const T = today();
 let activeModule = 'All';
 // User-defined category order (persisted in localStorage)
-let categoryOrder = JSON.parse(localStorage.getItem('tasks-cat-order') || 'null') || ['RT', 'TOV', 'Personal', 'Health'];
+let categoryOrder = JSON.parse(localStorage.getItem('tasks-cat-order') || 'null') || ['RT', 'RT Admin', 'TOV', 'Personal', 'Health'];
 
-const MODULE_ICONS   = { RT: '🏫', TOV: '💍', Personal: '👤', Health: '🏃' };
-const MODULE_COLORS  = { RT: 'var(--blue)', TOV: 'var(--green)', Personal: 'var(--orange)', Health: 'var(--coral)' };
+const MODULE_ICONS   = { RT: '🏫', 'RT Admin': '🏛️', TOV: '💍', Personal: '👤', Health: '🏃' };
+const MODULE_COLORS  = { RT: 'var(--blue)', 'RT Admin': '#7c3aed', TOV: 'var(--green)', Personal: 'var(--orange)', Health: 'var(--coral)' };
+
+// RT Admin is a virtual module stored as module='RT' with notes JSON tag {rt_admin:true}
+// These helpers handle the translation between display and storage.
+function isRTAdmin(t) {
+  if (!t.notes) return false;
+  try { return JSON.parse(t.notes).rt_admin === true; } catch { return false; }
+}
+function displayModule(t) {
+  return isRTAdmin(t) ? 'RT Admin' : (t.module || 'Personal');
+}
+function storageModule(displayMod) {
+  return displayMod === 'RT Admin' ? 'RT' : displayMod;
+}
+function storageNotes(displayMod, notesStr) {
+  if (displayMod === 'RT Admin') {
+    try {
+      const existing = notesStr ? JSON.parse(notesStr) : {};
+      if (typeof existing === 'object') return JSON.stringify({ ...existing, rt_admin: true });
+    } catch {}
+    return JSON.stringify({ rt_admin: true, note: notesStr || '' });
+  }
+  return notesStr || null;
+}
 
 window.setModule = (mod) => {
   activeModule = mod;
@@ -30,7 +53,11 @@ async function loadReminders() {
   let query = supabase.from('reminders').select('*').eq('status', 'active').or('recurring.is.null,recurring.eq.false').order('due_date');
   const res = await query;
   let reminders = res.data || [];
-  if (activeModule !== 'All') reminders = reminders.filter(r => r.module === activeModule);
+  if (activeModule === 'RT Admin') {
+    reminders = reminders.filter(r => isRTAdmin(r));
+  } else if (activeModule !== 'All') {
+    reminders = reminders.filter(r => r.module === activeModule && !isRTAdmin(r));
+  }
 
   const overdue  = reminders.filter(r => r.due_date && r.due_date <= T);
   const upcoming = reminders.filter(r => !r.due_date || r.due_date > T);
@@ -127,7 +154,11 @@ async function loadTasks() {
     .order('due_date');
 
   let tasks = res.data || [];
-  if (activeModule !== 'All') tasks = tasks.filter(t => t.module === activeModule);
+  if (activeModule === 'RT Admin') {
+    tasks = tasks.filter(t => isRTAdmin(t));
+  } else if (activeModule !== 'All') {
+    tasks = tasks.filter(t => t.module === activeModule && !isRTAdmin(t));
+  }
 
   const summaryEl = document.getElementById('tasks-summary');
   if (summaryEl) {
@@ -154,7 +185,7 @@ async function loadTasks() {
   if (normalTasks.length) {
     const groups = {};
     for (const t of normalTasks) {
-      const m = t.module || 'Personal';
+      const m = displayModule(t);
       if (!groups[m]) groups[m] = [];
       groups[m].push(t);
     }
@@ -296,7 +327,13 @@ async function loadFutureProjects() {
     .eq('status', 'future')
     .order('created_at', { ascending: false });
 
-  const projects = data || [];
+  let projects = data || [];
+  // Filter future projects by module the same way tasks are filtered
+  if (activeModule === 'RT Admin') {
+    projects = projects.filter(p => isRTAdmin(p));
+  } else if (activeModule !== 'All') {
+    projects = projects.filter(p => p.module === activeModule && !isRTAdmin(p));
+  }
   if (!projects.length) {
     el.innerHTML = `<div class="card" style="margin-bottom:12px">
       <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
@@ -318,7 +355,7 @@ async function loadFutureProjects() {
         <div class="list-item-left">
           <div class="list-item-name">${p.title}</div>
           ${p.notes ? `<div class="list-item-sub">${p.notes}</div>` : ''}
-          ${p.module ? `<div class="list-item-sub">${MODULE_ICONS[p.module] || ''} ${p.module}</div>` : ''}
+          ${p.module ? `<div class="list-item-sub">${MODULE_ICONS[displayModule(p)] || ''} ${displayModule(p)}</div>` : ''}
         </div>
         <div class="list-item-right" style="display:flex;gap:4px">
           <button class="btn btn-sm" style="background:var(--blue);color:white;border:none;font-size:11px;padding:3px 8px"
@@ -338,12 +375,14 @@ window.closeFutureModal = () => {
   document.getElementById('future-modal').style.display = 'none';
 };
 window.submitFutureProject = async () => {
-  const title = document.getElementById('future-title').value.trim();
-  const module = document.getElementById('future-module').value;
-  const notes = document.getElementById('future-notes').value.trim();
+  const title  = document.getElementById('future-title').value.trim();
+  const modSel = document.getElementById('future-module').value;
+  const notesRaw = document.getElementById('future-notes').value.trim();
   if (!title) { toast('Enter a title', 'error'); return; }
+  const module = storageModule(modSel);
+  const notes  = storageNotes(modSel, notesRaw);
   const { error } = await supabase.from('tasks').insert({
-    title, module, notes: notes || null, status: 'future', priority: 'normal',
+    title, module, notes, status: 'future', priority: 'normal',
   });
   if (error) { toast('Error: ' + error.message, 'error'); return; }
   toast('Future project added 🌱', 'success');
@@ -409,13 +448,15 @@ window.showTaskForm = () => { document.getElementById('task-modal').style.displa
 window.closeTaskModal = () => { document.getElementById('task-modal').style.display = 'none'; };
 window.submitTask = async () => {
   const title    = document.getElementById('task-title').value.trim();
-  const module   = document.getElementById('task-module').value;
+  const modSel   = document.getElementById('task-module').value;
   const priority = document.getElementById('task-priority').value;
   const due      = document.getElementById('task-due').value || null;
-  const notes    = document.getElementById('task-notes').value.trim();
+  const notesRaw = document.getElementById('task-notes').value.trim();
   if (!title) { toast('Enter a title', 'error'); return; }
+  const module = storageModule(modSel);
+  const notes  = storageNotes(modSel, notesRaw);
   const { error } = await supabase.from('tasks').insert({
-    title, module, priority, due_date: due, notes: notes || null, status: 'open'
+    title, module, priority, due_date: due, notes, status: 'open'
   });
   if (error) { toast('Error: ' + error.message, 'error'); return; }
   toast('Task added!', 'success');
