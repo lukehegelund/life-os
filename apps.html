@@ -79,6 +79,11 @@
       <div class="app-card-label">Languages</div>
       <div class="app-card-sub" id="lang-sub">Spanish & Russian</div>
     </a>
+    <a href="chat.html" class="app-card" style="border-top:3px solid var(--blue);grid-column:1/-1">
+      <div class="app-card-icon">💬</div>
+      <div class="app-card-label">Chat with Claude</div>
+      <div class="app-card-sub" id="chat-sub">Messages & replies</div>
+    </a>
   </div>
 
   <div class="section-label">School Tools</div>
@@ -126,12 +131,13 @@ import { today } from './js/utils.js';
 const T = today();
 
 async function loadStats() {
-  const [tovRes, langRes, studRes, clsRes, exRes] = await Promise.all([
+  const [tovRes, langRes, studRes, clsRes, exRes, chatRes] = await Promise.all([
     supabase.from('tov_clients').select('id, wedding_date').gte('wedding_date', T).order('wedding_date').limit(1),
     supabase.from('vocab_words').select('id', { count: 'exact' }).lte('next_review', T),
     supabase.from('students').select('id', { count: 'exact' }).eq('status', 'Active'),
     supabase.from('classes').select('id', { count: 'exact' }),
     supabase.from('exercise_log').select('date').order('date', { ascending: false }).limit(1),
+    supabase.from('claude_notifications').select('id', { count: 'exact' }).like('title', '💬 Claude:%').eq('read', false),
   ]);
 
   const tov = document.getElementById('tov-sub');
@@ -158,6 +164,12 @@ async function loadStats() {
     health.textContent = daysSince === null ? 'No exercise logged'
       : daysSince === 0 ? 'Exercise logged today ✓'
       : `Last exercise: ${daysSince}d ago`;
+  }
+
+  const chat = document.getElementById('chat-sub');
+  if (chat) {
+    const unread = chatRes.count ?? 0;
+    chat.textContent = unread > 0 ? `${unread} new reply${unread !== 1 ? 's' : ''} from Claude` : 'Messages & replies';
   }
 }
 
