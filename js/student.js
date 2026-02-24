@@ -34,7 +34,7 @@ async function load() {
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div>
           <div style="font-size:22px;font-weight:700">${s.name}</div>
-          <div style="color:var(--gray-400);font-size:13px">Grade ${s.grade_level || '—'} · ${s.date_of_birth ? fmtDate(s.date_of_birth) : ''}</div>
+          <div style="color:var(--gray-400);font-size:13px">Grade ${s.grade_level || '—'} · ${s.date_of_birth ? '🎂 ' + fmtDateFull(s.date_of_birth) : ''}</div>
         </div>
         <div style="text-align:right">
           <div style="font-size:28px;font-weight:700;color:var(--gold)">${s.current_gold ?? 0} 🪙</div>
