@@ -38,7 +38,7 @@ function injectButtons() {
       <button id="topbar-chat" onclick="window.toggleChat()" title="Chat with Claude"
         style="width:34px;height:34px;border-radius:50%;background:#1e1e2e;color:white;border:none;
                font-size:16px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;
-               box-shadow:var(--shadow)">🤖</button>
+               box-shadow:var(--shadow)">💬</button>
       <span id="topbar-chat-badge" style="display:none;position:absolute;top:-3px;right:-3px;
         background:#2563eb;color:white;border-radius:50%;width:16px;height:16px;font-size:10px;
         font-weight:700;align-items:center;justify-content:center;line-height:1"></span>
