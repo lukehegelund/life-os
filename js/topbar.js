@@ -540,7 +540,7 @@ function injectModals() {
     </div>
 
     <!-- Chat Panel -->
-    <div id="chat-panel" style="display:none;position:fixed;top:58px;right:12px;width:340px;height:480px;
+    <div id="chat-panel" style="display:none;position:fixed;top:58px;right:12px;width:480px;height:620px;
          background:#1e1e2e;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.35);
          border:1px solid #3a3a5c;z-index:999;flex-direction:column;overflow:hidden">
       <!-- Header -->
