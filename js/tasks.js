@@ -21,7 +21,7 @@ window.setModule = (mod) => {
 };
 
 async function load() {
-  await Promise.all([loadReminders(), loadTasks(), loadFutureProjects()]);
+  await Promise.all([loadReminders(), loadTasks(), loadFutureProjects(), loadRecurring()]);
 }
 
 // ── Reminders ─────────────────────────────────────────────────────────────────
@@ -424,6 +424,144 @@ window.submitTask = async () => {
   document.getElementById('task-due').value = '';
   document.getElementById('task-notes').value = '';
   load();
+};
+
+// ── Recurring Tasks ───────────────────────────────────────────────────────────
+const DAY_NAMES  = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+function nextOccurrence(pattern, fromDate) {
+  // pattern formats: "weekly:Sat,Sun", "weekly:Fri", "biweekly:Mon", "monthly"
+  const d = new Date(fromDate + 'T00:00:00');
+  const [freq, daysStr] = (pattern || 'weekly:Mon').split(':');
+  if (freq === 'weekly' || freq === 'weekly_weekend') {
+    const days = freq === 'weekly_weekend' ? ['Sat','Sun'] : (daysStr || 'Mon').split(',').map(s => s.trim());
+    const targetNums = days.map(s => DAY_NAMES.indexOf(s)).filter(n => n >= 0);
+    for (let i = 1; i <= 14; i++) {
+      const next = new Date(d); next.setDate(d.getDate() + i);
+      if (targetNums.includes(next.getDay())) return next.toISOString().split('T')[0];
+    }
+  } else if (freq === 'biweekly') {
+    const day = DAY_NAMES.indexOf((daysStr || 'Mon').trim());
+    for (let i = 8; i <= 21; i++) {
+      const next = new Date(d); next.setDate(d.getDate() + i);
+      if (next.getDay() === day) return next.toISOString().split('T')[0];
+    }
+  } else if (freq === 'monthly') {
+    const next = new Date(d); next.setMonth(next.getMonth() + 1);
+    return next.toISOString().split('T')[0];
+  }
+  const next = new Date(d); next.setDate(d.getDate() + 7);
+  return next.toISOString().split('T')[0];
+}
+
+function patternLabel(pattern) {
+  if (!pattern) return 'Recurring';
+  const [freq, daysStr] = pattern.split(':');
+  if (freq === 'weekly_weekend') return 'Every weekend';
+  if (freq === 'weekly') {
+    const days = (daysStr || '').split(',').map(s => s.trim()).filter(Boolean);
+    if (!days.length) return 'Weekly';
+    if (days.join(',') === 'Sat,Sun' || days.join(',') === 'Sun,Sat') return 'Every weekend';
+    return 'Every ' + days.join(' & ');
+  }
+  if (freq === 'biweekly') return 'Every other ' + (daysStr || 'week');
+  if (freq === 'monthly') return 'Monthly';
+  return pattern;
+}
+
+async function loadRecurring() {
+  const el = document.getElementById('recurring-section');
+  if (!el) return;
+
+  const { data } = await supabase.from('reminders')
+    .select('*')
+    .eq('recurring', true)
+    .order('title');
+
+  const items = (data || []);
+
+  el.innerHTML = `<div class="card" style="margin-bottom:12px">
+    <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
+      <span>🔄 Recurring Tasks${items.length ? ` <span class="badge badge-gray">${items.length}</span>` : ''}</span>
+      <button class="btn btn-sm btn-ghost" onclick="showRecurringForm()">+ Add</button>
+    </div>
+    ${!items.length
+      ? '<div style="text-align:center;color:var(--gray-400);padding:12px;font-size:13px">No recurring tasks yet</div>'
+      : items.map(r => {
+          const isOverdue = r.due_date && r.due_date <= T;
+          const isActive  = r.status === 'active';
+          return `
+          <div class="list-item">
+            <div class="list-item-left">
+              <div class="list-item-name" style="${!isActive ? 'color:var(--gray-400)' : ''}">${r.title}</div>
+              <div class="list-item-sub">
+                ${patternLabel(r.recurrence_pattern)}
+                ${r.module ? ' · ' + r.module : ''}
+                ${r.due_date ? ` · ${isOverdue ? `<span style="color:var(--red)">Due ${fmtDate(r.due_date)}</span>` : `Next ${fmtDate(r.due_date)}`}` : ''}
+              </div>
+              ${r.notes ? `<div style="font-size:13px;color:var(--gray-600);margin-top:2px">${r.notes}</div>` : ''}
+            </div>
+            <div class="list-item-right" style="display:flex;gap:4px;align-items:center">
+              ${isActive
+                ? `<button class="btn btn-sm" style="background:var(--green-light);color:var(--green);border:none;font-size:11px;padding:3px 8px"
+                     onclick="doneRecurring(${r.id}, '${r.recurrence_pattern || 'weekly:Mon'}')" title="Mark done, schedule next">✓ Done</button>`
+                : `<button class="btn btn-sm" style="background:#eff6ff;color:var(--blue);border:none;font-size:11px;padding:3px 8px"
+                     onclick="reactivateRecurring(${r.id})" title="Reactivate">Reactivate</button>`}
+              <button class="btn btn-sm btn-ghost" style="font-size:11px;padding:3px 8px"
+                onclick="toggleRecurring(${r.id}, ${!isActive})" title="${isActive ? 'Pause' : 'Resume'}">
+                ${isActive ? '⏸' : '▶'}
+              </button>
+            </div>
+          </div>`;
+        }).join('')
+    }
+  </div>`;
+}
+
+window.doneRecurring = async (id, pattern) => {
+  const nextDue = nextOccurrence(pattern, T);
+  await supabase.from('reminders').update({ status: 'active', due_date: nextDue }).eq('id', id);
+  toast(`✅ Done! Next: ${fmtDate(nextDue)}`, 'success');
+  loadRecurring();
+};
+
+window.reactivateRecurring = async (id) => {
+  await supabase.from('reminders').update({ status: 'active' }).eq('id', id);
+  toast('Recurring task reactivated 🔄', 'success');
+  loadRecurring();
+};
+
+window.toggleRecurring = async (id, makeActive) => {
+  await supabase.from('reminders').update({ status: makeActive ? 'active' : 'dismissed' }).eq('id', id);
+  loadRecurring();
+};
+
+window.showRecurringForm = () => {
+  document.getElementById('recurring-modal').style.display = 'flex';
+  setTimeout(() => document.getElementById('rec-title').focus(), 50);
+};
+window.closeRecurringModal = () => {
+  document.getElementById('recurring-modal').style.display = 'none';
+};
+window.submitRecurring = async () => {
+  const title     = document.getElementById('rec-title').value.trim();
+  const module    = document.getElementById('rec-module').value;
+  const frequency = document.getElementById('rec-frequency').value;
+  const notes     = document.getElementById('rec-notes').value.trim();
+  if (!title) { toast('Enter a title', 'error'); return; }
+
+  const nextDue = nextOccurrence(frequency, T);
+  const { error } = await supabase.from('reminders').insert({
+    title, module, notes: notes || null,
+    recurring: true, recurrence_pattern: frequency,
+    status: 'active', due_date: nextDue,
+  });
+  if (error) { toast('Error: ' + error.message, 'error'); return; }
+  toast('Recurring task added 🔄', 'success');
+  window.closeRecurringModal();
+  document.getElementById('rec-title').value = '';
+  document.getElementById('rec-notes').value = '';
+  loadRecurring();
 };
 
 load();
