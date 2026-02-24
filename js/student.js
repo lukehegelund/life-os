@@ -84,7 +84,7 @@ window.saveNote = async () => {
   const isTodo = document.getElementById('new-note-todo')?.checked ?? false;
   const tellParent = document.getElementById('new-note-parent')?.checked ?? false;
 
-  const { error } = await supabase.from('student_notes').insert({
+  const { data: noteData, error } = await supabase.from('student_notes').insert({
     student_id: Number(studentId),
     class_id: classId ? Number(classId) : null,
     date: T,
@@ -94,9 +94,20 @@ window.saveNote = async () => {
     is_todo: isTodo,
     tell_parent: tellParent,
     logged: false,
-  });
+  }).select('id').single();
 
   if (error) { toast('Error: ' + error.message, 'error'); return; }
+
+  // If flagged Tell Parent, create a parent_crm entry
+  if (tellParent && noteData?.id) {
+    await supabase.from('parent_crm').insert({
+      note_id: noteData.id,
+      student_id: Number(studentId),
+      title: 'Tell Parent',
+      notes: text,
+      status: 'pending',
+    });
+  }
 
   // Reset form
   document.getElementById('new-note-text').value = '';
@@ -266,6 +277,9 @@ window.saveNoteEdit = async (noteId, e) => {
   const isTodo = document.getElementById(`note-todo-${noteId}`)?.checked ?? false;
   const tellParent = document.getElementById(`note-parent-${noteId}`)?.checked ?? false;
 
+  // Fetch current state to detect tell_parent toggle
+  const { data: existing } = await supabase.from('student_notes').select('tell_parent, note, student_id').eq('id', noteId).single();
+
   const { error } = await supabase.from('student_notes').update({
     class_id: classId ? Number(classId) : null,
     show_in_overview: showInOverview,
@@ -274,6 +288,21 @@ window.saveNoteEdit = async (noteId, e) => {
   }).eq('id', noteId);
 
   if (error) { toast('Error: ' + error.message, 'error'); return; }
+
+  // If tell_parent was just turned ON, create parent_crm entry (if one doesn't already exist)
+  if (tellParent && !existing?.tell_parent) {
+    const { data: alreadyExists } = await supabase.from('parent_crm').select('id').eq('note_id', noteId).maybeSingle();
+    if (!alreadyExists) {
+      await supabase.from('parent_crm').insert({
+        note_id: noteId,
+        student_id: existing?.student_id || Number(studentId),
+        title: 'Tell Parent',
+        notes: existing?.note || '',
+        status: 'pending',
+      });
+    }
+  }
+
   toast('Note updated ✓', 'success');
   loadNotes(studentData);
 };
