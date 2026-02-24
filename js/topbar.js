@@ -5,6 +5,10 @@
 import { supabase } from './supabase.js';
 import { today, toast } from './utils.js';
 
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 // ── Inject buttons into header ────────────────────────────────────────────────
 function injectButtons() {
   // Support both standard .header-row pages and the calendar's .cal-toolbar
@@ -26,6 +30,10 @@ function injectButtons() {
       style="width:34px;height:34px;border-radius:50%;background:var(--orange-light,#fff7ed);color:var(--orange,#f97316);border:1px solid var(--orange,#f97316);
              font-size:16px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;
              box-shadow:var(--shadow);flex-shrink:0">🪙</button>
+    <a href="languages.html" id="topbar-languages" title="Languages"
+      style="width:34px;height:34px;border-radius:50%;background:var(--gray-100);color:var(--gray-700);border:1px solid var(--gray-200);
+             font-size:16px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;
+             box-shadow:var(--shadow);flex-shrink:0;text-decoration:none">🌍</a>
     <div id="topbar-queue-wrap" style="position:relative;flex-shrink:0">
       <button id="topbar-queue-status" onclick="window.toggleQueueStatus()" title="Claude task queue"
         style="width:34px;height:34px;border-radius:50%;background:#1e1e2e;color:white;border:none;
@@ -33,6 +41,19 @@ function injectButtons() {
                box-shadow:var(--shadow)">🤖</button>
       <span id="topbar-queue-badge" style="display:none;position:absolute;top:-3px;right:-3px;
         background:#ef4444;color:white;border-radius:50%;width:16px;height:16px;font-size:10px;
+        font-weight:700;align-items:center;justify-content:center;line-height:1"></span>
+    </div>
+    <button id="topbar-tell-claude" onclick="window.showTellClaude()" title="Tell Claude — bug, feature, or task"
+      style="width:34px;height:34px;border-radius:50%;background:#1e1e2e;color:white;border:none;
+             font-size:15px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;
+             box-shadow:var(--shadow);flex-shrink:0">💬</button>
+    <div id="topbar-chat-wrap" style="position:relative;flex-shrink:0">
+      <button id="topbar-chat" onclick="window.toggleChat()" title="Chat with Claude"
+        style="width:34px;height:34px;border-radius:50%;background:var(--gray-100);color:var(--gray-700);border:1px solid var(--gray-200);
+               font-size:16px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;
+               box-shadow:var(--shadow)">🗨️</button>
+      <span id="topbar-chat-badge" style="display:none;position:absolute;top:-3px;right:-3px;
+        background:#2563eb;color:white;border-radius:50%;width:16px;height:16px;font-size:10px;
         font-weight:700;align-items:center;justify-content:center;line-height:1"></span>
     </div>
     <div id="topbar-bell-wrap" style="position:relative;flex-shrink:0">
@@ -44,10 +65,6 @@ function injectButtons() {
         background:#ef4444;color:white;border-radius:50%;width:16px;height:16px;font-size:10px;
         font-weight:700;align-items:center;justify-content:center;line-height:1"></span>
     </div>
-    <button id="topbar-tell-claude" onclick="window.showTellClaude()" title="Tell Claude — bug, feature, or task"
-      style="width:34px;height:34px;border-radius:50%;background:#1e1e2e;color:white;border:none;
-             font-size:15px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;
-             box-shadow:var(--shadow);flex-shrink:0">💬</button>
   `;
 
   // Insert before any existing right-side button (like "+ Task"), or just append
@@ -61,6 +78,7 @@ function injectButtons() {
   // Load unread badge on init
   loadBellBadge();
   loadQueueBadge();
+  loadChatBadge();
 }
 
 // ── Bell badge ─────────────────────────────────────────────────────────────────
@@ -88,6 +106,24 @@ async function loadQueueBadge() {
   ]);
   const count = (tasksRes.data?.length || 0) + (feedbackRes.data?.length || 0);
   const badge = document.getElementById('topbar-queue-badge');
+  if (!badge) return;
+  if (count > 0) {
+    badge.textContent = count > 9 ? '9+' : count;
+    badge.style.display = 'flex';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+// ── Chat Badge ─────────────────────────────────────────────────────────────────
+async function loadChatBadge() {
+  const { data } = await supabase
+    .from('claude_notifications')
+    .select('id')
+    .like('title', '💬 Claude:%')
+    .eq('read', false);
+  const count = data?.length || 0;
+  const badge = document.getElementById('topbar-chat-badge');
   if (!badge) return;
   if (count > 0) {
     badge.textContent = count > 9 ? '9+' : count;
@@ -180,6 +216,110 @@ window.markAllNotifsRead = async () => {
   await supabase.from('claude_notifications').update({ read: true }).eq('read', false);
   await renderNotifications();
   loadBellBadge();
+};
+
+// ── Chat Panel ─────────────────────────────────────────────────────────────────
+let chatPanelOpen = false;
+
+window.toggleChat = async () => {
+  const panel = document.getElementById('chat-panel');
+  if (!panel) return;
+  chatPanelOpen = !chatPanelOpen;
+  if (chatPanelOpen) {
+    panel.style.display = 'flex';
+    await renderChat();
+  } else {
+    panel.style.display = 'none';
+  }
+};
+
+async function renderChat() {
+  const list = document.getElementById('chat-list');
+  const input = document.getElementById('chat-input');
+  if (!list) return;
+
+  list.innerHTML = '<div style="text-align:center;color:#a0a0b8;padding:20px;font-size:13px">Loading…</div>';
+
+  // Fetch Luke's messages (claude_tasks with page=chat.html) + Claude's replies (💬 Claude: notifications)
+  const [tasksRes, repliesRes] = await Promise.all([
+    supabase.from('claude_tasks').select('id,instruction,created_at,status').eq('page', 'chat.html').order('created_at'),
+    supabase.from('claude_notifications').select('id,title,body,read,created_at').like('title', '💬 Claude:%').order('created_at'),
+  ]);
+
+  const messages = [
+    ...(tasksRes.data || []).map(t => ({
+      id: 'task-' + t.id, from: 'luke',
+      text: t.instruction,
+      time: t.created_at,
+    })),
+    ...(repliesRes.data || []).map(r => ({
+      id: 'notif-' + r.id, from: 'claude',
+      text: (r.body || r.title.replace(/^💬 Claude:\s*/, '')),
+      title: r.title.replace(/^💬 Claude:\s*/, ''),
+      time: r.created_at,
+      read: r.read,
+      rawId: r.id,
+    })),
+  ].sort((a, b) => new Date(a.time) - new Date(b.time));
+
+  if (!messages.length) {
+    list.innerHTML = '<div style="text-align:center;color:#a0a0b8;padding:24px;font-size:13px">No messages yet.<br>Send Claude a message below!</div>';
+  } else {
+    list.innerHTML = messages.map(m => {
+      const ts = new Date(m.time);
+      const timeStr = ts.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' · ' +
+                      ts.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+      if (m.from === 'luke') {
+        return `
+          <div style="display:flex;justify-content:flex-end;margin:8px 14px">
+            <div style="max-width:80%;background:#2563eb;color:white;border-radius:14px 14px 4px 14px;padding:10px 13px;font-size:13px;line-height:1.4">
+              <div>${esc(m.text)}</div>
+              <div style="font-size:10px;opacity:0.7;margin-top:4px;text-align:right">${timeStr}</div>
+            </div>
+          </div>`;
+      } else {
+        return `
+          <div style="display:flex;justify-content:flex-start;margin:8px 14px">
+            <div style="max-width:85%;background:#2a2a3e;border-radius:14px 14px 14px 4px;padding:10px 13px;font-size:13px;line-height:1.4;${!m.read ? 'border-left:3px solid #2563eb' : ''}">
+              ${m.title ? `<div style="font-size:11px;font-weight:700;color:#7c7caa;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.04em">Claude</div>` : ''}
+              <div style="color:#e0e0f0;white-space:pre-wrap">${esc(m.text)}</div>
+              <div style="font-size:10px;color:#6060a0;margin-top:4px">${timeStr}</div>
+            </div>
+          </div>`;
+      }
+    }).join('');
+    // Scroll to bottom
+    setTimeout(() => { list.scrollTop = list.scrollHeight; }, 50);
+  }
+
+  // Mark unread Claude replies as read
+  const unreadIds = (repliesRes.data || []).filter(r => !r.read).map(r => r.id);
+  if (unreadIds.length > 0) {
+    setTimeout(async () => {
+      await supabase.from('claude_notifications').update({ read: true }).in('id', unreadIds);
+      loadChatBadge();
+    }, 1200);
+  }
+
+  if (input) input.focus();
+}
+
+window.submitChat = async () => {
+  const input = document.getElementById('chat-input');
+  const text = input?.value.trim();
+  if (!text) return;
+  input.value = '';
+  input.style.height = 'auto';
+
+  const page = window.location.pathname.split('/').pop() || 'index.html';
+  await supabase.from('claude_tasks').insert({
+    instruction: text,
+    page: 'chat.html',
+    status: 'open',
+    context: 'Sent from topbar chat on ' + page,
+  });
+
+  await renderChat();
 };
 
 // ── Modal HTML ────────────────────────────────────────────────────────────────
@@ -399,6 +539,33 @@ function injectModals() {
       <div id="notif-list" style="overflow-y:auto;flex:1;max-height:420px"></div>
     </div>
 
+    <!-- Chat Panel -->
+    <div id="chat-panel" style="display:none;position:fixed;top:58px;right:12px;width:340px;height:480px;
+         background:#1e1e2e;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.35);
+         border:1px solid #3a3a5c;z-index:999;flex-direction:column;overflow:hidden">
+      <!-- Header -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px 10px;
+                  border-bottom:1px solid #3a3a5c;flex-shrink:0">
+        <div style="font-size:14px;font-weight:700;color:white">🗨️ Chat with Claude</div>
+        <button onclick="window.toggleChat()"
+          style="font-size:18px;color:#6060a0;background:none;border:none;cursor:pointer;line-height:1;padding:0 2px">×</button>
+      </div>
+      <!-- Messages -->
+      <div id="chat-list" style="overflow-y:auto;flex:1;padding:4px 0"></div>
+      <!-- Input -->
+      <div style="padding:10px 12px;border-top:1px solid #3a3a5c;flex-shrink:0;display:flex;gap:8px;align-items:flex-end">
+        <textarea id="chat-input" placeholder="Message Claude…" rows="1"
+          style="flex:1;background:#2a2a3e;border:1.5px solid #3a3a5c;border-radius:10px;padding:8px 11px;
+                 color:white;font-size:13px;font-family:inherit;resize:none;outline:none;line-height:1.4;max-height:100px;overflow-y:auto"
+          onfocus="this.style.borderColor='#7c3aed'" onblur="this.style.borderColor='#3a3a5c'"
+          oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"
+          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();window.submitChat()}"></textarea>
+        <button onclick="window.submitChat()"
+          style="width:34px;height:34px;border-radius:50%;background:#7c3aed;border:none;color:white;
+                 font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">↑</button>
+      </div>
+    </div>
+
     <style>
       @keyframes slideUp {
         from { transform: translateY(100%); opacity: 0; }
@@ -408,20 +575,28 @@ function injectModals() {
   `;
   document.body.appendChild(div);
 
-  // Close notification panel when clicking outside
+  // Close panels when clicking outside
   document.addEventListener('click', (e) => {
+    // Notification panel
     const panel = document.getElementById('notif-panel');
     const bellWrap = document.getElementById('topbar-bell-wrap');
     if (panel && notifPanelOpen && !panel.contains(e.target) && !bellWrap?.contains(e.target)) {
       panel.style.display = 'none';
       notifPanelOpen = false;
     }
-    // Close queue panel when clicking outside
+    // Queue panel
     const qPanel = document.getElementById('queue-status-panel');
     const qWrap = document.getElementById('topbar-queue-wrap');
     if (qPanel && queuePanelOpen && !qPanel.contains(e.target) && !qWrap?.contains(e.target)) {
       qPanel.style.display = 'none';
       queuePanelOpen = false;
+    }
+    // Chat panel
+    const cPanel = document.getElementById('chat-panel');
+    const cWrap = document.getElementById('topbar-chat-wrap');
+    if (cPanel && chatPanelOpen && !cPanel.contains(e.target) && !cWrap?.contains(e.target)) {
+      cPanel.style.display = 'none';
+      chatPanelOpen = false;
     }
   });
 }
