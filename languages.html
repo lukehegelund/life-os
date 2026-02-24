@@ -665,11 +665,12 @@ async function txAutoSave(original, translated, cfg) {
 
     if (!existing) {
       await supabase.from('vocab_words').insert({
-        english: englishText, translation: targetText, language: cfg.tab,
+        english: englishText.toLowerCase().trim(), translation: targetText, language: cfg.tab,
         srs_stage: 0, next_review: T,
         times_seen: 0, times_correct: 0, times_wrong: 0,
       });
-      // Refresh flashcard queue so word shows up immediately
+      // Refresh flashcard queue and vocab cache so word shows up immediately
+      vocabLoaded = false;
       fcInit();
     }
   } catch(e) { /* silent */ }
@@ -829,7 +830,8 @@ window.txAddWord = async () => {
   document.getElementById('txAddTranslation').value = '';
   document.getElementById('txAddExample').value = '';
   loadStats();
-  // Refresh flashcard queue so word shows up immediately
+  // Refresh flashcard queue and vocab cache so word shows up immediately
+  vocabLoaded = false;
   fcInit();
 };
 
