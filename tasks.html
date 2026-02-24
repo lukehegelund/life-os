@@ -41,10 +41,57 @@
   <!-- All other open tasks grouped by module -->
   <div id="tasks-section"></div>
 
+  <!-- Recurring Tasks -->
+  <div id="recurring-section"></div>
+
   <!-- Future Projects -->
   <div id="future-projects-section"></div>
 
 </main>
+
+<!-- Add Recurring Task modal -->
+<div class="modal-overlay" id="recurring-modal">
+  <div class="modal-sheet">
+    <div class="modal-title">🔄 Add Recurring Task</div>
+    <div class="form-group">
+      <label class="form-label">Title</label>
+      <input type="text" class="form-input" id="rec-title" placeholder="What needs to happen?">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Module</label>
+      <select class="form-select" id="rec-module">
+        <option value="Personal">Personal</option>
+        <option value="RT">RT (River Tech)</option>
+        <option value="TOV">TOV (Take One Visuals)</option>
+        <option value="Health">Health</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Frequency</label>
+      <select class="form-select" id="rec-frequency">
+        <option value="weekly:Mon">Every Monday</option>
+        <option value="weekly:Tue">Every Tuesday</option>
+        <option value="weekly:Wed">Every Wednesday</option>
+        <option value="weekly:Thu">Every Thursday</option>
+        <option value="weekly:Fri">Every Friday</option>
+        <option value="weekly:Sat">Every Saturday</option>
+        <option value="weekly:Sun">Every Sunday</option>
+        <option value="weekly:Sat,Sun">Every Weekend (Sat & Sun)</option>
+        <option value="weekly:Mon,Wed,Fri">Mon / Wed / Fri</option>
+        <option value="biweekly:Mon">Every other Monday</option>
+        <option value="monthly">Monthly</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Notes (optional)</label>
+      <input type="text" class="form-input" id="rec-notes" placeholder="Brief description or context">
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" style="flex:1" onclick="submitRecurring()">Add Recurring Task</button>
+      <button class="btn btn-ghost" onclick="closeRecurringModal()">Cancel</button>
+    </div>
+  </div>
+</div>
 
 <!-- Future Project modal -->
 <div class="modal-overlay" id="future-modal">
