@@ -48,6 +48,24 @@
     <div id="notes-summary"></div>
   </div>
 
+  <!-- Log & Close Day -->
+  <div class="card" id="log-day-card">
+    <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
+      📊 End of Day
+      <span id="log-day-status" style="font-size:12px;color:var(--gray-400)"></span>
+    </div>
+    <div id="log-day-content">
+      <p style="font-size:14px;color:var(--gray-600);margin:0 0 12px">Snapshot today's pages, attendance, and participation, then reset today's counters.</p>
+      <button class="btn btn-primary btn-full" onclick="logAndCloseDay()" id="log-day-btn">📊 Log & Close Day</button>
+    </div>
+  </div>
+
+  <!-- Past Daily Recap Logs -->
+  <div class="card">
+    <div class="card-title">📅 Past Recap Logs</div>
+    <div id="past-logs"></div>
+  </div>
+
 </main>
 
 <nav class="bottom-nav">
