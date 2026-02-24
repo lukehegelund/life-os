@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Languages — Life OS</title>
-<link rel="stylesheet" href="css/main.css?v=2">
+<link rel="stylesheet" href="css/main.css?v=3">
 <style>
 /* ── Languages page overrides ─────────────────────────────────────────────── */
 
@@ -519,9 +519,10 @@
 
 <script type="module">
 import { supabase } from './js/supabase.js';
-import { today } from './js/utils.js';
+import { todayPST, pstDatePlusDays } from './js/utils.js';
 
-const T = today();
+// T is always today in PST — consistent across all browsers/devices
+const T = todayPST();
 
 // ══════════════════════════════════════════════════════════ TABS ══════════
 window.switchLangTab = (tab) => {
@@ -535,19 +536,16 @@ window.switchLangTab = (tab) => {
 
 // ══════════════════════════════════════════════════════════ STATS ════════
 async function loadStats() {
-  const [totalRes, dueRes] = await Promise.all([
-    supabase.from('vocab_words').select('language, srs_stage'),
-    supabase.from('vocab_words').select('language').lte('next_review', T),
-  ]);
-  const words = totalRes.data || [];
+  // "due" = stage-0 (always reviewable) OR next_review <= today PST
+  const today = todayPST();
+  const { data: words } = await supabase.from('vocab_words').select('language, srs_stage, next_review');
+  const all = words || [];
   const langs = ['Spanish','Danish','Russian'];
-  const dueByLang = {};
-  for (const w of (dueRes.data || [])) dueByLang[w.language] = (dueByLang[w.language]||0) + 1;
   const parts = langs.map(l => {
-    const cnt = words.filter(w => w.language === l).length;
-    if (!cnt) return null;
-    const due = dueByLang[l] || 0;
-    return `${l}: ${cnt} (${due} due)`;
+    const langWords = all.filter(w => w.language === l);
+    if (!langWords.length) return null;
+    const due = langWords.filter(w => w.srs_stage === 0 || w.next_review <= today).length;
+    return `${l}: ${langWords.length} (${due} due)`;
   }).filter(Boolean);
   const sumEl = document.getElementById('lang-summary');
   if (sumEl) sumEl.textContent = parts.join(' · ') || 'No words yet';
@@ -855,10 +853,25 @@ async function fcInit() {
   const areaEl = document.getElementById('fcCardArea');
   areaEl.innerHTML = '<div class="lang-loading"><div class="lang-spinner"></div></div>';
   try {
-    let query = supabase.from('vocab_words').select('*').lte('next_review', T);
-    if (fcLang !== 'all') query = query.eq('language', fcLang);
-    const res = await query.order('srs_stage').limit(50);
-    fcAllWords = res.data || [];
+    // Fetch words due today (PST) OR any new words (stage 0) — stage-0 words
+    // always show up regardless of date, so a timezone mixup never hides them.
+    const today = todayPST();
+    let dueQuery  = supabase.from('vocab_words').select('*').lte('next_review', today).gt('srs_stage', 0);
+    let newQuery  = supabase.from('vocab_words').select('*').eq('srs_stage', 0);
+    if (fcLang !== 'all') {
+      dueQuery = dueQuery.eq('language', fcLang);
+      newQuery = newQuery.eq('language', fcLang);
+    }
+    const [dueRes, newRes] = await Promise.all([
+      dueQuery.order('srs_stage').limit(50),
+      newQuery.limit(50),
+    ]);
+    // Merge, deduplicate by id, sort new (stage 0) first then by stage
+    const seen = new Set();
+    fcAllWords = [];
+    for (const w of [...(newRes.data || []), ...(dueRes.data || [])]) {
+      if (!seen.has(w.id)) { seen.add(w.id); fcAllWords.push(w); }
+    }
     fcBuildQueue();
   } catch(e) {
     areaEl.innerHTML = `<div class="fc-state"><div class="fc-state-emoji">⚠️</div><div class="fc-state-title">Couldn't load</div><div class="fc-state-sub">${e.message}</div><button class="btn btn-primary" onclick="fcInit()">Retry</button></div>`;
@@ -995,8 +1008,8 @@ window.fcAnswer = async (correct) => {
 
   // Update Supabase
   try {
-    const days    = FC_SRS_INTERVALS[newStage] || 1;
-    const nextRev = new Date(Date.now() + days * 86400000).toISOString().split('T')[0];
+    const days    = FC_SRS_INTERVALS[newStage] ?? 1;
+    const nextRev = pstDatePlusDays(days);   // always anchored to PST today
     const now     = new Date().toISOString();
     // Store the review id so we can delete it on undo
     const [, reviewRes] = await Promise.all([
@@ -1028,8 +1041,8 @@ window.fcUndo = async () => {
 
   // Restore Supabase to pre-answer state
   try {
-    const prevDays   = FC_SRS_INTERVALS[oldStage] || 1;
-    const prevReview = new Date(Date.now() + prevDays * 86400000).toISOString().split('T')[0];
+    const prevDays   = FC_SRS_INTERVALS[oldStage] ?? 1;
+    const prevReview = pstDatePlusDays(prevDays);  // PST-anchored
     await supabase.from('vocab_words').update({
       srs_stage: oldStage,
       next_review: prevReview,
@@ -1178,6 +1191,6 @@ function esc(s) {
 fcInit();
 
 </script>
-<script type="module" src="js/topbar.js"></script>
+<script type="module" src="js/topbar.js?v=2"></script>
 </body>
 </html>
