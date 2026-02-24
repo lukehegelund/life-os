@@ -196,8 +196,9 @@ async function loadTasks() {
     });
 
     for (const mod of sortedMods) {
-      const color = MODULE_COLORS[mod] || 'var(--blue)';
-      const icon  = MODULE_ICONS[mod] || '';
+      const color   = MODULE_COLORS[mod] || 'var(--blue)';
+      const icon    = MODULE_ICONS[mod] || '';
+      const safeId  = mod.replace(/\s+/g, '-');
       html += `<div class="card task-category-card" data-module="${mod}"
         draggable="true"
         ondragstart="window.catDragStart(event)"
@@ -210,9 +211,25 @@ async function loadTasks() {
             <span style="font-size:12px;color:var(--gray-300);cursor:grab" title="Drag to reorder">⠿</span>
             ${icon} ${mod}
           </div>
-          <span class="badge badge-gray">${groups[mod].length}</span>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span class="badge badge-gray">${groups[mod].length}</span>
+            <button class="btn btn-sm btn-ghost" style="font-size:11px;padding:2px 8px;line-height:1.4"
+              onclick="event.stopPropagation();showInlineAdd('${mod}')" title="Add task to ${mod}">+ Add</button>
+          </div>
         </div>
         ${renderTaskGroup(groups[mod])}
+        <div id="inline-add-${safeId}" style="display:none;padding:8px 0 4px 0;border-top:1px solid var(--gray-100);margin-top:4px">
+          <div style="display:flex;gap:6px;align-items:center">
+            <input type="text" id="inline-title-${safeId}"
+              placeholder="New task…"
+              style="flex:1;border:1px solid var(--gray-200);border-radius:8px;padding:6px 10px;font-size:13px;outline:none"
+              onkeydown="if(event.key==='Enter'){submitInlineTask('${mod}')}else if(event.key==='Escape'){hideInlineAdd('${mod}')}">
+            <button class="btn btn-sm" style="background:${color};color:white;border:none;padding:6px 12px;flex-shrink:0"
+              onclick="submitInlineTask('${mod}')">Add</button>
+            <button class="btn btn-sm btn-ghost" style="padding:6px 8px;flex-shrink:0"
+              onclick="hideInlineAdd('${mod}')">✕</button>
+          </div>
+        </div>
       </div>`;
     }
   }
@@ -245,6 +262,18 @@ async function loadTasks() {
   });
 }
 
+function notesDisplay(t) {
+  // Don't show raw JSON for rt_admin tagged tasks; show the 'note' sub-key if present
+  if (!t.notes) return '';
+  try {
+    const parsed = JSON.parse(t.notes);
+    if (typeof parsed === 'object') {
+      return parsed.note || '';
+    }
+  } catch {}
+  return t.notes;
+}
+
 function renderTaskGroup(tasks) {
   return tasks.map(t => `
     <div class="task-row task-swipe-row" id="task-${t.id}" data-id="${t.id}" style="touch-action:pan-y;overflow:hidden;position:relative;display:flex;align-items:center;gap:8px">
@@ -258,8 +287,8 @@ function renderTaskGroup(tasks) {
           <div class="task-title">${t.title}</div>
           <div class="task-meta">
             ${t.due_date ? `Due ${fmtDate(t.due_date)}` : ''}
-            ${t.due_date && t.notes ? ' · ' : ''}
-            ${t.notes ? t.notes : ''}
+            ${t.due_date && notesDisplay(t) ? ' · ' : ''}
+            ${notesDisplay(t)}
           </div>
         </div>
       </div>
@@ -273,6 +302,39 @@ function renderTaskGroup(tasks) {
       </div>
     </div>`).join('');
 }
+
+// ── Inline task creation ──────────────────────────────────────────────────────
+window.showInlineAdd = (mod) => {
+  const safeId = mod.replace(/\s+/g, '-');
+  const el = document.getElementById(`inline-add-${safeId}`);
+  if (!el) return;
+  el.style.display = 'block';
+  setTimeout(() => document.getElementById(`inline-title-${safeId}`)?.focus(), 50);
+};
+
+window.hideInlineAdd = (mod) => {
+  const safeId = mod.replace(/\s+/g, '-');
+  const el = document.getElementById(`inline-add-${safeId}`);
+  if (el) el.style.display = 'none';
+  const input = document.getElementById(`inline-title-${safeId}`);
+  if (input) input.value = '';
+};
+
+window.submitInlineTask = async (mod) => {
+  const safeId = mod.replace(/\s+/g, '-');
+  const input = document.getElementById(`inline-title-${safeId}`);
+  const title = input?.value.trim();
+  if (!title) { input?.focus(); return; }
+  const module = storageModule(mod);
+  const notes  = storageNotes(mod, '');
+  const { error } = await supabase.from('tasks').insert({
+    title, module, notes: notes || null, priority: 'normal', status: 'open'
+  });
+  if (error) { toast('Error: ' + error.message, 'error'); return; }
+  toast('Task added! ✅', 'success');
+  window.hideInlineAdd(mod);
+  loadTasks();
+};
 
 // ── Category drag-to-reorder ──────────────────────────────────────────────────
 let dragSrcModule = null;
