@@ -34,24 +34,11 @@ function injectButtons() {
       style="width:34px;height:34px;border-radius:50%;background:var(--gray-100);color:var(--gray-700);border:1px solid var(--gray-200);
              font-size:16px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;
              box-shadow:var(--shadow);flex-shrink:0;text-decoration:none">🌍</a>
-    <div id="topbar-queue-wrap" style="position:relative;flex-shrink:0">
-      <button id="topbar-queue-status" onclick="window.toggleQueueStatus()" title="Claude task queue"
-        style="width:34px;height:34px;border-radius:50%;background:#1e1e2e;color:white;border:none;
-               font-size:15px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;
-               box-shadow:var(--shadow)">🤖</button>
-      <span id="topbar-queue-badge" style="display:none;position:absolute;top:-3px;right:-3px;
-        background:#ef4444;color:white;border-radius:50%;width:16px;height:16px;font-size:10px;
-        font-weight:700;align-items:center;justify-content:center;line-height:1"></span>
-    </div>
-    <button id="topbar-tell-claude" onclick="window.showTellClaude()" title="Tell Claude — bug, feature, or task"
-      style="width:34px;height:34px;border-radius:50%;background:#1e1e2e;color:white;border:none;
-             font-size:15px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;
-             box-shadow:var(--shadow);flex-shrink:0">💬</button>
     <div id="topbar-chat-wrap" style="position:relative;flex-shrink:0">
       <button id="topbar-chat" onclick="window.toggleChat()" title="Chat with Claude"
-        style="width:34px;height:34px;border-radius:50%;background:var(--gray-100);color:var(--gray-700);border:1px solid var(--gray-200);
+        style="width:34px;height:34px;border-radius:50%;background:#1e1e2e;color:white;border:none;
                font-size:16px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;
-               box-shadow:var(--shadow)">🗨️</button>
+               box-shadow:var(--shadow)">🤖</button>
       <span id="topbar-chat-badge" style="display:none;position:absolute;top:-3px;right:-3px;
         background:#2563eb;color:white;border-radius:50%;width:16px;height:16px;font-size:10px;
         font-weight:700;align-items:center;justify-content:center;line-height:1"></span>
@@ -77,7 +64,6 @@ function injectButtons() {
 
   // Load unread badge on init
   loadBellBadge();
-  loadQueueBadge();
   loadChatBadge();
 }
 
@@ -98,31 +84,14 @@ async function loadBellBadge() {
   }
 }
 
-// ── Queue Badge ────────────────────────────────────────────────────────────────
-async function loadQueueBadge() {
-  const [tasksRes, feedbackRes] = await Promise.all([
+// ── Chat Badge (combines unread Claude replies + open queue items) ──────────────
+async function loadChatBadge() {
+  const [repliesRes, tasksRes, feedbackRes] = await Promise.all([
+    supabase.from('claude_notifications').select('id').like('title', '💬 Claude:%').eq('read', false),
     supabase.from('claude_tasks').select('id').eq('status', 'open'),
     supabase.from('lifeos_feedback').select('id').eq('status', 'open'),
   ]);
-  const count = (tasksRes.data?.length || 0) + (feedbackRes.data?.length || 0);
-  const badge = document.getElementById('topbar-queue-badge');
-  if (!badge) return;
-  if (count > 0) {
-    badge.textContent = count > 9 ? '9+' : count;
-    badge.style.display = 'flex';
-  } else {
-    badge.style.display = 'none';
-  }
-}
-
-// ── Chat Badge ─────────────────────────────────────────────────────────────────
-async function loadChatBadge() {
-  const { data } = await supabase
-    .from('claude_notifications')
-    .select('id')
-    .like('title', '💬 Claude:%')
-    .eq('read', false);
-  const count = data?.length || 0;
+  const count = (repliesRes.data?.length || 0) + (tasksRes.data?.length || 0) + (feedbackRes.data?.length || 0);
   const badge = document.getElementById('topbar-chat-badge');
   if (!badge) return;
   if (count > 0) {
@@ -132,6 +101,9 @@ async function loadChatBadge() {
     badge.style.display = 'none';
   }
 }
+
+// Keep alias for any existing callers
+async function loadQueueBadge() { await loadChatBadge(); }
 
 // ── Notification Panel ─────────────────────────────────────────────────────────
 let notifPanelOpen = false;
@@ -218,8 +190,65 @@ window.markAllNotifsRead = async () => {
   loadBellBadge();
 };
 
-// ── Chat Panel ─────────────────────────────────────────────────────────────────
+// ── Unified Claude Panel (Chat / Report / Queue) ───────────────────────────────
 let chatPanelOpen = false;
+let claudeActiveTab = 'chat';
+
+window.claudeSetTab = async (tab) => {
+  claudeActiveTab = tab;
+  ['chat','report','queue'].forEach(t => {
+    const btn = document.getElementById(`claude-tab-${t}`);
+    const pane = document.getElementById(`claude-pane-${t}`);
+    const active = t === tab;
+    if (btn) {
+      btn.style.background = active ? '#2a2a3e' : 'transparent';
+      btn.style.color = active ? 'white' : '#6060a0';
+      btn.style.borderBottom = active ? '2px solid #7c3aed' : '2px solid transparent';
+    }
+    if (pane) pane.style.display = active ? 'flex' : 'none';
+  });
+  if (tab === 'chat') await renderChat();
+  if (tab === 'queue') await renderQueuePane();
+  if (tab === 'report') {
+    const [tasksRes, feedbackRes] = await Promise.all([
+      supabase.from('claude_tasks').select('id').eq('status', 'open'),
+      supabase.from('lifeos_feedback').select('id').eq('status', 'open'),
+    ]);
+    const total = (tasksRes.data?.length || 0) + (feedbackRes.data?.length || 0);
+    const countEl = document.getElementById('tc-pending-count');
+    if (countEl) countEl.textContent = total > 0 ? `📋 ${total} item${total !== 1 ? 's' : ''} in queue` : '';
+    document.getElementById('tc-instruction')?.focus();
+  }
+};
+
+async function renderQueuePane() {
+  const list = document.getElementById('queue-status-list');
+  if (!list) return;
+  list.innerHTML = '<div style="color:#a0a0b8;font-size:12px;padding:16px 0">Loading…</div>';
+  const [tasksRes, feedbackRes] = await Promise.all([
+    supabase.from('claude_tasks').select('*').eq('status', 'open').order('created_at'),
+    supabase.from('lifeos_feedback').select('*').eq('status', 'open').order('created_at'),
+  ]);
+  const all = [
+    ...(tasksRes.data || []).map(t => ({ icon: '🤖', label: t.instruction, sub: t.page, date: t.created_at })),
+    ...(feedbackRes.data || []).map(f => ({ icon: f.type === 'bug' ? '🐛' : '✨', label: f.title, sub: f.page, date: f.created_at })),
+  ];
+  if (!all.length) {
+    list.innerHTML = '<div style="color:#6060a0;font-size:13px;padding:24px 0;text-align:center">Queue is empty 🎉</div>';
+    return;
+  }
+  list.innerHTML = all.map(i => {
+    const d = new Date(i.date);
+    const ts = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return `<div style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid #2a2a3e;align-items:flex-start">
+      <span style="font-size:15px;flex-shrink:0;margin-top:1px">${i.icon}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;color:white;line-height:1.35;word-break:break-word">${i.label}</div>
+        <div style="font-size:10px;color:#6060a0;margin-top:3px">${i.sub || ''} · ${ts}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
 
 window.toggleChat = async () => {
   const panel = document.getElementById('chat-panel');
@@ -227,7 +256,7 @@ window.toggleChat = async () => {
   chatPanelOpen = !chatPanelOpen;
   if (chatPanelOpen) {
     panel.style.display = 'flex';
-    await renderChat();
+    await window.claudeSetTab(claudeActiveTab);
   } else {
     panel.style.display = 'none';
   }
@@ -240,10 +269,13 @@ async function renderChat() {
 
   list.innerHTML = '<div style="text-align:center;color:#a0a0b8;padding:20px;font-size:13px">Loading…</div>';
 
+  // Only fetch messages from the last 3 days
+  const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+
   // Fetch Luke's messages (claude_tasks with page=chat.html) + Claude's replies (💬 Claude: notifications)
   const [tasksRes, repliesRes] = await Promise.all([
-    supabase.from('claude_tasks').select('id,instruction,created_at,status').eq('page', 'chat.html').order('created_at'),
-    supabase.from('claude_notifications').select('id,title,body,read,created_at').like('title', '💬 Claude:%').order('created_at'),
+    supabase.from('claude_tasks').select('id,instruction,created_at,status').eq('page', 'chat.html').gte('created_at', threeDaysAgo).order('created_at'),
+    supabase.from('claude_notifications').select('id,title,body,read,created_at').like('title', '💬 Claude:%').gte('created_at', threeDaysAgo).order('created_at'),
   ]);
 
   const messages = [
@@ -391,85 +423,6 @@ function injectModals() {
       </div>
     </div>
 
-    <!-- Tell Claude / Feedback Unified Modal -->
-    <div id="tc-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1000;align-items:flex-end;justify-content:center"
-         onclick="if(event.target===this)window.hideTellClaude()">
-      <div style="background:#1e1e2e;border-radius:16px 16px 0 0;padding:20px 20px 32px;width:100%;max-width:540px;animation:slideUp 0.2s ease">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-          <div style="font-size:17px;font-weight:700;color:white">💬 Tell Claude</div>
-          <button onclick="window.toggleTcQueue()" id="tc-queue-toggle"
-            style="font-size:11px;padding:4px 10px;border:1px solid #3a3a5c;border-radius:20px;
-                   background:transparent;color:#a0a0b8;cursor:pointer">View Queue</button>
-        </div>
-
-        <!-- Queue panel (hidden by default) -->
-        <div id="tc-queue-panel" style="display:none;background:#2a2a3e;border-radius:8px;padding:10px 12px;margin-bottom:14px;max-height:200px;overflow-y:auto"></div>
-
-        <!-- 3-tab switcher -->
-        <div style="display:flex;gap:0;margin-bottom:14px;background:#2a2a3e;border-radius:8px;padding:3px">
-          <button id="tc-tab-bug" onclick="window.tcSetTab('bug')"
-            style="flex:1;padding:7px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;
-                   background:#1e1e2e;color:white;box-shadow:0 1px 4px rgba(0,0,0,0.4)">
-            🐛 Bug
-          </button>
-          <button id="tc-tab-feature" onclick="window.tcSetTab('feature')"
-            style="flex:1;padding:7px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;
-                   background:transparent;color:#6060a0;box-shadow:none">
-            ✨ Feature
-          </button>
-          <button id="tc-tab-task" onclick="window.tcSetTab('task')"
-            style="flex:1;padding:7px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;
-                   background:transparent;color:#6060a0;box-shadow:none">
-            🤖 Task
-          </button>
-        </div>
-
-        <!-- Subtitle that changes per tab -->
-        <div id="tc-subtitle" style="font-size:12px;color:#a0a0b8;margin-bottom:12px">Report something that's broken.</div>
-
-        <!-- Text field -->
-        <textarea id="tc-instruction" placeholder="Describe the bug…" rows="3"
-          style="width:100%;border:1.5px solid #3a3a5c;border-radius:8px;padding:10px 12px;
-                 font-size:14px;margin-bottom:14px;outline:none;resize:vertical;font-family:inherit;
-                 background:#2a2a3e;color:white;box-sizing:border-box"
-          onfocus="this.style.borderColor='#7c3aed'" onblur="this.style.borderColor='#3a3a5c'"
-          onkeydown="if(event.key==='Enter'&&(event.metaKey||event.ctrlKey))window.submitTellClaude()"></textarea>
-
-        <!-- Pending count -->
-        <div id="tc-pending-count" style="font-size:12px;color:#a0a0b8;margin-bottom:14px;text-align:center"></div>
-
-        <!-- Actions -->
-        <div style="display:flex;gap:8px">
-          <button onclick="window.hideTellClaude()"
-            style="flex:1;padding:11px;border:1.5px solid #3a3a5c;border-radius:8px;
-                   background:transparent;font-size:14px;font-weight:600;color:#a0a0b8;cursor:pointer">
-            Cancel
-          </button>
-          <button id="tc-submit-btn" onclick="window.submitTellClaude()"
-            style="flex:2;padding:11px;border:none;border-radius:8px;background:#7c3aed;
-                   color:white;font-size:14px;font-weight:700;cursor:pointer">
-            Submit
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Queue Status Panel -->
-    <div id="queue-status-panel" style="display:none;position:fixed;top:58px;right:12px;width:320px;max-height:440px;
-         background:#1e1e2e;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.35);
-         border:1px solid #3a3a5c;z-index:999;overflow:hidden;flex-direction:column">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px 10px;
-                  border-bottom:1px solid #3a3a5c;flex-shrink:0">
-        <div style="font-size:14px;font-weight:700;color:white">🤖 Claude Queue</div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <div id="queue-status-label" style="font-size:11px;color:#a0a0b8"></div>
-          <button onclick="window.hideQueueStatus();window.showTellClaude('task')"
-            style="font-size:11px;padding:4px 10px;border:1px solid #3a3a5c;border-radius:20px;
-                   background:transparent;color:#a0a0b8;cursor:pointer;white-space:nowrap">+ Add task</button>
-        </div>
-      </div>
-      <div id="queue-status-list" style="overflow-y:auto;flex:1;max-height:380px;padding:4px 0"></div>
-    </div>
 
     <!-- Global Quick Gold Modal -->
     <div id="gg-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1000;align-items:flex-end;justify-content:center"
@@ -539,30 +492,72 @@ function injectModals() {
       <div id="notif-list" style="overflow-y:auto;flex:1;max-height:420px"></div>
     </div>
 
-    <!-- Chat Panel -->
+    <!-- Unified Claude Panel (Chat / Report / Queue) -->
     <div id="chat-panel" style="display:none;position:fixed;top:58px;right:12px;width:480px;height:620px;
          background:#1e1e2e;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.35);
          border:1px solid #3a3a5c;z-index:999;flex-direction:column;overflow:hidden">
       <!-- Header -->
       <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px 10px;
                   border-bottom:1px solid #3a3a5c;flex-shrink:0">
-        <div style="font-size:14px;font-weight:700;color:white">🗨️ Chat with Claude</div>
+        <div style="font-size:14px;font-weight:700;color:white">🤖 Claude</div>
         <button onclick="window.toggleChat()"
           style="font-size:18px;color:#6060a0;background:none;border:none;cursor:pointer;line-height:1;padding:0 2px">×</button>
       </div>
-      <!-- Messages -->
-      <div id="chat-list" style="overflow-y:auto;flex:1;padding:4px 0"></div>
-      <!-- Input -->
-      <div style="padding:10px 12px;border-top:1px solid #3a3a5c;flex-shrink:0;display:flex;gap:8px;align-items:flex-end">
-        <textarea id="chat-input" placeholder="Message Claude…" rows="1"
-          style="flex:1;background:#2a2a3e;border:1.5px solid #3a3a5c;border-radius:10px;padding:8px 11px;
-                 color:white;font-size:13px;font-family:inherit;resize:none;outline:none;line-height:1.4;max-height:100px;overflow-y:auto"
+      <!-- Tabs -->
+      <div style="display:flex;gap:0;padding:8px 10px 0;flex-shrink:0">
+        <button id="claude-tab-chat" onclick="window.claudeSetTab('chat')"
+          style="flex:1;padding:7px 4px;border:none;border-radius:8px 8px 0 0;font-size:12px;font-weight:600;cursor:pointer;
+                 background:#2a2a3e;color:white;border-bottom:2px solid #7c3aed">💬 Chat</button>
+        <button id="claude-tab-report" onclick="window.claudeSetTab('report')"
+          style="flex:1;padding:7px 4px;border:none;border-radius:8px 8px 0 0;font-size:12px;font-weight:600;cursor:pointer;
+                 background:transparent;color:#6060a0;border-bottom:2px solid transparent">🐛 Report</button>
+        <button id="claude-tab-queue" onclick="window.claudeSetTab('queue')"
+          style="flex:1;padding:7px 4px;border:none;border-radius:8px 8px 0 0;font-size:12px;font-weight:600;cursor:pointer;
+                 background:transparent;color:#6060a0;border-bottom:2px solid transparent">📋 Queue</button>
+      </div>
+      <!-- Tab: Chat -->
+      <div id="claude-pane-chat" style="display:flex;flex-direction:column;flex:1;overflow:hidden">
+        <div id="chat-list" style="overflow-y:auto;flex:1;padding:4px 0"></div>
+        <div style="padding:10px 12px;border-top:1px solid #3a3a5c;flex-shrink:0;display:flex;gap:8px;align-items:flex-end">
+          <textarea id="chat-input" placeholder="Message Claude…" rows="1"
+            style="flex:1;background:#2a2a3e;border:1.5px solid #3a3a5c;border-radius:10px;padding:8px 11px;
+                   color:white;font-size:13px;font-family:inherit;resize:none;outline:none;line-height:1.4;max-height:100px;overflow-y:auto"
+            onfocus="this.style.borderColor='#7c3aed'" onblur="this.style.borderColor='#3a3a5c'"
+            oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();window.submitChat()}"></textarea>
+          <button onclick="window.submitChat()"
+            style="width:34px;height:34px;border-radius:50%;background:#7c3aed;border:none;color:white;
+                   font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">↑</button>
+        </div>
+      </div>
+      <!-- Tab: Report (Bug / Feature) -->
+      <div id="claude-pane-report" style="display:none;flex-direction:column;flex:1;overflow-y:auto;padding:14px">
+        <div style="display:flex;gap:0;margin-bottom:12px;background:#2a2a3e;border-radius:8px;padding:3px">
+          <button id="tc-tab-bug" onclick="window.tcSetTab('bug')"
+            style="flex:1;padding:7px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;
+                   background:#1e1e2e;color:white;box-shadow:0 1px 4px rgba(0,0,0,0.4)">🐛 Bug</button>
+          <button id="tc-tab-feature" onclick="window.tcSetTab('feature')"
+            style="flex:1;padding:7px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;
+                   background:transparent;color:#6060a0;box-shadow:none">✨ Feature</button>
+          <button id="tc-tab-task" onclick="window.tcSetTab('task')"
+            style="flex:1;padding:7px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;
+                   background:transparent;color:#6060a0;box-shadow:none">🤖 Task</button>
+        </div>
+        <div id="tc-subtitle" style="font-size:12px;color:#a0a0b8;margin-bottom:10px">Report something that's broken.</div>
+        <textarea id="tc-instruction" placeholder="Describe the bug…" rows="4"
+          style="width:100%;border:1.5px solid #3a3a5c;border-radius:8px;padding:10px 12px;
+                 font-size:14px;margin-bottom:12px;outline:none;resize:vertical;font-family:inherit;
+                 background:#2a2a3e;color:white;box-sizing:border-box"
           onfocus="this.style.borderColor='#7c3aed'" onblur="this.style.borderColor='#3a3a5c'"
-          oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"
-          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();window.submitChat()}"></textarea>
-        <button onclick="window.submitChat()"
-          style="width:34px;height:34px;border-radius:50%;background:#7c3aed;border:none;color:white;
-                 font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">↑</button>
+          onkeydown="if(event.key==='Enter'&&(event.metaKey||event.ctrlKey))window.submitTellClaude()"></textarea>
+        <div id="tc-pending-count" style="font-size:12px;color:#a0a0b8;margin-bottom:12px;text-align:center"></div>
+        <button id="tc-submit-btn" onclick="window.submitTellClaude()"
+          style="width:100%;padding:11px;border:none;border-radius:8px;background:#7c3aed;
+                 color:white;font-size:14px;font-weight:700;cursor:pointer">🐛 Submit Bug</button>
+      </div>
+      <!-- Tab: Queue -->
+      <div id="claude-pane-queue" style="display:none;flex-direction:column;flex:1;overflow-y:auto;padding:14px">
+        <div id="queue-status-list" style="flex:1"></div>
       </div>
     </div>
 
@@ -583,13 +578,6 @@ function injectModals() {
     if (panel && notifPanelOpen && !panel.contains(e.target) && !bellWrap?.contains(e.target)) {
       panel.style.display = 'none';
       notifPanelOpen = false;
-    }
-    // Queue panel
-    const qPanel = document.getElementById('queue-status-panel');
-    const qWrap = document.getElementById('topbar-queue-wrap');
-    if (qPanel && queuePanelOpen && !qPanel.contains(e.target) && !qWrap?.contains(e.target)) {
-      qPanel.style.display = 'none';
-      queuePanelOpen = false;
     }
     // Chat panel
     const cPanel = document.getElementById('chat-panel');
@@ -674,32 +662,19 @@ const TC_TABS = {
   task:    { subtitle: 'Add a task to my queue — I\'ll tackle it next LifeOS session.', placeholder: 'e.g. Add a dark mode toggle to settings…', btn: '🤖 Add to Queue' },
 };
 
+// showTellClaude / hideTellClaude now route to the unified chat panel
 window.showTellClaude = async (defaultTab) => {
-  const el = document.getElementById('tc-overlay');
-  el.style.display = 'flex';
+  const panel = document.getElementById('chat-panel');
+  if (!panel) return;
+  chatPanelOpen = true;
+  panel.style.display = 'flex';
   document.getElementById('tc-instruction').value = '';
-  document.getElementById('tc-queue-panel').style.display = 'none';
-  document.getElementById('tc-queue-toggle').textContent = 'View Queue';
-  tcQueueOpen = false;
   window.tcSetTab(defaultTab || 'bug');
-  setTimeout(() => document.getElementById('tc-instruction').focus(), 50);
-
-  // Show pending count
-  const [tasksRes, feedbackRes] = await Promise.all([
-    supabase.from('claude_tasks').select('id').eq('status', 'open'),
-    supabase.from('lifeos_feedback').select('id').eq('status', 'open'),
-  ]);
-  const total = (tasksRes.data?.length || 0) + (feedbackRes.data?.length || 0);
-  const countEl = document.getElementById('tc-pending-count');
-  if (countEl) {
-    countEl.textContent = total > 0
-      ? `📋 ${total} item${total !== 1 ? 's' : ''} in queue`
-      : '';
-  }
+  await window.claudeSetTab('report');
 };
 
 window.hideTellClaude = () => {
-  document.getElementById('tc-overlay').style.display = 'none';
+  window.toggleChat();
 };
 
 window.tcSetTab = (tab) => {
@@ -749,99 +724,17 @@ window.submitTellClaude = async () => {
   }
 
   if (error) { toast('Error: ' + error.message, 'error'); return; }
-  window.hideTellClaude();
-  loadQueueBadge();
+  document.getElementById('tc-instruction').value = '';
+  await window.claudeSetTab('chat');
+  loadChatBadge();
 };
 
-// ── Queue toggle (inside unified Tell Claude modal) ───────────────────────────
+// ── Legacy stubs (buttons removed, kept for safety) ───────────────────────────
 let tcQueueOpen = false;
-window.toggleTcQueue = async () => {
-  const panel = document.getElementById('tc-queue-panel');
-  const btn   = document.getElementById('tc-queue-toggle');
-  tcQueueOpen = !tcQueueOpen;
-  if (!tcQueueOpen) { panel.style.display = 'none'; btn.textContent = 'View Queue'; return; }
-  panel.style.display = 'block';
-  btn.textContent = 'Hide Queue';
-  panel.innerHTML = '<div style="color:#a0a0b8;font-size:12px">Loading…</div>';
-  const { data: tasks } = await supabase.from('claude_tasks').select('*').eq('status','open').order('created_at');
-  const { data: feedback } = await supabase.from('lifeos_feedback').select('*').eq('status','open').order('created_at');
-  const all = [
-    ...(tasks||[]).map(t => ({ icon:'🤖', label: t.instruction, sub: t.page, date: t.created_at })),
-    ...(feedback||[]).map(f => ({ icon: f.type==='bug'?'🐛':'✨', label: f.title, sub: f.page, date: f.created_at })),
-  ];
-  if (!all.length) { panel.innerHTML = '<div style="color:#a0a0b8;font-size:12px">Queue is empty 🎉</div>'; return; }
-  panel.innerHTML = all.map(i => `
-    <div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid #3a3a5c;align-items:flex-start">
-      <span style="font-size:14px;flex-shrink:0">${i.icon}</span>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:12px;color:white;line-height:1.3;word-break:break-word">${i.label}</div>
-        <div style="font-size:10px;color:#6060a0;margin-top:2px">${i.sub || ''}</div>
-      </div>
-    </div>`).join('');
-};
-
-// ── Queue Status Panel ────────────────────────────────────────────────────────
+window.toggleTcQueue = () => {};
 let queuePanelOpen = false;
-
-window.hideQueueStatus = () => {
-  const panel = document.getElementById('queue-status-panel');
-  if (panel) panel.style.display = 'none';
-  queuePanelOpen = false;
-};
-
-window.toggleQueueStatus = async () => {
-  const panel = document.getElementById('queue-status-panel');
-  if (!panel) return;
-  queuePanelOpen = !queuePanelOpen;
-  if (!queuePanelOpen) { panel.style.display = 'none'; return; }
-  panel.style.display = 'flex';
-
-  const list = document.getElementById('queue-status-list');
-  const label = document.getElementById('queue-status-label');
-  list.innerHTML = '<div style="color:#a0a0b8;font-size:12px;padding:16px 14px">Loading…</div>';
-
-  const [tasksRes, feedbackRes] = await Promise.all([
-    supabase.from('claude_tasks').select('*').eq('status', 'open').order('created_at'),
-    supabase.from('lifeos_feedback').select('*').eq('status', 'open').order('created_at'),
-  ]);
-
-  const tasks = tasksRes.data || [];
-  const feedback = feedbackRes.data || [];
-  const total = tasks.length + feedback.length;
-
-  if (label) {
-    if (total === 0) {
-      label.textContent = '✅ All done';
-      label.style.color = '#22c55e';
-    } else {
-      label.textContent = `${total} pending`;
-      label.style.color = '#ef4444';
-    }
-  }
-
-  if (total === 0) {
-    list.innerHTML = '<div style="color:#6060a0;font-size:13px;padding:20px 14px;text-align:center">Queue is empty 🎉<br><span style="font-size:11px">No pending tasks or feedback</span></div>';
-    return;
-  }
-
-  const all = [
-    ...tasks.map(t => ({ icon: '🤖', label: t.instruction, sub: t.page, date: t.created_at })),
-    ...feedback.map(f => ({ icon: f.type === 'bug' ? '🐛' : '✨', label: f.title, sub: f.page, date: f.created_at })),
-  ];
-
-  list.innerHTML = all.map(i => {
-    const d = new Date(i.date);
-    const ts = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    return `
-      <div style="display:flex;gap:10px;padding:10px 14px;border-bottom:1px solid #2a2a3e;align-items:flex-start">
-        <span style="font-size:15px;flex-shrink:0;margin-top:1px">${i.icon}</span>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:12px;color:white;line-height:1.35;word-break:break-word">${i.label}</div>
-          <div style="font-size:10px;color:#6060a0;margin-top:3px">${i.sub || ''} · ${ts}</div>
-        </div>
-      </div>`;
-  }).join('');
-};
+window.hideQueueStatus = () => {};
+window.toggleQueueStatus = () => window.toggleChat();
 
 // ── Global Quick Gold ─────────────────────────────────────────────────────────
 let ggChecked = new Set();
