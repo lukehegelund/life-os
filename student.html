@@ -24,26 +24,26 @@
 
   <!-- Classes -->
   <div class="card">
-    <div class="card-title">📚 Enrolled Classes</div>
+    <div class="card-title">📚 Clases Inscritas</div>
     <div id="classes-list"></div>
   </div>
 
   <!-- Pages Analytics -->
   <div class="card">
-    <div class="card-title">📄 Pages History & Warnings</div>
+    <div class="card-title">📄 Historial de Páginas</div>
     <div id="pages-analytics"></div>
   </div>
 
   <!-- Notes (grouped by class, with swipe) -->
   <div class="card">
-    <div class="card-title">📝 Notes
-      <span style="font-size:11px;color:var(--gray-400);font-weight:400;margin-left:8px">← delete · → log</span>
+    <div class="card-title">📝 Notas
+      <span style="font-size:11px;color:var(--gray-400);font-weight:400;margin-left:8px">← borrar · → anotar</span>
     </div>
 
-    <!-- Add Note Form -->
+    <!-- Agregar Nota Form -->
     <div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--gray-100)">
       <textarea id="new-note-text" class="form-input" rows="2"
-        placeholder="Add a note…"
+        placeholder="Añadir nota…"
         style="width:100%;resize:none;margin-bottom:8px;font-size:14px"></textarea>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
         <select id="new-note-class" class="form-input" style="flex:1;min-width:120px;font-size:13px">
@@ -61,7 +61,7 @@
           <input type="checkbox" id="new-note-parent"> Tell Parent
         </label>
       </div>
-      <button onclick="saveNote()" class="btn btn-primary btn-sm" style="width:100%">Add Note</button>
+      <button onclick="saveNote()" class="btn btn-primary btn-sm" style="width:100%">Agregar Nota</button>
     </div>
 
     <div id="notes-list"></div>
@@ -69,25 +69,25 @@
 
   <!-- Gold -->
   <div class="card">
-    <div class="card-title">🪙 Gold History</div>
+    <div class="card-title">🪙 Historial de Oro</div>
     <div id="gold-list"></div>
   </div>
 
   <!-- Attendance -->
   <div class="card">
-    <div class="card-title">✋ Attendance</div>
+    <div class="card-title">✋ Asistencia</div>
     <div id="attendance-summary"></div>
   </div>
 
   <!-- Grades -->
   <div class="card">
-    <div class="card-title">📊 Grades</div>
+    <div class="card-title">📊 Calificaciones</div>
     <div id="grades-list"></div>
   </div>
 
   <!-- End of Day Reminder -->
   <div class="card" id="eod-reminder-card">
-    <div class="card-title">🔔 End of Day Reminder</div>
+    <div class="card-title">🔔 Recordatorio Fin del Día</div>
     <div id="eod-reminder-content"></div>
   </div>
 
@@ -96,7 +96,7 @@
 <nav class="bottom-nav">
   <a href="school.html" class="nav-item active">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>
-    School
+    Escuela
   </a>
   <a href="apps.html" class="nav-item">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
@@ -104,15 +104,15 @@
   </a>
   <a href="index.html" class="nav-item">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-    Dashboard
+    Panel
   </a>
   <a href="calendar.html" class="nav-item">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><circle cx="8" cy="16" r="1" fill="currentColor"/><circle cx="12" cy="16" r="1" fill="currentColor"/></svg>
-    Calendar
+    Calendario
   </a>
   <a href="tasks.html" class="nav-item">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-    Tasks
+    Tareas
   </a>
 </nav>
 
