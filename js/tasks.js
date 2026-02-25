@@ -63,7 +63,27 @@ window.setModule = (mod) => {
   activeModule = mod;
   document.querySelectorAll('.mod-btn').forEach(b => { b.classList.remove('btn-primary'); b.classList.add('btn-ghost'); });
   document.getElementById(`mod-${mod}`)?.classList.replace('btn-ghost', 'btn-primary');
-  load();
+
+  // Show/hide schedule filter row — not relevant for Repeated
+  const schedRow = document.querySelector('.sched-filter-row');
+  if (schedRow) schedRow.style.display = mod === 'Repeated' ? 'none' : '';
+
+  // Show/hide sections based on mode
+  const tasksEl   = document.getElementById('tasks-section');
+  const recurEl   = document.getElementById('recurring-section');
+  const futureEl  = document.getElementById('future-projects-section');
+  if (mod === 'Repeated') {
+    if (tasksEl)  tasksEl.style.display  = 'none';
+    if (recurEl)  recurEl.style.display  = '';
+    if (futureEl) futureEl.style.display = 'none';
+    loadRecurring();
+  } else {
+    if (tasksEl)  tasksEl.style.display  = '';
+    if (recurEl)  recurEl.style.display  = 'none';
+    if (futureEl) futureEl.style.display = '';
+    loadTasks();
+    loadFutureProjects();
+  }
 };
 
 // ── Schedule filter ────────────────────────────────────────────────────────────
@@ -82,14 +102,14 @@ window.setScheduleFilter = (filter) => {
     activeBtn.style.fontWeight = '600';
     activeBtn.style.borderColor = 'var(--blue)';
   }
-  // Hide recurring section when a schedule filter is active (not relevant)
-  const recurEl = document.getElementById('recurring-section');
-  if (recurEl) recurEl.style.display = filter === 'All' ? '' : 'none';
   loadTasks();
 };
 
 async function load() {
-  await Promise.all([loadTasks(), loadFutureProjects(), loadRecurring()]);
+  // On initial load, hide recurring section (shown only via Repeated module tab)
+  const recurEl = document.getElementById('recurring-section');
+  if (recurEl) recurEl.style.display = 'none';
+  await Promise.all([loadTasks(), loadFutureProjects()]);
 }
 
 // ── Schedule Label Picker ──────────────────────────────────────────────────────
