@@ -12,6 +12,10 @@ async function load() {
     loadGlance(),
     loadHealthStatus(),
     loadUrgentItems(),
+    loadUpcomingEvents(),
+    loadTOVStats(),
+    loadLanguageStats(),
+    loadStudentActivity(),
   ]);
 }
 
@@ -305,5 +309,266 @@ window.cancelTask = async (id, e) => {
   toast('Task removed', 'info');
   loadUrgentItems(); loadCurrentBanner();
 };
+
+// ── Upcoming calendar events (next 7 days) ─────────────────────────────────
+async function loadUpcomingEvents() {
+  const el = document.getElementById('upcoming-events');
+  if (!el) return;
+
+  const endDate = new Date(T);
+  endDate.setDate(endDate.getDate() + 7);
+  const endStr = endDate.toISOString().slice(0, 10);
+
+  const [calRes, classRes, weddingRes] = await Promise.all([
+    supabase.from('calendar_events')
+      .select('id, title, start_time, end_time, color')
+      .gte('start_time', T)
+      .lte('start_time', endStr + 'T23:59:59')
+      .order('start_time')
+      .limit(10),
+    supabase.from('classes').select('id, name, day_of_week, time_start, subject'),
+    supabase.from('tov_clients')
+      .select('id, name, wedding_date')
+      .gte('wedding_date', T)
+      .lte('wedding_date', endStr)
+      .limit(3),
+  ]);
+
+  const items = [];
+
+  // Calendar events
+  for (const ev of (calRes.data || [])) {
+    const ds = ev.start_time?.slice(0, 10);
+    const timeStr = ev.start_time?.slice(11, 16);
+    items.push({ ds, timeStr, title: ev.title, color: ev.color || '#0F9D58', link: 'calendar.html' });
+  }
+
+  // Weddings this week
+  for (const w of (weddingRes.data || [])) {
+    items.push({ ds: w.wedding_date, timeStr: null, title: `💍 ${w.name}`, color: '#16a34a', link: `tov-client.html?id=${w.id}` });
+  }
+
+  // Expand classes for next 7 days
+  const classes = classRes.data || [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(T + 'T00:00:00');
+    d.setDate(d.getDate() + i);
+    const dow = d.getDay();
+    const ds = d.toISOString().slice(0, 10);
+    for (const cls of classes) {
+      const dayOfWeek = (cls.day_of_week || '').trim();
+      const matches =
+        (dayOfWeek === 'Mon-Thu' && dow >= 1 && dow <= 4) ||
+        (dayOfWeek === 'Tue-Thu' && dow >= 2 && dow <= 4) ||
+        (dayOfWeek === 'Friday' && dow === 5) ||
+        (dayOfWeek === 'Monday' && dow === 1);
+      if (matches) {
+        items.push({ ds, timeStr: cls.time_start?.slice(0, 5) || null, title: cls.name, color: '#2563EB', link: `class.html?id=${cls.id}` });
+      }
+    }
+  }
+
+  // Sort by date + time
+  items.sort((a, b) => {
+    const ka = a.ds + (a.timeStr || '00:00');
+    const kb = b.ds + (b.timeStr || '00:00');
+    return ka.localeCompare(kb);
+  });
+
+  if (!items.length) {
+    el.innerHTML = '<div style="color:var(--gray-400);font-size:13px">Sin eventos próximos</div>';
+    return;
+  }
+
+  const shown = items.slice(0, 8);
+  let html = '';
+  let lastDate = null;
+  for (const item of shown) {
+    const dayLabel = new Date(item.ds + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    if (item.ds !== lastDate) {
+      if (lastDate !== null) html += '<div style="height:4px"></div>';
+      html += `<div style="font-size:10px;font-weight:700;color:var(--gray-400);text-transform:uppercase;margin-bottom:2px">${dayLabel}</div>`;
+      lastDate = item.ds;
+    }
+    html += `<a href="${item.link}" style="display:flex;align-items:center;gap:8px;padding:5px 0;text-decoration:none;border-bottom:1px solid var(--gray-100)">
+      <div style="width:3px;height:28px;border-radius:2px;background:${item.color};flex-shrink:0"></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--gray-800);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.title}</div>
+        ${item.timeStr ? `<div style="font-size:11px;color:var(--gray-400)">${item.timeStr}</div>` : ''}
+      </div>
+    </a>`;
+  }
+  el.innerHTML = html;
+}
+
+// ── TOV Stats ──────────────────────────────────────────────────────────────
+async function loadTOVStats() {
+  const el = document.getElementById('tov-stats');
+  if (!el) return;
+
+  const thirtyDays = new Date(T);
+  thirtyDays.setDate(thirtyDays.getDate() + 30);
+  const thirtyStr = thirtyDays.toISOString().slice(0, 10);
+
+  const [upcomingRes, inquiryRes, allRes] = await Promise.all([
+    supabase.from('tov_clients')
+      .select('id, name, wedding_date')
+      .gte('wedding_date', T)
+      .lte('wedding_date', thirtyStr)
+      .order('wedding_date')
+      .limit(5),
+    supabase.from('tov_clients')
+      .select('id', { count: 'exact' })
+      .eq('status', 'inquiry'),
+    supabase.from('tov_clients')
+      .select('id', { count: 'exact' })
+      .eq('status', 'booked'),
+  ]);
+
+  const upcoming = upcomingRes.data || [];
+  const inquiryCount = inquiryRes.count ?? 0;
+  const bookedCount = allRes.count ?? 0;
+
+  let html = `<div style="display:flex;gap:12px;margin-bottom:10px">
+    <div style="flex:1;text-align:center;background:var(--gray-50);border-radius:8px;padding:8px 4px">
+      <div style="font-size:20px;font-weight:700;color:var(--blue)">${bookedCount}</div>
+      <div style="font-size:11px;color:var(--gray-400)">Booked</div>
+    </div>
+    <div style="flex:1;text-align:center;background:var(--gray-50);border-radius:8px;padding:8px 4px">
+      <div style="font-size:20px;font-weight:700;color:${inquiryCount > 0 ? '#f59e0b' : 'var(--gray-400)'}">${inquiryCount}</div>
+      <div style="font-size:11px;color:var(--gray-400)">Inquiries</div>
+    </div>
+  </div>`;
+
+  if (upcoming.length) {
+    html += `<div style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;margin-bottom:4px">Next 30 Days</div>`;
+    for (const w of upcoming) {
+      const wDate = new Date(w.wedding_date + 'T00:00:00');
+      const daysAway = Math.round((wDate - new Date(T + 'T00:00:00')) / 86400000);
+      html += `<a href="tov-client.html?id=${w.id}" style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--gray-100);text-decoration:none">
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--gray-800)">💍 ${w.name}</div>
+          <div style="font-size:11px;color:var(--gray-400)">${wDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
+        </div>
+        <div style="font-size:12px;font-weight:700;color:${daysAway <= 7 ? 'var(--red)' : daysAway <= 14 ? '#f59e0b' : 'var(--gray-400)'}">${daysAway}d</div>
+      </a>`;
+    }
+  } else {
+    html += `<div style="color:var(--gray-400);font-size:13px">Sin bodas próximas en 30 días</div>`;
+  }
+
+  el.innerHTML = html;
+}
+
+// ── Language Stats ──────────────────────────────────────────────────────────
+async function loadLanguageStats() {
+  const el = document.getElementById('language-stats');
+  if (!el) return;
+
+  const [dueRes, totalRes, masteredRes, stage3Res] = await Promise.all([
+    supabase.from('vocab_words').select('id', { count: 'exact' }).lte('next_review', T),
+    supabase.from('vocab_words').select('id', { count: 'exact' }),
+    supabase.from('vocab_words').select('id', { count: 'exact' }).gte('stage', 6),
+    supabase.from('vocab_words').select('id', { count: 'exact' }).gte('stage', 3).lt('stage', 6),
+  ]);
+
+  const due      = dueRes.count ?? 0;
+  const total    = totalRes.count ?? 0;
+  const mastered = masteredRes.count ?? 0;
+  const learning = stage3Res.count ?? 0;
+  const pct = total > 0 ? Math.round(mastered / total * 100) : 0;
+
+  let html = `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
+    <div style="text-align:center;background:var(--gray-50);border-radius:8px;padding:8px 4px">
+      <div style="font-size:18px;font-weight:700;color:${due > 0 ? '#7C3AED' : 'var(--gray-400)'}">${due}</div>
+      <div style="font-size:10px;color:var(--gray-400)">Due Today</div>
+    </div>
+    <div style="text-align:center;background:var(--gray-50);border-radius:8px;padding:8px 4px">
+      <div style="font-size:18px;font-weight:700;color:#16a34a">${mastered}</div>
+      <div style="font-size:10px;color:var(--gray-400)">Mastered</div>
+    </div>
+    <div style="text-align:center;background:var(--gray-50);border-radius:8px;padding:8px 4px">
+      <div style="font-size:18px;font-weight:700;color:var(--blue)">${total}</div>
+      <div style="font-size:10px;color:var(--gray-400)">Total</div>
+    </div>
+  </div>`;
+
+  // Progress bar
+  html += `<div style="margin-bottom:8px">
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--gray-400);margin-bottom:3px">
+      <span>Mastery progress</span><span>${pct}%</span>
+    </div>
+    <div style="height:6px;background:var(--gray-100);border-radius:3px;overflow:hidden">
+      <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#7C3AED,#2563EB);border-radius:3px;transition:width 0.3s"></div>
+    </div>
+  </div>`;
+
+  if (due > 0) {
+    html += `<a href="languages.html" style="display:block;text-align:center;background:#F5F3FF;color:#7C3AED;border-radius:8px;padding:8px;font-size:13px;font-weight:700;text-decoration:none">📚 Review ${due} word${due !== 1 ? 's' : ''} →</a>`;
+  }
+
+  el.innerHTML = html;
+}
+
+// ── Recent Student Activity ─────────────────────────────────────────────────
+async function loadStudentActivity() {
+  const el = document.getElementById('student-activity');
+  if (!el) return;
+
+  const [notesRes, goldRes] = await Promise.all([
+    supabase.from('student_notes')
+      .select('id, note, date, followup_needed, students(id, name)')
+      .order('date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(5),
+    supabase.from('gold_transactions')
+      .select('id, amount, reason, created_at, students(name)')
+      .order('created_at', { ascending: false })
+      .limit(3),
+  ]);
+
+  const notes = notesRes.data || [];
+  const gold  = goldRes.data || [];
+
+  if (!notes.length && !gold.length) {
+    el.innerHTML = '<div style="color:var(--gray-400);font-size:13px">Sin actividad reciente</div>';
+    return;
+  }
+
+  let html = '';
+
+  if (notes.length) {
+    html += `<div style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;margin-bottom:4px">Notas Recientes</div>`;
+    for (const n of notes) {
+      const name = n.students?.name || '?';
+      const noteText = (n.note || '').slice(0, 80) + ((n.note || '').length > 80 ? '…' : '');
+      html += `<a href="student.html?id=${n.students?.id}" style="display:block;padding:6px 0;border-bottom:1px solid var(--gray-100);text-decoration:none">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
+          <div style="flex:1;min-width:0">
+            <span style="font-size:12px;font-weight:700;color:var(--blue)">${name}</span>
+            ${n.followup_needed ? '<span style="font-size:10px;color:var(--red);margin-left:4px">📌</span>' : ''}
+            <div style="font-size:12px;color:var(--gray-600);margin-top:1px">${noteText}</div>
+          </div>
+          <div style="font-size:10px;color:var(--gray-400);flex-shrink:0">${fmtDate(n.date)}</div>
+        </div>
+      </a>`;
+    }
+  }
+
+  if (gold.length) {
+    html += `<div style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;margin:8px 0 4px">Oro Reciente</div>`;
+    for (const g of gold) {
+      html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--gray-100)">
+        <div>
+          <span style="font-size:12px;font-weight:600;color:var(--gray-700)">${g.students?.name || '?'}</span>
+          ${g.reason ? `<span style="font-size:11px;color:var(--gray-400);margin-left:4px">· ${(g.reason).slice(0, 40)}</span>` : ''}
+        </div>
+        <span style="font-size:13px;font-weight:700;color:var(--orange)">+${g.amount} 🪙</span>
+      </div>`;
+    }
+  }
+
+  el.innerHTML = html;
+}
 
 load();
