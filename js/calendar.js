@@ -176,6 +176,8 @@ async function fetchEvents() {
           link: `class.html?id=${cls.id}`,
           timeStart: cls.time_start ? cls.time_start.slice(0,5) : null,
           timeEnd: cls.time_end ? cls.time_end.slice(0,5) : null,
+          classId: cls.id,
+          editable: true,
         });
       }
     }
@@ -409,11 +411,13 @@ function renderWeekGrid() {
       const topPct = minutesToPct(startMins);
       const heightPx = Math.max(20, (endMins - startMins) / 60 * HOUR_HEIGHT_PX);
       const timeLabel = `${e.timeStart}${e.timeEnd ? '–' + e.timeEnd : ''}`;
-      const isEditable = e.type === 'gcal' && e.id;
+      const isEditable = (e.type === 'gcal' && e.id) || (e.type === 'class' && e.classId);
       const cursor = isEditable ? 'grab' : 'pointer';
       const evId = e.id ? `data-ev-id="${e.id}"` : '';
+      const classIdAttr = e.classId ? `data-class-id="${e.classId}"` : '';
+      const evTypeAttr = `data-ev-type="${e.type}"`;
 
-      html += `<div class="wcal-ev${isEditable ? ' wcal-ev-editable' : ''}" ${evId}
+      html += `<div class="wcal-ev${isEditable ? ' wcal-ev-editable' : ''}" ${evId} ${classIdAttr} ${evTypeAttr}
         data-date="${str}" data-start="${e.timeStart}" data-end="${e.timeEnd || ''}"
         style="position:absolute;top:${topPct}%;left:2px;right:2px;
           min-height:${heightPx}px;background:${e.color};border-radius:4px;
@@ -478,10 +482,12 @@ function attachWeekInteractions() {
 
     // ── Mousedown on editable events ──────────────────────────────────────
     col.querySelectorAll('.wcal-ev-editable').forEach(evEl => {
-      const evId = evEl.dataset.evId;
-      const evDate = evEl.dataset.date;
-      const evStart = evEl.dataset.start;
-      const evEnd   = evEl.dataset.end;
+      const evId      = evEl.dataset.evId;
+      const classId   = evEl.dataset.classId;
+      const evType    = evEl.dataset.evType;
+      const evDate    = evEl.dataset.date;
+      const evStart   = evEl.dataset.start;
+      const evEnd     = evEl.dataset.end;
 
       // Resize handle
       const resizeHandle = evEl.querySelector('.wcal-resize-handle');
@@ -491,7 +497,7 @@ function attachWeekInteractions() {
           e.stopPropagation();
           dragState = {
             type: 'resize',
-            evEl, evId, evDate,
+            evEl, evId, classId, evType, evDate,
             startM: timeToMinutes(evStart),
             endM:   timeToMinutes(evEnd) || timeToMinutes(evStart) + 60,
             col,
@@ -510,7 +516,7 @@ function attachWeekInteractions() {
         const eMins = timeToMinutes(evEnd) || sMins + 60;
         dragState = {
           type: 'move',
-          evEl, evId, evDate: dateStr,
+          evEl, evId, classId, evType, evDate: dateStr,
           startM: sMins,
           endM:   eMins,
           duration: eMins - sMins,
@@ -521,11 +527,15 @@ function attachWeekInteractions() {
         evEl.style.cursor = 'grabbing';
       });
 
-      // Click (no drag) → open detail popup
+      // Click (no drag) → open detail popup (only for gcal events)
       evEl.addEventListener('click', (e) => {
         if (dragState) return; // was a drag, not a click
         e.stopPropagation();
-        openEventPopup(evId, evStart, evEnd, evEl.title.replace(` ${evStart}–${evEnd}`, '').trim(), evDate, evEl);
+        if (evType === 'gcal') {
+          openEventPopup(evId, evStart, evEnd, evEl.title.replace(` ${evStart}–${evEnd}`, '').trim(), evDate, evEl);
+        } else if (evType === 'class' && classId) {
+          window.location.href = `class.html?id=${classId}`;
+        }
       });
     });
   });
@@ -599,13 +609,21 @@ function attachWeekInteractions() {
 
     if (ds.type === 'resize') {
       ds.evEl.style.cursor = '';
-      saveEventTime(ds.evId, ds.evDate, minsToTimeStr(ds.startM), minsToTimeStr(ds.endM));
+      if (ds.evType === 'class' && ds.classId) {
+        saveClassTime(ds.classId, minsToTimeStr(ds.startM), minsToTimeStr(ds.endM));
+      } else {
+        saveEventTime(ds.evId, ds.evDate, minsToTimeStr(ds.startM), minsToTimeStr(ds.endM));
+      }
     }
 
     if (ds.type === 'move') {
       ds.evEl.style.opacity = '';
       ds.evEl.style.cursor = 'grab';
-      saveEventTime(ds.evId, ds.evDate, minsToTimeStr(ds.startM), minsToTimeStr(ds.endM));
+      if (ds.evType === 'class' && ds.classId) {
+        saveClassTime(ds.classId, minsToTimeStr(ds.startM), minsToTimeStr(ds.endM));
+      } else {
+        saveEventTime(ds.evId, ds.evDate, minsToTimeStr(ds.startM), minsToTimeStr(ds.endM));
+      }
     }
 
     // Clean up listeners
@@ -649,7 +667,21 @@ async function saveEventTime(id, dateStr, startTime, endTime) {
   else { render(); }
 }
 
-// ── Create event modal ────────────────────────────────────────────────────────
+// ── Save CLASS time to Supabase (updates recurring schedule globally) ─────────
+async function saveClassTime(classId, startTime, endTime) {
+  if (!classId) return;
+  const { error } = await supabase.from('classes').update({
+    time_start: startTime + ':00',
+    time_end:   endTime + ':00',
+  }).eq('id', classId);
+  if (error) { toast('Class save failed: ' + error.message, 'error'); }
+  else {
+    toast('Class time updated ✅ (all recurring days updated)', 'success');
+    render();
+  }
+}
+
+// ── Create event modal (with recurrence) ──────────────────────────────────────
 function openCreateModal(dateStr, startTime, endTime) {
   removeModal();
   const d = new Date(dateStr + 'T00:00:00');
@@ -665,7 +697,7 @@ function openCreateModal(dateStr, startTime, endTime) {
       <input id="cev-title" type="text" placeholder="Event title" autocomplete="off"
         style="width:100%;border:1.5px solid var(--gray-200);border-radius:8px;padding:9px 12px;font-size:14px;margin-bottom:10px;outline:none;box-sizing:border-box"
         onfocus="this.style.borderColor='var(--blue)'" onblur="this.style.borderColor='var(--gray-200)'" />
-      <div style="display:flex;gap:8px;margin-bottom:14px">
+      <div style="display:flex;gap:8px;margin-bottom:10px">
         <div style="flex:1">
           <label style="font-size:11px;color:var(--gray-400);margin-bottom:3px;display:block">Start</label>
           <input id="cev-start" type="time" value="${startTime}"
@@ -677,13 +709,21 @@ function openCreateModal(dateStr, startTime, endTime) {
             style="width:100%;border:1.5px solid var(--gray-200);border-radius:8px;padding:8px 10px;font-size:14px;outline:none;box-sizing:border-box" />
         </div>
       </div>
-      <select id="cev-color" style="width:100%;border:1.5px solid var(--gray-200);border-radius:8px;padding:9px 12px;font-size:14px;margin-bottom:14px;outline:none;box-sizing:border-box;background:var(--white)">
+      <select id="cev-color" style="width:100%;border:1.5px solid var(--gray-200);border-radius:8px;padding:9px 12px;font-size:14px;margin-bottom:10px;outline:none;box-sizing:border-box;background:var(--white)">
         <option value="#0F9D58">🟢 Green</option>
         <option value="#2563EB">🔵 Blue</option>
         <option value="#7C3AED">🟣 Purple</option>
         <option value="#D97706">🟡 Amber</option>
         <option value="#DC2626">🔴 Red</option>
         <option value="#0891B2">🩵 Teal</option>
+      </select>
+      <select id="cev-recur" style="width:100%;border:1.5px solid var(--gray-200);border-radius:8px;padding:9px 12px;font-size:14px;margin-bottom:14px;outline:none;box-sizing:border-box;background:var(--white)">
+        <option value="none">🔂 Doesn't repeat</option>
+        <option value="daily">📅 Daily (30 days)</option>
+        <option value="weekdays">🗓 Weekdays Mon–Fri (8 weeks)</option>
+        <option value="weekly">📆 Weekly (12 weeks)</option>
+        <option value="biweekly">📆 Every 2 weeks (12 occurrences)</option>
+        <option value="monthly">🗓 Monthly (6 months)</option>
       </select>
       <div style="display:flex;gap:8px">
         <button onclick="document.getElementById('cal-ev-modal').remove()"
@@ -706,23 +746,32 @@ function openCreateModal(dateStr, startTime, endTime) {
   document.getElementById('cev-save-btn').addEventListener('click', async () => {
     const title = titleEl.value.trim();
     if (!title) { titleEl.focus(); return; }
-    const start = document.getElementById('cev-start').value;
-    const end   = document.getElementById('cev-end').value;
-    const color = document.getElementById('cev-color').value;
-    const startISO = `${dateStr}T${start}:00+00:00`;
-    const endISO   = `${dateStr}T${end}:00+00:00`;
+    const start  = document.getElementById('cev-start').value;
+    const end    = document.getElementById('cev-end').value;
+    const color  = document.getElementById('cev-color').value;
+    const recur  = document.getElementById('cev-recur').value;
 
-    const { error } = await supabase.from('calendar_events').insert({
+    // Build list of dates to create events on
+    const dates = buildRecurDates(dateStr, recur);
+
+    const btn = document.getElementById('cev-save-btn');
+    if (btn) btn.disabled = true;
+
+    const rows = dates.map(ds => ({
       title,
-      start_time: startISO,
-      end_time: endISO,
+      start_time: `${ds}T${start}:00+00:00`,
+      end_time:   `${ds}T${end}:00+00:00`,
       all_day: false,
       color,
       calendar_name: 'LifeOS',
       is_busy: true,
-    });
-    if (error) { toast('Error: ' + error.message, 'error'); return; }
-    toast('Event added ✅', 'success');
+    }));
+
+    const { error } = await supabase.from('calendar_events').insert(rows);
+    if (error) { toast('Error: ' + error.message, 'error'); if (btn) btn.disabled = false; return; }
+
+    const countMsg = dates.length > 1 ? `${dates.length} events added ✅` : 'Event added ✅';
+    toast(countMsg, 'success');
     modal.remove();
     render();
   });
@@ -731,6 +780,56 @@ function openCreateModal(dateStr, startTime, endTime) {
     if (e.key === 'Enter') document.getElementById('cev-save-btn').click();
     if (e.key === 'Escape') modal.remove();
   });
+}
+
+// ── Build list of dates for recurrence ────────────────────────────────────────
+function buildRecurDates(startDateStr, recur) {
+  const dates = [startDateStr];
+  if (recur === 'none') return dates;
+
+  const start = new Date(startDateStr + 'T00:00:00');
+  const dow = start.getDay(); // 0=Sun, 1=Mon...5=Fri, 6=Sat
+
+  if (recur === 'daily') {
+    for (let i = 1; i < 30; i++) {
+      const d = new Date(start);
+      d.setDate(d.getDate() + i);
+      dates.push(dateStr(d));
+    }
+  } else if (recur === 'weekdays') {
+    let count = 0;
+    let i = 1;
+    while (count < 39) { // 8 weeks * ~5 days
+      const d = new Date(start);
+      d.setDate(d.getDate() + i);
+      if (d.getDay() >= 1 && d.getDay() <= 5) {
+        dates.push(dateStr(d));
+        count++;
+      }
+      i++;
+      if (i > 200) break;
+    }
+  } else if (recur === 'weekly') {
+    for (let i = 1; i < 12; i++) {
+      const d = new Date(start);
+      d.setDate(d.getDate() + i * 7);
+      dates.push(dateStr(d));
+    }
+  } else if (recur === 'biweekly') {
+    for (let i = 1; i < 12; i++) {
+      const d = new Date(start);
+      d.setDate(d.getDate() + i * 14);
+      dates.push(dateStr(d));
+    }
+  } else if (recur === 'monthly') {
+    for (let i = 1; i < 6; i++) {
+      const d = new Date(start);
+      d.setMonth(d.getMonth() + i);
+      dates.push(dateStr(d));
+    }
+  }
+
+  return dates;
 }
 
 // ── Event detail/edit/delete popup ───────────────────────────────────────────
