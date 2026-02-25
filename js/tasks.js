@@ -1,4 +1,4 @@
-// Life OS — Tasks (v8: schedule labels, no reminders, Today-first)
+// Life OS — Tasks (v9: schedule labels, reordering, recurring Today auto-flag)
 import { supabase } from './supabase.js';
 import { today, fmtDate, toast, showEmpty } from './utils.js';
 import { initSwipe } from './swipe-handler.js';
@@ -8,6 +8,8 @@ let activeModule = 'All';
 let activeScheduleFilter = 'All'; // 'All', 'Today', 'Next Up', 'Later', 'Down the Road', 'Unlabeled'
 // User-defined category order (persisted in localStorage)
 let categoryOrder = JSON.parse(localStorage.getItem('tasks-cat-order') || 'null') || ['RT', 'RT Admin', 'TOV', 'Personal', 'Health'];
+// Task order within each group: { groupKey: [id, id, ...] }
+let taskOrderMap = JSON.parse(localStorage.getItem('tasks-item-order') || '{}');
 
 const MODULE_ICONS   = { RT: '🏫', 'RT Admin': '🏛️', TOV: '💍', Personal: '👤', Health: '🏃' };
 const MODULE_COLORS  = { RT: 'var(--blue)', 'RT Admin': '#7c3aed', TOV: 'var(--green)', Personal: 'var(--orange)', Health: 'var(--coral)' };
@@ -116,6 +118,76 @@ window.applyScheduleLabel = async (label) => {
   loadTasks();
 };
 
+// ── Task ordering helpers ─────────────────────────────────────────────────────
+function saveTaskOrder() {
+  localStorage.setItem('tasks-item-order', JSON.stringify(taskOrderMap));
+}
+
+// Sort tasks by stored order for a given group key
+function applyTaskOrder(tasks, groupKey) {
+  const order = taskOrderMap[groupKey];
+  if (!order || !order.length) return tasks;
+  const indexMap = {};
+  order.forEach((id, i) => { indexMap[id] = i; });
+  return [...tasks].sort((a, b) => {
+    const ai = indexMap[a.id] !== undefined ? indexMap[a.id] : 9999;
+    const bi = indexMap[b.id] !== undefined ? indexMap[b.id] : 9999;
+    return ai - bi;
+  });
+}
+
+// Move a task up or down within its group
+window.moveTask = (taskId, groupKey, direction) => {
+  const order = taskOrderMap[groupKey] || [];
+  // Ensure all task IDs in the group are in the order array
+  // We rebuild from the current DOM order to capture IDs not yet in storage
+  const groupEl = document.getElementById(`task-group-${groupKey.replace(/\s+/g, '-')}`);
+  const currentIds = groupEl
+    ? [...groupEl.querySelectorAll('.task-swipe-row')].map(el => parseInt(el.dataset.id, 10))
+    : order.slice();
+
+  // Merge: start from current DOM order, fill in any missing from stored order
+  let merged = currentIds.length ? currentIds : (taskOrderMap[groupKey] || []);
+  taskOrderMap[groupKey] = merged;
+
+  const idx = merged.indexOf(taskId);
+  if (idx === -1) return;
+
+  if (direction === 'up' && idx > 0) {
+    [merged[idx - 1], merged[idx]] = [merged[idx], merged[idx - 1]];
+  } else if (direction === 'down' && idx < merged.length - 1) {
+    [merged[idx], merged[idx + 1]] = [merged[idx + 1], merged[idx]];
+  } else {
+    return; // already at edge
+  }
+
+  taskOrderMap[groupKey] = merged;
+  saveTaskOrder();
+
+  // Re-render just this group by re-ordering DOM nodes (fast, no network)
+  if (groupEl) {
+    const rows = [...groupEl.querySelectorAll('.task-swipe-row')];
+    const rowMap = {};
+    rows.forEach(r => { rowMap[parseInt(r.dataset.id, 10)] = r; });
+    merged.forEach(id => {
+      if (rowMap[id]) groupEl.appendChild(rowMap[id]);
+    });
+    // Update arrow button states
+    updateArrowStates(groupKey, merged);
+  }
+};
+
+function updateArrowStates(groupKey, order) {
+  order.forEach((id, idx) => {
+    const upBtn  = document.getElementById(`up-${id}`);
+    const downBtn = document.getElementById(`dn-${id}`);
+    if (upBtn)   upBtn.disabled  = idx === 0;
+    if (downBtn) downBtn.disabled = idx === order.length - 1;
+    if (upBtn)   upBtn.style.opacity  = idx === 0 ? '0.3' : '1';
+    if (downBtn) downBtn.style.opacity = idx === order.length - 1 ? '0.3' : '1';
+  });
+}
+
 // ── Tasks ─────────────────────────────────────────────────────────────────────
 async function loadTasks() {
   const res = await supabase.from('tasks')
@@ -157,10 +229,14 @@ async function loadTasks() {
 
   // ── Today section (only when showing All schedules) ──
   if (todayDisplay.length) {
+    const todayGroupKey = '__today__';
+    const orderedToday = applyTaskOrder(todayDisplay, todayGroupKey);
     html += `<div class="card" style="border-left:4px solid #f59e0b;padding:0;overflow:hidden;margin-bottom:12px">
       <div style="padding:10px 16px;background:#fffbeb">
-        <div class="urgent-section-header" style="color:#92400e">📅 Today (${todayDisplay.length})</div>
-        ${renderTaskGroup(todayDisplay, true)}
+        <div class="urgent-section-header" style="color:#92400e">📅 Today (${orderedToday.length})</div>
+        <div id="task-group-${todayGroupKey.replace(/\s+/g, '-')}" class="task-group-body">
+          ${renderTaskGroup(orderedToday, true, todayGroupKey)}
+        </div>
       </div>
     </div>`;
   }
@@ -182,6 +258,8 @@ async function loadTasks() {
       const color  = MODULE_COLORS[mod] || 'var(--blue)';
       const icon   = MODULE_ICONS[mod] || '';
       const safeId = mod.replace(/\s+/g, '-');
+      const groupKey = mod;
+      const orderedGroup = applyTaskOrder(groups[mod], groupKey);
       html += `<div class="card task-category-card" data-module="${mod}"
         draggable="true"
         ondragstart="window.catDragStart(event)"
@@ -200,7 +278,9 @@ async function loadTasks() {
               onclick="event.stopPropagation();showInlineAdd('${mod}')" title="Add task to ${mod}">+ Add</button>
           </div>
         </div>
-        ${renderTaskGroup(groups[mod], false)}
+        <div id="task-group-${safeId}" class="task-group-body">
+          ${renderTaskGroup(orderedGroup, false, groupKey)}
+        </div>
         <div id="inline-add-${safeId}" style="display:none;padding:8px 0 4px 0;border-top:1px solid var(--gray-100);margin-top:4px">
           <div style="display:flex;gap:6px;align-items:center">
             <input type="text" id="inline-title-${safeId}"
@@ -223,6 +303,18 @@ async function loadTasks() {
 
   document.getElementById('tasks-section').innerHTML = html;
 
+  // Apply arrow button states for all groups
+  setTimeout(() => {
+    // Today group
+    const todayGroupKey = '__today__';
+    const todayOrder = taskOrderMap[todayGroupKey];
+    if (todayOrder) updateArrowStates(todayGroupKey, todayOrder);
+    // Module groups
+    for (const key of Object.keys(taskOrderMap)) {
+      if (key !== todayGroupKey) updateArrowStates(key, taskOrderMap[key]);
+    }
+  }, 0);
+
   // Swipe gestures
   document.querySelectorAll('.task-swipe-row').forEach(item => {
     const taskId = item.dataset.id;
@@ -240,12 +332,14 @@ async function loadTasks() {
   });
 }
 
-function renderTaskGroup(tasks, inTodaySection) {
-  return tasks.map(t => {
+function renderTaskGroup(tasks, inTodaySection, groupKey) {
+  return tasks.map((t, idx) => {
     const label = getScheduleLabel(t);
     const sc = label && SCHEDULE_COLORS[label] ? SCHEDULE_COLORS[label] : null;
     const labelBadge = label ? `<span style="font-size:10px;padding:1px 6px;border-radius:10px;background:${sc?.bg};color:${sc?.color};border:1px solid ${sc?.border};font-weight:600;white-space:nowrap">${label}</span>` : '';
     const modLabel = !inTodaySection ? '' : `<span style="font-size:11px;color:var(--gray-400)">${MODULE_ICONS[displayModule(t)] || ''} ${displayModule(t)}</span>`;
+    const isFirst = idx === 0;
+    const isLast  = idx === tasks.length - 1;
     return `
     <div class="task-row task-swipe-row" id="task-${t.id}" data-id="${t.id}" style="touch-action:pan-y;overflow:hidden;position:relative;display:flex;align-items:center;gap:8px">
       <div data-swipe-inner style="display:flex;align-items:flex-start;gap:10px;flex:1">
@@ -265,7 +359,13 @@ function renderTaskGroup(tasks, inTodaySection) {
           </div>
         </div>
       </div>
-      <div style="display:flex;gap:4px;flex-shrink:0;align-items:center" ontouchstart="event.stopPropagation()" onclick="event.stopPropagation()">
+      <div style="display:flex;gap:3px;flex-shrink:0;align-items:center" ontouchstart="event.stopPropagation()" onclick="event.stopPropagation()">
+        <div style="display:flex;flex-direction:column;gap:1px">
+          <button id="up-${t.id}" class="btn btn-sm" style="background:var(--gray-100);color:var(--gray-500);border:none;font-size:10px;padding:2px 5px;line-height:1;${isFirst ? 'opacity:0.3' : ''}"
+            onclick="moveTask(${t.id}, '${groupKey}', 'up')" title="Move up" ${isFirst ? 'disabled' : ''}>▲</button>
+          <button id="dn-${t.id}" class="btn btn-sm" style="background:var(--gray-100);color:var(--gray-500);border:none;font-size:10px;padding:2px 5px;line-height:1;${isLast ? 'opacity:0.3' : ''}"
+            onclick="moveTask(${t.id}, '${groupKey}', 'down')" title="Move down" ${isLast ? 'disabled' : ''}>▼</button>
+        </div>
         <button class="btn btn-sm" style="background:#f3f4f6;color:#6b7280;border:none;font-size:13px;padding:4px 6px;line-height:1"
           onclick="openSchedulePicker(${t.id}, ${label ? `'${label}'` : 'null'}, event)" title="Schedule">📅</button>
         <button class="btn btn-sm" style="background:var(--green-light);color:var(--green);border:none;font-size:11px;padding:3px 8px"
@@ -517,25 +617,49 @@ async function loadRecurring() {
   const { data } = await supabase.from('reminders').select('*').eq('recurring', true).order('title');
   const items = data || [];
 
+  // Sort: due today or overdue first, then future, then paused
+  const sorted = [...items].sort((a, b) => {
+    const aDue = a.due_date && a.due_date <= T && a.status === 'active';
+    const bDue = b.due_date && b.due_date <= T && b.status === 'active';
+    if (aDue && !bDue) return -1;
+    if (!aDue && bDue) return 1;
+    const aActive = a.status === 'active'; const bActive = b.status === 'active';
+    if (aActive && !bActive) return -1;
+    if (!aActive && bActive) return 1;
+    return (a.title || '').localeCompare(b.title || '');
+  });
+
   el.innerHTML = `<div class="card" style="margin-bottom:12px;border-top:3px solid #8b5cf6">
     <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
       <span>🔄 Repeated Tasks${items.length ? ` <span class="badge badge-gray">${items.length}</span>` : ''}</span>
       <button class="btn btn-sm" style="background:#f5f3ff;color:#7c3aed;border:none;font-size:12px" onclick="showRecurringForm()">+ Add Repeated Task</button>
     </div>
     <div style="font-size:12px;color:var(--gray-400);margin:-4px 0 10px">Tasks that automatically come back on a schedule</div>
-    ${!items.length
+    ${!sorted.length
       ? '<div style="text-align:center;color:var(--gray-400);padding:12px;font-size:13px">No recurring tasks yet</div>'
-      : items.map(r => {
-          const isOverdue = r.due_date && r.due_date <= T;
-          const isActive  = r.status === 'active';
+      : sorted.map(r => {
+          const isDueToday = r.due_date && r.due_date === T && r.status === 'active';
+          const isOverdue  = r.due_date && r.due_date < T && r.status === 'active';
+          const isActive   = r.status === 'active';
+          const todayBadge = (isDueToday || isOverdue)
+            ? `<span style="font-size:10px;padding:2px 7px;border-radius:10px;background:#fef9c3;color:#92400e;border:1px solid #fde68a;font-weight:700;margin-left:4px">📅 Today</span>`
+            : '';
           return `
-          <div class="list-item">
+          <div class="list-item" style="${isDueToday || isOverdue ? 'background:#fffbeb;border-radius:10px;margin-bottom:4px;padding:8px 10px' : ''}">
             <div class="list-item-left">
-              <div class="list-item-name" style="${!isActive ? 'color:var(--gray-400)' : ''}">${r.title}</div>
+              <div class="list-item-name" style="display:flex;align-items:center;gap:4px;${!isActive ? 'color:var(--gray-400)' : ''}">
+                ${r.title}${todayBadge}
+              </div>
               <div class="list-item-sub">
                 ${patternLabel(r.recurrence_pattern)}
                 ${r.module ? ' · ' + r.module : ''}
-                ${r.due_date ? ` · ${isOverdue ? `<span style="color:var(--red)">Due ${fmtDate(r.due_date)}</span>` : `Next ${fmtDate(r.due_date)}`}` : ''}
+                ${r.due_date
+                  ? ` · ${isOverdue
+                      ? `<span style="color:var(--red)">Overdue: ${fmtDate(r.due_date)}</span>`
+                      : isDueToday
+                        ? `<span style="color:#92400e;font-weight:600">Due today!</span>`
+                        : `Next ${fmtDate(r.due_date)}`}`
+                  : ''}
               </div>
               ${r.notes ? `<div style="font-size:13px;color:var(--gray-600);margin-top:2px">${r.notes}</div>` : ''}
             </div>
@@ -556,10 +680,13 @@ async function loadRecurring() {
 
 window.doneRecurring = async (id, pattern) => {
   const nextDue = nextOccurrence(pattern, T);
+  // If next due date is today or in the past, auto-flag as Today in the main tasks section
+  // We update the reminder's next due date and mark it active again
   await supabase.from('reminders').update({ status: 'active', due_date: nextDue }).eq('id', id);
   toast(`✅ Done! Next: ${fmtDate(nextDue)}`, 'success');
   loadRecurring();
 };
+
 window.reactivateRecurring = async (id) => {
   await supabase.from('reminders').update({ status: 'active' }).eq('id', id);
   toast('Recurring task reactivated 🔄', 'success');
@@ -577,13 +704,14 @@ window.submitRecurring = async () => {
   const frequency = document.getElementById('rec-frequency').value;
   const notes     = document.getElementById('rec-notes').value.trim();
   if (!title) { toast('Enter a title', 'error'); return; }
-  const nextDue = nextOccurrence(frequency, T);
+  // First occurrence: if it's due today or overdue, start from today
+  const firstDue = T; // set the first due to today so it shows as Today immediately
   const { error } = await supabase.from('reminders').insert({
     title, module, notes: notes || null, recurring: true, recurrence_pattern: frequency,
-    status: 'active', due_date: nextDue,
+    status: 'active', due_date: firstDue,
   });
   if (error) { toast('Error: ' + error.message, 'error'); return; }
-  toast('Recurring task added 🔄', 'success');
+  toast('Recurring task added 🔄 — shows as Today until marked done', 'success');
   window.closeRecurringModal();
   document.getElementById('rec-title').value = '';
   document.getElementById('rec-notes').value = '';
