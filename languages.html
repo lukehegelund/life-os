@@ -3093,7 +3093,7 @@ window.phSelectPhrase = async (idx) => {
         times_seen: item.rank,
         srs_stage: 99,
         next_review: '9999-12-31',
-        added_date: new Date().toISOString().split('T')[0],
+        added_date: pstDatePlusDays(0),
         times_correct: 0,
         times_wrong: 0,
       });
@@ -3104,7 +3104,7 @@ window.phSelectPhrase = async (idx) => {
   // Add selected to SRS (or update if already exists)
   const existingSelected = phUserProgress[phLang + ':' + selected.rank];
   if (!existingSelected) {
-    const nextReview = new Date().toISOString().split('T')[0]; // due today on first add
+    const nextReview = pstDatePlusDays(0); // due today (PST) on first add
     await supabase.from('vocab_words').insert({
       english: selected.english,
       translation: selected.phrase,
@@ -3113,7 +3113,7 @@ window.phSelectPhrase = async (idx) => {
       times_seen: selected.rank,
       srs_stage: 1,
       next_review: nextReview,
-      added_date: new Date().toISOString().split('T')[0],
+      added_date: pstDatePlusDays(0),
       times_correct: 0,
       times_wrong: 0,
     });
