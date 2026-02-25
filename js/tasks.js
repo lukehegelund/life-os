@@ -73,13 +73,18 @@ window.setScheduleFilter = (filter) => {
     b.style.background = '';
     b.style.color = b.dataset.defaultColor || '';
     b.style.fontWeight = '400';
+    b.style.borderColor = '';
   });
   const activeBtn = document.getElementById(`sf-${filter}`);
   if (activeBtn) {
-    activeBtn.style.background = 'var(--gray-900)';
+    activeBtn.style.background = 'var(--blue)';
     activeBtn.style.color = 'white';
     activeBtn.style.fontWeight = '600';
+    activeBtn.style.borderColor = 'var(--blue)';
   }
+  // Hide recurring section when a schedule filter is active (not relevant)
+  const recurEl = document.getElementById('recurring-section');
+  if (recurEl) recurEl.style.display = filter === 'All' ? '' : 'none';
   loadTasks();
 };
 
@@ -368,10 +373,6 @@ function renderTaskGroup(tasks, inTodaySection, groupKey) {
         </div>
         <button class="btn btn-sm" style="background:#f3f4f6;color:#6b7280;border:none;font-size:13px;padding:4px 6px;line-height:1"
           onclick="openSchedulePicker(${t.id}, ${label ? `'${label}'` : 'null'}, event)" title="Schedule">📅</button>
-        <button class="btn btn-sm" style="background:var(--green-light);color:var(--green);border:none;font-size:11px;padding:3px 8px"
-          onclick="markDoneById(${t.id}, event)" title="Mark done">✓</button>
-        <button class="btn btn-sm" style="background:var(--coral-light);color:var(--red);border:none;font-size:11px;padding:3px 8px"
-          onclick="deleteTask(${t.id}, event)" title="Delete task">✕</button>
       </div>
     </div>`;
   }).join('');
