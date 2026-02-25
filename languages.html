@@ -957,8 +957,8 @@ window.txAddWord = async () => {
 };
 
 // ═══════════════════════════════════════════════════════ FLASHCARDS ══════
-const FC_SRS_INTERVALS = {0:0, 1:3, 2:7, 3:14, 4:30, 5:90, 6:180};
-const FC_STAGE_LABELS  = {0:'New', 1:'Day 3', 2:'Week', 3:'2 Wks', 4:'Month', 5:'3 Mo', 6:'Mastered'};
+const FC_SRS_INTERVALS = {0:0, 1:0, 2:7, 3:14, 4:30, 5:90, 6:180};
+const FC_STAGE_LABELS  = {0:'New', 1:'Today', 2:'Week', 3:'2 Wks', 4:'Month', 5:'3 Mo', 6:'Mastered'};
 const FC_STAGE_COLORS  = {0:'#2563EB', 1:'#7c3aed', 2:'#16a34a', 3:'#16a34a', 4:'#d97706', 5:'#d97706', 6:'#ca8a04'};
 const FC_TTS_LOCALE    = { Spanish:'es-ES', Danish:'da-DK', Russian:'ru-RU' };
 const FC_MAX_STAGE = 6;
@@ -3104,9 +3104,7 @@ window.phSelectPhrase = async (idx) => {
   // Add selected to SRS (or update if already exists)
   const existingSelected = phUserProgress[phLang + ':' + selected.rank];
   if (!existingSelected) {
-    const reviewDate = new Date();
-    reviewDate.setDate(reviewDate.getDate() + 3);
-    const nextReview = reviewDate.toISOString().split('T')[0];
+    const nextReview = new Date().toISOString().split('T')[0]; // due today on first add
     await supabase.from('vocab_words').insert({
       english: selected.english,
       translation: selected.phrase,
