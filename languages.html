@@ -1282,76 +1282,101 @@ function vocabFilter() {
   const q = (document.getElementById('vocabSearch')?.value || '').toLowerCase().trim();
   let pool = vocabLang === 'all' ? vocabAll : vocabAll.filter(w => w.language === vocabLang);
 
-  // Separate words from phrases (phrases have example_sentence='__phrase__')
-  let words   = pool.filter(w => w.example_sentence !== '__phrase__');
-  let phrases = pool.filter(w => w.example_sentence === '__phrase__');
+  // Apply search filter across both words and phrases uniformly
+  if (q) pool = pool.filter(w =>
+    w.english.toLowerCase().includes(q) ||
+    w.translation.toLowerCase().includes(q)
+  );
 
-  // Apply search filter
-  if (q) {
-    words   = words.filter(w => w.english.toLowerCase().includes(q) || w.translation.toLowerCase().includes(q) || (w.example_sentence||'').toLowerCase().includes(q));
-    phrases = phrases.filter(w => w.translation.toLowerCase().includes(q) || w.english.toLowerCase().includes(q));
-  }
+  // Sort: stage 0 first (worst), then 1-6 ascending, then 99 (known) last
+  // Within same stage, sort by language then by translation alphabetically
+  pool = [...pool].sort((a, b) => {
+    const sa = Number(a.srs_stage) || 0;
+    const sb = Number(b.srs_stage) || 0;
+    const sortA = sa === 99 ? 100 : sa;
+    const sortB = sb === 99 ? 100 : sb;
+    if (sortA !== sortB) return sortA - sortB;
+    if (a.language !== b.language) return a.language.localeCompare(b.language);
+    return a.translation.localeCompare(b.translation);
+  });
 
-  // Update count badge: "42 words · 18 phrases"
-  const wLabel = words.length + ' word' + (words.length !== 1 ? 's' : '');
-  const pLabel = phrases.length + ' phrase' + (phrases.length !== 1 ? 's' : '');
-  document.getElementById('vocabCount').textContent = wLabel + ' · ' + pLabel;
+  // Count badge
+  const total = pool.length;
+  const known = pool.filter(w => Number(w.srs_stage) === 99).length;
+  const learning = pool.filter(w => Number(w.srs_stage) > 0 && Number(w.srs_stage) < 99).length;
+  const newItems = pool.filter(w => !Number(w.srs_stage)).length;
+  document.getElementById('vocabCount').textContent =
+    total + ' item' + (total !== 1 ? 's' : '') +
+    (known ? '  ·  ' + known + ' known' : '') +
+    (learning ? '  ·  ' + learning + ' learning' : '') +
+    (newItems ? '  ·  ' + newItems + ' new' : '');
 
   const LANG_COLORS = { Spanish: 'var(--coral)', Danish: 'var(--blue)', Russian: 'var(--purple)' };
 
-  if (!words.length && !phrases.length) {
+  if (!pool.length) {
     document.getElementById('vocabList').innerHTML = '<div style="padding:24px;text-align:center;color:var(--gray-400);font-size:14px">No matches</div>';
     return;
   }
 
-  let html = '';
+  // Stage labels and colors
+  const STAGE_META = {
+    0:  { label: 'New',        color: '#94a3b8', bg: '#94a3b820' },
+    1:  { label: 'Stage 1',    color: '#f97316', bg: '#f9731620' },
+    2:  { label: 'Stage 2',    color: '#f59e0b', bg: '#f59e0b20' },
+    3:  { label: 'Stage 3',    color: '#eab308', bg: '#eab30820' },
+    4:  { label: 'Stage 4',    color: '#84cc16', bg: '#84cc1620' },
+    5:  { label: 'Stage 5',    color: '#22c55e', bg: '#22c55e20' },
+    6:  { label: 'Stage 6',    color: '#10b981', bg: '#10b98120' },
+    99: { label: '✓ Known',    color: '#16a34a', bg: '#16a34a20' },
+  };
 
-  // ── Words section ──────────────────────────────────────────────────────────
-  if (words.length) {
-    html += `<div style="padding:10px 16px 4px;font-size:11px;font-weight:700;letter-spacing:0.08em;color:var(--gray-400);text-transform:uppercase">Words (${words.length})</div>`;
-    html += words.map(w => `
+  // Group items by stage bucket: learning (0-6) vs known (99)
+  // Render section headers when stage group changes
+  let html = '';
+  let lastBucket = null; // 'learning' or 'known'
+
+  for (const w of pool) {
+    const stage = Number(w.srs_stage) || 0;
+    const isPhrase = w.example_sentence === '__phrase__';
+    const meta = STAGE_META[stage] || STAGE_META[0];
+    const bucket = stage === 99 ? 'known' : 'learning';
+
+    if (bucket !== lastBucket) {
+      if (bucket === 'known') {
+        html += `<div style="padding:14px 16px 4px;font-size:11px;font-weight:700;letter-spacing:0.08em;color:#16a34a;text-transform:uppercase">Known (${pool.filter(x => Number(x.srs_stage) === 99).length})</div>`;
+      } else {
+        const learningCount = pool.filter(x => Number(x.srs_stage) !== 99).length;
+        html += `<div style="padding:10px 16px 4px;font-size:11px;font-weight:700;letter-spacing:0.08em;color:var(--gray-400);text-transform:uppercase">Learning (${learningCount})</div>`;
+      }
+      lastBucket = bucket;
+    }
+
+    const stagePill = `<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:5px;background:${meta.bg};color:${meta.color}">${meta.label}</span>`;
+    const langPill  = `<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:5px;background:${LANG_COLORS[w.language]||'var(--gray-200)'}22;color:${LANG_COLORS[w.language]||'var(--gray-600)'}">${w.language}</span>`;
+    const typePill  = isPhrase
+      ? `<span style="font-size:10px;padding:1px 7px;border-radius:5px;background:var(--gray-100);color:var(--gray-400)">phrase</span>`
+      : '';
+
+    const subLine = stage > 0 && stage < 99
+      ? `<div class="list-item-sub">${w.times_correct||0}✓ ${w.times_wrong||0}✗ · Next: ${w.next_review||'—'}</div>`
+      : stage === 99 ? '' // no clutter for known items
+      : `<div class="list-item-sub">${w.times_correct||0}✓ ${w.times_wrong||0}✗</div>`;
+
+    html += `
     <div class="list-item">
       <div class="list-item-left">
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-          <span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:5px;background:${LANG_COLORS[w.language]||'var(--gray-200)'}22;color:${LANG_COLORS[w.language]||'var(--gray-600)'}">${w.language}</span>
-          <strong>${esc(w.english)}</strong>
-          <span style="color:var(--gray-400)">→</span>
-          <span style="color:var(--blue);font-weight:600">${esc(w.translation)}</span>
+          ${langPill}${typePill}${stagePill}
+        </div>
+        <div style="margin-top:4px">
+          <strong>${esc(w.translation)}</strong>
+          <span style="color:var(--gray-400);margin:0 5px">·</span>
+          <span style="color:var(--gray-500);font-size:13px">${esc(w.english)}</span>
         </div>
         ${w.example_sentence && w.example_sentence !== '__phrase__' ? `<div class="list-item-sub" style="font-style:italic">"${esc(w.example_sentence)}"</div>` : ''}
-        <div class="list-item-sub">Stage ${w.srs_stage} · ${w.times_correct||0}✓ ${w.times_wrong||0}✗ · Next: ${w.next_review||'—'}</div>
-      </div>
-    </div>`).join('');
-  }
-
-  // ── Phrases section ────────────────────────────────────────────────────────
-  if (phrases.length) {
-    html += `<div style="padding:${words.length ? '14px' : '10px'} 16px 4px;font-size:11px;font-weight:700;letter-spacing:0.08em;color:var(--gray-400);text-transform:uppercase">Phrases (${phrases.length})</div>`;
-    html += phrases.map(p => {
-      const rank = Number(p.times_seen) || 0;
-      const stage = Number(p.srs_stage) || 0;
-      let statusBadge;
-      if (stage === 99) {
-        statusBadge = `<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:5px;background:#16a34a22;color:#16a34a">✓ Known</span>`;
-      } else if (stage > 0) {
-        statusBadge = `<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:5px;background:#3b82f622;color:#3b82f6">📚 SRS ${stage}</span>`;
-      } else {
-        statusBadge = `<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:5px;background:var(--gray-200);color:var(--gray-500)">New</span>`;
-      }
-      return `
-    <div class="list-item">
-      <div class="list-item-left">
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-          <span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:5px;background:${LANG_COLORS[p.language]||'var(--gray-200)'}22;color:${LANG_COLORS[p.language]||'var(--gray-600)'}">${p.language}</span>
-          ${rank ? `<span style="font-size:10px;color:var(--gray-400)">#${rank}</span>` : ''}
-          ${statusBadge}
-        </div>
-        <div style="margin-top:4px;font-weight:600">${esc(p.translation)}</div>
-        <div class="list-item-sub" style="color:var(--gray-400)">${esc(p.english)}</div>
-        ${stage > 0 && stage < 99 ? `<div class="list-item-sub">Next review: ${p.next_review||'—'}</div>` : ''}
+        ${subLine}
       </div>
     </div>`;
-    }).join('');
   }
 
   document.getElementById('vocabList').innerHTML = html;
