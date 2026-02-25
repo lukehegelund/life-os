@@ -4771,11 +4771,10 @@ function phRenderCards() {
       </div>`;
   }).join('');
 
-  // Show/hide "Know them all" button
+  // Show "Know them all" button whenever cards are visible
   const knowAllBtn = document.getElementById('ph-know-all-btn');
   if (knowAllBtn) {
-    const hasUnknown = phGenerated.some(item => item.status !== 'known');
-    knowAllBtn.style.display = (phGenerated.length > 0 && hasUnknown) ? 'block' : 'none';
+    knowAllBtn.style.display = phGenerated.length > 0 ? 'block' : 'none';
   }
 }
 
