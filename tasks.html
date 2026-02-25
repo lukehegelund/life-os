@@ -42,9 +42,10 @@
     <button class="btn btn-sm btn-ghost mod-btn" id="mod-Personal" onclick="setModule('Personal')">👤 Personal</button>
     <button class="btn btn-sm btn-ghost mod-btn" id="mod-Health" onclick="setModule('Health')">🏃 Health</button>
     <button class="btn btn-sm btn-ghost mod-btn" id="mod-RT Admin" onclick="setModule('RT Admin')">🏛️ RT Admin</button>
+    <button class="btn btn-sm btn-ghost mod-btn" id="mod-Repeated" onclick="setModule('Repeated')">🔄 Repeated</button>
   </div>
   <!-- Schedule label filter tabs -->
-  <div style="display:flex;gap:6px;margin-top:6px;overflow-x:auto;padding-bottom:2px">
+  <div class="sched-filter-row" style="display:flex;gap:6px;margin-top:6px;overflow-x:auto;padding-bottom:2px">
     <button class="btn btn-sm btn-ghost sched-filter-btn" id="sf-All" onclick="setScheduleFilter('All')" style="border-radius:20px">All schedules</button>
     <button class="btn btn-sm btn-ghost sched-filter-btn" id="sf-Today" onclick="setScheduleFilter('Today')" style="border-radius:20px;border-color:#f59e0b;color:#92400e">📅 Today</button>
     <button class="btn btn-sm btn-ghost sched-filter-btn" id="sf-Next Up" onclick="setScheduleFilter('Next Up')" style="border-radius:20px;border-color:var(--blue);color:var(--blue)">Next Up</button>
