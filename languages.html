@@ -3013,8 +3013,10 @@ function phRenderCards() {
       item.status === 'srs'   ? '<span class="ph-card-badge" style="background:#dcfce7;color:#16a34a">📚 In SRS</span>' :
                                 '<span class="ph-card-badge" style="background:#dbeafe;color:#2563eb">New</span>';
     const clickable = item.status !== 'known';
-    return `<div class="ph-card" style="${clickable ? 'cursor:pointer' : 'opacity:0.5;cursor:default'}"
+    const speakBtn = `<button class="fc-speak-btn" id="ph-speak-${idx}" style="position:absolute;top:8px;right:8px;z-index:2" onclick="event.stopPropagation();phSpeak('` + item.phrase.replace(/'/g, "\'") + `','` + phLang + `',document.getElementById('ph-speak-${idx}'))">🔊</button>`;
+    return `<div class="ph-card" style="position:relative;${clickable ? 'cursor:pointer' : 'opacity:0.5;cursor:default'}"
          ${clickable ? 'onclick="phSelectPhrase(' + idx + ')"' : ''}>
+      ${speakBtn}
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin-bottom:6px">${item.tier} · #${item.rank}</div>
       ${badge}
       <div class="ph-card-phrase">${esc(item.phrase)}</div>
@@ -3022,6 +3024,28 @@ function phRenderCards() {
     </div>`;
   }).join('');
 }
+
+// ── Speak a phrase ───────────────────────────────────────────────────────
+window.phSpeak = (text, lang, btnEl) => {
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const locale = FC_TTS_LOCALE[lang] || 'es-ES';
+  setTimeout(() => {
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = locale;
+    const tryVoice = () => {
+      const voices = window.speechSynthesis.getVoices();
+      const exact = voices.find(v => v.lang === locale);
+      const partial = voices.find(v => v.lang.startsWith(locale.split('-')[0]));
+      if (exact) utter.voice = exact; else if (partial) utter.voice = partial;
+    };
+    tryVoice();
+    if (window.speechSynthesis.onvoiceschanged !== undefined) window.speechSynthesis.onvoiceschanged = tryVoice;
+    utter.rate = locale.startsWith('da') ? 0.82 : 0.92;
+    if (btnEl) { utter.onstart = () => btnEl.classList.add('speaking'); utter.onend = utter.onerror = () => btnEl.classList.remove('speaking'); }
+    window.speechSynthesis.speak(utter);
+  }, 60);
+};
 
 // ── Select a phrase ──────────────────────────────────────────────────────
 window.phSelectPhrase = async (idx) => {
