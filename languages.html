@@ -316,6 +316,79 @@
 .lang-loading { display: flex; align-items: center; justify-content: center; padding: 40px 0; }
 .lang-spinner { width: 28px; height: 28px; border: 2.5px solid var(--gray-200); border-top-color: var(--blue); border-radius: 50%; animation: spin 0.7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ─── PHRASES PANEL ───────────────────────────────────────────────────── */
+.ph-body { padding: 0 0 80px; }
+.ph-lang-select { display: flex; gap: 8px; padding: 14px 16px 0; flex-wrap: wrap; }
+.ph-lang-btn {
+  padding: 7px 16px; border-radius: 20px; font-size: 13px; font-weight: 600;
+  border: 1.5px solid var(--gray-200); background: var(--white); color: var(--gray-500);
+  cursor: pointer; transition: all 0.18s;
+}
+.ph-lang-btn.active { background: var(--blue); border-color: var(--blue); color: white; }
+
+.ph-generate-btn {
+  display: block; width: calc(100% - 32px); margin: 14px 16px 0;
+  padding: 14px; background: var(--blue); color: white; border: none;
+  border-radius: 12px; font-size: 1rem; font-weight: 700; cursor: pointer;
+  transition: all 0.2s;
+}
+.ph-generate-btn:active { transform: scale(0.98); opacity: 0.9; }
+.ph-generate-btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+.ph-instruction {
+  margin: 14px 16px 4px;
+  padding: 10px 14px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  font-size: 13px;
+  color: #1e40af;
+  line-height: 1.5;
+}
+
+.ph-cards { padding: 8px 16px 0; display: flex; flex-direction: column; gap: 10px; }
+
+.ph-card {
+  background: var(--white);
+  border: 2px solid var(--gray-200);
+  border-radius: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: all 0.18s;
+  position: relative;
+}
+.ph-card:hover { border-color: var(--blue); background: #eff6ff; }
+.ph-card.known { opacity: 0.45; cursor: default; border-style: dashed; }
+.ph-card.known:hover { border-color: var(--gray-200); background: var(--white); }
+.ph-card.in-srs { border-color: #16a34a; background: #f0fdf4; cursor: default; }
+.ph-card-rank {
+  position: absolute; top: 10px; right: 12px;
+  font-size: 10px; font-weight: 700; color: var(--gray-400);
+  background: var(--gray-50); border: 1px solid var(--gray-200);
+  padding: 1px 7px; border-radius: 6px;
+}
+.ph-card-phrase { font-size: 16px; font-weight: 700; color: var(--gray-800); margin-bottom: 4px; }
+.ph-card-english { font-size: 13px; color: var(--gray-500); }
+.ph-card-badge {
+  display: inline-block; margin-top: 6px; font-size: 11px; font-weight: 700;
+  padding: 2px 8px; border-radius: 5px;
+}
+.ph-card-badge.known  { background: #f3f4f6; color: var(--gray-400); }
+.ph-card-badge.in-srs { background: #dcfce7; color: #16a34a; }
+
+.ph-tap-hint {
+  margin: 10px 16px 0;
+  font-size: 12px; color: var(--gray-400); text-align: center;
+}
+
+.ph-stats {
+  margin: 14px 16px 0;
+  display: flex; gap: 12px;
+}
+.ph-stat { flex: 1; background: var(--gray-50); border: 1px solid var(--gray-100); border-radius: 10px; padding: 10px 12px; text-align: center; }
+.ph-stat-num { font-size: 1.4rem; font-weight: 800; color: var(--blue); }
+.ph-stat-label { font-size: 11px; color: var(--gray-400); margin-top: 2px; }
 </style>
 </head>
 <body>
@@ -329,9 +402,10 @@
   </div>
   <!-- Top-level tab bar -->
   <div class="lang-tabs">
-    <div class="lang-tab active" id="ltab-translator" onclick="switchLangTab('translator')">🌐 Translator</div>
+    <div class="lang-tab active" id="ltab-translator" onclick="switchLangTab('translator')">🌐 Translate</div>
     <div class="lang-tab" id="ltab-flashcards" onclick="switchLangTab('flashcards')">⚡ Flashcards</div>
-    <div class="lang-tab" id="ltab-vocab" onclick="switchLangTab('vocab')">📖 Vocabulary</div>
+    <div class="lang-tab" id="ltab-vocab" onclick="switchLangTab('vocab')">📖 Vocab</div>
+    <div class="lang-tab" id="ltab-phrases" onclick="switchLangTab('phrases')">💬 Phrases</div>
   </div>
 </header>
 
@@ -490,6 +564,49 @@
 </div>
 </div><!-- /panel-vocab -->
 
+<!-- ══════════════════════════════════════════════════════════ PHRASES ════ -->
+<div class="lang-panel" id="panel-phrases">
+<div class="ph-body">
+
+  <!-- Language selector -->
+  <div class="ph-lang-select">
+    <button class="ph-lang-btn active" data-lang="Spanish" onclick="phSetLang('Spanish')">🇪🇸 Spanish</button>
+    <button class="ph-lang-btn" data-lang="Russian" onclick="phSetLang('Russian')">🇷🇺 Russian</button>
+    <button class="ph-lang-btn" data-lang="Danish" onclick="phSetLang('Danish')">🇩🇰 Danish</button>
+  </div>
+
+  <!-- Stats -->
+  <div class="ph-stats">
+    <div class="ph-stat">
+      <div class="ph-stat-num" id="ph-stat-known">—</div>
+      <div class="ph-stat-label">Known</div>
+    </div>
+    <div class="ph-stat">
+      <div class="ph-stat-num" id="ph-stat-srs">—</div>
+      <div class="ph-stat-label">In SRS</div>
+    </div>
+    <div class="ph-stat">
+      <div class="ph-stat-num" id="ph-stat-left">—</div>
+      <div class="ph-stat-label">Remaining</div>
+    </div>
+  </div>
+
+  <!-- Generate button -->
+  <button class="ph-generate-btn" id="ph-generate-btn" onclick="phGenerate()">Generate Phrases</button>
+
+  <!-- Instruction -->
+  <div class="ph-instruction" id="ph-instruction" style="display:none">
+    Tap the <strong>first phrase you don't know</strong> (from simplest to hardest). Phrases simpler than your selection will be marked as known. The phrase you select will be added to your SRS flashcard deck.
+  </div>
+
+  <!-- Phrase cards -->
+  <div class="ph-cards" id="ph-cards"></div>
+
+  <div class="ph-tap-hint" id="ph-tap-hint" style="display:none">Scroll up to see all 5 phrases</div>
+
+</div>
+</div><!-- /panel-phrases -->
+
 </main>
 
 <nav class="bottom-nav">
@@ -536,6 +653,7 @@ window.switchLangTab = (tab) => {
   document.getElementById(`panel-${tab}`).classList.add('active');
   if (tab === 'flashcards') fcInit();
   if (tab === 'vocab') vocabLoad();
+  if (tab === 'phrases') phInit();
 };
 
 // ══════════════════════════════════════════════════════════ STATS ════════
@@ -1184,6 +1302,508 @@ window.setVocabLang = (lang) => {
   vocabLang = lang;
   document.querySelectorAll('#panel-vocab .fc-lang-pill').forEach(p => p.classList.toggle('active', p.dataset.lang === lang));
   vocabFilter();
+};
+
+// ═══════════════════════════════════════════════════════ PHRASES ════════
+// Phrases are stored in vocab_words with example_sentence='__phrase__'
+// english = English meaning, translation = target phrase, language = lang
+// srs_stage=99 + next_review='9999-12-31' = "known" (never review)
+// srs_stage=0..6 = in SRS queue
+// rank stored in times_seen field (misused but no DDL needed)
+
+const PH_TIERS = [
+  { label: 'Core',     min: 1,   max: 20  },
+  { label: 'Common',   min: 21,  max: 50  },
+  { label: 'Useful',   min: 51,  max: 100 },
+  { label: 'Extended', min: 101, max: 200 },
+  { label: 'Advanced', min: 201, max: 500 },
+];
+
+// ── Phrase pools (rank, target phrase, english meaning) ─────────────────
+// Each entry: [rank, targetPhrase, englishMeaning]
+const PH_POOL = {
+  Spanish: [
+    [1,'Hola','Hello'],[2,'Gracias','Thank you'],[3,'Por favor','Please'],[4,'De nada','You\'re welcome'],[5,'Sí','Yes'],
+    [6,'No','No'],[7,'Buenos días','Good morning'],[8,'Buenas noches','Good night'],[9,'¿Cómo estás?','How are you?'],[10,'Bien, gracias','Fine, thank you'],
+    [11,'Lo siento','I\'m sorry'],[12,'Perdón','Excuse me'],[13,'¿Cómo te llamas?','What is your name?'],[14,'Me llamo...','My name is...'],[15,'Mucho gusto','Nice to meet you'],
+    [16,'¿Hablas inglés?','Do you speak English?'],[17,'No entiendo','I don\'t understand'],[18,'¿Puedes repetir?','Can you repeat that?'],[19,'¿Cuánto cuesta?','How much does it cost?'],[20,'¿Dónde está...?','Where is...?'],
+    [21,'Necesito ayuda','I need help'],[22,'Tengo hambre','I\'m hungry'],[23,'Tengo sed','I\'m thirsty'],[24,'Estoy cansado','I\'m tired'],[25,'Me gusta','I like it'],
+    [26,'No me gusta','I don\'t like it'],[27,'¿Qué hora es?','What time is it?'],[28,'¿De dónde eres?','Where are you from?'],[29,'Soy de...','I am from...'],[30,'Hablo un poco de español','I speak a little Spanish'],
+    [31,'¿Puedes hablar más despacio?','Can you speak more slowly?'],[32,'El baño, por favor','The bathroom, please'],[33,'La cuenta, por favor','The bill, please'],[34,'Una mesa para dos','A table for two'],[35,'¿Tienes una habitación disponible?','Do you have a room available?'],
+    [36,'¿A qué hora sale el tren?','What time does the train leave?'],[37,'Quiero ir a...','I want to go to...'],[38,'¿Cómo llego a...?','How do I get to...?'],[39,'Gira a la derecha','Turn right'],[40,'Gira a la izquierda','Turn left'],
+    [41,'Todo recto','Straight ahead'],[42,'Cerca de aquí','Near here'],[43,'Lejos de aquí','Far from here'],[44,'Llama a la policía','Call the police'],[45,'Necesito un médico','I need a doctor'],
+    [46,'Es una emergencia','It\'s an emergency'],[47,'¿Puedo pagar con tarjeta?','Can I pay by card?'],[48,'¿Hay wifi aquí?','Is there wifi here?'],[49,'¿Qué recomiendas?','What do you recommend?'],[50,'Está muy rico','It\'s very delicious'],
+    [51,'¿Puedo ver el menú?','Can I see the menu?'],[52,'Sin gluten, por favor','Gluten-free, please'],[53,'Soy alérgico a...','I\'m allergic to...'],[54,'¿Puedo probar esto?','Can I try this?'],[55,'Me lo llevo','I\'ll take it'],
+    [56,'¿Tiene talla más grande?','Do you have a bigger size?'],[57,'¿Está en oferta?','Is it on sale?'],[58,'¿Puedo devolver esto?','Can I return this?'],[59,'Busco un hotel barato','I\'m looking for a cheap hotel'],[60,'¿Hay descuento para estudiantes?','Is there a student discount?'],
+    [61,'¿Cuándo abre?','When does it open?'],[62,'¿Cuándo cierra?','When does it close?'],[63,'Está cerrado','It\'s closed'],[64,'Está abierto','It\'s open'],[65,'Quisiera reservar','I\'d like to make a reservation'],
+    [66,'Para esta noche','For tonight'],[67,'Para dos personas','For two people'],[68,'¿Incluye el desayuno?','Does it include breakfast?'],[69,'El vuelo está retrasado','The flight is delayed'],[70,'Perdí mi equipaje','I lost my luggage'],
+    [71,'Me robaron','I was robbed'],[72,'¿Puede ayudarme?','Can you help me?'],[73,'No encuentro mi pasaporte','I can\'t find my passport'],[74,'¿Dónde está la embajada?','Where is the embassy?'],[75,'¿Tiene aspirinas?','Do you have aspirin?'],
+    [76,'Me duele la cabeza','I have a headache'],[77,'Me duele el estómago','I have a stomachache'],[78,'Tengo fiebre','I have a fever'],[79,'Soy diabético','I\'m diabetic'],[80,'Tomo medicamentos','I take medication'],
+    [81,'¿Cuánto tiempo tarda?','How long does it take?'],[82,'Estoy perdido','I\'m lost'],[83,'¿Puede escribirlo?','Can you write it down?'],[84,'¿Puede mostrármelo en el mapa?','Can you show me on the map?'],[85,'¿Hay transporte público?','Is there public transport?'],
+    [86,'¿Dónde puedo comprar una tarjeta SIM?','Where can I buy a SIM card?'],[87,'Quiero cambiar dinero','I want to exchange money'],[88,'¿Cuál es el tipo de cambio?','What\'s the exchange rate?'],[89,'Un billete de ida','A one-way ticket'],[90,'Un billete de ida y vuelta','A round-trip ticket'],
+    [91,'¿Está incluido el seguro?','Is insurance included?'],[92,'Tengo una reserva','I have a reservation'],[93,'¿Puedo hacer el check-in más tarde?','Can I check in later?'],[94,'¿Hay caja fuerte?','Is there a safe?'],[95,'La habitación está sucia','The room is dirty'],
+    [96,'El aire acondicionado no funciona','The air conditioning doesn\'t work'],[97,'¿Puede traerme más toallas?','Can you bring more towels?'],[98,'¿A qué hora es el desayuno?','What time is breakfast?'],[99,'¿Hay piscina?','Is there a pool?'],[100,'Me quedé sin batería','My battery is dead'],
+    [101,'¿Tienes cargador?','Do you have a charger?'],[102,'El internet no funciona','The internet isn\'t working'],[103,'¿Cuánto cuesta el taxi?','How much is a taxi?'],[104,'Llévame al aeropuerto','Take me to the airport'],[105,'Pare aquí, por favor','Stop here, please'],
+    [106,'¿Cuánto falta?','How much further?'],[107,'Tengo prisa','I\'m in a hurry'],[108,'No tengo prisa','I\'m not in a hurry'],[109,'¿Puedo sentarme aquí?','Can I sit here?'],[110,'¿Está ocupado este asiento?','Is this seat taken?'],
+    [111,'Con permiso','Excuse me (to pass)'],[112,'¡Buen provecho!','Enjoy your meal!'],[113,'¡Salud!','Cheers!'],[114,'¡Feliz cumpleaños!','Happy birthday!'],[115,'¡Feliz Navidad!','Merry Christmas!'],
+    [116,'¿Qué tal tu día?','How was your day?'],[117,'Estoy muy bien','I\'m doing very well'],[118,'Más o menos','So-so'],[119,'¿Y tú?','And you?'],[120,'Hasta luego','See you later'],
+    [121,'Hasta mañana','See you tomorrow'],[122,'Cuídate','Take care'],[123,'Un placer','My pleasure'],[124,'Encantado de conocerte','Pleased to meet you'],[125,'¿Cuántos años tienes?','How old are you?'],
+    [126,'Tengo veinte años','I\'m twenty years old'],[127,'¿Estás casado?','Are you married?'],[128,'Tengo hijos','I have children'],[129,'¿A qué te dedicas?','What do you do for work?'],[130,'Soy estudiante','I\'m a student'],
+    [131,'Trabajo en...','I work at...'],[132,'¿Cuánto tiempo llevas aquí?','How long have you been here?'],[133,'Es mi primera vez aquí','It\'s my first time here'],[134,'Me encanta este país','I love this country'],[135,'La comida aquí es deliciosa','The food here is delicious'],
+    [136,'¿Qué tiempo hace?','What\'s the weather like?'],[137,'Hace calor','It\'s hot'],[138,'Hace frío','It\'s cold'],[139,'Está lloviendo','It\'s raining'],[140,'Mañana hará sol','Tomorrow will be sunny'],
+    [141,'¿Cuáles son las atracciones turísticas?','What are the tourist attractions?'],[142,'¿Hay un tour guiado?','Is there a guided tour?'],[143,'¿Puedo tomar fotos aquí?','Can I take photos here?'],[144,'¿Dónde puedo comprar souvenirs?','Where can I buy souvenirs?'],[145,'¿Está lejos del centro?','Is it far from downtown?'],
+    [146,'¿Con qué frecuencia pasa el autobús?','How often does the bus come?'],[147,'¿Dónde compro los billetes?','Where do I buy tickets?'],[148,'¿Necesito reservar con antelación?','Do I need to book in advance?'],[149,'¿Hay lista de espera?','Is there a waiting list?'],[150,'¿Puedo cancelar mi reserva?','Can I cancel my reservation?'],
+    [151,'Tengo intolerancia a la lactosa','I\'m lactose intolerant'],[152,'Soy vegetariano','I\'m vegetarian'],[153,'Soy vegano','I\'m vegan'],[154,'Sin carne, por favor','No meat, please'],[155,'¿Qué lleva este plato?','What\'s in this dish?'],
+    [156,'Está demasiado picante','It\'s too spicy'],[157,'¿Puede ser menos salado?','Can it be less salty?'],[158,'Para llevar, por favor','To go, please'],[159,'¿Puede poner esto en una caja?','Can you box this up?'],[160,'¿Tiene menú del día?','Do you have a daily menu?'],
+    [161,'Voy a tomar...','I\'ll have...'],[162,'¿Qué se bebe aquí típicamente?','What\'s the typical drink here?'],[163,'Un vaso de agua, por favor','A glass of water, please'],[164,'Sin hielo, por favor','No ice, please'],[165,'Brindemos','Let\'s toast'],
+    [166,'¿Puedo ver la carta de vinos?','Can I see the wine list?'],[167,'¿Podemos dividir la cuenta?','Can we split the bill?'],[168,'Invito yo','It\'s on me'],[169,'Déjalo, yo pago','Don\'t worry, I\'ll pay'],[170,'¿Está incluida la propina?','Is the tip included?'],
+    [171,'Voy de compras','I\'m going shopping'],[172,'¿Dónde está el centro comercial?','Where is the shopping mall?'],[173,'Busco un regalo','I\'m looking for a gift'],[174,'¿Puedo probármelo?','Can I try it on?'],[175,'¿Tiene en azul?','Do you have it in blue?'],
+    [176,'Es demasiado caro','It\'s too expensive'],[177,'¿Puede hacerme un descuento?','Can you give me a discount?'],[178,'Me lo pienso','I\'ll think about it'],[179,'Solo estoy mirando','I\'m just looking'],[180,'¿Puede envolvérmelo para regalo?','Can you gift wrap it?'],
+    [181,'¿Cuál es la garantía?','What is the warranty?'],[182,'Está roto','It\'s broken'],[183,'No funciona bien','It doesn\'t work well'],[184,'Quiero hacer una reclamación','I want to make a complaint'],[185,'¿Dónde está el servicio de atención al cliente?','Where is customer service?'],
+    [186,'Estoy buscando trabajo','I\'m looking for a job'],[187,'¿Hablan español aquí?','Do they speak Spanish here?'],[188,'Necesito una conexión a internet','I need internet access'],[189,'¿Puedo usar su teléfono?','Can I use your phone?'],[190,'Mi teléfono se quedó sin batería','My phone died'],
+    [191,'¿Puedo cargar mi teléfono aquí?','Can I charge my phone here?'],[192,'¿Tiene adaptador de corriente?','Do you have a power adapter?'],[193,'Necesito un mapa','I need a map'],[194,'¿Tiene una guía de la ciudad?','Do you have a city guide?'],[195,'¿Qué hay para hacer por la noche?','What is there to do at night?'],
+    [196,'¿Hay clubs o discotecas cerca?','Are there clubs or discos nearby?'],[197,'¿Es seguro caminar aquí de noche?','Is it safe to walk here at night?'],[198,'¿Hay zonas peligrosas?','Are there dangerous areas?'],[199,'Estoy aquí de vacaciones','I\'m here on vacation'],[200,'Estoy aquí por trabajo','I\'m here for work'],
+    [201,'Vengo a visitar a unos amigos','I\'m visiting some friends'],[202,'¿Cuántos días te quedas?','How many days are you staying?'],[203,'Me voy mañana','I\'m leaving tomorrow'],[204,'Ha sido un placer','It\'s been a pleasure'],[205,'Espero verte pronto','I hope to see you soon'],
+    [206,'Mantente en contacto','Stay in touch'],[207,'¿Puedo tener tu número?','Can I have your number?'],[208,'Te mando un mensaje','I\'ll send you a message'],[209,'¿Tienes redes sociales?','Are you on social media?'],[210,'Sígueme en Instagram','Follow me on Instagram'],
+    [211,'¿Cuándo nos vemos?','When shall we meet?'],[212,'¿Quedamos mañana?','Shall we meet tomorrow?'],[213,'Te espero a las ocho','I\'ll wait for you at eight'],[214,'Llegaré tarde','I\'ll be late'],[215,'Llego en diez minutos','I\'ll arrive in ten minutes'],
+    [216,'El tráfico está fatal','Traffic is terrible'],[217,'Hay mucho tráfico','There\'s a lot of traffic'],[218,'El tren lleva retraso','The train is delayed'],[219,'Perdí el autobús','I missed the bus'],[220,'¿Me puedes esperar?','Can you wait for me?'],
+    [221,'No llegaré a tiempo','I won\'t arrive on time'],[222,'Lo siento por el retraso','Sorry for the delay'],[223,'¿Podemos cambiar los planes?','Can we change the plans?'],[224,'Prefiero quedar antes','I prefer to meet earlier'],[225,'¿Te viene bien el sábado?','Does Saturday work for you?'],
+    [226,'No puedo ese día','I can\'t that day'],[227,'Estoy ocupado','I\'m busy'],[228,'Tengo otro compromiso','I have another commitment'],[229,'¿Qué tal el jueves?','How about Thursday?'],[230,'Me viene bien cualquier día','Any day works for me'],
+    [231,'¿Hay algo que deba saber?','Is there anything I should know?'],[232,'¿Hay costumbres especiales aquí?','Are there special customs here?'],[233,'¿Debo quitarme los zapatos?','Should I take off my shoes?'],[234,'¿Está bien hablar en voz alta?','Is it okay to talk loudly?'],[235,'No quiero ofender a nadie','I don\'t want to offend anyone'],
+    [236,'Intento aprender la cultura','I\'m trying to learn the culture'],[237,'¿Cuáles son las fiestas locales?','What are the local holidays?'],[238,'¿Qué música es típica de aquí?','What music is typical here?'],[239,'¿Qué deporte es popular?','What sport is popular?'],[240,'¿Hay algún festival pronto?','Is there a festival coming up?'],
+    [241,'¿Cómo se dice... en español?','How do you say... in Spanish?'],[242,'¿Qué significa...?','What does... mean?'],[243,'¿Puedes deletrearlo?','Can you spell it?'],[244,'¿Cómo se escribe?','How do you write it?'],[245,'No sé cómo decirlo','I don\'t know how to say it'],
+    [246,'¿Cuál es la palabra para...?','What is the word for...?'],[247,'Estoy aprendiendo español','I\'m learning Spanish'],[248,'¿Puedes corregirme?','Can you correct me?'],[249,'¿Estoy pronunciando bien?','Am I pronouncing it correctly?'],[250,'Quiero mejorar mi español','I want to improve my Spanish'],
+    [251,'¿Tienes libros de texto?','Do you have textbooks?'],[252,'¿Dónde puedo encontrar clases de idiomas?','Where can I find language classes?'],[253,'¿Hay intercambios de idiomas?','Are there language exchanges?'],[254,'Busco a alguien con quien practicar','I\'m looking for someone to practice with'],[255,'¿Cuánto tiempo llevas estudiando?','How long have you been studying?'],
+    [256,'¿Es difícil el idioma?','Is the language difficult?'],[257,'Me cuesta la pronunciación','I struggle with pronunciation'],[258,'Entiendo mejor de lo que hablo','I understand better than I speak'],[259,'¿Cuándo te fuiste?','When did you leave?'],[260,'¿A dónde fuiste de vacaciones?','Where did you go on vacation?'],
+    [261,'¿Qué tal el viaje?','How was the trip?'],[262,'Fue increíble','It was incredible'],[263,'Lo pasé muy bien','I had a great time'],[264,'Fue una experiencia única','It was a unique experience'],[265,'Repetiría sin dudarlo','I would do it again without hesitation'],
+    [266,'¿Volverías?','Would you go back?'],[267,'Definitivamente','Definitely'],[268,'Quizás algún día','Maybe someday'],[269,'No creo que vuelva','I don\'t think I\'ll go back'],[270,'Hay lugares más interesantes','There are more interesting places'],
+    [271,'¿Qué te pareció la gente?','What did you think of the people?'],[272,'Fueron muy amables','They were very kind'],[273,'Al principio fue difícil','At first it was difficult'],[274,'Me acostumbré rápido','I adapted quickly'],[275,'Extraño estar allí','I miss being there'],
+    [276,'¿Cuándo vuelves?','When are you coming back?'],[277,'Aún no lo sé','I don\'t know yet'],[278,'Depende del trabajo','It depends on work'],[279,'Si consigo el dinero','If I get the money'],[280,'Ahorro para el próximo viaje','I\'m saving for the next trip'],
+    [281,'¿Me prestas dinero?','Can you lend me money?'],[282,'Te lo devuelvo mañana','I\'ll pay you back tomorrow'],[283,'¿Me fías?','Can you put it on my tab?'],[284,'No llevo efectivo','I don\'t have cash'],[285,'¿Aceptan tarjeta de crédito?','Do you accept credit cards?'],
+    [286,'¿Hay cajero automático cerca?','Is there an ATM nearby?'],[287,'Me han cobrado de más','I\'ve been overcharged'],[288,'Falta cambio','I\'m short change'],[289,'¿Puede darme un recibo?','Can you give me a receipt?'],[290,'Necesito una factura','I need an invoice'],
+    [291,'¿Tiene seguro médico?','Do you have medical insurance?'],[292,'¿Dónde está el hospital más cercano?','Where is the nearest hospital?'],[293,'Llame a una ambulancia','Call an ambulance'],[294,'Me he cortado','I\'ve cut myself'],[295,'Me he quemado','I\'ve burned myself'],
+    [296,'Me he torcido el tobillo','I\'ve sprained my ankle'],[297,'No puedo moverlo','I can\'t move it'],[298,'Me duele mucho','It hurts a lot'],[299,'Necesito puntos','I need stitches'],[300,'¿Puede darme algo para el dolor?','Can you give me something for the pain?'],
+    [301,'Soy alérgico a la penicilina','I\'m allergic to penicillin'],[302,'¿Cuántas veces al día?','How many times a day?'],[303,'Con o sin comida','With or without food'],[304,'¿Tiene efectos secundarios?','Are there side effects?'],[305,'Me siento mareado','I feel dizzy'],
+    [306,'Me siento mal','I feel sick'],[307,'Voy a vomitar','I\'m going to vomit'],[308,'¿Cuánto tiempo dura el tratamiento?','How long does the treatment last?'],[309,'¿Necesito receta?','Do I need a prescription?'],[310,'¿Puedo comprar esto sin receta?','Can I buy this without a prescription?'],
+    [311,'¿Tiene algo más fuerte?','Do you have something stronger?'],[312,'¿Cuánto tiempo tardan los resultados?','How long do the results take?'],[313,'¿Debo volver?','Should I come back?'],[314,'¿Cuándo debo tomar la próxima dosis?','When should I take the next dose?'],[315,'¿Puedo hacer ejercicio?','Can I exercise?'],
+    [316,'¿Debo guardar reposo?','Should I rest?'],[317,'¿Puedo beber alcohol?','Can I drink alcohol?'],[318,'¿Puedo comer normal?','Can I eat normally?'],[319,'¿Cuándo me puedo duchar?','When can I shower?'],[320,'¿Cuándo me quitan los puntos?','When do the stitches come out?'],
+    [321,'Estoy aprendiendo a cocinar','I\'m learning to cook'],[322,'¿Me das la receta?','Can you give me the recipe?'],[323,'¿Cuánto tiempo se cocina?','How long does it cook?'],[324,'A fuego lento','On low heat'],[325,'¿Qué ingredientes necesito?','What ingredients do I need?'],
+    [326,'¿Dónde compras las verduras?','Where do you buy vegetables?'],[327,'¿Hay mercado de abastos?','Is there a food market?'],[328,'¿Es fresco?','Is it fresh?'],[329,'¿Es de temporada?','Is it in season?'],[330,'¿Es producción local?','Is it locally produced?'],
+    [331,'¿Tiene productos orgánicos?','Do you have organic products?'],[332,'¿A cuánto están los tomates?','How much are the tomatoes?'],[333,'Deme medio kilo','Give me half a kilo'],[334,'¿Puede cortarlo en filetes?','Can you cut it into slices?'],[335,'Bien maduro, por favor','Nice and ripe, please'],
+    [336,'¿Tiene algo más tierno?','Do you have something more tender?'],[337,'¿Cuándo caduca?','When does it expire?'],[338,'¿Es sin gluten?','Is it gluten-free?'],[339,'¿Tiene lactosa?','Does it contain lactose?'],[340,'¿Tiene frutos secos?','Does it contain nuts?'],
+    [341,'Estoy haciendo dieta','I\'m on a diet'],[342,'Intento comer sano','I\'m trying to eat healthy'],[343,'Como poca carne','I eat little meat'],[344,'Prefiero la comida casera','I prefer home-cooked food'],[345,'Me gusta experimentar con recetas','I like experimenting with recipes'],
+    [346,'¿Tienes buena mano para la cocina?','Are you a good cook?'],[347,'Se me quema siempre','I always burn things'],[348,'¿Me enseñas a hacerlo?','Can you teach me how to make it?'],[349,'Lo he hecho yo mismo','I made it myself'],[350,'¿Quieres probar un poco?','Do you want to try a little?'],
+    [351,'No hay nada como la comida de casa','There\'s nothing like home cooking'],[352,'En mi país se come diferente','In my country we eat differently'],[353,'¿Cómo se llama este plato?','What is this dish called?'],[354,'Nunca había probado esto','I\'ve never tried this before'],[355,'¿Es picante?','Is it spicy?'],
+    [356,'¿Lleva gluten?','Does it contain gluten?'],[357,'No como cerdo','I don\'t eat pork'],[358,'¿Puedo pedir un plato sin...?','Can I order a dish without...?'],[359,'¿Qué lleva de postre?','What do you have for dessert?'],[360,'¿Está incluido el postre?','Is dessert included?'],
+    [361,'Tengo prisa, ¿puede ser rápido?','I\'m in a hurry, can it be quick?'],[362,'¿Cuánto tarda en salir el plato?','How long does the dish take?'],[363,'Me olvidé de decirle algo','I forgot to tell you something'],[364,'Cometí un error','I made a mistake'],[365,'No era mi intención','It wasn\'t my intention'],
+    [366,'Lo hice sin querer','I did it by accident'],[367,'No volverá a pasar','It won\'t happen again'],[368,'¿Podemos hablar?','Can we talk?'],[369,'Necesito contarte algo','I need to tell you something'],[370,'Hay algo que no te he dicho','There\'s something I haven\'t told you'],
+    [371,'No sé cómo decirte esto','I don\'t know how to tell you this'],[372,'Espero que no te moleste','I hope you don\'t mind'],[373,'¿Me entiendes?','Do you understand me?'],[374,'¿Estás de acuerdo?','Do you agree?'],[375,'No estoy de acuerdo','I disagree'],
+    [376,'Creo que tienes razón','I think you\'re right'],[377,'Estás equivocado','You\'re wrong'],[378,'Puede que tengas razón','You might be right'],[379,'Hay que pensarlo más','We need to think about it more'],[380,'Necesito más tiempo','I need more time'],
+    [381,'No me lo esperaba','I didn\'t expect that'],[382,'Me has sorprendido','You\'ve surprised me'],[383,'Qué buena noticia','What good news'],[384,'Qué mala suerte','What bad luck'],[385,'¡Qué pena!','What a shame!'],
+    [386,'Lo siento mucho','I\'m very sorry'],[387,'Todo saldrá bien','Everything will be fine'],[388,'No te preocupes','Don\'t worry'],[389,'Estás exagerando','You\'re exaggerating'],[390,'Cálmate','Calm down'],
+    [391,'Necesito que te calmes','I need you to calm down'],[392,'Hablemos con calma','Let\'s talk calmly'],[393,'No quiero discutir','I don\'t want to argue'],[394,'Prefiero dejar el tema','I prefer to drop the subject'],[395,'Sigamos adelante','Let\'s move forward'],
+    [396,'Olvidemos lo que pasó','Let\'s forget what happened'],[397,'Empecemos de nuevo','Let\'s start over'],[398,'Te perdono','I forgive you'],[399,'¿Me perdonas?','Do you forgive me?'],[400,'Fue culpa mía','It was my fault'],
+    [401,'No fue tu culpa','It wasn\'t your fault'],[402,'Los dos nos equivocamos','We were both wrong'],[403,'Lo importante es que estamos bien','The important thing is that we\'re okay'],[404,'Me alegra que habláramos','I\'m glad we talked'],[405,'Gracias por tu honestidad','Thank you for your honesty'],
+    [406,'Valoro tu opinión','I value your opinion'],[407,'Tu apoyo significa mucho','Your support means a lot'],[408,'No sé qué haría sin ti','I don\'t know what I\'d do without you'],[409,'Eres muy importante para mí','You\'re very important to me'],[410,'Te quiero mucho','I love you very much'],
+    [411,'Eres mi mejor amigo','You\'re my best friend'],[412,'¿Qué harías tú en mi lugar?','What would you do in my place?'],[413,'Necesito tu consejo','I need your advice'],[414,'¿Qué te parece esta idea?','What do you think of this idea?'],[415,'¿Me puedes dar tu opinión?','Can you give me your opinion?'],
+    [416,'¿Qué harías diferente?','What would you do differently?'],[417,'¿Cómo lo ves tú?','How do you see it?'],[418,'¿Te parece lógico?','Does it seem logical to you?'],[419,'¿Qué te preocupa?','What worries you?'],[420,'¿Qué te ilusiona?','What excites you?'],
+    [421,'Tengo muchas ganas','I\'m really looking forward to it'],[422,'No tengo ganas de nada','I don\'t feel like doing anything'],[423,'Estoy pasando una mala racha','I\'m going through a rough patch'],[424,'Las cosas mejorarán','Things will improve'],[425,'Hay que ser positivo','You have to be positive'],
+    [426,'A veces la vida es difícil','Sometimes life is difficult'],[427,'Pero siempre hay una solución','But there\'s always a solution'],[428,'Confío en ti','I trust you'],[429,'Sé que puedes hacerlo','I know you can do it'],[430,'¡Ánimo!','Cheer up!'],
+    [431,'¡No te rindas!','Don\'t give up!'],[432,'Has hecho un gran trabajo','You\'ve done a great job'],[433,'Estoy orgulloso de ti','I\'m proud of you'],[434,'Mereces lo mejor','You deserve the best'],[435,'Eres muy valiente','You\'re very brave'],
+    [436,'No me esperaba menos de ti','I expected no less from you'],[437,'¿Cómo puedo ayudarte?','How can I help you?'],[438,'Estoy aquí para lo que necesites','I\'m here for whatever you need'],[439,'Cuenta conmigo','Count on me'],[440,'Puedes llamarme cuando quieras','You can call me whenever you want'],
+    [441,'No estás solo','You\'re not alone'],[442,'Todos pasamos por eso','We all go through that'],[443,'El tiempo lo cura todo','Time heals everything'],[444,'Mañana será mejor','Tomorrow will be better'],[445,'Vive el momento','Live in the moment'],
+    [446,'No te pongas tan serio','Don\'t be so serious'],[447,'Ríete un poco','Laugh a little'],[448,'La risa es la mejor medicina','Laughter is the best medicine'],[449,'¿Te acuerdas cuando...?','Do you remember when...?'],[450,'Qué buenos recuerdos','What good memories'],
+    [451,'Lo echaré de menos','I\'ll miss it'],[452,'Nunca olvidaré esto','I\'ll never forget this'],[453,'Ha sido una gran aventura','It\'s been a great adventure'],[454,'¿Qué viene ahora?','What comes next?'],[455,'El futuro está lleno de posibilidades','The future is full of possibilities'],
+    [456,'Todo está por hacer','Everything is yet to be done'],[457,'Hay que aprovechar cada oportunidad','You have to make the most of every opportunity'],[458,'La vida es corta','Life is short'],[459,'Hay que disfrutar','You have to enjoy it'],[460,'¿Qué es lo que más valoras en la vida?','What do you value most in life?'],
+    [461,'Para mí lo más importante es la familia','For me the most important thing is family'],[462,'Sin salud no hay nada','Without health there\'s nothing'],[463,'El dinero no lo es todo','Money isn\'t everything'],[464,'Lo que importa es ser feliz','What matters is being happy'],[465,'¿Qué te hace feliz?','What makes you happy?'],
+    [466,'Me hace feliz estar con mis amigos','I\'m happy when I\'m with my friends'],[467,'Me encanta viajar','I love to travel'],[468,'Me gusta leer','I like to read'],[469,'Practico deporte todos los días','I exercise every day'],[470,'¿Tienes algún hobby?','Do you have any hobbies?'],
+    [471,'Toco la guitarra','I play guitar'],[472,'Pinto en mis ratos libres','I paint in my free time'],[473,'Me encanta la fotografía','I love photography'],[474,'Juego al ajedrez','I play chess'],[475,'Colecciono...','I collect...'],
+    [476,'¿Qué tipo de música escuchas?','What kind of music do you listen to?'],[477,'Me gusta todo tipo de música','I like all kinds of music'],[478,'Prefiero la música en vivo','I prefer live music'],[479,'¿Vas mucho al cine?','Do you go to the movies often?'],[480,'¿Qué serie recomiendas?','What series do you recommend?'],
+    [481,'Estoy enganchado a esta serie','I\'m hooked on this series'],[482,'¿Has visto la última temporada?','Have you seen the last season?'],[483,'No hagas spoilers','Don\'t give spoilers'],[484,'¿El libro o la película?','The book or the movie?'],[485,'Prefiero el libro siempre','I always prefer the book'],
+    [486,'¿Cuál es tu libro favorito?','What\'s your favorite book?'],[487,'¿Qué género prefieres?','What genre do you prefer?'],[488,'Leo antes de dormir','I read before bed'],[489,'No tengo tiempo para leer','I don\'t have time to read'],[490,'¿Cuándo vas al gimnasio?','When do you go to the gym?'],
+    [491,'Entreno tres veces a la semana','I train three times a week'],[492,'¿Corres?','Do you run?'],[493,'Hago yoga por las mañanas','I do yoga in the mornings'],[494,'¿Qué deporte practicas?','What sport do you play?'],[495,'Juego al fútbol los domingos','I play football on Sundays'],
+    [496,'¿Eres del Madrid o del Barça?','Are you a Madrid or Barça fan?'],[497,'No me interesa el fútbol','I\'m not interested in football'],[498,'Prefiero el baloncesto','I prefer basketball'],[499,'¿Vamos a ver el partido?','Shall we watch the game?'],[500,'¿A qué hora empieza?','What time does it start?'],
+  ],
+  Russian: [
+    [1,'Привет','Hello'],[2,'Спасибо','Thank you'],[3,'Пожалуйста','Please / You\'re welcome'],[4,'Да','Yes'],[5,'Нет','No'],
+    [6,'Доброе утро','Good morning'],[7,'Добрый вечер','Good evening'],[8,'Спокойной ночи','Good night'],[9,'Как дела?','How are you?'],[10,'Хорошо, спасибо','Fine, thank you'],
+    [11,'Извините','Excuse me / Sorry'],[12,'Простите','Forgive me / Pardon'],[13,'Как вас зовут?','What is your name?'],[14,'Меня зовут...','My name is...'],[15,'Очень приятно','Nice to meet you'],
+    [16,'Вы говорите по-английски?','Do you speak English?'],[17,'Я не понимаю','I don\'t understand'],[18,'Повторите, пожалуйста','Please repeat that'],[19,'Сколько это стоит?','How much does it cost?'],[20,'Где находится...?','Where is...?'],
+    [21,'Мне нужна помощь','I need help'],[22,'Я голоден','I\'m hungry'],[23,'Я хочу пить','I\'m thirsty'],[24,'Я устал','I\'m tired'],[25,'Мне это нравится','I like it'],
+    [26,'Мне это не нравится','I don\'t like it'],[27,'Который час?','What time is it?'],[28,'Откуда вы?','Where are you from?'],[29,'Я из...','I\'m from...'],[30,'Я немного говорю по-русски','I speak a little Russian'],
+    [31,'Говорите медленнее, пожалуйста','Please speak more slowly'],[32,'Где туалет?','Where is the bathroom?'],[33,'Счёт, пожалуйста','The bill, please'],[34,'Столик на двоих','A table for two'],[35,'Есть свободные номера?','Do you have rooms available?'],
+    [36,'Когда отправляется поезд?','When does the train depart?'],[37,'Я хочу поехать в...','I want to go to...'],[38,'Как добраться до...?','How do I get to...?'],[39,'Поверните направо','Turn right'],[40,'Поверните налево','Turn left'],
+    [41,'Прямо','Straight ahead'],[42,'Недалеко отсюда','Near here'],[43,'Далеко отсюда','Far from here'],[44,'Вызовите полицию','Call the police'],[45,'Мне нужен врач','I need a doctor'],
+    [46,'Это срочно','It\'s urgent'],[47,'Можно платить картой?','Can I pay by card?'],[48,'Здесь есть вай-фай?','Is there wifi here?'],[49,'Что вы рекомендуете?','What do you recommend?'],[50,'Это очень вкусно','It\'s very delicious'],
+    [51,'Можно посмотреть меню?','Can I see the menu?'],[52,'Без глютена, пожалуйста','Gluten-free, please'],[53,'У меня аллергия на...','I\'m allergic to...'],[54,'Можно попробовать?','Can I try it?'],[55,'Я возьму это','I\'ll take it'],
+    [56,'Есть размер побольше?','Do you have a bigger size?'],[57,'Это со скидкой?','Is it on sale?'],[58,'Можно вернуть это?','Can I return this?'],[59,'Ищу недорогой отель','I\'m looking for a cheap hotel'],[60,'Есть студенческая скидка?','Is there a student discount?'],
+    [61,'Когда открывается?','When does it open?'],[62,'Когда закрывается?','When does it close?'],[63,'Закрыто','Closed'],[64,'Открыто','Open'],[65,'Я хотел бы сделать бронь','I\'d like to make a reservation'],
+    [66,'На сегодняшний вечер','For tonight'],[67,'На двоих','For two people'],[68,'Завтрак включён?','Is breakfast included?'],[69,'Рейс задержан','The flight is delayed'],[70,'Я потерял багаж','I lost my luggage'],
+    [71,'Меня ограбили','I was robbed'],[72,'Помогите мне, пожалуйста','Please help me'],[73,'Я не могу найти паспорт','I can\'t find my passport'],[74,'Где посольство?','Where is the embassy?'],[75,'Есть аспирин?','Do you have aspirin?'],
+    [76,'У меня болит голова','I have a headache'],[77,'У меня болит живот','I have a stomachache'],[78,'У меня температура','I have a fever'],[79,'Я диабетик','I\'m diabetic'],[80,'Я принимаю лекарства','I take medication'],
+    [81,'Сколько времени это займёт?','How long will it take?'],[82,'Я потерялся','I\'m lost'],[83,'Запишите, пожалуйста','Please write it down'],[84,'Покажите на карте','Show me on the map'],[85,'Есть общественный транспорт?','Is there public transport?'],
+    [86,'Где купить сим-карту?','Where can I buy a SIM card?'],[87,'Хочу обменять деньги','I want to exchange money'],[88,'Какой обменный курс?','What\'s the exchange rate?'],[89,'Билет в одну сторону','A one-way ticket'],[90,'Билет туда и обратно','A round-trip ticket'],
+    [91,'Страховка включена?','Is insurance included?'],[92,'У меня бронь','I have a reservation'],[93,'Можно заселиться позже?','Can I check in later?'],[94,'Есть сейф?','Is there a safe?'],[95,'Номер грязный','The room is dirty'],
+    [96,'Кондиционер не работает','The air conditioning doesn\'t work'],[97,'Принесите полотенца','Please bring towels'],[98,'В котором часу завтрак?','What time is breakfast?'],[99,'Есть бассейн?','Is there a pool?'],[100,'Телефон разрядился','My phone is dead'],
+    [101,'Есть зарядка?','Do you have a charger?'],[102,'Интернет не работает','The internet isn\'t working'],[103,'Сколько стоит такси?','How much is a taxi?'],[104,'В аэропорт, пожалуйста','To the airport, please'],[105,'Остановите здесь','Stop here'],
+    [106,'Далеко ещё?','How much further?'],[107,'Я спешу','I\'m in a hurry'],[108,'Я не спешу','I\'m not in a hurry'],[109,'Можно здесь сесть?','Can I sit here?'],[110,'Это место занято?','Is this seat taken?'],
+    [111,'Разрешите пройти','Excuse me (to pass)'],[112,'Приятного аппетита!','Enjoy your meal!'],[113,'Будем здоровы!','To your health! / Cheers!'],[114,'С днём рождения!','Happy birthday!'],[115,'С Рождеством!','Merry Christmas!'],
+    [116,'Как прошёл день?','How was your day?'],[117,'Всё отлично','Everything is great'],[118,'Так себе','So-so'],[119,'А у тебя?','And you?'],[120,'До свидания','Goodbye'],
+    [121,'До завтра','See you tomorrow'],[122,'Берегите себя','Take care'],[123,'С удовольствием','With pleasure'],[124,'Рад познакомиться','Glad to meet you'],[125,'Сколько вам лет?','How old are you?'],
+    [126,'Мне двадцать лет','I\'m twenty years old'],[127,'Вы женаты?','Are you married?'],[128,'У меня есть дети','I have children'],[129,'Кем вы работаете?','What do you do for work?'],[130,'Я студент','I\'m a student'],
+    [131,'Я работаю в...','I work at...'],[132,'Сколько вы уже здесь?','How long have you been here?'],[133,'Я здесь впервые','It\'s my first time here'],[134,'Я люблю эту страну','I love this country'],[135,'Здесь очень вкусная еда','The food here is delicious'],
+    [136,'Какая сегодня погода?','What\'s the weather like today?'],[137,'Жарко','It\'s hot'],[138,'Холодно','It\'s cold'],[139,'Идёт дождь','It\'s raining'],[140,'Завтра будет солнечно','Tomorrow will be sunny'],
+    [141,'Какие здесь достопримечательности?','What are the tourist attractions?'],[142,'Есть экскурсия?','Is there a guided tour?'],[143,'Можно фотографировать?','Can I take photos?'],[144,'Где купить сувениры?','Where can I buy souvenirs?'],[145,'Это далеко от центра?','Is it far from downtown?'],
+    [146,'Как часто ходит автобус?','How often does the bus come?'],[147,'Где купить билеты?','Where do I buy tickets?'],[148,'Нужно бронировать заранее?','Do I need to book in advance?'],[149,'Есть лист ожидания?','Is there a waiting list?'],[150,'Можно отменить бронь?','Can I cancel my reservation?'],
+    [151,'У меня непереносимость лактозы','I\'m lactose intolerant'],[152,'Я вегетарианец','I\'m vegetarian'],[153,'Я веган','I\'m vegan'],[154,'Без мяса, пожалуйста','No meat, please'],[155,'Что в этом блюде?','What\'s in this dish?'],
+    [156,'Слишком острое','It\'s too spicy'],[157,'Можно менее солёное?','Can it be less salty?'],[158,'С собой, пожалуйста','To go, please'],[159,'Упакуйте, пожалуйста','Can you box this up?'],[160,'Есть бизнес-ланч?','Do you have a daily menu?'],
+    [161,'Я возьму...','I\'ll have...'],[162,'Что здесь обычно пьют?','What\'s the typical drink here?'],[163,'Стакан воды, пожалуйста','A glass of water, please'],[164,'Без льда, пожалуйста','No ice, please'],[165,'Давайте выпьем','Let\'s drink'],
+    [166,'Можно карту вин?','Can I see the wine list?'],[167,'Разделим счёт?','Can we split the bill?'],[168,'Я угощаю','It\'s on me'],[169,'Не беспокойся, я заплачу','Don\'t worry, I\'ll pay'],[170,'Чаевые включены?','Is the tip included?'],
+    [171,'Иду за покупками','I\'m going shopping'],[172,'Где торговый центр?','Where is the shopping mall?'],[173,'Ищу подарок','I\'m looking for a gift'],[174,'Можно примерить?','Can I try it on?'],[175,'Есть в синем цвете?','Do you have it in blue?'],
+    [176,'Слишком дорого','It\'s too expensive'],[177,'Сделайте скидку','Can you give me a discount?'],[178,'Я подумаю','I\'ll think about it'],[179,'Я просто смотрю','I\'m just looking'],[180,'Упакуйте как подарок?','Can you gift wrap it?'],
+    [181,'Какая гарантия?','What is the warranty?'],[182,'Это сломано','It\'s broken'],[183,'Плохо работает','It doesn\'t work well'],[184,'Хочу подать жалобу','I want to make a complaint'],[185,'Где служба поддержки?','Where is customer service?'],
+    [186,'Ищу работу','I\'m looking for a job'],[187,'Здесь говорят по-русски?','Do they speak Russian here?'],[188,'Мне нужен интернет','I need internet access'],[189,'Можно воспользоваться вашим телефоном?','Can I use your phone?'],[190,'Телефон сел','My phone died'],
+    [191,'Можно зарядить телефон?','Can I charge my phone here?'],[192,'Есть переходник?','Do you have a power adapter?'],[193,'Мне нужна карта','I need a map'],[194,'Есть путеводитель?','Do you have a city guide?'],[195,'Что делать вечером?','What is there to do at night?'],
+    [196,'Есть клубы рядом?','Are there clubs nearby?'],[197,'Ночью безопасно гулять?','Is it safe to walk at night?'],[198,'Есть опасные районы?','Are there dangerous areas?'],[199,'Я в отпуске','I\'m on vacation'],[200,'Я здесь по работе','I\'m here for work'],
+    [201,'Еду навестить друзей','I\'m visiting some friends'],[202,'Сколько дней останетесь?','How many days are you staying?'],[203,'Уезжаю завтра','I\'m leaving tomorrow'],[204,'Было приятно','It\'s been a pleasure'],[205,'Надеюсь увидеть тебя скоро','I hope to see you soon'],
+    [206,'Не теряй связь','Stay in touch'],[207,'Можешь дать свой номер?','Can I have your number?'],[208,'Напишу тебе','I\'ll send you a message'],[209,'Ты есть в соцсетях?','Are you on social media?'],[210,'Подпишись на меня в Instagram','Follow me on Instagram'],
+    [211,'Когда встретимся?','When shall we meet?'],[212,'Встретимся завтра?','Shall we meet tomorrow?'],[213,'Жду тебя в восемь','I\'ll wait for you at eight'],[214,'Опоздаю','I\'ll be late'],[215,'Буду через десять минут','I\'ll arrive in ten minutes'],
+    [216,'Пробки','Traffic is terrible'],[217,'Много пробок','There\'s a lot of traffic'],[218,'Поезд задерживается','The train is delayed'],[219,'Я пропустил автобус','I missed the bus'],[220,'Ты можешь меня подождать?','Can you wait for me?'],
+    [221,'Не успею вовремя','I won\'t arrive on time'],[222,'Извини за опоздание','Sorry for the delay'],[223,'Можем изменить планы?','Can we change the plans?'],[224,'Лучше встретиться раньше','I prefer to meet earlier'],[225,'Суббота подходит?','Does Saturday work for you?'],
+    [226,'В этот день не могу','I can\'t that day'],[227,'Я занят','I\'m busy'],[228,'У меня другие планы','I have another commitment'],[229,'Как насчёт четверга?','How about Thursday?'],[230,'Любой день подходит','Any day works for me'],
+    [231,'Есть что-то, что надо знать?','Is there anything I should know?'],[232,'Есть особые обычаи?','Are there special customs?'],[233,'Нужно снимать обувь?','Should I take off my shoes?'],[234,'Можно говорить громко?','Is it okay to talk loudly?'],[235,'Не хочу никого обидеть','I don\'t want to offend anyone'],
+    [236,'Изучаю культуру','I\'m trying to learn the culture'],[237,'Какие местные праздники?','What are the local holidays?'],[238,'Какая музыка здесь популярна?','What music is popular here?'],[239,'Какой спорт популярен?','What sport is popular?'],[240,'Скоро будет фестиваль?','Is there a festival coming up?'],
+    [241,'Как сказать... по-русски?','How do you say... in Russian?'],[242,'Что значит...?','What does... mean?'],[243,'Можешь написать это?','Can you spell it?'],[244,'Как пишется?','How do you write it?'],[245,'Не знаю как это сказать','I don\'t know how to say it'],
+    [246,'Как будет слово...?','What is the word for...?'],[247,'Я учу русский','I\'m learning Russian'],[248,'Исправляй меня','Can you correct me?'],[249,'Правильно произношу?','Am I pronouncing it correctly?'],[250,'Хочу улучшить русский','I want to improve my Russian'],
+    [251,'Где учебники?','Do you have textbooks?'],[252,'Где найти языковые курсы?','Where can I find language classes?'],[253,'Есть языковые обмены?','Are there language exchanges?'],[254,'Ищу партнёра для практики','I\'m looking for a practice partner'],[255,'Сколько ты учишь язык?','How long have you been studying?'],
+    [256,'Язык сложный?','Is the language difficult?'],[257,'Мне трудно произношение','I struggle with pronunciation'],[258,'Понимаю лучше, чем говорю','I understand better than I speak'],[259,'Когда ты уехал?','When did you leave?'],[260,'Куда ты ездил в отпуск?','Where did you go on vacation?'],
+    [261,'Как прошла поездка?','How was the trip?'],[262,'Было невероятно','It was incredible'],[263,'Хорошо провёл время','I had a great time'],[264,'Это был уникальный опыт','It was a unique experience'],[265,'Я бы сделал это снова','I would do it again'],
+    [266,'Вернёшься туда?','Would you go back?'],[267,'Определённо','Definitely'],[268,'Может быть, когда-нибудь','Maybe someday'],[269,'Не думаю, что вернусь','I don\'t think I\'ll go back'],[270,'Есть более интересные места','There are more interesting places'],
+    [271,'Как тебе местные?','What did you think of the people?'],[272,'Они были очень добры','They were very kind'],[273,'Сначала было трудно','At first it was difficult'],[274,'Быстро привык','I adapted quickly'],[275,'Скучаю по тем местам','I miss being there'],
+    [276,'Когда вернёшься?','When are you coming back?'],[277,'Ещё не знаю','I don\'t know yet'],[278,'Зависит от работы','It depends on work'],[279,'Если найду деньги','If I get the money'],[280,'Коплю на следующую поездку','I\'m saving for the next trip'],
+    [281,'Одолжишь денег?','Can you lend me money?'],[282,'Верну завтра','I\'ll pay you back tomorrow'],[283,'Запишешь на мой счёт?','Can you put it on my tab?'],[284,'Нет наличных','I don\'t have cash'],[285,'Принимаете кредитные карты?','Do you accept credit cards?'],
+    [286,'Есть банкомат рядом?','Is there an ATM nearby?'],[287,'С меня взяли лишнее','I\'ve been overcharged'],[288,'Не хватает сдачи','I\'m short change'],[289,'Дайте чек, пожалуйста','Can you give me a receipt?'],[290,'Мне нужна счёт-фактура','I need an invoice'],
+    [291,'Есть медицинская страховка?','Do you have medical insurance?'],[292,'Где ближайшая больница?','Where is the nearest hospital?'],[293,'Вызовите скорую','Call an ambulance'],[294,'Я порезался','I\'ve cut myself'],[295,'Я обжёгся','I\'ve burned myself'],
+    [296,'Я вывихнул лодыжку','I\'ve sprained my ankle'],[297,'Не могу двигать','I can\'t move it'],[298,'Очень больно','It hurts a lot'],[299,'Нужны швы','I need stitches'],[300,'Дайте что-нибудь от боли','Can you give me something for the pain?'],
+    [301,'У меня аллергия на пенициллин','I\'m allergic to penicillin'],[302,'Сколько раз в день?','How many times a day?'],[303,'До или после еды','With or without food'],[304,'Есть побочные эффекты?','Are there side effects?'],[305,'Голова кружится','I feel dizzy'],
+    [306,'Мне плохо','I feel sick'],[307,'Сейчас вырвет','I\'m going to vomit'],[308,'Сколько длится лечение?','How long does the treatment last?'],[309,'Нужен рецепт?','Do I need a prescription?'],[310,'Можно без рецепта?','Can I buy this without a prescription?'],
+    [311,'Есть что посильнее?','Do you have something stronger?'],[312,'Когда будут результаты?','How long do the results take?'],[313,'Надо вернуться?','Should I come back?'],[314,'Когда следующий приём?','When should I take the next dose?'],[315,'Можно заниматься спортом?','Can I exercise?'],
+    [316,'Надо соблюдать постельный режим?','Should I rest?'],[317,'Можно алкоголь?','Can I drink alcohol?'],[318,'Можно нормально есть?','Can I eat normally?'],[319,'Когда можно принять душ?','When can I shower?'],[320,'Когда снимут швы?','When do the stitches come out?'],
+    [321,'Учусь готовить','I\'m learning to cook'],[322,'Дашь рецепт?','Can you give me the recipe?'],[323,'Сколько варить?','How long does it cook?'],[324,'На медленном огне','On low heat'],[325,'Какие нужны ингредиенты?','What ingredients do I need?'],
+    [326,'Где покупаешь овощи?','Where do you buy vegetables?'],[327,'Есть рынок?','Is there a food market?'],[328,'Это свежее?','Is it fresh?'],[329,'Это сезонное?','Is it in season?'],[330,'Это местное производство?','Is it locally produced?'],
+    [331,'Есть органические продукты?','Do you have organic products?'],[332,'Почём помидоры?','How much are the tomatoes?'],[333,'Полкило, пожалуйста','Give me half a kilo'],[334,'Нарежьте на кусочки','Can you cut it into slices?'],[335,'Поспелее, пожалуйста','Nice and ripe, please'],
+    [336,'Есть помягче?','Do you have something more tender?'],[337,'Когда срок годности?','When does it expire?'],[338,'Без глютена?','Is it gluten-free?'],[339,'Содержит лактозу?','Does it contain lactose?'],[340,'Есть орехи?','Does it contain nuts?'],
+    [341,'Я на диете','I\'m on a diet'],[342,'Стараюсь питаться правильно','I\'m trying to eat healthy'],[343,'Мало мяса','I eat little meat'],[344,'Предпочитаю домашнюю еду','I prefer home-cooked food'],[345,'Люблю экспериментировать с рецептами','I like experimenting with recipes'],
+    [346,'Ты хорошо готовишь?','Are you a good cook?'],[347,'Постоянно пригорает','I always burn things'],[348,'Научи меня готовить это','Can you teach me how to make it?'],[349,'Я сам это сделал','I made it myself'],[350,'Хочешь попробовать?','Do you want to try?'],
+    [351,'Нет ничего лучше домашней еды','There\'s nothing like home cooking'],[352,'В моей стране едят по-другому','In my country we eat differently'],[353,'Как называется это блюдо?','What is this dish called?'],[354,'Никогда раньше не пробовал','I\'ve never tried this before'],[355,'Это острое?','Is it spicy?'],
+    [356,'В составе глютен?','Does it contain gluten?'],[357,'Не ем свинину','I don\'t eat pork'],[358,'Можно заказать без...?','Can I order without...?'],[359,'Что на десерт?','What do you have for dessert?'],[360,'Десерт включён?','Is dessert included?'],
+    [361,'Спешу, можно побыстрее?','I\'m in a hurry, can it be quick?'],[362,'Долго ждать?','How long does the dish take?'],[363,'Забыл кое-что сказать','I forgot to tell you something'],[364,'Я сделал ошибку','I made a mistake'],[365,'Это было не намеренно','It wasn\'t my intention'],
+    [366,'Это случайно','I did it by accident'],[367,'Больше не повторится','It won\'t happen again'],[368,'Можем поговорить?','Can we talk?'],[369,'Мне надо тебе кое-что сказать','I need to tell you something'],[370,'Есть кое-что, о чём я не говорил','There\'s something I haven\'t told you'],
+    [371,'Не знаю, как тебе это сказать','I don\'t know how to tell you this'],[372,'Надеюсь, не обидишься','I hope you don\'t mind'],[373,'Ты понимаешь?','Do you understand me?'],[374,'Ты согласен?','Do you agree?'],[375,'Я не согласен','I disagree'],
+    [376,'Думаю, ты прав','I think you\'re right'],[377,'Ты не прав','You\'re wrong'],[378,'Возможно, ты прав','You might be right'],[379,'Надо ещё подумать','We need to think about it more'],[380,'Мне нужно больше времени','I need more time'],
+    [381,'Не ожидал этого','I didn\'t expect that'],[382,'Ты меня удивил','You\'ve surprised me'],[383,'Какая хорошая новость','What good news'],[384,'Как не повезло','What bad luck'],[385,'Как жаль!','What a shame!'],
+    [386,'Мне очень жаль','I\'m very sorry'],[387,'Всё будет хорошо','Everything will be fine'],[388,'Не волнуйся','Don\'t worry'],[389,'Ты преувеличиваешь','You\'re exaggerating'],[390,'Успокойся','Calm down'],
+    [391,'Мне нужно, чтобы ты успокоился','I need you to calm down'],[392,'Поговорим спокойно','Let\'s talk calmly'],[393,'Не хочу ругаться','I don\'t want to argue'],[394,'Оставим эту тему','I prefer to drop the subject'],[395,'Двигаемся вперёд','Let\'s move forward'],
+    [396,'Забудем, что было','Let\'s forget what happened'],[397,'Начнём сначала','Let\'s start over'],[398,'Я тебя прощаю','I forgive you'],[399,'Ты меня прощаешь?','Do you forgive me?'],[400,'Это была моя вина','It was my fault'],
+    [401,'Это не твоя вина','It wasn\'t your fault'],[402,'Мы оба ошиблись','We were both wrong'],[403,'Главное, что мы в порядке','The important thing is that we\'re okay'],[404,'Рад, что поговорили','I\'m glad we talked'],[405,'Спасибо за честность','Thank you for your honesty'],
+    [406,'Ценю твоё мнение','I value your opinion'],[407,'Твоя поддержка очень важна','Your support means a lot'],[408,'Не знаю, что бы без тебя делал','I don\'t know what I\'d do without you'],[409,'Ты очень важен для меня','You\'re very important to me'],[410,'Я тебя очень люблю','I love you very much'],
+    [411,'Ты мой лучший друг','You\'re my best friend'],[412,'Что бы ты сделал на моём месте?','What would you do in my place?'],[413,'Мне нужен твой совет','I need your advice'],[414,'Как тебе эта идея?','What do you think of this idea?'],[415,'Дай свою оценку','Can you give me your opinion?'],
+    [416,'Что бы ты сделал иначе?','What would you do differently?'],[417,'Как ты это видишь?','How do you see it?'],[418,'Тебе кажется логичным?','Does it seem logical to you?'],[419,'Что тебя беспокоит?','What worries you?'],[420,'Что тебя радует?','What excites you?'],
+    [421,'Очень жду','I\'m really looking forward to it'],[422,'Ничего не хочется','I don\'t feel like doing anything'],[423,'Тяжёлый период','I\'m going through a rough patch'],[424,'Всё наладится','Things will improve'],[425,'Надо быть позитивным','You have to be positive'],
+    [426,'Иногда жизнь трудна','Sometimes life is difficult'],[427,'Но всегда есть выход','But there\'s always a solution'],[428,'Доверяю тебе','I trust you'],[429,'Знаю, ты справишься','I know you can do it'],[430,'Не падай духом!','Cheer up!'],
+    [431,'Не сдавайся!','Don\'t give up!'],[432,'Ты отлично справился','You\'ve done a great job'],[433,'Горжусь тобой','I\'m proud of you'],[434,'Ты заслуживаешь лучшего','You deserve the best'],[435,'Ты очень смелый','You\'re very brave'],
+    [436,'Я и не сомневался в тебе','I expected no less from you'],[437,'Чем я могу помочь?','How can I help you?'],[438,'Я здесь, если что нужно','I\'m here for whatever you need'],[439,'Рассчитывай на меня','Count on me'],[440,'Звони в любое время','You can call me whenever you want'],
+    [441,'Ты не один','You\'re not alone'],[442,'Все через это проходят','We all go through that'],[443,'Время лечит','Time heals everything'],[444,'Завтра будет лучше','Tomorrow will be better'],[445,'Живи настоящим','Live in the moment'],
+    [446,'Не будь таким серьёзным','Don\'t be so serious'],[447,'Посмейся немного','Laugh a little'],[448,'Смех — лучшее лекарство','Laughter is the best medicine'],[449,'Помнишь, как...?','Do you remember when...?'],[450,'Какие хорошие воспоминания','What good memories'],
+    [451,'Буду скучать','I\'ll miss it'],[452,'Никогда этого не забуду','I\'ll never forget this'],[453,'Это было настоящее приключение','It\'s been a great adventure'],[454,'Что дальше?','What comes next?'],[455,'Будущее полно возможностей','The future is full of possibilities'],
+    [456,'Всё ещё впереди','Everything is yet to be done'],[457,'Надо использовать каждый шанс','You have to make the most of every opportunity'],[458,'Жизнь коротка','Life is short'],[459,'Надо наслаждаться','You have to enjoy it'],[460,'Что для тебя важнее всего?','What do you value most in life?'],
+    [461,'Для меня главное — семья','For me the most important thing is family'],[462,'Без здоровья ничего нет','Without health there\'s nothing'],[463,'Деньги — не всё','Money isn\'t everything'],[464,'Главное — быть счастливым','What matters is being happy'],[465,'Что делает тебя счастливым?','What makes you happy?'],
+    [466,'Счастлив рядом с друзьями','I\'m happy when I\'m with my friends'],[467,'Обожаю путешествовать','I love to travel'],[468,'Люблю читать','I like to read'],[469,'Занимаюсь спортом каждый день','I exercise every day'],[470,'Есть хобби?','Do you have any hobbies?'],
+    [471,'Играю на гитаре','I play guitar'],[472,'Рисую в свободное время','I paint in my free time'],[473,'Обожаю фотографию','I love photography'],[474,'Играю в шахматы','I play chess'],[475,'Коллекционирую...','I collect...'],
+    [476,'Какую музыку слушаешь?','What kind of music do you listen to?'],[477,'Слушаю всё подряд','I like all kinds of music'],[478,'Предпочитаю живую музыку','I prefer live music'],[479,'Часто ходишь в кино?','Do you go to the movies often?'],[480,'Какой сериал посоветуешь?','What series do you recommend?'],
+    [481,'Подсел на этот сериал','I\'m hooked on this series'],[482,'Смотрел последний сезон?','Have you seen the last season?'],[483,'Не спойлери','Don\'t give spoilers'],[484,'Книга или фильм?','The book or the movie?'],[485,'Всегда предпочитаю книгу','I always prefer the book'],
+    [486,'Какая любимая книга?','What\'s your favorite book?'],[487,'Какой жанр предпочитаешь?','What genre do you prefer?'],[488,'Читаю перед сном','I read before bed'],[489,'Нет времени читать','I don\'t have time to read'],[490,'Когда ходишь в зал?','When do you go to the gym?'],
+    [491,'Тренируюсь три раза в неделю','I train three times a week'],[492,'Бегаешь?','Do you run?'],[493,'Занимаюсь йогой по утрам','I do yoga in the mornings'],[494,'Каким спортом занимаешься?','What sport do you play?'],[495,'Играю в футбол по воскресеньям','I play football on Sundays'],
+    [496,'Болеешь за ЦСКА или Спартак?','Are you CSKA or Spartak fan?'],[497,'Не интересуюсь футболом','I\'m not interested in football'],[498,'Предпочитаю баскетбол','I prefer basketball'],[499,'Пойдём смотреть матч?','Shall we watch the game?'],[500,'Когда начало?','What time does it start?'],
+  ],
+  Danish: [
+    [1,'Hej','Hello'],[2,'Tak','Thank you'],[3,'Vær så venlig','Please'],[4,'Selv tak','You\'re welcome'],[5,'Ja','Yes'],
+    [6,'Nej','No'],[7,'God morgen','Good morning'],[8,'God aften','Good evening'],[9,'God nat','Good night'],[10,'Hvordan har du det?','How are you?'],
+    [11,'Fint, tak','Fine, thank you'],[12,'Undskyld','Excuse me / Sorry'],[13,'Hvad hedder du?','What is your name?'],[14,'Jeg hedder...','My name is...'],[15,'Hyggeligt at møde dig','Nice to meet you'],
+    [16,'Taler du engelsk?','Do you speak English?'],[17,'Jeg forstår ikke','I don\'t understand'],[18,'Kan du gentage det?','Can you repeat that?'],[19,'Hvad koster det?','How much does it cost?'],[20,'Hvor er...?','Where is...?'],
+    [21,'Jeg har brug for hjælp','I need help'],[22,'Jeg er sulten','I\'m hungry'],[23,'Jeg er tørstig','I\'m thirsty'],[24,'Jeg er træt','I\'m tired'],[25,'Jeg kan godt lide det','I like it'],
+    [26,'Jeg kan ikke lide det','I don\'t like it'],[27,'Hvad er klokken?','What time is it?'],[28,'Hvor er du fra?','Where are you from?'],[29,'Jeg er fra...','I\'m from...'],[30,'Jeg taler lidt dansk','I speak a little Danish'],
+    [31,'Tal langsommere, tak','Please speak more slowly'],[32,'Hvor er toilettet?','Where is the bathroom?'],[33,'Regningen, tak','The bill, please'],[34,'Et bord til to','A table for two'],[35,'Har I ledige værelser?','Do you have rooms available?'],
+    [36,'Hvornår afgår toget?','When does the train depart?'],[37,'Jeg vil gerne til...','I want to go to...'],[38,'Hvordan kommer jeg til...?','How do I get to...?'],[39,'Drej til højre','Turn right'],[40,'Drej til venstre','Turn left'],
+    [41,'Ligeud','Straight ahead'],[42,'I nærheden','Near here'],[43,'Langt herfra','Far from here'],[44,'Ring til politiet','Call the police'],[45,'Jeg har brug for en læge','I need a doctor'],
+    [46,'Det er en nødsituation','It\'s an emergency'],[47,'Kan jeg betale med kort?','Can I pay by card?'],[48,'Er der wifi her?','Is there wifi here?'],[49,'Hvad anbefaler du?','What do you recommend?'],[50,'Det er meget lækkert','It\'s very delicious'],
+    [51,'Kan jeg se menuen?','Can I see the menu?'],[52,'Glutenfri, tak','Gluten-free, please'],[53,'Jeg er allergisk over for...','I\'m allergic to...'],[54,'Kan jeg smage på det?','Can I try it?'],[55,'Jeg tager det','I\'ll take it'],
+    [56,'Har I en større størrelse?','Do you have a bigger size?'],[57,'Er det på tilbud?','Is it on sale?'],[58,'Kan jeg returnere det?','Can I return this?'],[59,'Jeg leder efter et billigt hotel','I\'m looking for a cheap hotel'],[60,'Er der studenterrabat?','Is there a student discount?'],
+    [61,'Hvornår åbner I?','When does it open?'],[62,'Hvornår lukker I?','When does it close?'],[63,'Det er lukket','It\'s closed'],[64,'Det er åbent','It\'s open'],[65,'Jeg vil gerne reservere','I\'d like to make a reservation'],
+    [66,'Til i aften','For tonight'],[67,'Til to personer','For two people'],[68,'Er morgenmad inkluderet?','Is breakfast included?'],[69,'Flyet er forsinket','The flight is delayed'],[70,'Jeg har mistet min bagage','I lost my luggage'],
+    [71,'Jeg er blevet bestjålet','I was robbed'],[72,'Kan du hjælpe mig?','Can you help me?'],[73,'Jeg kan ikke finde mit pas','I can\'t find my passport'],[74,'Hvor er ambassaden?','Where is the embassy?'],[75,'Har du aspirin?','Do you have aspirin?'],
+    [76,'Jeg har hovedpine','I have a headache'],[77,'Jeg har mavepine','I have a stomachache'],[78,'Jeg har feber','I have a fever'],[79,'Jeg er diabetiker','I\'m diabetic'],[80,'Jeg tager medicin','I take medication'],
+    [81,'Hvor lang tid tager det?','How long does it take?'],[82,'Jeg er faret vild','I\'m lost'],[83,'Kan du skrive det ned?','Can you write it down?'],[84,'Vis mig på kortet','Show me on the map'],[85,'Er der offentlig transport?','Is there public transport?'],
+    [86,'Hvor kan jeg købe et SIM-kort?','Where can I buy a SIM card?'],[87,'Jeg vil gerne veksle penge','I want to exchange money'],[88,'Hvad er kursen?','What\'s the exchange rate?'],[89,'En enkeltbillet','A one-way ticket'],[90,'En returbillet','A round-trip ticket'],
+    [91,'Er forsikring inkluderet?','Is insurance included?'],[92,'Jeg har en reservation','I have a reservation'],[93,'Kan jeg checke ind senere?','Can I check in later?'],[94,'Er der en pengeskab?','Is there a safe?'],[95,'Værelset er snavset','The room is dirty'],
+    [96,'Klimaanlægget virker ikke','The air conditioning doesn\'t work'],[97,'Kan du bringe flere håndklæder?','Can you bring more towels?'],[98,'Hvornår er morgenmad?','What time is breakfast?'],[99,'Er der en pool?','Is there a pool?'],[100,'Min telefon er løbet tør for batteri','My phone is dead'],
+    [101,'Har du en oplader?','Do you have a charger?'],[102,'Internettet virker ikke','The internet isn\'t working'],[103,'Hvad koster en taxa?','How much is a taxi?'],[104,'Til lufthavnen, tak','To the airport, please'],[105,'Stop her, tak','Stop here, please'],
+    [106,'Er der langt igen?','How much further?'],[107,'Jeg har travlt','I\'m in a hurry'],[108,'Jeg har ikke travlt','I\'m not in a hurry'],[109,'Kan jeg sidde her?','Can I sit here?'],[110,'Er denne plads optaget?','Is this seat taken?'],
+    [111,'Må jeg komme forbi','Excuse me (to pass)'],[112,'Velbekomme!','Enjoy your meal!'],[113,'Skål!','Cheers!'],[114,'Tillykke med fødselsdagen!','Happy birthday!'],[115,'Glædelig jul!','Merry Christmas!'],
+    [116,'Hvordan var din dag?','How was your day?'],[117,'Rigtig godt','Very good'],[118,'Nogenlunde','So-so'],[119,'Og dig?','And you?'],[120,'Farvel','Goodbye'],
+    [121,'Vi ses i morgen','See you tomorrow'],[122,'Pas på dig selv','Take care'],[123,'Selv tak / Gerne','My pleasure'],[124,'Dejligt at møde dig','Pleased to meet you'],[125,'Hvor gammel er du?','How old are you?'],
+    [126,'Jeg er tyve år','I\'m twenty years old'],[127,'Er du gift?','Are you married?'],[128,'Jeg har børn','I have children'],[129,'Hvad laver du?','What do you do for work?'],[130,'Jeg er studerende','I\'m a student'],
+    [131,'Jeg arbejder hos...','I work at...'],[132,'Hvor længe har du været her?','How long have you been here?'],[133,'Det er første gang jeg er her','It\'s my first time here'],[134,'Jeg elsker dette land','I love this country'],[135,'Maden her er lækker','The food here is delicious'],
+    [136,'Hvordan er vejret?','What\'s the weather like?'],[137,'Det er varmt','It\'s hot'],[138,'Det er koldt','It\'s cold'],[139,'Det regner','It\'s raining'],[140,'I morgen bliver det solrigt','Tomorrow will be sunny'],
+    [141,'Hvilke seværdigheder er der?','What are the tourist attractions?'],[142,'Er der en guidet tur?','Is there a guided tour?'],[143,'Må man tage billeder her?','Can I take photos here?'],[144,'Hvor kan jeg købe souvenirs?','Where can I buy souvenirs?'],[145,'Er det langt fra centrum?','Is it far from downtown?'],
+    [146,'Hvor tit kører bussen?','How often does the bus come?'],[147,'Hvor køber man billetter?','Where do I buy tickets?'],[148,'Skal man booke på forhånd?','Do I need to book in advance?'],[149,'Er der venteliste?','Is there a waiting list?'],[150,'Kan jeg annullere min reservation?','Can I cancel my reservation?'],
+    [151,'Jeg er laktoseintolerant','I\'m lactose intolerant'],[152,'Jeg er vegetar','I\'m vegetarian'],[153,'Jeg er veganer','I\'m vegan'],[154,'Uden kød, tak','No meat, please'],[155,'Hvad er der i retten?','What\'s in this dish?'],
+    [156,'Det er for stærkt','It\'s too spicy'],[157,'Kan det blive mindre salt?','Can it be less salty?'],[158,'Med ud, tak','To go, please'],[159,'Kan du pakke det ind?','Can you box this up?'],[160,'Har I dagens ret?','Do you have a daily menu?'],
+    [161,'Jeg tager...','I\'ll have...'],[162,'Hvad drikker man typisk her?','What\'s the typical drink here?'],[163,'Et glas vand, tak','A glass of water, please'],[164,'Uden is, tak','No ice, please'],[165,'Lad os skåle','Let\'s toast'],
+    [166,'Kan jeg se vinkortet?','Can I see the wine list?'],[167,'Kan vi dele regningen?','Can we split the bill?'],[168,'Jeg spanderer','It\'s on me'],[169,'Det er okay, jeg betaler','Don\'t worry, I\'ll pay'],[170,'Er drikkepenge inkluderet?','Is the tip included?'],
+    [171,'Jeg skal handle','I\'m going shopping'],[172,'Hvor er indkøbscentret?','Where is the shopping mall?'],[173,'Jeg leder efter en gave','I\'m looking for a gift'],[174,'Kan jeg prøve det?','Can I try it on?'],[175,'Har I det i blåt?','Do you have it in blue?'],
+    [176,'Det er for dyrt','It\'s too expensive'],[177,'Kan du give mig rabat?','Can you give me a discount?'],[178,'Jeg tænker over det','I\'ll think about it'],[179,'Jeg kigger bare','I\'m just looking'],[180,'Kan du pakke det ind som gave?','Can you gift wrap it?'],
+    [181,'Hvad er garantien?','What is the warranty?'],[182,'Det er gået i stykker','It\'s broken'],[183,'Det virker ikke ordentligt','It doesn\'t work well'],[184,'Jeg vil gerne klage','I want to make a complaint'],[185,'Hvor er kundeservice?','Where is customer service?'],
+    [186,'Jeg leder efter arbejde','I\'m looking for a job'],[187,'Taler de dansk her?','Do they speak Danish here?'],[188,'Jeg har brug for internet','I need internet access'],[189,'Må jeg bruge din telefon?','Can I use your phone?'],[190,'Min telefon er død','My phone died'],
+    [191,'Kan jeg oplade min telefon her?','Can I charge my phone here?'],[192,'Har du en stikadapter?','Do you have a power adapter?'],[193,'Jeg har brug for et kort','I need a map'],[194,'Har du en byguide?','Do you have a city guide?'],[195,'Hvad kan man lave om aftenen?','What is there to do at night?'],
+    [196,'Er der natklubber i nærheden?','Are there clubs nearby?'],[197,'Er det sikkert at gå her om natten?','Is it safe to walk here at night?'],[198,'Er der farlige områder?','Are there dangerous areas?'],[199,'Jeg er her på ferie','I\'m here on vacation'],[200,'Jeg er her i arbejde','I\'m here for work'],
+    [201,'Jeg besøger venner','I\'m visiting some friends'],[202,'Hvor mange dage bliver du?','How many days are you staying?'],[203,'Jeg rejser i morgen','I\'m leaving tomorrow'],[204,'Det har været en fornøjelse','It\'s been a pleasure'],[205,'Håber vi ses snart','I hope to see you soon'],
+    [206,'Hold kontakten','Stay in touch'],[207,'Kan jeg få dit nummer?','Can I have your number?'],[208,'Jeg sender dig en besked','I\'ll send you a message'],[209,'Er du på sociale medier?','Are you on social media?'],[210,'Følg mig på Instagram','Follow me on Instagram'],
+    [211,'Hvornår mødes vi?','When shall we meet?'],[212,'Mødes vi i morgen?','Shall we meet tomorrow?'],[213,'Jeg venter på dig klokken otte','I\'ll wait for you at eight'],[214,'Jeg kommer for sent','I\'ll be late'],[215,'Jeg er der om ti minutter','I\'ll arrive in ten minutes'],
+    [216,'Trafikken er håbløs','Traffic is terrible'],[217,'Der er meget trafik','There\'s a lot of traffic'],[218,'Toget er forsinket','The train is delayed'],[219,'Jeg nåede ikke bussen','I missed the bus'],[220,'Kan du vente på mig?','Can you wait for me?'],
+    [221,'Jeg når det ikke til tiden','I won\'t arrive on time'],[222,'Undskyld forsinkelsen','Sorry for the delay'],[223,'Kan vi ændre planerne?','Can we change the plans?'],[224,'Jeg foretrækker at mødes tidligere','I prefer to meet earlier'],[225,'Passer lørdag?','Does Saturday work for you?'],
+    [226,'Den dag kan jeg ikke','I can\'t that day'],[227,'Jeg er optaget','I\'m busy'],[228,'Jeg har en anden aftale','I have another commitment'],[229,'Hvad med torsdag?','How about Thursday?'],[230,'Alle dage passer mig','Any day works for me'],
+    [231,'Er der noget jeg bør vide?','Is there anything I should know?'],[232,'Er der særlige skikke her?','Are there special customs here?'],[233,'Skal man tage skoene af?','Should I take off my shoes?'],[234,'Er det okay at tale højt?','Is it okay to talk loudly?'],[235,'Jeg vil ikke støde nogen','I don\'t want to offend anyone'],
+    [236,'Jeg prøver at lære kulturen','I\'m trying to learn the culture'],[237,'Hvad er de lokale helligdage?','What are the local holidays?'],[238,'Hvad er typisk musik her?','What music is typical here?'],[239,'Hvad er den populære sport?','What sport is popular?'],[240,'Er der en festival snart?','Is there a festival coming up?'],
+    [241,'Hvordan siger man... på dansk?','How do you say... in Danish?'],[242,'Hvad betyder...?','What does... mean?'],[243,'Kan du stave det?','Can you spell it?'],[244,'Hvordan skriver man det?','How do you write it?'],[245,'Jeg ved ikke hvordan jeg siger det','I don\'t know how to say it'],
+    [246,'Hvad er ordet for...?','What is the word for...?'],[247,'Jeg lærer dansk','I\'m learning Danish'],[248,'Ret mig gerne','Can you correct me?'],[249,'Udtaler jeg det rigtigt?','Am I pronouncing it correctly?'],[250,'Jeg vil gerne blive bedre til dansk','I want to improve my Danish'],
+    [251,'Har du lærebøger?','Do you have textbooks?'],[252,'Hvor kan jeg finde sprogkurser?','Where can I find language classes?'],[253,'Er der sprogudveksling?','Are there language exchanges?'],[254,'Jeg leder efter nogen at øve med','I\'m looking for someone to practice with'],[255,'Hvor længe har du studeret?','How long have you been studying?'],
+    [256,'Er sproget svært?','Is the language difficult?'],[257,'Jeg kæmper med udtalen','I struggle with pronunciation'],[258,'Jeg forstår bedre end jeg taler','I understand better than I speak'],[259,'Hvornår rejste du?','When did you leave?'],[260,'Hvor rejste du hen?','Where did you go on vacation?'],
+    [261,'Hvordan var rejsen?','How was the trip?'],[262,'Det var utroligt','It was incredible'],[263,'Jeg havde det fantastisk','I had a great time'],[264,'Det var en unik oplevelse','It was a unique experience'],[265,'Jeg ville gøre det igen','I would do it again'],
+    [266,'Ville du tage derhen igen?','Would you go back?'],[267,'Helt sikkert','Definitely'],[268,'Måske en dag','Maybe someday'],[269,'Jeg tror ikke jeg tager derhen igen','I don\'t think I\'ll go back'],[270,'Der er mere interessante steder','There are more interesting places'],
+    [271,'Hvad synes du om folkene?','What did you think of the people?'],[272,'De var meget venlige','They were very kind'],[273,'I starten var det svært','At first it was difficult'],[274,'Jeg tilpassede mig hurtigt','I adapted quickly'],[275,'Jeg savner at være der','I miss being there'],
+    [276,'Hvornår kommer du tilbage?','When are you coming back?'],[277,'Det ved jeg ikke endnu','I don\'t know yet'],[278,'Det afhænger af arbejdet','It depends on work'],[279,'Hvis jeg får penge nok','If I get the money'],[280,'Jeg sparer op til næste tur','I\'m saving for the next trip'],
+    [281,'Kan du låne mig penge?','Can you lend me money?'],[282,'Jeg betaler dig tilbage i morgen','I\'ll pay you back tomorrow'],[283,'Kan du skrive det på min regning?','Can you put it on my tab?'],[284,'Jeg har ikke kontanter','I don\'t have cash'],[285,'Tager I kreditkort?','Do you accept credit cards?'],
+    [286,'Er der en hæveautomat i nærheden?','Is there an ATM nearby?'],[287,'Jeg er blevet opkrævet for meget','I\'ve been overcharged'],[288,'Jeg mangler byttepenge','I\'m short change'],[289,'Kan jeg få en kvittering?','Can you give me a receipt?'],[290,'Jeg har brug for en faktura','I need an invoice'],
+    [291,'Har du sygeforsikring?','Do you have medical insurance?'],[292,'Hvor er det nærmeste hospital?','Where is the nearest hospital?'],[293,'Ring efter en ambulance','Call an ambulance'],[294,'Jeg har skåret mig','I\'ve cut myself'],[295,'Jeg har brændt mig','I\'ve burned myself'],
+    [296,'Jeg har forstuvet min ankel','I\'ve sprained my ankle'],[297,'Jeg kan ikke bevæge den','I can\'t move it'],[298,'Det gør meget ondt','It hurts a lot'],[299,'Jeg har brug for sting','I need stitches'],[300,'Kan du give mig noget mod smerterne?','Can you give me something for the pain?'],
+    [301,'Jeg er allergisk over for penicillin','I\'m allergic to penicillin'],[302,'Hvor mange gange om dagen?','How many times a day?'],[303,'Med eller uden mad','With or without food'],[304,'Er der bivirkninger?','Are there side effects?'],[305,'Jeg er svimmel','I feel dizzy'],
+    [306,'Jeg har det dårligt','I feel sick'],[307,'Jeg skal til at kaste op','I\'m going to vomit'],[308,'Hvor lang tid varer behandlingen?','How long does the treatment last?'],[309,'Skal jeg have recept?','Do I need a prescription?'],[310,'Kan jeg købe det uden recept?','Can I buy this without a prescription?'],
+    [311,'Har du noget stærkere?','Do you have something stronger?'],[312,'Hvor lang tid tager svarene?','How long do the results take?'],[313,'Skal jeg komme tilbage?','Should I come back?'],[314,'Hvornår tager jeg næste dosis?','When should I take the next dose?'],[315,'Må jeg motionere?','Can I exercise?'],
+    [316,'Skal jeg holde sengen?','Should I rest?'],[317,'Må jeg drikke alkohol?','Can I drink alcohol?'],[318,'Må jeg spise normalt?','Can I eat normally?'],[319,'Hvornår må jeg bade?','When can I shower?'],[320,'Hvornår fjernes stingene?','When do the stitches come out?'],
+    [321,'Jeg lærer at lave mad','I\'m learning to cook'],[322,'Kan du give mig opskriften?','Can you give me the recipe?'],[323,'Hvor lang tid skal det koge?','How long does it cook?'],[324,'Over svag varme','On low heat'],[325,'Hvilke ingredienser skal jeg bruge?','What ingredients do I need?'],
+    [326,'Hvor køber du grøntsager?','Where do you buy vegetables?'],[327,'Er der et marked?','Is there a food market?'],[328,'Er det frisk?','Is it fresh?'],[329,'Er det i sæson?','Is it in season?'],[330,'Er det lokalt produceret?','Is it locally produced?'],
+    [331,'Har I økologiske produkter?','Do you have organic products?'],[332,'Hvad koster tomaterne?','How much are the tomatoes?'],[333,'Et halvt kilo, tak','Give me half a kilo'],[334,'Kan du skære det i skiver?','Can you cut it into slices?'],[335,'Godt moden, tak','Nice and ripe, please'],
+    [336,'Har du noget mere mørt?','Do you have something more tender?'],[337,'Hvornår udløber det?','When does it expire?'],[338,'Er det glutenfrit?','Is it gluten-free?'],[339,'Indeholder det laktose?','Does it contain lactose?'],[340,'Indeholder det nødder?','Does it contain nuts?'],
+    [341,'Jeg er på kur','I\'m on a diet'],[342,'Jeg prøver at spise sundt','I\'m trying to eat healthy'],[343,'Jeg spiser lidt kød','I eat little meat'],[344,'Jeg foretrækker hjemmelavet mad','I prefer home-cooked food'],[345,'Jeg eksperimenterer gerne med opskrifter','I like experimenting with recipes'],
+    [346,'Er du god til at lave mad?','Are you a good cook?'],[347,'Jeg brænder altid maden på','I always burn things'],[348,'Kan du lære mig at lave det?','Can you teach me how to make it?'],[349,'Jeg lavede det selv','I made it myself'],[350,'Vil du smage lidt?','Do you want to try a little?'],
+    [351,'Der er intet som hjemmelavet mad','There\'s nothing like home cooking'],[352,'I mit land spiser vi anderledes','In my country we eat differently'],[353,'Hvad hedder denne ret?','What is this dish called?'],[354,'Jeg har aldrig smagt det før','I\'ve never tried this before'],[355,'Er det stærkt?','Is it spicy?'],
+    [356,'Indeholder det gluten?','Does it contain gluten?'],[357,'Jeg spiser ikke svinekød','I don\'t eat pork'],[358,'Kan jeg bestille en ret uden...?','Can I order a dish without...?'],[359,'Hvad er der til dessert?','What do you have for dessert?'],[360,'Er dessert inkluderet?','Is dessert included?'],
+    [361,'Jeg har travlt, kan det gå hurtigt?','I\'m in a hurry, can it be quick?'],[362,'Hvor lang tid tager retten?','How long does the dish take?'],[363,'Jeg glemte at fortælle dig noget','I forgot to tell you something'],[364,'Jeg begik en fejl','I made a mistake'],[365,'Det var ikke meningen','It wasn\'t my intention'],
+    [366,'Det var en fejltagelse','I did it by accident'],[367,'Det sker ikke igen','It won\'t happen again'],[368,'Kan vi tale?','Can we talk?'],[369,'Jeg er nødt til at fortælle dig noget','I need to tell you something'],[370,'Der er noget jeg ikke har fortalt dig','There\'s something I haven\'t told you'],
+    [371,'Jeg ved ikke hvordan jeg siger det','I don\'t know how to tell you this'],[372,'Jeg håber det ikke generer dig','I hope you don\'t mind'],[373,'Forstår du mig?','Do you understand me?'],[374,'Er du enig?','Do you agree?'],[375,'Jeg er ikke enig','I disagree'],
+    [376,'Jeg tror du har ret','I think you\'re right'],[377,'Du tager fejl','You\'re wrong'],[378,'Du har måske ret','You might be right'],[379,'Vi er nødt til at tænke mere over det','We need to think about it more'],[380,'Jeg har brug for mere tid','I need more time'],
+    [381,'Det forventede jeg ikke','I didn\'t expect that'],[382,'Du har overrasket mig','You\'ve surprised me'],[383,'Hvilken god nyhed','What good news'],[384,'Sikke en uheldig situation','What bad luck'],[385,'Hvor ærgerligt!','What a shame!'],
+    [386,'Det er jeg meget ked af','I\'m very sorry'],[387,'Alt bliver godt','Everything will be fine'],[388,'Bare rolig','Don\'t worry'],[389,'Du overdriver','You\'re exaggerating'],[390,'Ro dig ned','Calm down'],
+    [391,'Jeg har brug for at du falder til ro','I need you to calm down'],[392,'Lad os tale roligt','Let\'s talk calmly'],[393,'Jeg vil ikke skændes','I don\'t want to argue'],[394,'Lad os lægge emnet til side','I prefer to drop the subject'],[395,'Lad os komme videre','Let\'s move forward'],
+    [396,'Lad os glemme hvad der skete','Let\'s forget what happened'],[397,'Lad os starte forfra','Let\'s start over'],[398,'Jeg tilgiver dig','I forgive you'],[399,'Tilgiver du mig?','Do you forgive me?'],[400,'Det var min skyld','It was my fault'],
+    [401,'Det var ikke din skyld','It wasn\'t your fault'],[402,'Vi begik begge en fejl','We were both wrong'],[403,'Det vigtige er at vi har det godt','The important thing is that we\'re okay'],[404,'Jeg er glad for at vi talte','I\'m glad we talked'],[405,'Tak for din ærlighed','Thank you for your honesty'],
+    [406,'Jeg sætter pris på din mening','I value your opinion'],[407,'Din støtte betyder meget','Your support means a lot'],[408,'Jeg ved ikke hvad jeg ville gøre uden dig','I don\'t know what I\'d do without you'],[409,'Du er meget vigtig for mig','You\'re very important to me'],[410,'Jeg elsker dig meget','I love you very much'],
+    [411,'Du er min bedste ven','You\'re my best friend'],[412,'Hvad ville du gøre i mit sted?','What would you do in my place?'],[413,'Jeg har brug for dit råd','I need your advice'],[414,'Hvad synes du om denne idé?','What do you think of this idea?'],[415,'Kan du give mig din mening?','Can you give me your opinion?'],
+    [416,'Hvad ville du gøre anderledes?','What would you do differently?'],[417,'Hvordan ser du det?','How do you see it?'],[418,'Virker det logisk for dig?','Does it seem logical to you?'],[419,'Hvad bekymrer dig?','What worries you?'],[420,'Hvad glæder dig?','What excites you?'],
+    [421,'Jeg glæder mig meget','I\'m really looking forward to it'],[422,'Jeg har ikke lyst til noget','I don\'t feel like doing anything'],[423,'Jeg går gennem en svær periode','I\'m going through a rough patch'],[424,'Tingene vil blive bedre','Things will improve'],[425,'Man skal være positiv','You have to be positive'],
+    [426,'Livet er til tider svært','Sometimes life is difficult'],[427,'Men der er altid en løsning','But there\'s always a solution'],[428,'Jeg stoler på dig','I trust you'],[429,'Jeg ved du kan gøre det','I know you can do it'],[430,'Kom nu!','Cheer up!'],
+    [431,'Giv ikke op!','Don\'t give up!'],[432,'Du har gjort et fantastisk arbejde','You\'ve done a great job'],[433,'Jeg er stolt af dig','I\'m proud of you'],[434,'Du fortjener det bedste','You deserve the best'],[435,'Du er meget modig','You\'re very brave'],
+    [436,'Det forventede jeg ikke mindre af dig','I expected no less from you'],[437,'Hvordan kan jeg hjælpe dig?','How can I help you?'],[438,'Jeg er her for hvad du end har brug for','I\'m here for whatever you need'],[439,'Du kan regne med mig','Count on me'],[440,'Du kan ringe til mig når som helst','You can call me whenever you want'],
+    [441,'Du er ikke alene','You\'re not alone'],[442,'Vi går alle igennem det','We all go through that'],[443,'Tiden heler alle sår','Time heals everything'],[444,'I morgen er en ny dag','Tomorrow will be better'],[445,'Lev i øjeblikket','Live in the moment'],
+    [446,'Tag det ikke så seriøst','Don\'t be so serious'],[447,'Grin lidt','Laugh a little'],[448,'Latter er den bedste medicin','Laughter is the best medicine'],[449,'Husker du da...?','Do you remember when...?'],[450,'Sikke gode minder','What good memories'],
+    [451,'Jeg kommer til at savne det','I\'ll miss it'],[452,'Det glemmer jeg aldrig','I\'ll never forget this'],[453,'Det har været et stort eventyr','It\'s been a great adventure'],[454,'Hvad sker der nu?','What comes next?'],[455,'Fremtiden er fuld af muligheder','The future is full of possibilities'],
+    [456,'Alt er endnu ikke sket','Everything is yet to be done'],[457,'Man skal gribe enhver mulighed','You have to make the most of every opportunity'],[458,'Livet er kort','Life is short'],[459,'Man skal nyde det','You have to enjoy it'],[460,'Hvad sætter du mest pris på i livet?','What do you value most in life?'],
+    [461,'For mig er familien det vigtigste','For me the most important thing is family'],[462,'Uden helbred har man ingenting','Without health there\'s nothing'],[463,'Penge er ikke alt','Money isn\'t everything'],[464,'Det vigtige er at være lykkelig','What matters is being happy'],[465,'Hvad gør dig lykkelig?','What makes you happy?'],
+    [466,'Jeg er lykkelig sammen med mine venner','I\'m happy when I\'m with my friends'],[467,'Jeg elsker at rejse','I love to travel'],[468,'Jeg kan godt lide at læse','I like to read'],[469,'Jeg dyrker sport hver dag','I exercise every day'],[470,'Har du nogen hobbyer?','Do you have any hobbies?'],
+    [471,'Jeg spiller guitar','I play guitar'],[472,'Jeg maler i min fritid','I paint in my free time'],[473,'Jeg elsker fotografi','I love photography'],[474,'Jeg spiller skak','I play chess'],[475,'Jeg samler på...','I collect...'],
+    [476,'Hvilken slags musik hører du?','What kind of music do you listen to?'],[477,'Jeg hører alle slags musik','I like all kinds of music'],[478,'Jeg foretrækker livekoncerter','I prefer live music'],[479,'Går du meget i biografen?','Do you go to the movies often?'],[480,'Hvilken serie anbefaler du?','What series do you recommend?'],
+    [481,'Jeg er vild med denne serie','I\'m hooked on this series'],[482,'Har du set den sidste sæson?','Have you seen the last season?'],[483,'Ingen spoilers','Don\'t give spoilers'],[484,'Bogen eller filmen?','The book or the movie?'],[485,'Jeg foretrækker altid bogen','I always prefer the book'],
+    [486,'Hvad er din yndlingsbog?','What\'s your favorite book?'],[487,'Hvilken genre foretrækker du?','What genre do you prefer?'],[488,'Jeg læser inden sengetid','I read before bed'],[489,'Jeg har ikke tid til at læse','I don\'t have time to read'],[490,'Hvornår træner du?','When do you go to the gym?'],
+    [491,'Jeg træner tre gange om ugen','I train three times a week'],[492,'Løber du?','Do you run?'],[493,'Jeg dyrker yoga om morgenen','I do yoga in the mornings'],[494,'Hvilken sport dyrker du?','What sport do you play?'],[495,'Jeg spiller fodbold om søndagen','I play football on Sundays'],
+    [496,'Holder du med et hold?','Do you support a team?'],[497,'Jeg er ikke interesseret i fodbold','I\'m not interested in football'],[498,'Jeg foretrækker basketball','I prefer basketball'],[499,'Skal vi se kampen?','Shall we watch the game?'],[500,'Hvornår begynder den?','What time does it start?'],
+  ],
+};
+
+// ── State ───────────────────────────────────────────────────────────────
+let phLang = 'Spanish';
+let phGenerated = [];     // [{rank, phrase, english, status}] status: 'known'|'srs'|'new'|'harder'
+let phUserProgress = {};  // { 'lang:rank': {id, srs_stage} }
+
+// ── Init ────────────────────────────────────────────────────────────────
+async function phInit() {
+  await phLoadProgress();
+  phUpdateStats();
+  // Show generate button, hide cards until first generate
+  document.getElementById('ph-cards').innerHTML = '';
+  document.getElementById('ph-instruction').style.display = 'none';
+}
+
+// ── Load progress from DB ────────────────────────────────────────────────
+async function phLoadProgress() {
+  const { data } = await supabase
+    .from('vocab_words')
+    .select('id, english, language, times_seen, srs_stage')
+    .eq('example_sentence', '__phrase__');
+  phUserProgress = {};
+  (data || []).forEach(row => {
+    phUserProgress[row.language + ':' + row.times_seen] = { id: row.id, srs_stage: row.srs_stage };
+  });
+}
+
+// ── Update stats display ─────────────────────────────────────────────────
+function phUpdateStats() {
+  const pool = PH_POOL[phLang] || [];
+  let known = 0, inSrs = 0;
+  pool.forEach(([rank]) => {
+    const key = phLang + ':' + rank;
+    const p = phUserProgress[key];
+    if (!p) return;
+    if (p.srs_stage === 99) known++;
+    else inSrs++;
+  });
+  const remaining = pool.length - known - inSrs;
+  document.getElementById('ph-stat-known').textContent = known;
+  document.getElementById('ph-stat-srs').textContent = inSrs;
+  document.getElementById('ph-stat-remaining').textContent = remaining;
+}
+
+// ── Set language ─────────────────────────────────────────────────────────
+window.phSetLang = (lang) => {
+  phLang = lang;
+  document.querySelectorAll('#panel-phrases .ph-lang-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.lang === lang));
+  phUpdateStats();
+  phGenerated = [];
+  document.getElementById('ph-cards').innerHTML = '';
+  document.getElementById('ph-instruction').style.display = 'none';
+};
+
+// ── Generate 5 phrases (one per tier) ───────────────────────────────────
+window.phGenerate = async () => {
+  await phLoadProgress();
+  const pool = PH_POOL[phLang] || [];
+  phGenerated = [];
+
+  PH_TIERS.forEach(tier => {
+    // Get phrases in this tier that are NOT known (srs_stage != 99)
+    const candidates = pool.filter(([rank]) => {
+      if (rank < tier.min || rank > tier.max) return false;
+      const key = phLang + ':' + rank;
+      const p = phUserProgress[key];
+      return !p || p.srs_stage !== 99;
+    });
+
+    if (!candidates.length) {
+      // All known in this tier — show a known one as placeholder
+      const allInTier = pool.filter(([rank]) => rank >= tier.min && rank <= tier.max);
+      if (allInTier.length) {
+        const pick = allInTier[Math.floor(Math.random() * allInTier.length)];
+        phGenerated.push({ rank: pick[0], phrase: pick[1], english: pick[2], status: 'known', tier: tier.label });
+      }
+      return;
+    }
+
+    // Prefer unstarted (no entry) over in-SRS
+    const unstarted = candidates.filter(([rank]) => !phUserProgress[phLang + ':' + rank]);
+    const source = unstarted.length ? unstarted : candidates;
+    const pick = source[Math.floor(Math.random() * source.length)];
+    const key = phLang + ':' + pick[0];
+    const p = phUserProgress[key];
+    const status = !p ? 'new' : 'srs';
+    phGenerated.push({ rank: pick[0], phrase: pick[1], english: pick[2], status, tier: tier.label });
+  });
+
+  phRenderCards();
+  document.getElementById('ph-instruction').style.display = 'block';
+  phUpdateStats();
+};
+
+// ── Render cards ─────────────────────────────────────────────────────────
+function phRenderCards() {
+  const container = document.getElementById('ph-cards');
+  if (!phGenerated.length) { container.innerHTML = ''; return; }
+
+  container.innerHTML = phGenerated.map((item, idx) => {
+    const statusBadge =
+      item.status === 'known' ? '<span class="ph-card-badge ph-badge-known">✓ Known</span>' :
+      item.status === 'srs'   ? '<span class="ph-card-badge ph-badge-srs">📚 In SRS</span>' :
+      '<span class="ph-card-badge ph-badge-new">New</span>';
+
+    const tierLabel = `<span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin-bottom:4px;display:block">${item.tier} · #${item.rank}</span>`;
+
+    const clickable = item.status !== 'known';
+    return `
+      <div class="ph-card ${item.status === 'known' ? 'ph-card-known' : ''}"
+           ${clickable ? `onclick="phSelectPhrase(${idx})"` : ''}
+           style="${clickable ? 'cursor:pointer' : 'opacity:0.6'}">
+        ${tierLabel}
+        <div class="ph-card-rank">${statusBadge}</div>
+        <div class="ph-card-phrase">${esc(item.phrase)}</div>
+        <div class="ph-card-english">${esc(item.english)}</div>
+      </div>`;
+  }).join('');
+}
+
+// ── Select a phrase (tap = "first one I don't know") ────────────────────
+window.phSelectPhrase = async (idx) => {
+  const selected = phGenerated[idx];
+  if (!selected || selected.status === 'known') return;
+
+  // Mark all phrases with lower rank as "known"
+  const simpler = phGenerated.filter((item, i) => i < idx && item.status !== 'known');
+  for (const item of simpler) {
+    const existing = phUserProgress[phLang + ':' + item.rank];
+    if (existing) {
+      await supabase.from('vocab_words').update({
+        srs_stage: 99,
+        next_review: '9999-12-31',
+      }).eq('id', existing.id);
+    } else {
+      await supabase.from('vocab_words').insert({
+        english: item.english,
+        translation: item.phrase,
+        language: phLang,
+        example_sentence: '__phrase__',
+        times_seen: item.rank,
+        srs_stage: 99,
+        next_review: '9999-12-31',
+        times_correct: 0,
+        times_wrong: 0,
+      });
+    }
+    item.status = 'known';
+  }
+
+  // Add selected phrase to SRS (or if already in SRS, keep it)
+  const existingSelected = phUserProgress[phLang + ':' + selected.rank];
+  if (!existingSelected) {
+    const now = new Date();
+    const reviewDate = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+    const nextReview = reviewDate.toISOString().split('T')[0];
+    await supabase.from('vocab_words').insert({
+      english: selected.english,
+      translation: selected.phrase,
+      language: phLang,
+      example_sentence: '__phrase__',
+      times_seen: selected.rank,
+      srs_stage: 1,
+      next_review: nextReview,
+      times_correct: 0,
+      times_wrong: 0,
+    });
+    selected.status = 'srs';
+  }
+
+  // Reload progress and re-render
+  await phLoadProgress();
+  phUpdateStats();
+  phRenderCards();
 };
 
 // ════════════════════════════════════════════════════════ HELPERS ════════
