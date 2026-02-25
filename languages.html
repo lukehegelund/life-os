@@ -1129,22 +1129,36 @@ window.fcAnswer = async (correct) => {
   fcShowSwipe(correct);
   setTimeout(() => fcShowCard(), 350);
 
+  // If a phrase reaches max stage on a correct answer, graduate it to "known"
+  const isPhrase = w.example_sentence === '__phrase__';
+  const graduated = isPhrase && correct && newStage === FC_MAX_STAGE;
+  const finalStage   = graduated ? 99 : newStage;
+  const finalNextRev_raw = graduated ? '9999-12-31' : null; // resolved below
+
   // Update Supabase
   try {
     const days    = FC_SRS_INTERVALS[newStage] ?? 1;
-    const nextRev = pstDatePlusDays(days);   // always anchored to PST today
+    const nextRev = graduated ? '9999-12-31' : pstDatePlusDays(days);   // always anchored to PST today
     const now     = new Date().toISOString();
     // Store the review id so we can delete it on undo
     const [, reviewRes] = await Promise.all([
       supabase.from('vocab_words').update({
-        srs_stage: newStage, next_review: nextRev, last_reviewed: now,
+        srs_stage: finalStage, next_review: nextRev, last_reviewed: now,
         times_seen:    (Number(w.times_seen)||0) + 1,
         times_correct: (Number(w.times_correct)||0) + (correct ? 1 : 0),
         times_wrong:   (Number(w.times_wrong)||0)   + (correct ? 0 : 1),
       }).eq('id', w.id),
-      supabase.from('srs_reviews').insert({ word_id: w.id, reviewed_at: now, result: correct ? 'correct' : 'wrong', old_stage: oldStage, new_stage: newStage }).select('id').single(),
+      supabase.from('srs_reviews').insert({ word_id: w.id, reviewed_at: now, result: correct ? 'correct' : 'wrong', old_stage: oldStage, new_stage: finalStage }).select('id').single(),
     ]);
     if (fcLastAnswer && reviewRes?.data?.id) fcLastAnswer.reviewId = reviewRes.data.id;
+    // Refresh phrase progress state so Phrases tab updates immediately
+    if (graduated && typeof phUserProgress !== 'undefined') {
+      const langKey = Object.keys(phUserProgress).find(k => {
+        const entry = phUserProgress[k];
+        return entry && entry.id === w.id;
+      });
+      if (langKey) phUserProgress[langKey] = { id: w.id, srs_stage: 99 };
+    }
   } catch(e) { /* silent */ }
 };
 
@@ -1256,7 +1270,7 @@ async function vocabLoad() {
   if (!vocabLoaded) {
     document.getElementById('vocabList').innerHTML = '<div class="lang-loading"><div class="lang-spinner"></div></div>';
     const res = await supabase.from('vocab_words')
-      .select('id, english, translation, language, srs_stage, next_review, times_correct, times_wrong, example_sentence')
+      .select('id, english, translation, language, srs_stage, next_review, times_correct, times_wrong, times_seen, example_sentence')
       .order('language').order('english');
     vocabAll = res.data || [];
     vocabLoaded = true;
@@ -1267,21 +1281,35 @@ async function vocabLoad() {
 function vocabFilter() {
   const q = (document.getElementById('vocabSearch')?.value || '').toLowerCase().trim();
   let pool = vocabLang === 'all' ? vocabAll : vocabAll.filter(w => w.language === vocabLang);
-  if (q) pool = pool.filter(w =>
-    w.english.toLowerCase().includes(q) ||
-    w.translation.toLowerCase().includes(q) ||
-    (w.example_sentence||'').toLowerCase().includes(q)
-  );
 
-  document.getElementById('vocabCount').textContent = pool.length + ' word' + (pool.length !== 1 ? 's' : '');
+  // Separate words from phrases (phrases have example_sentence='__phrase__')
+  let words   = pool.filter(w => w.example_sentence !== '__phrase__');
+  let phrases = pool.filter(w => w.example_sentence === '__phrase__');
+
+  // Apply search filter
+  if (q) {
+    words   = words.filter(w => w.english.toLowerCase().includes(q) || w.translation.toLowerCase().includes(q) || (w.example_sentence||'').toLowerCase().includes(q));
+    phrases = phrases.filter(w => w.translation.toLowerCase().includes(q) || w.english.toLowerCase().includes(q));
+  }
+
+  // Update count badge: "42 words · 18 phrases"
+  const wLabel = words.length + ' word' + (words.length !== 1 ? 's' : '');
+  const pLabel = phrases.length + ' phrase' + (phrases.length !== 1 ? 's' : '');
+  document.getElementById('vocabCount').textContent = wLabel + ' · ' + pLabel;
 
   const LANG_COLORS = { Spanish: 'var(--coral)', Danish: 'var(--blue)', Russian: 'var(--purple)' };
-  if (!pool.length) {
+
+  if (!words.length && !phrases.length) {
     document.getElementById('vocabList').innerHTML = '<div style="padding:24px;text-align:center;color:var(--gray-400);font-size:14px">No matches</div>';
     return;
   }
 
-  document.getElementById('vocabList').innerHTML = pool.map(w => `
+  let html = '';
+
+  // ── Words section ──────────────────────────────────────────────────────────
+  if (words.length) {
+    html += `<div style="padding:10px 16px 4px;font-size:11px;font-weight:700;letter-spacing:0.08em;color:var(--gray-400);text-transform:uppercase">Words (${words.length})</div>`;
+    html += words.map(w => `
     <div class="list-item">
       <div class="list-item-left">
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
@@ -1290,10 +1318,43 @@ function vocabFilter() {
           <span style="color:var(--gray-400)">→</span>
           <span style="color:var(--blue);font-weight:600">${esc(w.translation)}</span>
         </div>
-        ${w.example_sentence ? `<div class="list-item-sub" style="font-style:italic">"${esc(w.example_sentence)}"</div>` : ''}
+        ${w.example_sentence && w.example_sentence !== '__phrase__' ? `<div class="list-item-sub" style="font-style:italic">"${esc(w.example_sentence)}"</div>` : ''}
         <div class="list-item-sub">Stage ${w.srs_stage} · ${w.times_correct||0}✓ ${w.times_wrong||0}✗ · Next: ${w.next_review||'—'}</div>
       </div>
     </div>`).join('');
+  }
+
+  // ── Phrases section ────────────────────────────────────────────────────────
+  if (phrases.length) {
+    html += `<div style="padding:${words.length ? '14px' : '10px'} 16px 4px;font-size:11px;font-weight:700;letter-spacing:0.08em;color:var(--gray-400);text-transform:uppercase">Phrases (${phrases.length})</div>`;
+    html += phrases.map(p => {
+      const rank = Number(p.times_seen) || 0;
+      const stage = Number(p.srs_stage) || 0;
+      let statusBadge;
+      if (stage === 99) {
+        statusBadge = `<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:5px;background:#16a34a22;color:#16a34a">✓ Known</span>`;
+      } else if (stage > 0) {
+        statusBadge = `<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:5px;background:#3b82f622;color:#3b82f6">📚 SRS ${stage}</span>`;
+      } else {
+        statusBadge = `<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:5px;background:var(--gray-200);color:var(--gray-500)">New</span>`;
+      }
+      return `
+    <div class="list-item">
+      <div class="list-item-left">
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:5px;background:${LANG_COLORS[p.language]||'var(--gray-200)'}22;color:${LANG_COLORS[p.language]||'var(--gray-600)'}">${p.language}</span>
+          ${rank ? `<span style="font-size:10px;color:var(--gray-400)">#${rank}</span>` : ''}
+          ${statusBadge}
+        </div>
+        <div style="margin-top:4px;font-weight:600">${esc(p.translation)}</div>
+        <div class="list-item-sub" style="color:var(--gray-400)">${esc(p.english)}</div>
+        ${stage > 0 && stage < 99 ? `<div class="list-item-sub">Next review: ${p.next_review||'—'}</div>` : ''}
+      </div>
+    </div>`;
+    }).join('');
+  }
+
+  document.getElementById('vocabList').innerHTML = html;
 }
 
 window.vocabFilter = vocabFilter;
