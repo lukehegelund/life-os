@@ -1,6 +1,6 @@
 // notes.js — Life OS Notes page (v2: Google Keep style, multi-note view)
-// Notes stored in `tasks` table with module='__note__'
-// title → title, body → notes field, color → priority field, pinned → status='pinned'
+// Notes stored in `tasks` table with module='Personal' + notes JSON flag {is_note:true}
+// title → title, body → notes.body, color → priority field, pinned → status='pinned'
 
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
@@ -8,7 +8,10 @@ const SUPABASE_URL = 'https://kxsuzgpnvtepsyhkezin.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4c3V6Z3BudnRlcHN5aGtlemluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3Nzc1MDAsImV4cCI6MjA4NzM1MzUwMH0.oKtpiH63heyK-wJ87ZRvkhUzRqy6NT6Z2XWF1xjbtxA';
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 
-const NOTE_MODULE = '__note__';
+// Notes use module='Personal' + notes JSON contains "is_note":true
+// This avoids the tasks_module_check constraint that blocks '__note__'
+const NOTE_MODULE = 'Personal';
+const NOTE_FLAG   = '"is_note":true';
 
 const COLOR_MAP = {
   yellow: '#FFF9C4',
@@ -34,20 +37,25 @@ async function loadNotes() {
     .from('tasks')
     .select('id, title, notes, priority, status, created_at, completed_at')
     .eq('module', NOTE_MODULE)
+    .like('notes', `%${NOTE_FLAG}%`)
     .not('status', 'eq', 'cancelled')
     .order('completed_at', { ascending: false, nullsFirst: false });
 
   if (error) { console.error('loadNotes error', error); return; }
 
-  allNotes = (data || []).map(row => ({
-    id: row.id,
-    title: row.title || '',
-    body: row.notes || '',
-    color: row.priority || 'yellow',
-    pinned: row.status === 'pinned',
-    created_at: row.created_at,
-    updated_at: row.completed_at || row.created_at,
-  }));
+  allNotes = (data || []).map(row => {
+    let meta = {};
+    try { meta = JSON.parse(row.notes || '{}'); } catch { meta = {}; }
+    return {
+      id: row.id,
+      title: row.title || '',
+      body: meta.body || '',
+      color: row.priority || 'yellow',
+      pinned: row.status === 'pinned',
+      created_at: row.created_at,
+      updated_at: row.completed_at || row.created_at,
+    };
+  });
 
   renderNotes();
 }
@@ -232,9 +240,12 @@ async function saveNote(noteId) {
   const existing = allNotes.find(n => n.id === noteId);
   const color = existing?.color || 'yellow';
 
+  // Store body inside notes JSON alongside is_note flag
+  const notesJson = JSON.stringify({ is_note: true, body });
+
   const { error } = await sb.from('tasks').update({
     title: title || 'Sin título',
-    notes: body,
+    notes: notesJson,
     priority: color,
     completed_at: now,
   }).eq('id', noteId);
@@ -254,8 +265,8 @@ window.createNewNote = async function() {
   const now = new Date().toISOString();
   const { data, error } = await sb.from('tasks').insert({
     title: '',
-    notes: '',
-    module: NOTE_MODULE,
+    notes: JSON.stringify({ is_note: true, body: '' }),
+    module: NOTE_MODULE,   // 'Personal' — passes tasks_module_check constraint
     priority: 'yellow',
     status: 'open',
     completed_at: now,
