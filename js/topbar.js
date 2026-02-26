@@ -117,11 +117,14 @@ window.toggleNotifications = async () => {
   if (!panel) return;
 
   notifPanelOpen = !notifPanelOpen;
+  const backdrop = document.getElementById('topbar-backdrop');
   if (notifPanelOpen) {
-    panel.style.display = 'block';
+    panel.style.display = 'flex';
+    if (backdrop) backdrop.style.display = 'block';
     await renderNotifications();
   } else {
     panel.style.display = 'none';
+    if (backdrop) backdrop.style.display = 'none';
   }
 };
 
@@ -208,8 +211,10 @@ window.toggleChat = async () => {
   const panel = document.getElementById('chat-panel');
   if (!panel) return;
   chatPanelOpen = !chatPanelOpen;
+  const backdrop = document.getElementById('topbar-backdrop');
   if (chatPanelOpen) {
     panel.style.display = 'flex';
+    if (backdrop) backdrop.style.display = 'block';
     // Restore draft
     const input = document.getElementById('chat-input');
     if (input) {
@@ -221,6 +226,7 @@ window.toggleChat = async () => {
     await renderChat();
   } else {
     panel.style.display = 'none';
+    if (backdrop) backdrop.style.display = 'none';
   }
 };
 
@@ -440,30 +446,40 @@ function injectModals() {
     </div>
 
     <!-- Notification Panel -->
-    <div id="notif-panel" style="display:none;position:fixed;top:58px;right:12px;width:340px;max-height:480px;
-         background:var(--white);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.15);
-         border:1px solid var(--gray-200);z-index:999;overflow:hidden;display:none;flex-direction:column">
+    <div id="notif-panel" style="display:none;position:fixed;bottom:0;left:0;right:0;
+         background:var(--white);border-radius:16px 16px 0 0;box-shadow:0 -4px 32px rgba(0,0,0,0.15);
+         border-top:1px solid var(--gray-200);z-index:999;overflow:hidden;flex-direction:column;
+         max-height:60vh">
+      <!-- Drag handle -->
+      <div style="display:flex;justify-content:center;padding:10px 0 4px;flex-shrink:0">
+        <div style="width:36px;height:4px;border-radius:2px;background:var(--gray-200)"></div>
+      </div>
       <!-- Header -->
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px 10px;
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px 10px;
                   border-bottom:1px solid var(--gray-100);flex-shrink:0">
-        <div style="font-size:14px;font-weight:700;color:var(--gray-800)">🔔 Notificaciones</div>
+        <div style="font-size:15px;font-weight:700;color:var(--gray-800)">🔔 Notificaciones</div>
         <button onclick="window.markTodosNotifsRead()"
           style="font-size:11px;color:var(--blue);background:none;border:none;cursor:pointer;font-weight:600;padding:2px 4px">
           Marcar todo leído
         </button>
       </div>
       <!-- List -->
-      <div id="notif-list" style="overflow-y:auto;flex:1;max-height:420px"></div>
+      <div id="notif-list" style="overflow-y:auto;flex:1"></div>
     </div>
 
     <!-- Claude Chat Panel (single conversation) -->
-    <div id="chat-panel" style="display:none;position:fixed;top:58px;right:12px;width:480px;height:620px;
-         background:#1e1e2e;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.35);
-         border:1px solid #3a3a5c;z-index:999;flex-direction:column;overflow:hidden">
+    <div id="chat-panel" style="display:none;position:fixed;bottom:0;left:0;right:0;
+         background:#1e1e2e;border-radius:16px 16px 0 0;box-shadow:0 -4px 32px rgba(0,0,0,0.45);
+         border-top:1px solid #3a3a5c;z-index:999;flex-direction:column;overflow:hidden;
+         height:75vh;max-height:680px">
+      <!-- Drag handle -->
+      <div style="display:flex;justify-content:center;padding:10px 0 4px;flex-shrink:0">
+        <div style="width:36px;height:4px;border-radius:2px;background:#3a3a5c"></div>
+      </div>
       <!-- Header -->
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px 10px;
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px 10px;
                   border-bottom:1px solid #3a3a5c;flex-shrink:0">
-        <div style="font-size:14px;font-weight:700;color:white">🤖 Claude</div>
+        <div style="font-size:15px;font-weight:700;color:white">🤖 Claude</div>
         <div style="display:flex;gap:6px;align-items:center">
           <button onclick="window.showTellClaude()" title="Reportar bug o sugerencia"
             style="font-size:14px;color:#6060a0;background:none;border:none;cursor:pointer;padding:2px 4px;border-radius:6px;line-height:1"
@@ -522,7 +538,18 @@ function injectModals() {
   `;
   document.body.appendChild(div);
 
-  // Close panels when clicking outside
+  // Backdrop div for panel dismissal
+  const backdrop = document.createElement('div');
+  backdrop.id = 'topbar-backdrop';
+  backdrop.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:998;';
+  backdrop.addEventListener('click', () => {
+    if (notifPanelOpen) { document.getElementById('notif-panel').style.display = 'none'; notifPanelOpen = false; }
+    if (chatPanelOpen) { document.getElementById('chat-panel').style.display = 'none'; chatPanelOpen = false; }
+    backdrop.style.display = 'none';
+  });
+  document.body.appendChild(backdrop);
+
+  // Close panels when clicking outside (kept for safety)
   document.addEventListener('click', (e) => {
     // Notification panel
     const panel = document.getElementById('notif-panel');
@@ -530,6 +557,7 @@ function injectModals() {
     if (panel && notifPanelOpen && !panel.contains(e.target) && !bellWrap?.contains(e.target)) {
       panel.style.display = 'none';
       notifPanelOpen = false;
+      document.getElementById('topbar-backdrop').style.display = 'none';
     }
     // Chat panel
     const cPanel = document.getElementById('chat-panel');
@@ -537,6 +565,7 @@ function injectModals() {
     if (cPanel && chatPanelOpen && !cPanel.contains(e.target) && !cWrap?.contains(e.target)) {
       cPanel.style.display = 'none';
       chatPanelOpen = false;
+      document.getElementById('topbar-backdrop').style.display = 'none';
     }
   });
 }
