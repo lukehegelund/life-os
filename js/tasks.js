@@ -28,6 +28,7 @@ function parseNotes(t) {
   try { const p = JSON.parse(t.notes); return typeof p === 'object' && p !== null ? p : {}; } catch { return {}; }
 }
 function isRTAdmin(t) { return parseNotes(t).rt_admin === true; }
+function isHomework(t) { return parseNotes(t).homework === true; }
 function displayModule(t) { return isRTAdmin(t) ? 'RT Admin' : (t.module || 'Personal'); }
 function storageModule(displayMod) { return displayMod === 'RT Admin' ? 'RT' : displayMod; }
 function getScheduleLabel(t) { return parseNotes(t).schedule_label || null; }
@@ -327,6 +328,9 @@ async function loadTasks() {
   }
 
   document.getElementById('tasks-section').innerHTML = html;
+
+  // ── Homework section (always shown, separate from module groups) ──
+  loadHomework();
 
   // Apply arrow button states for all groups
   setTimeout(() => {
@@ -737,6 +741,86 @@ window.submitRecurring = async () => {
   document.getElementById('rec-title').value = '';
   document.getElementById('rec-notes').value = '';
   loadRecurring();
+};
+
+// ── Homework Section ──────────────────────────────────────────────────────────
+async function loadHomework() {
+  const hwEl = document.getElementById('homework-section');
+  if (!hwEl) return;
+
+  const { data } = await supabase.from('tasks')
+    .select('*')
+    .in('status', ['open', 'in_progress'])
+    .order('due_date', { ascending: true, nullsFirst: false });
+
+  const hwTasks = (data || []).filter(t => isHomework(t));
+
+  if (!hwTasks.length) {
+    hwEl.innerHTML = `<div class="card" style="margin-bottom:12px;border-top:3px solid #f59e0b">
+      <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
+        <span>📚 Homework</span>
+        <button class="btn btn-sm btn-ghost" style="font-size:11px;padding:2px 8px" onclick="showHomeworkForm()">+ Add</button>
+      </div>
+      <div style="font-size:13px;color:var(--gray-400);padding:4px 0">No homework assignments</div>
+    </div>`;
+    return;
+  }
+
+  hwEl.innerHTML = `<div class="card" style="margin-bottom:12px;border-top:3px solid #f59e0b">
+    <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
+      <span>📚 Homework <span class="badge badge-gray">${hwTasks.length}</span></span>
+      <button class="btn btn-sm btn-ghost" style="font-size:11px;padding:2px 8px" onclick="showHomeworkForm()">+ Add</button>
+    </div>
+    ${hwTasks.map(t => {
+      const isOverdue = t.due_date && t.due_date < T;
+      const isDueToday = t.due_date && t.due_date === T;
+      const dueColor = isOverdue ? 'var(--red)' : isDueToday ? '#92400e' : 'var(--gray-400)';
+      return `
+      <div class="list-item" id="hw-${t.id}">
+        <div class="list-item-left" style="flex:1">
+          <div class="list-item-name">${t.title}</div>
+          ${t.due_date ? `<div class="list-item-sub" style="color:${dueColor};font-weight:${isOverdue||isDueToday?'700':'400'}">
+            Due ${fmtDate(t.due_date)}${isOverdue ? ' ⚠️' : ''}
+          </div>` : ''}
+        </div>
+        <div class="list-item-right" style="display:flex;gap:4px">
+          <button class="btn btn-sm" style="background:var(--green-light);color:var(--green);border:none;font-size:11px;padding:3px 8px"
+            onclick="doneHomework(${t.id})">✓ Done</button>
+          <button class="btn btn-sm" style="background:var(--coral-light);color:var(--red);border:none;font-size:11px;padding:3px 8px"
+            onclick="deleteTask(${t.id}, event)">✕</button>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+window.doneHomework = async (id) => {
+  await supabase.from('tasks').update({ status: 'done', completed_at: new Date().toISOString() }).eq('id', id);
+  toast('Homework done! ✅', 'success');
+  loadHomework();
+};
+
+window.showHomeworkForm = () => {
+  document.getElementById('homework-modal').style.display = 'flex';
+  setTimeout(() => document.getElementById('hw-title').focus(), 50);
+};
+window.closeHomeworkModal = () => {
+  document.getElementById('homework-modal').style.display = 'none';
+};
+window.submitHomework = async () => {
+  const title   = document.getElementById('hw-title').value.trim();
+  const dueDate = document.getElementById('hw-due').value || null;
+  if (!title) { toast('Enter a title', 'error'); return; }
+  const { error } = await supabase.from('tasks').insert({
+    title, module: 'RT', notes: JSON.stringify({ homework: true }),
+    due_date: dueDate, status: 'open', priority: 'normal',
+  });
+  if (error) { toast('Error: ' + error.message, 'error'); return; }
+  toast('Homework added! 📚', 'success');
+  window.closeHomeworkModal();
+  document.getElementById('hw-title').value = '';
+  document.getElementById('hw-due').value = '';
+  loadHomework();
 };
 
 load();
