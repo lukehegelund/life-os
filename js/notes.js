@@ -1,6 +1,6 @@
-// notes.js — Life OS Notes page
-// Notes are stored in the `tasks` table with module='__note__'
-// title → title, body text → notes field, color → priority field, pinned → status='pinned'
+// notes.js — Life OS Notes page (v2: Google Keep style, multi-note view)
+// Notes stored in `tasks` table with module='__note__'
+// title → title, body → notes field, color → priority field, pinned → status='pinned'
 
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
@@ -10,23 +10,23 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 
 const NOTE_MODULE = '__note__';
 
-// Color → CSS class and background hex
 const COLOR_MAP = {
-  yellow: { cls: 'note-yellow', bg: '#FFF9C4', editorBg: '#FFF9C4' },
-  white:  { cls: 'note-white',  bg: '#FFFFFF', editorBg: '#FFFFFF' },
-  blue:   { cls: 'note-blue',   bg: '#BBDEFB', editorBg: '#BBDEFB' },
-  green:  { cls: 'note-green',  bg: '#C8E6C9', editorBg: '#C8E6C9' },
-  pink:   { cls: 'note-pink',   bg: '#F8BBD9', editorBg: '#F8BBD9' },
-  orange: { cls: 'note-orange', bg: '#FFE0B2', editorBg: '#FFE0B2' },
-  purple: { cls: 'note-purple', bg: '#E1BEE7', editorBg: '#E1BEE7' },
-  teal:   { cls: 'note-teal',   bg: '#B2DFDB', editorBg: '#B2DFDB' },
+  yellow: '#FFF9C4',
+  white:  '#FFFFFF',
+  blue:   '#BBDEFB',
+  green:  '#C8E6C9',
+  pink:   '#F8BBD9',
+  orange: '#FFE0B2',
+  purple: '#E1BEE7',
+  teal:   '#B2DFDB',
 };
 
 let allNotes = [];
-let currentNote = null;   // { id, title, body, color, pinned, created_at, updated_at }
-let currentColor = 'yellow';
-let saveTimeout = null;
 let searchQuery = '';
+// Track which note card is currently "expanded" for editing (null = none)
+let activeNoteId = null;
+// Track per-note save timeouts
+const saveTimeouts = {};
 
 // ── Load notes ─────────────────────────────────────────────────
 async function loadNotes() {
@@ -34,7 +34,8 @@ async function loadNotes() {
     .from('tasks')
     .select('id, title, notes, priority, status, created_at, completed_at')
     .eq('module', NOTE_MODULE)
-    .order('completed_at', { ascending: false });  // use completed_at as updated_at
+    .not('status', 'eq', 'cancelled')
+    .order('completed_at', { ascending: false, nullsFirst: false });
 
   if (error) { console.error('loadNotes error', error); return; }
 
@@ -48,69 +49,106 @@ async function loadNotes() {
     updated_at: row.completed_at || row.created_at,
   }));
 
-  renderNotes(allNotes);
+  renderNotes();
 }
 
-// ── Render notes list ──────────────────────────────────────────
-function renderNotes(notes) {
+// ── Render all notes as Keep-style cards ──────────────────────
+function renderNotes() {
   const container = document.getElementById('notes-list');
-  const countEl = document.getElementById('notes-count');
-
-  if (!notes.length) {
-    countEl.textContent = '';
-    container.innerHTML = `
-      <div class="notes-empty">
-        <div class="empty-icon">📝</div>
-        <p>Toca + para crear tu primera nota</p>
-      </div>`;
-    return;
-  }
+  const countEl   = document.getElementById('notes-count');
 
   const q = searchQuery.toLowerCase();
   const visible = q
-    ? notes.filter(n => n.title.toLowerCase().includes(q) || n.body.toLowerCase().includes(q))
-    : notes;
+    ? allNotes.filter(n => n.title.toLowerCase().includes(q) || n.body.toLowerCase().includes(q))
+    : allNotes;
 
-  countEl.textContent = `${visible.length} nota${visible.length !== 1 ? 's' : ''}`;
+  countEl.textContent = visible.length ? `${visible.length} nota${visible.length !== 1 ? 's' : ''}` : '';
 
   const pinned = visible.filter(n => n.pinned);
   const others = visible.filter(n => !n.pinned);
 
   let html = '';
 
-  if (pinned.length) {
-    if (others.length) html += `<div class="notes-section-label">📌 Fijadas</div>`;
-    html += `<div class="notes-grid">${pinned.map(noteCard).join('')}</div>`;
-  }
-
-  if (others.length) {
-    if (pinned.length) html += `<div class="notes-section-label">Otras</div>`;
-    html += `<div class="notes-grid">${others.map(noteCard).join('')}</div>`;
-  }
-
   if (!visible.length) {
-    html = `<div class="notes-empty"><div class="empty-icon">🔍</div><p>No se encontraron notas</p></div>`;
+    html = `<div class="notes-empty"><div class="empty-icon">📝</div><p>Toca + para crear tu primera nota</p></div>`;
+  } else {
+    if (pinned.length) {
+      if (others.length) html += `<div class="notes-section-label">📌 Fijadas</div>`;
+      html += `<div class="notes-masonry">${pinned.map(n => noteCardHtml(n)).join('')}</div>`;
+    }
+    if (others.length) {
+      if (pinned.length) html += `<div class="notes-section-label" style="margin-top:16px">Otras</div>`;
+      html += `<div class="notes-masonry">${others.map(n => noteCardHtml(n)).join('')}</div>`;
+    }
   }
 
   container.innerHTML = html;
+
+  // Re-open active note if one was being edited
+  if (activeNoteId) {
+    const card = document.getElementById(`note-card-${activeNoteId}`);
+    if (card) expandCard(card, activeNoteId);
+  }
 }
 
-function noteCard(note) {
-  const colorInfo = COLOR_MAP[note.color] || COLOR_MAP.yellow;
-  const title = note.title ? `<div class="note-title">${esc(note.title)}</div>` : '';
-  const body = note.body ? `<div class="note-body">${esc(note.body)}</div>` : '';
-  const dateStr = fmtDate(note.updated_at);
+function noteCardHtml(note) {
+  const bg = COLOR_MAP[note.color] || COLOR_MAP.yellow;
+  const border = note.color === 'white' ? 'border:1.5px solid #e5e7eb;' : '';
+  const pinIcon = note.pinned ? '<span class="note-pin-icon" title="Fijada">📌</span>' : '';
+  const isActive = activeNoteId === note.id;
+
   return `
-    <div class="note-card ${colorInfo.cls} ${note.pinned ? 'pinned' : ''}"
-         onclick="openNote('${note.id}')">
-      ${title}
-      ${body}
-      <div class="note-date">${dateStr}</div>
+    <div class="note-card-keep ${isActive ? 'note-card-active' : ''}"
+         id="note-card-${note.id}"
+         style="background:${bg};${border}"
+         onclick="handleCardClick(event, '${note.id}')">
+      ${pinIcon}
+      <div class="note-card-content">
+        <div class="note-title-area" id="note-title-area-${note.id}">
+          ${isActive
+            ? `<input type="text" class="note-inline-title" id="note-title-${note.id}"
+                 value="${esc(note.title)}"
+                 placeholder="Título"
+                 oninput="scheduleSaveNote('${note.id}')"
+                 onclick="event.stopPropagation()">`
+            : (note.title ? `<div class="note-title-display">${esc(note.title)}</div>` : '')}
+        </div>
+        <div class="note-body-area" id="note-body-area-${note.id}">
+          ${isActive
+            ? `<textarea class="note-inline-body" id="note-body-${note.id}"
+                 placeholder="Escribe una nota..."
+                 oninput="scheduleSaveNote('${note.id}');autoResize(this)"
+                 onclick="event.stopPropagation()">${esc(note.body)}</textarea>`
+            : (note.body ? `<div class="note-body-display">${esc(note.body)}</div>` : '')}
+        </div>
+        ${isActive ? `
+          <div class="note-inline-toolbar" onclick="event.stopPropagation()">
+            <div class="note-colors-inline">
+              ${Object.entries(COLOR_MAP).map(([c, hex]) => `
+                <div class="note-color-dot ${note.color === c ? 'selected' : ''}"
+                     style="background:${hex};${c==='white'?'border:1.5px solid #d1d5db;':''}"
+                     onclick="setNoteColor('${note.id}','${c}')" title="${c}"></div>
+              `).join('')}
+            </div>
+            <div class="note-card-actions">
+              <button class="note-action-btn" onclick="toggleNotePin('${note.id}')" title="${note.pinned ? 'Desfijar' : 'Fijar'}">
+                ${note.pinned ? '📌' : '📍'}
+              </button>
+              <button class="note-action-btn" onclick="deleteNote('${note.id}')" title="Eliminar" style="color:#ef4444">
+                🗑️
+              </button>
+              <button class="note-action-btn close-btn" onclick="collapseCard('${note.id}')" title="Cerrar">
+                ✓ Listo
+              </button>
+            </div>
+          </div>` : `
+          <div class="note-date-display">${fmtDate(note.updated_at)}</div>`}
+      </div>
     </div>`;
 }
 
 function esc(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 function fmtDate(iso) {
@@ -127,160 +165,174 @@ function fmtDate(iso) {
   return d.toLocaleDateString('es', { month: 'short', day: 'numeric' });
 }
 
-// ── Open/close editor ──────────────────────────────────────────
-window.openNewNote = function() {
-  currentNote = null;
-  currentColor = 'yellow';
-  document.getElementById('editor-title').value = '';
-  document.getElementById('editor-body').value = '';
-  document.getElementById('editor-status').textContent = 'Nueva nota';
-  document.getElementById('pin-btn').style.opacity = '0.4';
-  setEditorColor('yellow');
-  document.getElementById('note-editor').classList.add('open');
-  document.getElementById('editor-title').focus();
+// ── Card expand/collapse ───────────────────────────────────────
+window.handleCardClick = function(event, noteId) {
+  if (event.target.closest('.note-inline-toolbar')) return;
+  if (activeNoteId === noteId) return; // already active, don't re-render
+  activeNoteId = noteId;
+  renderNotes();
+  // Focus body after render
+  setTimeout(() => {
+    const bodyEl = document.getElementById(`note-body-${noteId}`);
+    if (bodyEl) { bodyEl.focus(); autoResize(bodyEl); }
+  }, 30);
 };
 
-window.openNote = function(id) {
-  const note = allNotes.find(n => n.id === id);
-  if (!note) return;
-  currentNote = { ...note };
-  currentColor = note.color || 'yellow';
-  document.getElementById('editor-title').value = note.title;
-  document.getElementById('editor-body').value = note.body;
-  document.getElementById('editor-status').textContent = fmtDate(note.updated_at);
-  document.getElementById('pin-btn').style.opacity = note.pinned ? '1' : '0.4';
-  setEditorColor(currentColor);
-  document.getElementById('note-editor').classList.add('open');
-  document.getElementById('editor-body').focus();
-};
-
-window.closeEditor = async function() {
-  clearTimeout(saveTimeout);
-  await saveNote();
-  document.getElementById('note-editor').classList.remove('open');
-  loadNotes();
-};
-
-// ── Auto-save on input ─────────────────────────────────────────
-document.getElementById('editor-title').addEventListener('input', scheduleSave);
-document.getElementById('editor-body').addEventListener('input', scheduleSave);
-
-function scheduleSave() {
-  clearTimeout(saveTimeout);
-  saveTimeout = setTimeout(saveNote, 1200);
+function expandCard(card, noteId) {
+  // Focus body
+  setTimeout(() => {
+    const bodyEl = document.getElementById(`note-body-${noteId}`);
+    if (bodyEl) { bodyEl.focus(); autoResize(bodyEl); }
+  }, 30);
 }
 
-async function saveNote() {
-  const title = document.getElementById('editor-title').value.trim();
-  const body = document.getElementById('editor-body').value.trim();
+window.collapseCard = async function(noteId) {
+  // Save before collapsing
+  clearTimeout(saveTimeouts[noteId]);
+  await saveNote(noteId);
+  activeNoteId = null;
+  await loadNotes();
+};
 
-  if (!title && !body) return; // Nothing to save
+// Collapse if clicking outside any note card
+document.addEventListener('click', async (e) => {
+  if (!activeNoteId) return;
+  const activeCard = document.getElementById(`note-card-${activeNoteId}`);
+  if (activeCard && !activeCard.contains(e.target) && !e.target.closest('.fab')) {
+    clearTimeout(saveTimeouts[activeNoteId]);
+    await saveNote(activeNoteId);
+    activeNoteId = null;
+    await loadNotes();
+  }
+});
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = el.scrollHeight + 'px';
+}
+
+// ── Save note ──────────────────────────────────────────────────
+window.scheduleSaveNote = function(noteId) {
+  clearTimeout(saveTimeouts[noteId]);
+  saveTimeouts[noteId] = setTimeout(() => saveNote(noteId), 800);
+};
+
+async function saveNote(noteId) {
+  const titleEl = document.getElementById(`note-title-${noteId}`);
+  const bodyEl  = document.getElementById(`note-body-${noteId}`);
+  if (!titleEl && !bodyEl) return; // card not open
+
+  const title = titleEl?.value?.trim() || '';
+  const body  = bodyEl?.value?.trim()  || '';
+  if (!title && !body) return;
 
   const now = new Date().toISOString();
 
-  if (!currentNote) {
-    // Create new note
-    const { data, error } = await sb.from('tasks').insert({
-      title: title || 'Sin título',
-      notes: body,
-      module: NOTE_MODULE,
-      priority: currentColor,
-      status: 'open',
-      completed_at: now,
-      due_date: null,
-    }).select().single();
+  // Find existing note in allNotes
+  const existing = allNotes.find(n => n.id === noteId);
+  const color = existing?.color || 'yellow';
 
-    if (error) { console.error('create note error', error); return; }
-    currentNote = {
-      id: data.id,
-      title: data.title,
-      body: data.notes,
-      color: data.priority,
-      pinned: false,
-      created_at: data.created_at,
-      updated_at: data.completed_at,
-    };
-    document.getElementById('editor-status').textContent = 'Guardado';
-  } else {
-    // Update existing note
-    const { error } = await sb.from('tasks').update({
-      title: title || 'Sin título',
-      notes: body,
-      priority: currentColor,
-      completed_at: now,
-    }).eq('id', currentNote.id);
+  const { error } = await sb.from('tasks').update({
+    title: title || 'Sin título',
+    notes: body,
+    priority: color,
+    completed_at: now,
+  }).eq('id', noteId);
 
-    if (error) { console.error('update note error', error); return; }
-    currentNote.title = title;
-    currentNote.body = body;
-    currentNote.color = currentColor;
-    currentNote.updated_at = now;
-    document.getElementById('editor-status').textContent = 'Guardado';
+  if (error) { console.error('saveNote error', error); return; }
+
+  // Update local cache
+  if (existing) {
+    existing.title = title;
+    existing.body = body;
+    existing.updated_at = now;
   }
 }
+
+// ── Create new note ────────────────────────────────────────────
+window.createNewNote = async function() {
+  const now = new Date().toISOString();
+  const { data, error } = await sb.from('tasks').insert({
+    title: '',
+    notes: '',
+    module: NOTE_MODULE,
+    priority: 'yellow',
+    status: 'open',
+    completed_at: now,
+    due_date: null,
+  }).select().single();
+
+  if (error) { console.error('createNewNote error', error); return; }
+
+  // Add to local list
+  const newNote = {
+    id: data.id,
+    title: '',
+    body: '',
+    color: 'yellow',
+    pinned: false,
+    created_at: data.created_at,
+    updated_at: data.completed_at,
+  };
+  allNotes.unshift(newNote);
+  activeNoteId = data.id;
+  renderNotes();
+
+  setTimeout(() => {
+    const titleEl = document.getElementById(`note-title-${data.id}`);
+    if (titleEl) titleEl.focus();
+  }, 30);
+};
+
+// ── Set color ──────────────────────────────────────────────────
+window.setNoteColor = async function(noteId, color) {
+  const note = allNotes.find(n => n.id === noteId);
+  if (!note) return;
+  note.color = color;
+
+  const { error } = await sb.from('tasks').update({ priority: color }).eq('id', noteId);
+  if (error) { console.error('setNoteColor error', error); return; }
+
+  // Update card background immediately without full re-render
+  const card = document.getElementById(`note-card-${noteId}`);
+  if (card) {
+    card.style.background = COLOR_MAP[color] || COLOR_MAP.yellow;
+    card.style.border = color === 'white' ? '1.5px solid #e5e7eb' : '';
+    // Update dots selection
+    card.querySelectorAll('.note-color-dot').forEach(dot => {
+      dot.classList.toggle('selected', dot.title === color);
+    });
+  }
+};
 
 // ── Pin/unpin ──────────────────────────────────────────────────
-window.togglePin = async function() {
-  if (!currentNote) {
-    // Save first
-    await saveNote();
-    if (!currentNote) return;
-  }
-  const newPinned = !currentNote.pinned;
+window.toggleNotePin = async function(noteId) {
+  const note = allNotes.find(n => n.id === noteId);
+  if (!note) return;
+  const newPinned = !note.pinned;
+  note.pinned = newPinned;
+
   const { error } = await sb.from('tasks').update({
     status: newPinned ? 'pinned' : 'open',
-  }).eq('id', currentNote.id);
+  }).eq('id', noteId);
 
-  if (!error) {
-    currentNote.pinned = newPinned;
-    document.getElementById('pin-btn').style.opacity = newPinned ? '1' : '0.4';
-    document.getElementById('editor-status').textContent = newPinned ? '📌 Fijada' : 'Sin fijar';
-  }
+  if (error) { console.error('togglePin error', error); note.pinned = !newPinned; return; }
+  renderNotes();
 };
 
-// ── Color ──────────────────────────────────────────────────────
-window.setColor = function(color, el) {
-  currentColor = color;
-  setEditorColor(color);
-  // Update swatch selection
-  document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
-  el.classList.add('selected');
-  // Trigger save
-  scheduleSave();
-};
-
-function setEditorColor(color) {
-  const info = COLOR_MAP[color] || COLOR_MAP.yellow;
-  document.getElementById('editor-bg').style.background = info.bg;
-  // Update swatch selection
-  document.querySelectorAll('.color-swatch').forEach(s => {
-    s.classList.toggle('selected', s.dataset.color === color);
-  });
-}
-
-// ── Delete ─────────────────────────────────────────────────────
-window.confirmDelete = function() {
-  if (!currentNote) {
-    closeEditor();
-    return;
-  }
-  document.getElementById('delete-confirm').classList.add('open');
-};
-
-window.deleteCurrentNote = async function() {
-  document.getElementById('delete-confirm').classList.remove('open');
-  if (!currentNote) return;
-
-  await sb.from('tasks').delete().eq('id', currentNote.id);
-  document.getElementById('note-editor').classList.remove('open');
-  currentNote = null;
-  loadNotes();
+// ── Delete note ────────────────────────────────────────────────
+window.deleteNote = async function(noteId) {
+  if (!confirm('¿Eliminar esta nota?')) return;
+  await sb.from('tasks').update({ status: 'cancelled' }).eq('id', noteId);
+  allNotes = allNotes.filter(n => n.id !== noteId);
+  if (activeNoteId === noteId) activeNoteId = null;
+  renderNotes();
 };
 
 // ── Search ─────────────────────────────────────────────────────
 window.filterNotes = function(q) {
   searchQuery = q;
-  renderNotes(allNotes);
+  renderNotes();
 };
 
 // ── Init ───────────────────────────────────────────────────────
