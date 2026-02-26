@@ -66,6 +66,9 @@
   <!-- Future Projects -->
   <div id="future-projects-section"></div>
 
+  <!-- Homework -->
+  <div id="homework-section"></div>
+
 </main>
 
 <!-- Schedule Picker sheet -->
@@ -198,6 +201,25 @@
     <div style="display:flex;gap:8px">
       <button class="btn btn-primary" style="flex:1" onclick="submitFutureProject()">Add Project</button>
       <button class="btn btn-ghost" onclick="closeFutureModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Homework modal -->
+<div class="modal-overlay" id="homework-modal">
+  <div class="modal-sheet">
+    <div class="modal-title">📚 Add Homework</div>
+    <div class="form-group">
+      <label class="form-label">Assignment</label>
+      <input type="text" class="form-input" id="hw-title" placeholder="Assignment description">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Due Date (optional)</label>
+      <input type="date" class="form-input" id="hw-due">
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" style="flex:1;background:#f59e0b;border-color:#f59e0b" onclick="submitHomework()">Add Homework</button>
+      <button class="btn btn-ghost" onclick="closeHomeworkModal()">Cancel</button>
     </div>
   </div>
 </div>
