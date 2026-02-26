@@ -174,11 +174,12 @@ window.logAndCloseDay = async () => {
   const T = today();
 
   // 1. Gather attendance stats for today
-  const [attRes, pagesRes, partRes, classRes] = await Promise.all([
+  const [attRes, pagesRes, partRes, classRes, goldRes] = await Promise.all([
     supabase.from('attendance').select('class_id, status').eq('date', T),
     supabase.from('student_pages').select('student_id, class_id, pages_delta, total_pages').eq('date', T),
     supabase.from('participation_scores').select('student_id, class_id, score').eq('date', T),
     supabase.from('classes').select('id, name'),
+    supabase.from('gold_transactions').select('student_id, amount').eq('distributed', false).lte('date', T),
   ]);
 
   const classMap = {};
@@ -227,7 +228,14 @@ window.logAndCloseDay = async () => {
     if (pt && pt.count) parts.push(`part: ${(pt.total/pt.count).toFixed(1)}/5`);
     if (parts.length) lines.push(`• ${name}: ${parts.join(' | ')}`);
   }
-  const body = lines.length ? lines.join('\n') : '(No activity logged today)';
+  // Add gold summary to the body
+  const goldTxs = (goldRes?.data || []);
+  const totalGoldDistributed = goldTxs.reduce((sum, t) => sum + (t.amount || 0), 0);
+  let goldLine = '';
+  if (goldTxs.length) {
+    goldLine = `\n🪙 Total oro del día: ${totalGoldDistributed > 0 ? '+' : ''}${totalGoldDistributed} (${goldTxs.length} transacciones)`;
+  }
+  const body = (lines.length ? lines.join('\n') : '(Sin actividad hoy)') + goldLine;
 
   // 2. Save snapshot to claude_notifications
   const { error: logErr } = await supabase.from('claude_notifications').insert({
@@ -242,14 +250,30 @@ window.logAndCloseDay = async () => {
     return;
   }
 
-  // 3. Reset student_pages total_pages counter for today (set total_pages = 0 for all of today's entries)
+  // 3. Reset current_gold to 0 for ALL students (gold history preserved in gold_transactions)
+  // First get all student IDs
+  const { data: allStudents } = await supabase.from('students').select('id');
+  if (allStudents && allStudents.length) {
+    await supabase.from('students').update({ current_gold: 0 }).in('id', allStudents.map(s => s.id));
+  }
+
+  // 4. Also mark all undistributed gold_transactions as distributed (gold reset)
+  await supabase.from('gold_transactions')
+    .update({ distributed: true, distributed_at: new Date().toISOString() })
+    .eq('distributed', false)
+    .lte('date', T);
+
+  // 5. Reset student_pages total_pages counter for today
   await supabase.from('student_pages').update({ total_pages: 0 }).eq('date', T);
 
-  // 4. Update UI
+  // Note: attendance, participation_scores, and student_pages rows stay in DB for analytics
+  // They are date-keyed, so tomorrow's class view will load fresh (no rows for tomorrow yet)
+
+  // 6. Update UI
   statusEl.textContent = `Logged at ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`;
   btn.textContent = '✅ Day Logged';
   btn.style.background = 'var(--green)';
-  toast('Day logged and counters reset! 📊', 'success');
+  toast('Día cerrado ✅ Oro, asistencia y páginas reiniciados para mañana', 'success');
   loadPastLogs();
 };
 
