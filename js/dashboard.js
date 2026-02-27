@@ -270,5 +270,64 @@ window.deleteSrReport = async function(id) {
   await load();
 };
 
+// ── Today's Tasks ────────────────────────────────────────────────────────────
+async function loadTodayTasks() {
+  const el = document.getElementById('today-tasks-list');
+  if (!el) return;
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('id, title, module, priority, status')
+    .eq('due_date', T)
+    .neq('status', 'done')
+    .order('priority', { ascending: false })
+    .order('created_at', { ascending: true });
+
+  if (error) { el.innerHTML = `<div class="sr-empty">Error cargando tareas</div>`; return; }
+
+  if (!data || data.length === 0) {
+    el.innerHTML = `<div class="sr-empty">Sin tareas para hoy. ¡Excelente!</div>`;
+    return;
+  }
+
+  const moduleIcon = { RT:'🏫', TOV:'💍', Personal:'👤', Health:'🏃', LifeOS:'🖥️' };
+  const prioColor  = { urgent: 'urgent', high: 'urgent', normal: 'normal', low: 'normal' };
+
+  el.innerHTML = data.map(t => `
+    <div class="dash-task-item">
+      <div class="dash-task-dot ${prioColor[t.priority] || 'normal'}"></div>
+      <span>${esc(t.title)}</span>
+      <span class="dash-task-module">${moduleIcon[t.module] || ''} ${esc(t.module || '')}</span>
+    </div>`).join('');
+}
+
+// ── Today's Food Log ──────────────────────────────────────────────────────────
+async function loadTodayFood() {
+  const el = document.getElementById('today-food-list');
+  if (!el) return;
+
+  const { data, error } = await supabase
+    .from('food_log')
+    .select('id, meal, description, notes')
+    .eq('date', T)
+    .order('id', { ascending: true });
+
+  if (error) { el.innerHTML = `<div class="sr-empty">Error cargando comidas</div>`; return; }
+
+  if (!data || data.length === 0) {
+    el.innerHTML = `<div class="sr-empty">Sin comidas registradas hoy.</div>`;
+    return;
+  }
+
+  const mealEmoji = { Breakfast:'🌅', Lunch:'☀️', Dinner:'🌙', Snack:'🍎', Other:'🍽️' };
+  el.innerHTML = data.map(f => `
+    <div class="dash-food-item">
+      <div class="dash-food-meal">${mealEmoji[f.meal] || '🍽️'} ${esc(f.meal)}</div>
+      <div class="dash-food-desc">${esc(f.description)}${f.notes ? `<div style="font-size:11px;color:var(--gray-400);margin-top:2px">${esc(f.notes)}</div>` : ''}</div>
+    </div>`).join('');
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 load();
+loadTodayTasks();
+loadTodayFood();
