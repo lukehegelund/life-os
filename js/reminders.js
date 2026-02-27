@@ -145,12 +145,115 @@ async function scheduleNtfy(title, dateStr, timeStr) {
   }
 }
 
-// ── Add Modal ─────────────────────────────────────────────────────────────────
+// ── Add Modal state ───────────────────────────────────────────────────────────
+let _pickedDate = null;   // 'YYYY-MM-DD' or null
+let _pickedTime = null;   // 'HH:MM' or null
+let _pickedModule = 'Personal';
+
+function _updateWhenDisplay() {
+  const el = document.getElementById('selected-when-display');
+  const txt = document.getElementById('selected-when-text');
+  if (!el || !txt) return;
+  if (!_pickedDate && !_pickedTime) {
+    el.classList.remove('visible');
+    txt.textContent = '';
+    return;
+  }
+  const dateLabel = _pickedDate ? fmtDateLocal(_pickedDate) : 'Sin fecha';
+  const timeLabel = _pickedTime ? ` · ${_pickedTime}` : '';
+  txt.textContent = dateLabel + timeLabel;
+  el.classList.add('visible');
+}
+
+function _clearQuickBtns() {
+  document.querySelectorAll('.quick-btn').forEach(b => b.classList.remove('selected'));
+}
+
+window.pickPreset = (btn) => {
+  _clearQuickBtns();
+  btn.classList.add('selected');
+  const preset = btn.dataset.preset;
+  const now = new Date();
+
+  if (preset === 'notime') {
+    _pickedDate = T;
+    _pickedTime = null;
+    document.getElementById('rem-time-custom').value = '';
+    document.getElementById('rem-date-custom').value = T;
+  } else if (preset === 'in30') {
+    const t = new Date(now.getTime() + 30*60000);
+    _pickedDate = t.toISOString().split('T')[0];
+    _pickedTime = `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;
+    document.getElementById('rem-time-custom').value = _pickedTime;
+    document.getElementById('rem-date-custom').value = _pickedDate;
+  } else if (preset === 'in1h') {
+    const t = new Date(now.getTime() + 60*60000);
+    _pickedDate = t.toISOString().split('T')[0];
+    _pickedTime = `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;
+    document.getElementById('rem-time-custom').value = _pickedTime;
+    document.getElementById('rem-date-custom').value = _pickedDate;
+  } else if (preset === 'tonight') {
+    _pickedDate = T;
+    _pickedTime = '19:00';
+    document.getElementById('rem-time-custom').value = '19:00';
+    document.getElementById('rem-date-custom').value = T;
+  } else if (preset === 'tmr-am') {
+    const tmr = new Date(now); tmr.setDate(tmr.getDate()+1);
+    _pickedDate = tmr.toISOString().split('T')[0];
+    _pickedTime = '08:00';
+    document.getElementById('rem-time-custom').value = '08:00';
+    document.getElementById('rem-date-custom').value = _pickedDate;
+  } else if (preset === 'tmr-pm') {
+    const tmr = new Date(now); tmr.setDate(tmr.getDate()+1);
+    _pickedDate = tmr.toISOString().split('T')[0];
+    _pickedTime = '15:00';
+    document.getElementById('rem-time-custom').value = '15:00';
+    document.getElementById('rem-date-custom').value = _pickedDate;
+  }
+  _updateWhenDisplay();
+};
+
+window.pickCustomTime = (val) => {
+  _clearQuickBtns();
+  _pickedTime = val || null;
+  if (!_pickedDate) { _pickedDate = T; document.getElementById('rem-date-custom').value = T; }
+  _updateWhenDisplay();
+};
+
+window.pickCustomDate = (val) => {
+  _clearQuickBtns();
+  _pickedDate = val || null;
+  _updateWhenDisplay();
+};
+
+window.clearWhen = () => {
+  _pickedDate = null;
+  _pickedTime = null;
+  _clearQuickBtns();
+  document.getElementById('rem-time-custom').value = '';
+  document.getElementById('rem-date-custom').value = '';
+  _updateWhenDisplay();
+};
+
+window.pickModule = (btn) => {
+  document.querySelectorAll('.mod-pill').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  _pickedModule = btn.dataset.mod;
+};
+
 window.showAddModal = () => {
+  // Reset state
+  _pickedDate = null;
+  _pickedTime = null;
+  _pickedModule = 'Personal';
   document.getElementById('rem-title').value = '';
-  document.getElementById('rem-date').value = T;
-  document.getElementById('rem-time').value = '';
-  document.getElementById('rem-module').value = 'Personal';
+  document.getElementById('rem-time-custom').value = '';
+  document.getElementById('rem-date-custom').value = '';
+  _clearQuickBtns();
+  document.querySelectorAll('.mod-pill').forEach(b => b.classList.remove('selected'));
+  const defMod = document.querySelector('.mod-pill[data-mod="Personal"]');
+  if (defMod) defMod.classList.add('selected');
+  _updateWhenDisplay();
   document.getElementById('add-modal').style.display = 'flex';
   setTimeout(() => document.getElementById('rem-title').focus(), 50);
 };
@@ -161,11 +264,11 @@ window.closeAddModal = () => {
 
 window.submitReminder = async () => {
   const title  = document.getElementById('rem-title').value.trim();
-  const date   = document.getElementById('rem-date').value;
-  const time   = document.getElementById('rem-time').value;
-  const module = document.getElementById('rem-module').value;
-
   if (!title) { toast('Escribe el recordatorio'); return; }
+
+  const date   = _pickedDate;
+  const time   = _pickedTime;
+  const module = _pickedModule;
 
   // Schedule ntfy if time provided
   let ntfyOk = false;
@@ -189,9 +292,9 @@ window.submitReminder = async () => {
 
   closeAddModal();
   if (ntfyOk) {
-    toast(`✅ Recordatorio guardado · 📱 ntfy programado para ${time}`, 'success');
+    toast(`✅ Guardado · 📱 ntfy para ${time}`, 'success');
   } else if (time) {
-    toast('✅ Recordatorio guardado (ntfy sin conexión — revisa tu red)', 'info');
+    toast('✅ Guardado (ntfy sin conexión)', 'info');
   } else {
     toast('✅ Recordatorio guardado', 'success');
   }

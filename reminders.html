@@ -10,6 +10,67 @@
 .modal-sheet { background:var(--white); border-radius:16px 16px 0 0; padding:20px; width:100%; max-width:600px; max-height:90vh; overflow-y:auto; }
 .modal-title { font-size:17px; font-weight:700; margin-bottom:16px; }
 
+/* ── Quick-pick time buttons ── */
+.time-picker-section { margin-bottom:16px; }
+.time-picker-label { font-size:11px; font-weight:700; color:var(--gray-400); text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px; }
+.quick-grid {
+  display:grid; grid-template-columns:repeat(3,1fr); gap:8px;
+}
+.quick-btn {
+  background:var(--gray-50,#f9fafb);
+  border:1.5px solid var(--gray-200);
+  border-radius:10px;
+  padding:10px 6px;
+  text-align:center;
+  cursor:pointer;
+  transition:all .15s;
+  font-size:13px;
+  font-weight:600;
+  color:var(--gray-700);
+  line-height:1.3;
+}
+.quick-btn:active { transform:scale(.97); }
+.quick-btn.selected {
+  background:var(--blue);
+  border-color:var(--blue);
+  color:#fff;
+}
+.quick-btn .qb-emoji { font-size:18px; display:block; margin-bottom:2px; }
+.quick-btn .qb-label { font-size:11px; }
+
+/* ── Custom time row ── */
+.custom-time-row {
+  display:flex; align-items:center; gap:8px; margin-top:10px;
+}
+.custom-time-row label { font-size:13px; color:var(--gray-500); flex-shrink:0; }
+.custom-time-input {
+  flex:1; padding:9px 12px; border-radius:10px;
+  border:1.5px solid var(--gray-200); font-size:14px;
+  background:var(--gray-50,#f9fafb);
+}
+.custom-time-input:focus { outline:none; border-color:var(--blue); }
+
+/* ── Selected time display ── */
+.selected-when {
+  background:#eff6ff; border:1.5px solid #bfdbfe;
+  border-radius:10px; padding:10px 14px;
+  font-size:13px; font-weight:600; color:#1d4ed8;
+  margin-bottom:12px; display:none;
+  align-items:center; gap:8px;
+}
+.selected-when.visible { display:flex; }
+
+/* ── Module pills ── */
+.module-pills { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:4px; }
+.mod-pill {
+  padding:6px 12px; border-radius:99px; font-size:12px; font-weight:600;
+  border:1.5px solid var(--gray-200); background:var(--gray-50,#f9fafb);
+  cursor:pointer; transition:all .15s; color:var(--gray-600);
+}
+.mod-pill:active { transform:scale(.97); }
+.mod-pill.selected { background:var(--blue); border-color:var(--blue); color:#fff; }
+
+/* ── Reminder cards ── */
 .reminder-card {
   background: var(--white);
   border-radius: 12px;
@@ -88,40 +149,76 @@
   <div class="modal-sheet">
     <div class="modal-title">🔔 Nuevo recordatorio</div>
 
-    <div class="form-group">
-      <label class="form-label">¿Qué necesitas recordar?</label>
+    <!-- Title input -->
+    <div class="form-group" style="margin-bottom:16px">
       <input type="text" class="form-input" id="rem-title"
-        placeholder="e.g. Enviar correo a padres"
-        onkeydown="if(event.key==='Enter')document.getElementById('rem-date').focus()">
+        placeholder="¿Qué necesitas recordar?"
+        style="font-size:16px;padding:12px 14px"
+        onkeydown="if(event.key==='Enter')this.blur()">
     </div>
 
-    <div class="form-group">
-      <label class="form-label">Fecha</label>
-      <input type="date" class="form-input" id="rem-date">
+    <!-- Selected time display -->
+    <div class="selected-when" id="selected-when-display">
+      <span>⏰</span>
+      <span id="selected-when-text"></span>
+      <button onclick="clearWhen()" style="margin-left:auto;background:none;border:none;cursor:pointer;font-size:16px;padding:0;color:#93c5fd">✕</button>
     </div>
 
-    <div class="form-group">
-      <label class="form-label">Hora (opcional — para notificación en celular)</label>
-      <input type="time" class="form-input" id="rem-time"
-        placeholder="e.g. 08:00">
-      <div style="font-size:12px;color:var(--gray-400);margin-top:4px">
-        📱 Si pones hora, te manda notificación ntfy a esa hora exacta
+    <!-- Quick-pick: Today -->
+    <div class="time-picker-section">
+      <div class="time-picker-label">⚡ Rápido</div>
+      <div class="quick-grid">
+        <button class="quick-btn" data-preset="in30" onclick="pickPreset(this)">
+          <span class="qb-emoji">⏱️</span>
+          <span class="qb-label">En 30 min</span>
+        </button>
+        <button class="quick-btn" data-preset="in1h" onclick="pickPreset(this)">
+          <span class="qb-emoji">🕐</span>
+          <span class="qb-label">En 1 hora</span>
+        </button>
+        <button class="quick-btn" data-preset="tonight" onclick="pickPreset(this)">
+          <span class="qb-emoji">🌆</span>
+          <span class="qb-label">Esta noche (7pm)</span>
+        </button>
+        <button class="quick-btn" data-preset="tmr-am" onclick="pickPreset(this)">
+          <span class="qb-emoji">🌅</span>
+          <span class="qb-label">Mañana AM (8am)</span>
+        </button>
+        <button class="quick-btn" data-preset="tmr-pm" onclick="pickPreset(this)">
+          <span class="qb-emoji">☀️</span>
+          <span class="qb-label">Mañana tarde (3pm)</span>
+        </button>
+        <button class="quick-btn" data-preset="notime" onclick="pickPreset(this)">
+          <span class="qb-emoji">📌</span>
+          <span class="qb-label">Sin hora</span>
+        </button>
       </div>
     </div>
 
-    <div class="form-group">
-      <label class="form-label">Módulo</label>
-      <select class="form-select" id="rem-module">
-        <option value="Personal">Personal</option>
-        <option value="RT">🏫 RT (River Tech)</option>
-        <option value="TOV">💍 TOV (Take One Visuals)</option>
-        <option value="Health">🏃 Health</option>
-        <option value="LifeOS">🖥️ LifeOS</option>
-      </select>
+    <!-- Custom time -->
+    <div class="custom-time-row">
+      <label>🕐 Hora exacta:</label>
+      <input type="time" class="custom-time-input" id="rem-time-custom"
+        onchange="pickCustomTime(this.value)">
+      <input type="date" class="custom-time-input" id="rem-date-custom"
+        style="max-width:140px"
+        onchange="pickCustomDate(this.value)">
     </div>
 
-    <div style="display:flex;gap:8px;margin-top:4px">
-      <button class="btn btn-primary" style="flex:1" onclick="submitReminder()">Guardar</button>
+    <!-- Module pills -->
+    <div style="margin-top:16px;margin-bottom:4px">
+      <div class="time-picker-label" style="margin-bottom:8px">Módulo</div>
+      <div class="module-pills">
+        <button class="mod-pill selected" data-mod="Personal" onclick="pickModule(this)">👤 Personal</button>
+        <button class="mod-pill" data-mod="RT" onclick="pickModule(this)">🏫 RT</button>
+        <button class="mod-pill" data-mod="TOV" onclick="pickModule(this)">💍 TOV</button>
+        <button class="mod-pill" data-mod="Health" onclick="pickModule(this)">🏃 Salud</button>
+        <button class="mod-pill" data-mod="LifeOS" onclick="pickModule(this)">🖥️ LifeOS</button>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn btn-primary" style="flex:1;font-size:16px;padding:13px" onclick="submitReminder()">Guardar</button>
       <button class="btn btn-ghost" onclick="closeAddModal()">Cancelar</button>
     </div>
   </div>
