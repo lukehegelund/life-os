@@ -1,6 +1,6 @@
-// notes.js — Life OS Notes (v3: list layout, DOM expand/collapse, modern colors)
+// notes.js — Life OS Notes (v4: rich text, modern font, instant delete)
 // Notes stored in `tasks` table with module='Personal' + notes JSON flag {is_note:true}
-// body/color/pinned stored in notes JSON; priority='normal', status='open'
+// body = HTML string (contenteditable), color/pinned in notes JSON
 
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
@@ -11,14 +11,14 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 const NOTE_MODULE = 'Personal';
 const NOTE_FLAG   = '"is_note":true';
 
-// Modern accent colors matching the app palette
+// Accent color strips using app CSS variables
 const ACCENT_COLORS = {
-  none:   { strip: 'transparent', label: 'None' },
-  blue:   { strip: '#2563EB',     label: 'Blue' },
-  green:  { strip: '#1A5E3A',     label: 'Green' },
-  orange: { strip: '#D97706',     label: 'Orange' },
-  coral:  { strip: '#E8563A',     label: 'Coral' },
-  purple: { strip: '#7C3AED',     label: 'Purple' },
+  none:   { strip: 'transparent',  label: 'None' },
+  blue:   { strip: '#2563EB',      label: 'Blue' },
+  green:  { strip: '#1A5E3A',      label: 'Green' },
+  orange: { strip: '#D97706',      label: 'Orange' },
+  coral:  { strip: '#E8563A',      label: 'Coral' },
+  purple: { strip: '#7C3AED',      label: 'Purple' },
 };
 
 let allNotes = [];
@@ -26,9 +26,16 @@ let searchQuery = '';
 let activeNoteId = null;
 const saveTimeouts = {};
 
-// ── Helpers ─────────────────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────
 function esc(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Strip HTML tags to get plain text for preview
+function stripHtml(html) {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html || '';
+  return tmp.textContent || '';
 }
 
 function fmtDate(iso) {
@@ -45,7 +52,7 @@ function fmtDate(iso) {
   return d.toLocaleDateString('es', { month: 'short', day: 'numeric' });
 }
 
-// ── Load notes ──────────────────────────────────────────────────
+// ── Load notes ───────────────────────────────────────────────────
 async function loadNotes() {
   const { data, error } = await sb
     .from('tasks')
@@ -63,7 +70,7 @@ async function loadNotes() {
     return {
       id: row.id,
       title: row.title || '',
-      body: meta.body || '',
+      body: meta.body || '',          // HTML string
       color: meta.color || 'none',
       pinned: meta.pinned || false,
       created_at: row.created_at,
@@ -74,14 +81,14 @@ async function loadNotes() {
   renderNotes();
 }
 
-// ── Render (full list rebuild) ──────────────────────────────────
+// ── Render (full list rebuild) ────────────────────────────────────
 function renderNotes() {
   const container = document.getElementById('notes-list');
   const countEl   = document.getElementById('notes-count');
 
   const q = searchQuery.toLowerCase();
   const visible = q
-    ? allNotes.filter(n => n.title.toLowerCase().includes(q) || n.body.toLowerCase().includes(q))
+    ? allNotes.filter(n => n.title.toLowerCase().includes(q) || stripHtml(n.body).toLowerCase().includes(q))
     : allNotes;
 
   countEl.textContent = visible.length ? `${visible.length} nota${visible.length !== 1 ? 's' : ''}` : '';
@@ -106,20 +113,17 @@ function renderNotes() {
 
   container.innerHTML = html;
 
-  // Re-expand active note after re-render
-  if (activeNoteId) {
-    expandCardDOM(activeNoteId);
-  }
+  // Re-expand active note
+  if (activeNoteId) expandCardDOM(activeNoteId);
 }
 
 function noteCardHtml(note) {
   const accentColor = ACCENT_COLORS[note.color]?.strip || 'transparent';
-  const isActive = activeNoteId === note.id;
-  const titleDisplay = note.title || '<span style="color:var(--gray-400);font-style:italic">Sin título</span>';
-  const bodyPreview = note.body ? note.body.replace(/\n/g, ' ').substring(0, 80) + (note.body.length > 80 ? '…' : '') : '';
+  const bodyText = stripHtml(note.body);
+  const bodyPreview = bodyText ? bodyText.substring(0, 90) + (bodyText.length > 90 ? '…' : '') : '';
 
   return `
-    <div class="note-card${isActive ? ' expanded' : ''}${note.pinned ? ' pinned-card' : ''}"
+    <div class="note-card${note.pinned ? ' pinned-card' : ''}"
          id="note-card-${note.id}"
          onclick="handleCardClick(event, '${note.id}')">
 
@@ -145,14 +149,30 @@ function noteCardHtml(note) {
           placeholder="Título"
           oninput="scheduleSaveNote('${note.id}')"
           onclick="event.stopPropagation()">
-        <textarea class="note-edit-body"
+
+        <!-- Rich text formatting bar -->
+        <div class="note-fmt-bar" onclick="event.stopPropagation()">
+          <button class="fmt-btn" onmousedown="event.preventDefault();fmtCmd('bold')" title="Bold"><b>B</b></button>
+          <button class="fmt-btn" onmousedown="event.preventDefault();fmtCmd('italic')" title="Italic"><i>I</i></button>
+          <button class="fmt-btn" onmousedown="event.preventDefault();fmtCmd('underline')" title="Underline"><u>U</u></button>
+          <div class="fmt-divider"></div>
+          <button class="fmt-btn" onmousedown="event.preventDefault();fmtFontSize('small')" title="Small">S</button>
+          <button class="fmt-btn fmt-btn-active" onmousedown="event.preventDefault();fmtFontSize('normal')" title="Normal">M</button>
+          <button class="fmt-btn" onmousedown="event.preventDefault();fmtFontSize('large')" title="Large">L</button>
+          <div class="fmt-divider"></div>
+          <button class="fmt-btn" onmousedown="event.preventDefault();fmtCmd('insertUnorderedList')" title="Bullet list">•</button>
+          <button class="fmt-btn" onmousedown="event.preventDefault();fmtCmd('removeFormat')" title="Clear format">✕</button>
+        </div>
+
+        <!-- contenteditable body -->
+        <div class="note-edit-body"
           id="note-body-${note.id}"
-          placeholder="Escribe una nota..."
-          oninput="scheduleSaveNote('${note.id}');autoResizeTA(this)"
-          onclick="event.stopPropagation()">${esc(note.body)}</textarea>
+          contenteditable="true"
+          data-placeholder="Escribe una nota..."
+          oninput="scheduleSaveNote('${note.id}')"
+          onclick="event.stopPropagation()">${note.body || ''}</div>
 
         <div class="note-edit-toolbar" onclick="event.stopPropagation()">
-          <!-- Color swatches -->
           <div class="note-color-row">
             ${Object.entries(ACCENT_COLORS).map(([key, cfg]) => `
               <div class="note-color-swatch${note.color === key ? ' active' : ''}"
@@ -161,7 +181,6 @@ function noteCardHtml(note) {
                    onclick="setNoteColor('${note.id}','${key}')"></div>
             `).join('')}
           </div>
-          <!-- Action buttons -->
           <div class="note-toolbar-actions">
             <button class="note-tool-btn" onclick="toggleNotePin('${note.id}')" title="${note.pinned ? 'Desfijar' : 'Fijar'}">
               ${note.pinned ? '📌' : '📍'}
@@ -179,27 +198,40 @@ function noteCardHtml(note) {
     </div>`;
 }
 
-// ── Expand / collapse (DOM-based, no full re-render) ─────────────
+// ── Rich text commands ────────────────────────────────────────────
+window.fmtCmd = function(cmd) {
+  document.execCommand(cmd, false, null);
+  if (activeNoteId) scheduleSaveNote(activeNoteId);
+};
+
+const FONT_SIZES = { small: '1', normal: '3', large: '5' };
+window.fmtFontSize = function(size) {
+  document.execCommand('fontSize', false, FONT_SIZES[size] || '3');
+  if (activeNoteId) scheduleSaveNote(activeNoteId);
+};
+
+// ── Expand / collapse ─────────────────────────────────────────────
 function expandCardDOM(noteId) {
   const card = document.getElementById(`note-card-${noteId}`);
   if (!card) return;
   card.classList.add('expanded');
   setTimeout(() => {
     const bodyEl = document.getElementById(`note-body-${noteId}`);
-    if (bodyEl) { autoResizeTA(bodyEl); bodyEl.focus(); }
+    if (bodyEl) bodyEl.focus();
   }, 30);
 }
 
 window.handleCardClick = function(event, noteId) {
-  if (event.target.closest('.note-edit-toolbar') || event.target.closest('.note-card-expanded')) return;
+  if (event.target.closest('.note-edit-toolbar') ||
+      event.target.closest('.note-card-expanded') ||
+      event.target.closest('.note-fmt-bar')) return;
   if (activeNoteId === noteId) return;
 
-  // Collapse previous
   if (activeNoteId) {
     const prev = document.getElementById(`note-card-${activeNoteId}`);
     if (prev) prev.classList.remove('expanded');
     clearTimeout(saveTimeouts[activeNoteId]);
-    saveNote(activeNoteId); // fire-and-forget
+    saveNote(activeNoteId);
   }
 
   activeNoteId = noteId;
@@ -212,11 +244,9 @@ window.collapseCard = async function(noteId) {
   const card = document.getElementById(`note-card-${noteId}`);
   if (card) card.classList.remove('expanded');
   activeNoteId = null;
-  // Reload to update preview text / date
   await loadNotes();
 };
 
-// Collapse on outside click
 document.addEventListener('click', async (e) => {
   if (!activeNoteId) return;
   const activeCard = document.getElementById(`note-card-${activeNoteId}`);
@@ -229,12 +259,7 @@ document.addEventListener('click', async (e) => {
   }
 });
 
-function autoResizeTA(el) {
-  el.style.height = 'auto';
-  el.style.height = el.scrollHeight + 'px';
-}
-
-// ── Save note ───────────────────────────────────────────────────
+// ── Save note ─────────────────────────────────────────────────────
 window.scheduleSaveNote = function(noteId) {
   clearTimeout(saveTimeouts[noteId]);
   saveTimeouts[noteId] = setTimeout(() => saveNote(noteId), 800);
@@ -245,9 +270,10 @@ async function saveNote(noteId) {
   const bodyEl  = document.getElementById(`note-body-${noteId}`);
   if (!titleEl && !bodyEl) return;
 
-  const title = titleEl?.value?.trim() || '';
-  const body  = bodyEl?.value?.trim()  || '';
-  if (!title && !body) return;
+  const title   = titleEl?.value?.trim() || '';
+  const bodyHtml = bodyEl?.innerHTML?.trim() || '';
+  const bodyText = stripHtml(bodyHtml);
+  if (!title && !bodyText) return;
 
   const existing = allNotes.find(n => n.id === noteId);
   const color  = existing?.color  || 'none';
@@ -256,7 +282,7 @@ async function saveNote(noteId) {
 
   const { error } = await sb.from('tasks').update({
     title: title || 'Sin título',
-    notes: JSON.stringify({ is_note: true, body, color, pinned }),
+    notes: JSON.stringify({ is_note: true, body: bodyHtml, color, pinned }),
     completed_at: now,
   }).eq('id', noteId);
 
@@ -264,12 +290,12 @@ async function saveNote(noteId) {
 
   if (existing) {
     existing.title = title;
-    existing.body  = body;
+    existing.body  = bodyHtml;
     existing.updated_at = now;
   }
 }
 
-// ── Create new note ─────────────────────────────────────────────
+// ── Create new note ───────────────────────────────────────────────
 window.createNewNote = async function() {
   const now = new Date().toISOString();
   const { data, error } = await sb.from('tasks').insert({
@@ -290,7 +316,6 @@ window.createNewNote = async function() {
   };
   allNotes.unshift(newNote);
 
-  // If another card is open, close it
   if (activeNoteId) {
     const prev = document.getElementById(`note-card-${activeNoteId}`);
     if (prev) prev.classList.remove('expanded');
@@ -298,7 +323,7 @@ window.createNewNote = async function() {
   }
 
   activeNoteId = data.id;
-  renderNotes(); // need to add the new card to the DOM first
+  renderNotes();
 
   setTimeout(() => {
     const titleEl = document.getElementById(`note-title-${data.id}`);
@@ -306,68 +331,71 @@ window.createNewNote = async function() {
   }, 40);
 };
 
-// ── Set color ───────────────────────────────────────────────────
+// ── Set color ─────────────────────────────────────────────────────
 window.setNoteColor = async function(noteId, color) {
   const note = allNotes.find(n => n.id === noteId);
   if (!note) return;
   note.color = color;
 
-  const { error } = await sb.from('tasks').update({
+  sb.from('tasks').update({
     notes: JSON.stringify({ is_note: true, body: note.body || '', color, pinned: note.pinned || false }),
   }).eq('id', noteId);
-  if (error) { console.error('setNoteColor error', error); return; }
 
-  // Update accent strip instantly
   const card = document.getElementById(`note-card-${noteId}`);
   if (card) {
-    const strip = card.querySelector('.note-card-accent');
+    let strip = card.querySelector('.note-card-accent');
     const accentColor = ACCENT_COLORS[color]?.strip || 'transparent';
     if (accentColor !== 'transparent') {
       if (!strip) {
-        const div = document.createElement('div');
-        div.className = 'note-card-accent';
-        div.style.background = accentColor;
-        card.prepend(div);
-      } else { strip.style.background = accentColor; }
+        strip = document.createElement('div');
+        strip.className = 'note-card-accent';
+        card.prepend(strip);
+      }
+      strip.style.background = accentColor;
     } else {
       if (strip) strip.remove();
     }
-    // Update swatch active state
     card.querySelectorAll('.note-color-swatch').forEach(sw => {
       sw.classList.toggle('active', sw.title === ACCENT_COLORS[color]?.label);
     });
   }
 };
 
-// ── Pin/unpin ───────────────────────────────────────────────────
+// ── Pin/unpin ─────────────────────────────────────────────────────
 window.toggleNotePin = async function(noteId) {
   const note = allNotes.find(n => n.id === noteId);
   if (!note) return;
   const newPinned = !note.pinned;
   note.pinned = newPinned;
 
-  const { error } = await sb.from('tasks').update({
+  sb.from('tasks').update({
     notes: JSON.stringify({ is_note: true, body: note.body || '', color: note.color || 'none', pinned: newPinned }),
   }).eq('id', noteId);
-  if (error) { console.error('togglePin error', error); note.pinned = !newPinned; return; }
 
   renderNotes();
 };
 
-// ── Delete note ─────────────────────────────────────────────────
+// ── Delete note (instant DOM removal) ────────────────────────────
 window.deleteNote = async function(noteId) {
   if (!confirm('¿Eliminar esta nota?')) return;
-  await sb.from('tasks').delete().eq('id', noteId);
+  // Remove from DOM immediately
+  const card = document.getElementById(`note-card-${noteId}`);
+  if (card) card.remove();
   allNotes = allNotes.filter(n => n.id !== noteId);
   if (activeNoteId === noteId) activeNoteId = null;
-  renderNotes();
+  // Update count
+  const countEl = document.getElementById('notes-count');
+  if (countEl) countEl.textContent = allNotes.length ? `${allNotes.length} nota${allNotes.length !== 1 ? 's' : ''}` : '';
+  if (!allNotes.length) renderNotes();
+  // DB delete in background
+  sb.from('tasks').delete().eq('id', noteId);
 };
 
-// ── Search ──────────────────────────────────────────────────────
+// ── Search ────────────────────────────────────────────────────────
 window.filterNotes = function(q) {
   searchQuery = q;
   renderNotes();
 };
 
-// ── Init ────────────────────────────────────────────────────────
+// ── Init ──────────────────────────────────────────────────────────
 loadNotes();

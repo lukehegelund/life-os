@@ -58,13 +58,9 @@ function injectButtons() {
     </div>
   `;
 
-  // Insert before any existing right-side button (like "+ Task"), or just append
-  const existingBtn = headerRow.querySelector('button, a.btn');
-  if (existingBtn) {
-    headerRow.insertBefore(wrap, existingBtn);
-  } else {
-    headerRow.appendChild(wrap);
-  }
+  // Always append directly to headerRow (not inside a nested container)
+  // so the topbar buttons appear at the top level of the flex row
+  headerRow.appendChild(wrap);
 
   // Load unread badge on init
   loadBellBadge();

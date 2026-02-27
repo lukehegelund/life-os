@@ -4,8 +4,60 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Notas — Life OS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/main.css?v=2">
 <style>
+/* Apply Inter font to notes page */
+body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+
+/* ── Rich text formatting toolbar ───────────────────────────── */
+.note-fmt-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 0 8px 0;
+  flex-wrap: wrap;
+}
+.fmt-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 7px;
+  border-radius: 5px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gray-600);
+  line-height: 1;
+  transition: background 0.1s;
+  min-width: 28px;
+  text-align: center;
+}
+.fmt-btn:hover { background: var(--gray-100); }
+.fmt-btn.fmt-btn-active { background: var(--blue-light); color: var(--blue); }
+.fmt-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--gray-200);
+  margin: 0 3px;
+  flex-shrink: 0;
+}
+
+/* contenteditable body — placeholder + focus */
+.note-edit-body[contenteditable] {
+  min-height: 80px;
+  outline: none;
+  line-height: 1.6;
+  font-size: 14px;
+  color: var(--gray-800);
+  cursor: text;
+}
+.note-edit-body[contenteditable]:empty::before {
+  content: attr(data-placeholder);
+  color: var(--gray-400);
+  pointer-events: none;
+}
 /* ── Note list ──────────────────────────────────────────────── */
 .notes-list-stack {
   display: flex;
@@ -280,6 +332,6 @@
 </nav>
 
 <script type="module" src="js/notes.js?v=4"></script>
-<script type="module" src="js/topbar.js?v=4"></script>
+<script type="module" src="js/topbar.js?v=5"></script>
 </body>
 </html>
