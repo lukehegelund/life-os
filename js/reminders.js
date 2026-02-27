@@ -1,4 +1,4 @@
-// Life OS — Reminders v5
+// Life OS — Reminders v6 — recurring editable
 // One-time reminders: saved to Supabase, Edge Function fires ntfy via pg_cron every minute
 // Recurring reminders: daily / weekly / monthly / custom — also handled by Edge Function
 import { supabase } from './supabase.js';
@@ -170,6 +170,7 @@ function renderRecurringCard(r) {
         </div>
       </div>
       <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
+        <button class="btn btn-sm btn-ghost" onclick="editRecurring(${r.id})" title="Editar" style="font-size:14px;padding:4px 8px">✏️</button>
         <button class="btn btn-sm btn-ghost" onclick="pauseRecurring(${r.id})" title="Pausar" style="font-size:14px;padding:4px 8px">⏸️</button>
         <button class="btn btn-sm btn-ghost" onclick="deleteReminder(${r.id})" title="Eliminar" style="font-size:16px;padding:4px 8px">🗑️</button>
       </div>
@@ -298,11 +299,12 @@ window.submitReminder = async () => {
 };
 
 // ── RECURRING Modal state ─────────────────────────────────────────────────────
-let _recFreq   = 'daily';
-let _recDays   = [];       // for weekly/custom
-let _recDom    = 1;        // for monthly
-let _recTime   = null;     // 'HH:MM'
-let _recModule = 'Personal';
+let _recFreq      = 'daily';
+let _recDays      = [];       // for weekly/custom
+let _recDom       = 1;        // for monthly
+let _recTime      = null;     // 'HH:MM'
+let _recModule    = 'Personal';
+let _editingRecId = null;     // null = new, number = editing existing
 
 function _updateRecPreview() {
   const titleEl = document.getElementById('rec-title');
@@ -371,6 +373,7 @@ window.pickRecModule = (btn) => {
 };
 
 window.showRecurringModal = () => {
+  _editingRecId = null;
   _recFreq = 'daily'; _recDays = []; _recDom = 1; _recTime = null; _recModule = 'Personal';
   document.getElementById('rec-title').value = '';
   document.getElementById('rec-time-custom').value = '';
@@ -384,10 +387,71 @@ window.showRecurringModal = () => {
   document.getElementById('rec-dow-section').style.display = 'none';
   document.getElementById('rec-dom-section').style.display = 'none';
   document.getElementById('rec-preview').style.display = 'none';
+  // Update modal title for new vs edit
+  const modalTitle = document.getElementById('rec-modal-title');
+  if (modalTitle) modalTitle.textContent = '🔁 Nuevo repetitivo';
+  const submitBtn = document.querySelector('#recurring-modal .submit-rec-btn');
+  if (submitBtn) submitBtn.textContent = 'Guardar repetitivo';
   document.getElementById('recurring-modal').style.display = 'flex';
   setTimeout(() => document.getElementById('rec-title').focus(), 50);
 };
-window.closeRecurringModal = () => { document.getElementById('recurring-modal').style.display = 'none'; };
+window.closeRecurringModal = () => { document.getElementById('recurring-modal').style.display = 'none'; _editingRecId = null; };
+
+// ── Edit existing recurring reminder ──────────────────────────────────────────
+window.editRecurring = async (id) => {
+  // Load the reminder data from the DOM (it's already loaded in memory)
+  const { data, error } = await supabase.from('reminders').select('*').eq('id', id).single();
+  if (error || !data) { toast('Error al cargar recordatorio', 'error'); return; }
+
+  _editingRecId = id;
+  const p = parsePattern(data);
+
+  // Pre-fill title
+  document.getElementById('rec-title').value = data.title || '';
+
+  // Pre-fill freq
+  _recFreq = p.freq || 'daily';
+  document.querySelectorAll('#freq-pills .freq-pill').forEach(b => b.classList.remove('selected'));
+  const freqBtn = document.querySelector(`#freq-pills [data-freq="${_recFreq}"]`);
+  if (freqBtn) freqBtn.classList.add('selected');
+
+  // Show/hide sub-sections
+  document.getElementById('rec-dow-section').style.display = (_recFreq === 'weekly' || _recFreq === 'custom') ? '' : 'none';
+  document.getElementById('rec-dom-section').style.display = (_recFreq === 'monthly') ? '' : 'none';
+
+  // Pre-fill days
+  _recDays = Array.isArray(p.days) ? [...p.days] : [];
+  document.querySelectorAll('.dow-btn').forEach(b => {
+    b.classList.toggle('selected', _recDays.includes(b.dataset.dow));
+  });
+
+  // Pre-fill day of month
+  _recDom = p.day_of_month || 1;
+  document.getElementById('rec-dom').value = String(_recDom);
+
+  // Pre-fill time
+  _recTime = p.time || null;
+  document.getElementById('rec-time-custom').value = _recTime || '';
+  document.querySelectorAll('#recurring-modal .quick-btn').forEach(b => {
+    b.classList.toggle('selected', b.dataset?.time === _recTime || b.textContent === _recTime);
+  });
+
+  // Pre-fill module
+  _recModule = data.module || 'Personal';
+  document.querySelectorAll('#rec-mod-pills .mod-pill').forEach(b => b.classList.remove('selected'));
+  const modBtn = document.querySelector(`#rec-mod-pills [data-mod="${_recModule}"]`);
+  if (modBtn) modBtn.classList.add('selected');
+
+  // Update modal title and submit button
+  const modalTitle = document.getElementById('rec-modal-title');
+  if (modalTitle) modalTitle.textContent = '✏️ Editar repetitivo';
+  const submitBtn = document.querySelector('#recurring-modal .submit-rec-btn');
+  if (submitBtn) submitBtn.textContent = 'Guardar cambios';
+
+  _updateRecPreview();
+  document.getElementById('recurring-modal').style.display = 'flex';
+  setTimeout(() => document.getElementById('rec-title').focus(), 50);
+};
 
 window.submitRecurring = async () => {
   const title = document.getElementById('rec-title').value.trim();
@@ -402,17 +466,26 @@ window.submitRecurring = async () => {
   if (_recFreq === 'weekly' || _recFreq === 'custom') pattern.days = _recDays;
   if (_recFreq === 'monthly') pattern.day_of_month = domVal;
 
-  const { error } = await supabase.from('reminders').insert({
+  const payload = {
     title,
     module: _recModule,
     recurring: true,
     recurrence_pattern: JSON.stringify(pattern),
     status: 'active',
-    notes: null,
-  });
+  };
+
+  let error;
+  if (_editingRecId) {
+    // Update existing
+    ({ error } = await supabase.from('reminders').update(payload).eq('id', _editingRecId));
+  } else {
+    // Insert new
+    ({ error } = await supabase.from('reminders').insert({ ...payload, notes: null }));
+  }
+
   if (error) { toast('Error: ' + error.message, 'error'); return; }
   closeRecurringModal();
-  toast('🔁 Recordatorio repetitivo guardado', 'success');
+  toast(_editingRecId ? '✏️ Repetitivo actualizado' : '🔁 Recordatorio repetitivo guardado', 'success');
   await load();
 };
 
