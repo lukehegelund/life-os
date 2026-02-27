@@ -1,7 +1,7 @@
 // Life OS — Reminders (v1: ntfy X-At scheduled notifications)
 // Saves reminders to Supabase, fires ntfy with X-At header for scheduled delivery.
 import { supabase } from './supabase.js';
-import { today, toast, pstOffsetStr } from './utils.js';
+import { today, toast, pstOffsetStr } from './utils.js?v=2';
 
 const NTFY_TOPIC = 'luke-lifeos-rt2026';
 const T = today();
