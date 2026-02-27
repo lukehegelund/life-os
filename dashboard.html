@@ -99,6 +99,25 @@
 }
 .sr-action-btn:hover { background: var(--gray-100); color: var(--gray-700); }
 
+/* Force-update toggle button */
+.sr-force-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 5px 6px;
+  border-radius: 7px;
+  font-size: 16px;
+  color: var(--gray-300);
+  transition: background 0.1s, transform 0.1s;
+  opacity: 0.5;
+}
+.sr-force-btn:hover { background: var(--gray-100); opacity: 1; }
+.sr-force-btn.active {
+  opacity: 1;
+  color: var(--orange, #f59e0b);
+}
+.sr-force-btn.active:hover { background: #fff7ed; }
+
 /* Response section */
 .sr-card-response {
   padding: 0 14px 14px;
@@ -428,7 +447,7 @@ textarea.form-input { resize:vertical; min-height:80px; font-family:inherit; lin
   </a>
 </nav>
 
-<script type="module" src="js/dashboard.js?v=1"></script>
+<script type="module" src="js/dashboard.js?v=2"></script>
 <script type="module" src="js/topbar.js?v=6"></script>
 </body>
 </html>
