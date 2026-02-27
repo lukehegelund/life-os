@@ -1,4 +1,4 @@
-// notes.js — Life OS Notes (v4: rich text, modern font, instant delete)
+// notes.js — Life OS Notes (v5: fix color/pin persistence, await DB updates)
 // Notes stored in `tasks` table with module='Personal' + notes JSON flag {is_note:true}
 // body = HTML string (contenteditable), color/pinned in notes JSON
 
@@ -609,6 +609,9 @@ async function saveNote(noteId) {
     existing.title = title;
     existing.body  = bodyHtml;
     existing.updated_at = now;
+    // Keep color and pinned in sync (they may have been updated separately)
+    existing.color  = color;
+    existing.pinned = pinned;
   }
 }
 
@@ -652,9 +655,17 @@ window.createNewNote = async function() {
 window.setNoteColor = async function(noteId, color) {
   const note = allNotes.find(n => n.id === noteId);
   if (!note) return;
+
+  // Flush any pending save first so we don't lose body edits
+  if (saveTimeouts[noteId]) {
+    clearTimeout(saveTimeouts[noteId]);
+    await saveNote(noteId);
+  }
+
   note.color = color;
 
-  sb.from('tasks').update({
+  // Await the DB update so collapse/reload doesn't race with it
+  await sb.from('tasks').update({
     notes: JSON.stringify({ is_note: true, body: note.body || '', color, pinned: note.pinned || false }),
   }).eq('id', noteId);
 
@@ -682,10 +693,18 @@ window.setNoteColor = async function(noteId, color) {
 window.toggleNotePin = async function(noteId) {
   const note = allNotes.find(n => n.id === noteId);
   if (!note) return;
+
+  // Flush any pending save first so we don't lose body edits
+  if (saveTimeouts[noteId]) {
+    clearTimeout(saveTimeouts[noteId]);
+    await saveNote(noteId);
+  }
+
   const newPinned = !note.pinned;
   note.pinned = newPinned;
 
-  sb.from('tasks').update({
+  // Await the DB update so collapse/reload doesn't race with it
+  await sb.from('tasks').update({
     notes: JSON.stringify({ is_note: true, body: note.body || '', color: note.color || 'none', pinned: newPinned }),
   }).eq('id', noteId);
 
