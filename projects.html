@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Proyectos — Life OS</title>
+<link rel="stylesheet" href="css/main.css?v=2">
+<style>
+/* ── Project Cards ──────────────────────────────────────────────────── */
+.proj-card {
+  background: var(--white);
+  border: 1.5px solid var(--gray-200);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.proj-card:hover { border-color: var(--blue); box-shadow: 0 2px 8px rgba(0,0,0,0.07); }
+.proj-card.needs-action { border-left: 4px solid #f59e0b; }
+
+.proj-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.proj-card-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--gray-800);
+  line-height: 1.35;
+}
+.proj-card-prompt {
+  font-size: 12px;
+  color: var(--gray-500);
+  margin-top: 4px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.proj-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.proj-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 99px;
+  white-space: nowrap;
+}
+.proj-badge.action  { background: #fef3c7; color: #92400e; }
+.proj-badge.active  { background: #d1fae5; color: #065f46; }
+.proj-badge.paused  { background: #f3f4f6; color: #6b7280; }
+
+.proj-status-snippet {
+  font-size: 12px;
+  color: var(--gray-500);
+  margin-top: 6px;
+  font-style: italic;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ── Detail Panel (slide-up) ────────────────────────────────────────── */
+.proj-panel-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  z-index: 200;
+}
+.proj-panel-overlay.open { display: block; }
+
+.proj-panel {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  max-height: 92vh;
+  background: var(--white);
+  border-radius: 20px 20px 0 0;
+  z-index: 201;
+  display: flex;
+  flex-direction: column;
+  transform: translateY(100%);
+  transition: transform 0.28s cubic-bezier(0.32,0.72,0,1);
+  overflow: hidden;
+}
+.proj-panel.open { transform: translateY(0); }
+
+.proj-panel-handle {
+  width: 36px;
+  height: 4px;
+  background: var(--gray-300);
+  border-radius: 99px;
+  margin: 10px auto 0;
+  flex-shrink: 0;
+}
+.proj-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px 12px;
+  border-bottom: 1px solid var(--gray-100);
+  flex-shrink: 0;
+  gap: 10px;
+}
+.proj-panel-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--gray-800);
+  flex: 1;
+  min-width: 0;
+}
+.proj-panel-close {
+  background: var(--gray-100);
+  border: none;
+  border-radius: 99px;
+  width: 30px;
+  height: 30px;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gray-500);
+  flex-shrink: 0;
+}
+.proj-panel-close:hover { background: var(--gray-200); }
+
+.proj-panel-body {
+  overflow-y: auto;
+  flex: 1;
+  padding: 0 16px 100px;
+}
+
+/* Section inside panel */
+.proj-section {
+  margin-top: 16px;
+}
+.proj-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--gray-400);
+  margin-bottom: 6px;
+}
+.proj-section-text {
+  font-size: 13px;
+  color: var(--gray-700);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.proj-section-empty {
+  font-size: 12px;
+  color: var(--gray-400);
+  font-style: italic;
+}
+.proj-editable {
+  width: 100%;
+  font-size: 13px;
+  color: var(--gray-700);
+  line-height: 1.55;
+  border: 1.5px solid var(--gray-200);
+  border-radius: 10px;
+  padding: 10px 12px;
+  resize: vertical;
+  min-height: 80px;
+  background: var(--gray-50, #f9fafb);
+  font-family: inherit;
+  box-sizing: border-box;
+}
+.proj-editable:focus { outline: none; border-color: var(--blue); background: #fff; }
+
+/* Action needed banner */
+.proj-action-banner {
+  background: #fffbeb;
+  border: 1.5px solid #f59e0b;
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-top: 12px;
+}
+.proj-action-banner-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #92400e;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  margin-bottom: 4px;
+}
+.proj-action-banner-text {
+  font-size: 13px;
+  color: #78350f;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+.proj-action-reply {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.proj-action-reply input {
+  flex: 1;
+  border: 1.5px solid var(--gray-200);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  background: white;
+  min-width: 0;
+}
+.proj-action-reply input:focus { outline: none; border-color: var(--blue); }
+.proj-action-reply button {
+  background: var(--blue);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.proj-action-reply button:hover { opacity: 0.85; }
+
+/* Log */
+.proj-log-entry {
+  font-size: 12px;
+  color: var(--gray-600);
+  line-height: 1.5;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--gray-100);
+}
+.proj-log-entry:last-child { border-bottom: none; }
+.proj-log-ts {
+  font-size: 10px;
+  color: var(--gray-400);
+  margin-bottom: 2px;
+}
+
+/* Panel action buttons */
+.proj-panel-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+.proj-panel-btn {
+  font-size: 12px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1.5px solid var(--gray-200);
+  background: var(--white);
+  color: var(--gray-600);
+  cursor: pointer;
+  font-weight: 500;
+}
+.proj-panel-btn:hover { background: var(--gray-100); }
+.proj-panel-btn.danger { color: var(--coral, #e8563a); border-color: var(--coral, #e8563a); }
+.proj-panel-btn.danger:hover { background: #fff1f0; }
+.proj-panel-btn.primary { background: var(--blue); color: white; border-color: var(--blue); }
+.proj-panel-btn.primary:hover { opacity: 0.85; }
+
+/* Add project button (floating) */
+.proj-add-fab {
+  position: fixed;
+  bottom: 72px;
+  right: 16px;
+  background: var(--blue);
+  color: white;
+  border: none;
+  border-radius: 99px;
+  padding: 12px 20px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.proj-add-fab:hover { opacity: 0.9; }
+
+/* New project modal */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  z-index: 300;
+  align-items: flex-end;
+}
+.modal-overlay.open { display: flex; }
+.modal-sheet {
+  background: var(--white);
+  border-radius: 20px 20px 0 0;
+  padding: 20px 16px 40px;
+  width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.modal-title { font-size: 17px; font-weight: 700; color: var(--gray-800); margin-bottom: 16px; }
+.modal-label { font-size: 12px; font-weight: 600; color: var(--gray-500); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .06em; }
+.modal-input {
+  width: 100%;
+  border: 1.5px solid var(--gray-200);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  background: var(--gray-50, #f9fafb);
+  font-family: inherit;
+  box-sizing: border-box;
+  margin-bottom: 14px;
+}
+.modal-input:focus { outline: none; border-color: var(--blue); background: white; }
+.modal-textarea { resize: vertical; min-height: 100px; }
+.modal-actions { display: flex; gap: 10px; margin-top: 6px; }
+.modal-btn {
+  flex: 1;
+  padding: 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+}
+.modal-btn.cancel { background: var(--gray-100); color: var(--gray-600); }
+.modal-btn.cancel:hover { background: var(--gray-200); }
+.modal-btn.save { background: var(--blue); color: white; }
+.modal-btn.save:hover { opacity: 0.88; }
+</style>
+</head>
+<body>
+
+<header class="page-header">
+  <div class="header-row">
+    <div>
+      <h1>Proyectos</h1>
+      <div class="subtitle" id="proj-subtitle">Proyectos de Claude</div>
+    </div>
+    <div id="proj-action-count" style="display:none;font-size:12px;font-weight:600;color:#92400e;background:#fef3c7;padding:4px 10px;border-radius:99px"></div>
+  </div>
+</header>
+
+<main class="content">
+  <div id="proj-list">
+    <div class="sr-empty" style="padding:20px 0">Cargando proyectos...</div>
+  </div>
+</main>
+
+<!-- FAB button -->
+<button class="proj-add-fab" onclick="showNewProjectModal()">
+  <span style="font-size:18px">+</span> Nuevo Proyecto
+</button>
+
+<!-- Detail panel overlay -->
+<div class="proj-panel-overlay" id="proj-panel-overlay" onclick="closePanel()"></div>
+<div class="proj-panel" id="proj-panel">
+  <div class="proj-panel-handle"></div>
+  <div class="proj-panel-header">
+    <div class="proj-panel-title" id="pp-title">—</div>
+    <button class="proj-panel-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="proj-panel-body" id="pp-body">
+    <!-- filled by JS -->
+  </div>
+</div>
+
+<!-- New Project modal -->
+<div class="modal-overlay" id="new-proj-modal" onclick="e => { if(e.target===this) closeNewModal(); }">
+  <div class="modal-sheet" onclick="event.stopPropagation()">
+    <div class="modal-title" id="new-proj-modal-title">✨ Nuevo Proyecto</div>
+
+    <div class="modal-label">Título</div>
+    <input class="modal-input" id="np-title" type="text" placeholder="Nombre corto del proyecto" />
+
+    <div class="modal-label">Objetivo principal</div>
+    <textarea class="modal-input modal-textarea" id="np-prompt" placeholder="¿Qué quieres que Claude haga? Sé todo lo específico que puedas..."></textarea>
+
+    <div class="modal-actions">
+      <button class="modal-btn cancel" onclick="closeNewModal()">Cancelar</button>
+      <button class="modal-btn save" onclick="submitNewProject()">Crear Proyecto</button>
+    </div>
+  </div>
+</div>
+
+<nav class="bottom-nav">
+  <a href="dashboard.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+    Inicio
+  </a>
+  <a href="school.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>
+    Escuela
+  </a>
+  <a href="apps.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+    Apps
+  </a>
+  <a href="languages.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+    Idiomas
+  </a>
+  <a href="calendar.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><circle cx="8" cy="16" r="1" fill="currentColor"/><circle cx="12" cy="16" r="1" fill="currentColor"/></svg>
+    Calendario
+  </a>
+  <a href="notes.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+    Notas
+  </a>
+  <a href="tasks.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+    Tareas
+  </a>
+  <a href="projects.html" class="nav-item active">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+    Proyectos
+  </a>
+</nav>
+
+<script type="module" src="js/projects.js?v=1"></script>
+<script type="module" src="js/topbar.js?v=6"></script>
+</body>
+</html>
