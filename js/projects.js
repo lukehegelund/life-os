@@ -221,10 +221,18 @@ function renderPanelBody(p) {
     </div>
   `;
 
-  // Allow Enter in reply input
+  // Allow Enter in reply input + scroll into view on mobile keyboard open
   setTimeout(() => {
     const inp = document.getElementById('proj-reply-input');
-    if (inp) inp.addEventListener('keydown', e => { if (e.key === 'Enter') window.submitProjectReply(p.id); });
+    if (inp) {
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') window.submitProjectReply(p.id); });
+      inp.addEventListener('focus', () => {
+        // Give the keyboard time to open, then scroll the input into view
+        setTimeout(() => {
+          inp.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 320);
+      });
+    }
   }, 50);
 }
 
