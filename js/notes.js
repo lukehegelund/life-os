@@ -1,6 +1,6 @@
 // notes.js — Life OS Notes page (v2: Google Keep style, multi-note view)
 // Notes stored in `tasks` table with module='Personal' + notes JSON flag {is_note:true}
-// title → title, body → notes.body, color → priority field, pinned → status='pinned'
+// title → title, body/color/pinned → notes JSON field, priority='normal', status='open'
 
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
@@ -38,7 +38,7 @@ async function loadNotes() {
     .select('id, title, notes, priority, status, created_at, completed_at')
     .eq('module', NOTE_MODULE)
     .like('notes', `%${NOTE_FLAG}%`)
-    .not('status', 'eq', 'cancelled')
+    .eq('status', 'open')
     .order('completed_at', { ascending: false, nullsFirst: false });
 
   if (error) { console.error('loadNotes error', error); return; }
@@ -50,8 +50,8 @@ async function loadNotes() {
       id: row.id,
       title: row.title || '',
       body: meta.body || '',
-      color: row.priority || 'yellow',
-      pinned: row.status === 'pinned',
+      color: meta.color || 'yellow',   // color stored in notes JSON (priority field is reserved for task priority)
+      pinned: meta.pinned || false,    // pinned stored in notes JSON (status field only allows 'open'/'done')
       created_at: row.created_at,
       updated_at: row.completed_at || row.created_at,
     };
@@ -239,14 +239,15 @@ async function saveNote(noteId) {
   // Find existing note in allNotes
   const existing = allNotes.find(n => n.id === noteId);
   const color = existing?.color || 'yellow';
+  const pinned = existing?.pinned || false;
 
-  // Store body inside notes JSON alongside is_note flag
-  const notesJson = JSON.stringify({ is_note: true, body });
+  // Store everything (body, color, pinned) inside notes JSON
+  // priority field is reserved for task priority (urgent/normal) — do not use for color
+  const notesJson = JSON.stringify({ is_note: true, body, color, pinned });
 
   const { error } = await sb.from('tasks').update({
     title: title || 'Sin título',
     notes: notesJson,
-    priority: color,
     completed_at: now,
   }).eq('id', noteId);
 
@@ -265,10 +266,10 @@ window.createNewNote = async function() {
   const now = new Date().toISOString();
   const { data, error } = await sb.from('tasks').insert({
     title: '',
-    notes: JSON.stringify({ is_note: true, body: '' }),
+    notes: JSON.stringify({ is_note: true, body: '', color: 'yellow', pinned: false }),
     module: NOTE_MODULE,   // 'Personal' — passes tasks_module_check constraint
-    priority: 'yellow',
-    status: 'open',
+    priority: 'normal',    // 'normal' — only 'normal'/'urgent' pass tasks_priority_check
+    status: 'open',        // 'open' — only 'open'/'done' pass tasks_status_check
     completed_at: now,
     due_date: null,
   }).select().single();
@@ -301,7 +302,9 @@ window.setNoteColor = async function(noteId, color) {
   if (!note) return;
   note.color = color;
 
-  const { error } = await sb.from('tasks').update({ priority: color }).eq('id', noteId);
+  // Store color inside notes JSON (priority field is reserved for task priority)
+  const notesJson = JSON.stringify({ is_note: true, body: note.body || '', color, pinned: note.pinned || false });
+  const { error } = await sb.from('tasks').update({ notes: notesJson }).eq('id', noteId);
   if (error) { console.error('setNoteColor error', error); return; }
 
   // Update card background immediately without full re-render
@@ -323,9 +326,9 @@ window.toggleNotePin = async function(noteId) {
   const newPinned = !note.pinned;
   note.pinned = newPinned;
 
-  const { error } = await sb.from('tasks').update({
-    status: newPinned ? 'pinned' : 'open',
-  }).eq('id', noteId);
+  // Store pinned inside notes JSON (status field only allows 'open'/'done')
+  const notesJson = JSON.stringify({ is_note: true, body: note.body || '', color: note.color || 'yellow', pinned: newPinned });
+  const { error } = await sb.from('tasks').update({ notes: notesJson }).eq('id', noteId);
 
   if (error) { console.error('togglePin error', error); note.pinned = !newPinned; return; }
   renderNotes();
@@ -334,7 +337,8 @@ window.toggleNotePin = async function(noteId) {
 // ── Delete note ────────────────────────────────────────────────
 window.deleteNote = async function(noteId) {
   if (!confirm('¿Eliminar esta nota?')) return;
-  await sb.from('tasks').update({ status: 'cancelled' }).eq('id', noteId);
+  // Hard delete — 'cancelled' is not a valid status value per tasks_status_check
+  await sb.from('tasks').delete().eq('id', noteId);
   allNotes = allNotes.filter(n => n.id !== noteId);
   if (activeNoteId === noteId) activeNoteId = null;
   renderNotes();
