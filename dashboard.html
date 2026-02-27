@@ -167,6 +167,60 @@
   font-size: 13px;
 }
 
+/* ── Today's items ─────────────────────────────────────────────── */
+.dash-task-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--white);
+  border: 1.5px solid var(--gray-200);
+  border-radius: 10px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--gray-800);
+}
+.dash-task-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--blue);
+}
+.dash-task-dot.urgent { background: var(--coral, #e8563a); }
+.dash-task-dot.normal { background: var(--blue); }
+.dash-task-module {
+  font-size: 11px;
+  color: var(--gray-400);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.dash-food-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--white);
+  border: 1.5px solid var(--gray-200);
+  border-radius: 10px;
+  margin-bottom: 6px;
+}
+.dash-food-meal {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--blue);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+  width: 60px;
+  margin-top: 1px;
+}
+.dash-food-desc {
+  font-size: 13px;
+  color: var(--gray-700);
+  line-height: 1.4;
+}
+
 /* Modal */
 .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:500; align-items:flex-end; justify-content:center; }
 .modal-sheet { background:var(--white); border-radius:16px 16px 0 0; padding:20px; width:100%; max-width:600px; max-height:90vh; overflow-y:auto; }
@@ -239,6 +293,32 @@ textarea.form-input { resize:vertical; min-height:80px; font-family:inherit; lin
 </header>
 
 <main class="content">
+
+  <!-- Today's Tasks -->
+  <div class="sr-section">
+    <div class="sr-section-header">
+      <div class="sr-section-label">✅ Tareas de hoy</div>
+      <a href="tasks.html" style="font-size:12px;color:var(--blue);text-decoration:none;font-weight:600">Ver todas →</a>
+    </div>
+    <div id="today-tasks-list"><div class="sr-empty" style="padding:10px 0">Cargando...</div></div>
+  </div>
+
+  <!-- Today's Food Log -->
+  <div class="sr-section">
+    <div class="sr-section-header">
+      <div class="sr-section-label">🍽️ Comidas de hoy</div>
+      <a href="health.html" style="font-size:12px;color:var(--blue);text-decoration:none;font-weight:600">Ver historial →</a>
+    </div>
+    <div id="today-food-list"><div class="sr-empty" style="padding:10px 0">Cargando...</div></div>
+  </div>
+
+  <!-- Smart Reports divider -->
+  <div style="margin:8px 0 20px;display:flex;align-items:center;gap:10px">
+    <div style="flex:1;height:1px;background:var(--gray-200)"></div>
+    <span style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.07em;white-space:nowrap">📊 Smart Reports</span>
+    <div style="flex:1;height:1px;background:var(--gray-200)"></div>
+  </div>
+
   <div id="sr-daily" class="sr-section">
     <div class="sr-section-header">
       <div class="sr-section-label">📅 Diario</div>
