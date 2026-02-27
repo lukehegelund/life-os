@@ -24,42 +24,64 @@ export function fmtDateLong(d) {
 /** Format a date as "X days ago" / "Today" / "Yesterday" (for "last logged" labels) */
 export function daysAgo(d) {
   if (!d) return '—';
-  const dt = typeof d === 'string' ? new Date(d + 'T00:00:00') : d;
-  const now = new Date();
-  const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const diffMs = todayMidnight - dt;
-  const diffDays = Math.round(diffMs / 86400000);
-  if (diffDays === 0) return 'Today';
+  const targetDateStr = typeof d === 'string' ? d.slice(0, 10) : d.toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+  const todayStr = today();
+  if (targetDateStr === todayStr) return 'Today';
+  // Compute diff using date strings (YYYY-MM-DD comparison is safe)
+  const [ty, tm, td2] = todayStr.split('-').map(Number);
+  const [oy, om, od] = targetDateStr.split('-').map(Number);
+  const todayMs = Date.UTC(ty, tm - 1, td2);
+  const otherMs = Date.UTC(oy, om - 1, od);
+  const diffDays = Math.round((todayMs - otherMs) / 86400000);
   if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 0) return 'Future';
   return `${diffDays}d ago`;
 }
 
-/** Today as YYYY-MM-DD string (browser local time) */
-export function today() {
-  const d = new Date();
-  return [d.getFullYear(), String(d.getMonth()+1).padStart(2,'0'), String(d.getDate()).padStart(2,'0')].join('-');
-}
+// ── TIMEZONE: ALL date logic uses America/Los_Angeles (PST/PDT) ──────────────
 
-/**
- * Today as YYYY-MM-DD string, always in PST/PDT (America/Los_Angeles).
- * Use this for SRS / flashcard date logic so the app behaves consistently
- * regardless of which browser or device Luke is using.
- */
-export function todayPST() {
+/** Today as YYYY-MM-DD string, pinned to PST/PDT (America/Los_Angeles). */
+export function today() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
 }
 
+/** Alias — same as today(), explicit PST name kept for clarity in SRS code. */
+export function todayPST() {
+  return today();
+}
+
 /**
- * Return a YYYY-MM-DD date that is `days` days after today in PST.
- * Pass 0 to get today in PST.
+ * Return a YYYY-MM-DD date that is `days` days offset from today in PST.
+ * Pass 0 to get today, negative for past dates, positive for future.
+ * Example: pstDatePlusDays(-7) = 7 days ago in PST
  */
 export function pstDatePlusDays(days) {
-  // Get today's midnight in PST as a UTC timestamp, then add days
-  const pstTodayStr = todayPST(); // "YYYY-MM-DD"
+  const pstTodayStr = today(); // "YYYY-MM-DD" in PST
   const [y, m, d] = pstTodayStr.split('-').map(Number);
   const base = new Date(Date.UTC(y, m - 1, d)); // midnight UTC for that PST date
   base.setUTCDate(base.getUTCDate() + days);
-  return base.toISOString().split('T')[0];
+  // Return the date in PST, not UTC, to avoid boundary issues
+  return base.toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+}
+
+/**
+ * Given a UTC timestamp (ms), return the YYYY-MM-DD date in PST.
+ * Use instead of new Date(ts).toISOString().split('T')[0] for date comparisons.
+ */
+export function pstDateFromMs(ms) {
+  return new Date(ms).toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+}
+
+/**
+ * Current PST offset string for ntfy X-At scheduling.
+ * Returns '-08:00' (PST) or '-07:00' (PDT) depending on DST.
+ */
+export function pstOffsetStr() {
+  // Intl gives us the offset in minutes; PST = 480, PDT = 420
+  const offsetMins = new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles', timeZoneName: 'shortOffset' })
+    .match(/GMT([+-]\d+)/)?.[1];
+  if (offsetMins === '-7') return '-07:00';
+  return '-08:00'; // default PST
 }
 
 /** Format gold amount with color class */

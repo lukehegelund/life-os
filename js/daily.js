@@ -1,6 +1,6 @@
 // Life OS — Daily Recap (no polling — user-driven)
 import { supabase } from './supabase.js';
-import { today, fmtDate, fmtDateLong, goldStr, goldClass, catBadge, toast, attendanceBadge, showSpinner } from './utils.js';
+import { today, fmtDate, fmtDateLong, goldStr, goldClass, catBadge, toast, attendanceBadge, showSpinner, pstDatePlusDays } from './utils.js';
 
 let selectedDate = today();
 
@@ -312,16 +312,18 @@ async function loadPastLogs() {
 
 // ── Date navigation ───────────────────────────────────────────────────────────
 document.getElementById('date-prev').addEventListener('click', () => {
-  const d = new Date(selectedDate + 'T00:00:00');
-  d.setDate(d.getDate() - 1);
-  selectedDate = d.toISOString().split('T')[0];
+  // Offset from selectedDate by -1 day using UTC arithmetic (date strings are timezone-safe)
+  const [y, m, d2] = selectedDate.split('-').map(Number);
+  const base = new Date(Date.UTC(y, m - 1, d2 - 1));
+  selectedDate = base.toISOString().split('T')[0];
   load();
 });
 document.getElementById('date-next').addEventListener('click', () => {
-  const d = new Date(selectedDate + 'T00:00:00');
-  d.setDate(d.getDate() + 1);
-  if (d.toISOString().split('T')[0] > today()) return;
-  selectedDate = d.toISOString().split('T')[0];
+  const [y, m, d2] = selectedDate.split('-').map(Number);
+  const next = new Date(Date.UTC(y, m - 1, d2 + 1));
+  const nextStr = next.toISOString().split('T')[0];
+  if (nextStr > today()) return;
+  selectedDate = nextStr;
   load();
 });
 document.getElementById('date-today').addEventListener('click', () => {

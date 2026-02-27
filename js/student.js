@@ -1,12 +1,12 @@
 // Life OS — Individual Student Profile (Phase 2)
 import { supabase } from './supabase.js';
-import { qp, fmtDate, fmtDateFull, daysAgo, goldStr, goldClass, attendanceBadge, toast, showSpinner, showEmpty } from './utils.js';
+import { qp, fmtDate, fmtDateFull, daysAgo, goldStr, goldClass, attendanceBadge, toast, showSpinner, showEmpty, today, pstDatePlusDays } from './utils.js';
 import { initSwipe } from './swipe-handler.js';
 
 const studentId = qp('id');
 if (!studentId) { window.location.href = 'students.html'; }
 
-const T = new Date().toISOString().split('T')[0];
+const T = today(); // PST date
 let studentData = null;
 let allClasses = [];
 let enrolledClasses = []; // only classes this student is currently enrolled in
@@ -313,8 +313,8 @@ async function loadPagesAnalytics(s) {
   if (!el) return;
 
   // Fetch 30 days of pages history
-  const thirtyAgo = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
-  const sevenAgo  = new Date(Date.now() -  7 * 86400000).toISOString().split('T')[0];
+  const thirtyAgo = pstDatePlusDays(-30);
+  const sevenAgo  = pstDatePlusDays(-7);
 
   const pagesRes = await supabase.from('student_pages')
     .select('*, classes(name, track_pages)')

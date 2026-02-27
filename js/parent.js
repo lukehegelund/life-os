@@ -1,6 +1,6 @@
 // Life OS — Individual Parent Profile
 import { supabase } from './supabase.js';
-import { fmtDate, fmtDateFull, toast, showSpinner, showEmpty, qp } from './utils.js';
+import { fmtDate, fmtDateFull, toast, showSpinner, showEmpty, qp, today } from './utils.js';
 
 // ── State ─────────────────────────────────────────────────────────────────
 const parentName = decodeURIComponent(qp('name') || '');
@@ -10,7 +10,7 @@ let parentData = null;      // the parsed parent object
 let linkedStudents = [];    // full student records for this parent's students
 let enrolledClassesMap = {}; // studentId → [class objects]
 
-const T = new Date().toISOString().split('T')[0];
+const T = today(); // PST date
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 function parseParentsFromStudent(student) {

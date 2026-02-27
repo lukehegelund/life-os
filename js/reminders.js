@@ -1,7 +1,7 @@
 // Life OS — Reminders (v1: ntfy X-At scheduled notifications)
 // Saves reminders to Supabase, fires ntfy with X-At header for scheduled delivery.
 import { supabase } from './supabase.js';
-import { today, toast } from './utils.js';
+import { today, toast, pstOffsetStr } from './utils.js';
 
 const NTFY_TOPIC = 'luke-lifeos-rt2026';
 const T = today();
@@ -121,22 +121,13 @@ function renderCard(r) {
 async function scheduleNtfy(title, dateStr, timeStr) {
   if (!dateStr || !timeStr) return false;
 
-  // Central Time offset: CST = UTC-6 (Nov–Mar), CDT = UTC-5 (Mar–Nov)
-  // Feb 27 2026 is CST. We compute dynamically so it auto-adjusts for DST.
-  const now = new Date();
-  const offsetMins = now.getTimezoneOffset(); // browser local offset in minutes (positive = behind UTC)
-  // Fallback to CT (-6h = 360 min) if browser timezone is unexpected
-  const ctOffsetMins = 360; // CST — update to 300 for CDT season if needed
-  const offsetSign = '-';
-  const offsetHours = String(Math.floor(ctOffsetMins / 60)).padStart(2, '0');
-  const offsetMinStr = String(ctOffsetMins % 60).padStart(2, '0');
-  const offsetStr = `${offsetSign}${offsetHours}:${offsetMinStr}`; // '-06:00'
-
+  // PST/PDT offset — dynamically computed from America/Los_Angeles
+  const offsetStr = pstOffsetStr(); // '-08:00' (PST) or '-07:00' (PDT)
   const atHeader = `${dateStr}T${timeStr}:00${offsetStr}`;
 
-  // Verify the scheduled time is in the future (CT) — ntfy silently defers past times to +24h
+  // Verify the scheduled time is in the future — ntfy silently defers past times to +24h
   const fireUTC = new Date(`${dateStr}T${timeStr}:00${offsetStr}`);
-  if (fireUTC <= now) {
+  if (fireUTC <= new Date()) {
     console.warn('scheduleNtfy: target time is in the past, skipping ntfy to avoid silent 24h deferral', atHeader);
     return 'past';
   }
@@ -196,15 +187,14 @@ window.pickPreset = (btn) => {
     document.getElementById('rem-date-custom').value = T;
   } else if (preset === 'in30') {
     const t = new Date(now.getTime() + 30*60000);
-    // Use local date (getFullYear/Month/Date), not UTC (toISOString)
-    _pickedDate = [t.getFullYear(), String(t.getMonth()+1).padStart(2,'0'), String(t.getDate()).padStart(2,'0')].join('-');
-    _pickedTime = `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;
+    _pickedDate = t.toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+    _pickedTime = t.toLocaleTimeString('en-GB', { timeZone: 'America/Los_Angeles', hour: '2-digit', minute: '2-digit' });
     document.getElementById('rem-time-custom').value = _pickedTime;
     document.getElementById('rem-date-custom').value = _pickedDate;
   } else if (preset === 'in1h') {
     const t = new Date(now.getTime() + 60*60000);
-    _pickedDate = [t.getFullYear(), String(t.getMonth()+1).padStart(2,'0'), String(t.getDate()).padStart(2,'0')].join('-');
-    _pickedTime = `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;
+    _pickedDate = t.toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+    _pickedTime = t.toLocaleTimeString('en-GB', { timeZone: 'America/Los_Angeles', hour: '2-digit', minute: '2-digit' });
     document.getElementById('rem-time-custom').value = _pickedTime;
     document.getElementById('rem-date-custom').value = _pickedDate;
   } else if (preset === 'tonight') {
@@ -213,15 +203,14 @@ window.pickPreset = (btn) => {
     document.getElementById('rem-time-custom').value = '19:00';
     document.getElementById('rem-date-custom').value = T;
   } else if (preset === 'tmr-am') {
-    const tmr = new Date(now); tmr.setDate(tmr.getDate()+1);
-    // Use local date for tomorrow too
-    _pickedDate = [tmr.getFullYear(), String(tmr.getMonth()+1).padStart(2,'0'), String(tmr.getDate()).padStart(2,'0')].join('-');
+    const tmr = new Date(now.getTime() + 86400000); // +24h
+    _pickedDate = tmr.toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
     _pickedTime = '08:00';
     document.getElementById('rem-time-custom').value = '08:00';
     document.getElementById('rem-date-custom').value = _pickedDate;
   } else if (preset === 'tmr-pm') {
-    const tmr = new Date(now); tmr.setDate(tmr.getDate()+1);
-    _pickedDate = [tmr.getFullYear(), String(tmr.getMonth()+1).padStart(2,'0'), String(tmr.getDate()).padStart(2,'0')].join('-');
+    const tmr = new Date(now.getTime() + 86400000);
+    _pickedDate = tmr.toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
     _pickedTime = '15:00';
     document.getElementById('rem-time-custom').value = '15:00';
     document.getElementById('rem-date-custom').value = _pickedDate;

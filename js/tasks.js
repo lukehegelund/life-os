@@ -1,6 +1,6 @@
 // Life OS — Tasks (v10: dynamic category tabs, category manager, reminders section)
 import { supabase } from './supabase.js';
-import { today, fmtDate, toast, showEmpty } from './utils.js';
+import { today, fmtDate, toast, showEmpty, pstDatePlusDays } from './utils.js';
 import { initSwipe } from './swipe-handler.js';
 
 const T = today();
@@ -664,36 +664,44 @@ window.submitTask = async () => {
 // ── Recurring Tasks ───────────────────────────────────────────────────────────
 const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
+/** Return YYYY-MM-DD for a Date object, using PST timezone */
+function dateStrPST(d) {
+  return d.toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+}
+
 function nextOccurrence(pattern, fromDate) {
-  const d = new Date(fromDate + 'T00:00:00');
+  // Parse fromDate string as midnight PST to avoid UTC boundary issues
+  const [fy, fm, fd] = fromDate.split('-').map(Number);
+  // Use UTC midnight of the PST date — safe for day arithmetic
+  const base = new Date(Date.UTC(fy, fm - 1, fd));
   const [freq, daysStr] = (pattern || 'weekly:Mon').split(':');
   if (freq === 'daily') {
-    const next = new Date(d); next.setDate(d.getDate() + 1);
-    return next.toISOString().split('T')[0];
+    base.setUTCDate(base.getUTCDate() + 1);
+    return base.toISOString().split('T')[0]; // UTC date = PST date here (midnight UTC)
   } else if (freq === 'weekdays') {
     for (let i = 1; i <= 7; i++) {
-      const next = new Date(d); next.setDate(d.getDate() + i);
-      if (next.getDay() >= 1 && next.getDay() <= 5) return next.toISOString().split('T')[0];
+      const next = new Date(base); next.setUTCDate(base.getUTCDate() + i);
+      if (next.getUTCDay() >= 1 && next.getUTCDay() <= 5) return next.toISOString().split('T')[0];
     }
   } else if (freq === 'weekly' || freq === 'weekly_weekend') {
     const days = freq === 'weekly_weekend' ? ['Sat','Sun'] : (daysStr || 'Mon').split(',').map(s => s.trim());
     const targetNums = days.map(s => DAY_NAMES.indexOf(s)).filter(n => n >= 0);
     for (let i = 1; i <= 14; i++) {
-      const next = new Date(d); next.setDate(d.getDate() + i);
-      if (targetNums.includes(next.getDay())) return next.toISOString().split('T')[0];
+      const next = new Date(base); next.setUTCDate(base.getUTCDate() + i);
+      if (targetNums.includes(next.getUTCDay())) return next.toISOString().split('T')[0];
     }
   } else if (freq === 'biweekly') {
     const day = DAY_NAMES.indexOf((daysStr || 'Mon').trim());
     for (let i = 8; i <= 21; i++) {
-      const next = new Date(d); next.setDate(d.getDate() + i);
-      if (next.getDay() === day) return next.toISOString().split('T')[0];
+      const next = new Date(base); next.setUTCDate(base.getUTCDate() + i);
+      if (next.getUTCDay() === day) return next.toISOString().split('T')[0];
     }
   } else if (freq === 'monthly') {
-    const next = new Date(d); next.setMonth(next.getMonth() + 1);
-    return next.toISOString().split('T')[0];
+    base.setUTCMonth(base.getUTCMonth() + 1);
+    return base.toISOString().split('T')[0];
   }
-  const next = new Date(d); next.setDate(d.getDate() + 7);
-  return next.toISOString().split('T')[0];
+  base.setUTCDate(base.getUTCDate() + 7);
+  return base.toISOString().split('T')[0];
 }
 
 function patternLabel(pattern) {

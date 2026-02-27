@@ -1,6 +1,6 @@
 // Life OS — Dashboard v4 (new nav: School / Apps / Dashboard / Calendar / Tasks)
 import { supabase } from './supabase.js';
-import { today, fmtDate, fmtDateLong, fmtTime, toast } from './utils.js';
+import { today, fmtDate, fmtDateLong, fmtTime, toast, pstDatePlusDays } from './utils.js';
 import { initSwipe } from './swipe-handler.js';
 
 const T = today();
@@ -153,7 +153,7 @@ async function loadHealthStatus() {
 
   const meals = foodRes.data || [];
   const exercises = exRes.data || [];
-  const hour = new Date().getHours();
+  const hour = parseInt(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', hour12: false }), 10);
 
   // Case-insensitive map of logged meals
   const loggedByMeal = {};
@@ -315,9 +315,7 @@ async function loadUpcomingEvents() {
   const el = document.getElementById('upcoming-events');
   if (!el) return;
 
-  const endDate = new Date(T);
-  endDate.setDate(endDate.getDate() + 7);
-  const endStr = endDate.toISOString().slice(0, 10);
+  const endStr = pstDatePlusDays(7);
 
   const [calRes, classRes, weddingRes] = await Promise.all([
     supabase.from('calendar_events')
@@ -351,10 +349,9 @@ async function loadUpcomingEvents() {
   // Expand classes for next 7 days
   const classes = classRes.data || [];
   for (let i = 0; i < 7; i++) {
-    const d = new Date(T + 'T00:00:00');
-    d.setDate(d.getDate() + i);
-    const dow = d.getDay();
-    const ds = d.toISOString().slice(0, 10);
+    const ds = pstDatePlusDays(i);
+    const [y, m, dd] = ds.split('-').map(Number);
+    const dow = new Date(Date.UTC(y, m - 1, dd)).getUTCDay();
     for (const cls of classes) {
       const dayOfWeek = (cls.day_of_week || '').trim();
       const matches =
@@ -406,9 +403,7 @@ async function loadTOVStats() {
   const el = document.getElementById('tov-stats');
   if (!el) return;
 
-  const thirtyDays = new Date(T);
-  thirtyDays.setDate(thirtyDays.getDate() + 30);
-  const thirtyStr = thirtyDays.toISOString().slice(0, 10);
+  const thirtyStr = pstDatePlusDays(30);
 
   const [upcomingRes, inquiryRes, allRes] = await Promise.all([
     supabase.from('tov_clients')

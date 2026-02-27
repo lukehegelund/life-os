@@ -1,6 +1,6 @@
 // Life OS — Languages (Flashcards + Translator + Vocab Browser)
 import { supabase } from './supabase.js';
-import { today, fmtDate, toast, showSpinner, showEmpty } from './utils.js';
+import { today, fmtDate, toast, showSpinner, showEmpty, pstDatePlusDays } from './utils.js';
 // No polling — user-driven
 
 const T = today();
@@ -174,7 +174,7 @@ window.reviewWord = async (wordId, result) => {
   const oldStage = w.srs_stage;
   const newStage = result === 'correct' ? Math.min(oldStage + 1, 6) : Math.max(0, oldStage - 1);
   const intervals = [0, 3, 7, 14, 30, 60, 120]; // stage 0 = same day, so new words stay reviewable today
-  const nextReview = new Date(Date.now() + intervals[newStage] * 86400000).toISOString().split('T')[0];
+  const nextReview = pstDatePlusDays(intervals[newStage]);
   const now = new Date().toISOString();
 
   await Promise.all([

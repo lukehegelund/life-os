@@ -3,7 +3,7 @@
 // Tab 2: Parent List (parsed from students table, clickable profiles)
 
 import { supabase } from './supabase.js';
-import { fmtDate, toast, showSpinner } from './utils.js';
+import { fmtDate, toast, showSpinner, today } from './utils.js';
 
 // ── State ─────────────────────────────────────────────────────────────────
 let activeFilter = 'all';
@@ -228,7 +228,7 @@ window.saveCrmNote = async () => {
   const isTodo = document.getElementById('crm-note-todo')?.checked ?? false;
   const tellParent = document.getElementById('crm-note-parent')?.checked ?? false;
 
-  const T = new Date().toISOString().split('T')[0];
+  const T = today(); // PST date
 
   // Insert into student_notes
   const { data: noteData, error } = await supabase.from('student_notes').insert({

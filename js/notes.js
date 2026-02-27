@@ -503,7 +503,7 @@ window.submitSlashStudentNote = async function(classId, content) {
   const isParent = document.getElementById('slash-cat-parent')?.checked;
 
   const category = isTodo ? 'To-Do' : isParent ? 'Parent Contact' : 'Overview';
-  const now = new Date().toISOString().split('T')[0];
+  const now = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' }); // PST date
 
   const { error } = await sb.from('student_notes').insert({
     student_id: studentId,

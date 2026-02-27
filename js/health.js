@@ -1,6 +1,6 @@
 // Life OS — Health
 import { supabase } from './supabase.js';
-import { today, fmtDate, fmtDateFull, badge, toast, showSpinner, showEmpty } from './utils.js';
+import { today, fmtDate, fmtDateFull, badge, toast, showSpinner, showEmpty, pstDatePlusDays } from './utils.js';
 // No polling — user-driven
 
 const T = today();
@@ -14,7 +14,7 @@ async function loadFoodLog() {
   const el = document.getElementById('food-log');
   showSpinner(el);
   // Last 7 days
-  const since = new Date(Date.now() - 6 * 86400000).toISOString().split('T')[0];
+  const since = pstDatePlusDays(-6);
   const res = await supabase.from('food_log').select('*').gte('date', since).order('date', { ascending: false }).order('meal');
   const entries = res.data || [];
 
@@ -44,8 +44,7 @@ async function loadPendingMeals() {
   const el = document.getElementById('pending-meals');
   const days = [];
   for (let i = 6; i >= 0; i--) {
-    const d = new Date(Date.now() - i * 86400000).toISOString().split('T')[0];
-    days.push(d);
+    days.push(pstDatePlusDays(-i));
   }
   const since = days[0];
   const res = await supabase.from('food_log').select('date, meal').gte('date', since);

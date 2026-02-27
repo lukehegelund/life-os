@@ -1,6 +1,6 @@
 // Life OS — Class Dashboard (Phase 2, v3 — no polling, single-expand, desktop buttons)
 import { supabase } from './supabase.js';
-import { qp, today, fmtDate, fmtTime, daysAgo, goldStr, goldClass, toast, showSpinner, showEmpty } from './utils.js';
+import { qp, today, fmtDate, fmtTime, daysAgo, goldStr, goldClass, toast, showSpinner, showEmpty, pstDatePlusDays } from './utils.js';
 import { initSwipe } from './swipe-handler.js';
 
 const classId = qp('id');
@@ -235,8 +235,8 @@ async function loadOverviewNotes(studentId) {
   const el = document.getElementById(`overview-notes-${studentId}`);
   if (!el) return;
 
-  const thirtyAgo = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
-  const sevenAgo  = new Date(Date.now() -  7 * 86400000).toISOString().split('T')[0];
+  const thirtyAgo = pstDatePlusDays(-30);
+  const sevenAgo  = pstDatePlusDays(-7);
   const trackPages = cls?.track_pages !== 'None';
 
   const fetches = [
@@ -667,7 +667,7 @@ window.changeNoteClass = async (noteId, newClassId) => {
 // ── Attendance Grid ────────────────────────────────────────────────────────
 async function loadAttendanceGrid() {
   const el = document.getElementById('att-grid');
-  const start = new Date(Date.now() - 14 * 86400000).toISOString().split('T')[0];
+  const start = pstDatePlusDays(-14);
 
   const [rosterRes, attRes] = await Promise.all([
     supabase.from('class_enrollments')
@@ -691,7 +691,7 @@ async function loadAttendanceGrid() {
 
   const days = [];
   for (let i = 9; i >= 0; i--) {
-    days.push(new Date(Date.now() - i * 86400000).toISOString().split('T')[0]);
+    days.push(pstDatePlusDays(-i));
   }
 
   const colors = { Present: 'var(--green)', Absent: 'var(--red)', Late: 'var(--orange)', Excused: 'var(--gray-400)' };
@@ -725,7 +725,7 @@ async function loadAnalytics() {
   if (!el) return;
   el.style.display = 'block';
 
-  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
+  const weekAgo = pstDatePlusDays(-7);
 
   const [pagesRes, enrRes] = await Promise.all([
     supabase.from('student_pages')

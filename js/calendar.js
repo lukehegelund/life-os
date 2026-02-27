@@ -393,7 +393,9 @@ function renderWeekGrid() {
     // Current time indicator
     if (isToday) {
       const now = new Date();
-      const nowMins = now.getHours() * 60 + now.getMinutes();
+      const pstTime = now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', minute: 'numeric', hour12: false });
+      const [pstH, pstM] = pstTime.split(':').map(Number);
+      const nowMins = pstH * 60 + pstM;
       const startMins = WEEK_HOUR_START * 60;
       const endMins = WEEK_HOUR_END * 60;
       if (nowMins >= startMins && nowMins <= endMins) {
