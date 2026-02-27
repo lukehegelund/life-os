@@ -94,14 +94,15 @@ window.saveNote = async () => {
     is_todo: isTodo,
     tell_parent: tellParent,
     logged: false,
-  }).select('id').single();
+  }).select('id');
 
   if (error) { toast('Error: ' + error.message, 'error'); return; }
 
   // If flagged Tell Parent, create a parent_crm entry
-  if (tellParent && noteData?.id) {
+  const insertedId = Array.isArray(noteData) ? noteData[0]?.id : noteData?.id;
+  if (tellParent && insertedId) {
     await supabase.from('parent_crm').insert({
-      note_id: noteData.id,
+      note_id: insertedId,
       student_id: Number(studentId),
       title: 'Tell Parent',
       notes: text,
