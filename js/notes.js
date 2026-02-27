@@ -310,26 +310,33 @@ function showSlashPopup(cmd, lineText, bodyEl) {
     });
 
   } else if (cmd === '/note') {
+    const noteContent = lineText.replace(cmd, '').trim();
     popup.innerHTML = `
       <div style="font-size:14px;font-weight:700;color:var(--gray-800);margin-bottom:4px">📝 Agregar nota como…</div>
       <div style="font-size:12px;color:var(--gray-500);margin-bottom:10px">
-        "${lineText.replace(cmd,'').trim() || '(contenido del mismo renglón)'}"
+        "${esc(noteContent) || '(contenido del mismo renglón)'}"
       </div>
       <div style="display:flex;flex-direction:column;gap:8px">
-        <button class="btn btn-ghost" style="justify-content:flex-start;text-align:left;padding:10px 12px;border-radius:10px"
-          onclick="openSlashNoteFlow('universal', ${JSON.stringify(lineText.replace(cmd,'').trim())})">
+        <button class="btn btn-ghost slash-note-type-btn" data-type="universal" style="justify-content:flex-start;text-align:left;padding:10px 12px;border-radius:10px">
           📋 <strong>Universal</strong> — aparece en todas las clases
         </button>
-        <button class="btn btn-ghost" style="justify-content:flex-start;text-align:left;padding:10px 12px;border-radius:10px"
-          onclick="openSlashNoteFlow('class', ${JSON.stringify(lineText.replace(cmd,'').trim())})">
+        <button class="btn btn-ghost slash-note-type-btn" data-type="class" style="justify-content:flex-start;text-align:left;padding:10px 12px;border-radius:10px">
           🏫 <strong>Nota de clase</strong> — elige una clase específica
         </button>
-        <button class="btn btn-ghost" style="justify-content:flex-start;text-align:left;padding:10px 12px;border-radius:10px"
-          onclick="openSlashNoteFlow('student', ${JSON.stringify(lineText.replace(cmd,'').trim())})">
+        <button class="btn btn-ghost slash-note-type-btn" data-type="student" style="justify-content:flex-start;text-align:left;padding:10px 12px;border-radius:10px">
           👤 <strong>Nota de alumno</strong> — elige alumno y clase
         </button>
-        <button class="btn btn-sm btn-ghost" onclick="dismissSlashPopup()">Cancelar</button>
+        <button class="btn btn-sm btn-ghost" id="slash-note-cancel-btn">Cancelar</button>
       </div>`;
+
+    // Use event listeners (not inline onclick) to safely pass noteContent string
+    popup.querySelectorAll('.slash-note-type-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        window.openSlashNoteFlow(btn.dataset.type, noteContent);
+      });
+    });
+    popup.querySelector('#slash-note-cancel-btn').addEventListener('click', () => dismissSlashPopup());
+
     // Remove the command from the editor
     setTimeout(() => removeSlashCommand(bodyEl, cmd), 0);
   }
