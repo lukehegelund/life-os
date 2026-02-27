@@ -45,6 +45,7 @@ function getFreqIcon(freq) {
 
 function isDue(r) {
   if (!r.next_run_date) return true; // never run = always due
+  if (r.force_update)  return true; // manually requested
   return r.next_run_date <= T;
 }
 
@@ -117,6 +118,18 @@ function reportCardHtml(r) {
     dueBadge = `<span class="sr-due-badge fresh">✅ Al día</span>`;
   }
 
+  // Force-update toggle: shows whether update is requested (auto-due OR manually forced)
+  const autoScheduleDue = !r.next_run_date || r.next_run_date <= T;
+  const isForced = !!r.force_update;
+  const isActive  = autoScheduleDue || isForced;
+  const toggleTitle = isForced && !autoScheduleDue
+    ? 'Cancelar solicitud de actualización anticipada'
+    : autoScheduleDue
+    ? 'Actualización programada automáticamente'
+    : 'Solicitar actualización anticipada';
+  const toggleClass = isActive ? 'sr-force-btn active' : 'sr-force-btn';
+  const toggleIcon  = isActive ? '🔔' : '🔕';
+
   const responseSection = r.response
     ? `<div class="sr-response-text">${esc(r.response).replace(/\n/g, '<br>')}</div>
        ${updatedAgo ? `<div class="sr-response-date">Actualizado ${updatedAgo}</div>` : ''}`
@@ -133,6 +146,7 @@ function reportCardHtml(r) {
           </div>
         </div>
         <div class="sr-card-actions" onclick="event.stopPropagation()">
+          <button class="${toggleClass}" onclick="toggleSrForceUpdate('${r.id}')" title="${toggleTitle}">${toggleIcon}</button>
           <button class="sr-action-btn" onclick="editSrReport('${r.id}')" title="Editar">✏️</button>
           <button class="sr-action-btn" onclick="deleteSrReport('${r.id}')" title="Eliminar" style="color:var(--coral,#e8563a)">🗑️</button>
         </div>
@@ -149,6 +163,31 @@ function reportCardHtml(r) {
 window.toggleSrCard = function(id) {
   const card = document.getElementById(`sr-card-${id}`);
   if (card) card.classList.toggle('expanded');
+};
+
+window.toggleSrForceUpdate = async function(id) {
+  const r = allReports.find(x => x.id === id);
+  if (!r) return;
+
+  const autoScheduleDue = !r.next_run_date || r.next_run_date <= T;
+
+  // If auto-scheduled due, the bell is already on — toggling manually cycles:
+  //   auto-due + not forced → set force_update true (belt-and-suspenders, visual confirmation)
+  //   force_update true     → clear it (only affects manual override, auto-due stays)
+  // If not auto-due:
+  //   not forced → turn on (request early update)
+  //   forced     → turn off (cancel early request)
+  const newVal = !r.force_update;
+
+  const { error } = await supabase
+    .from('smart_reports')
+    .update({ force_update: newVal })
+    .eq('id', id);
+
+  if (error) { console.error('toggleSrForceUpdate error', error); return; }
+
+  r.force_update = newVal;
+  await load();
 };
 
 // ── Modal state ───────────────────────────────────────────────────────────────
