@@ -1,7 +1,7 @@
 // Life OS — Reminders (v1: ntfy X-At scheduled notifications)
 // Saves reminders to Supabase, fires ntfy with X-At header for scheduled delivery.
 import { supabase } from './supabase.js';
-import { today, toast, pstOffsetStr } from './utils.js?v=2';
+import { today, toast } from './utils.js?v=2';
 
 const NTFY_TOPIC = 'luke-lifeos-rt2026';
 const T = today();
@@ -118,26 +118,15 @@ function renderCard(r) {
 }
 
 // ── ntfy scheduling ───────────────────────────────────────────────────────────
-async function scheduleNtfy(title, dateStr, timeStr) {
-  if (!dateStr || !timeStr) return false;
-
-  // PST/PDT offset — dynamically computed from America/Los_Angeles
-  const offsetStr = pstOffsetStr(); // '-08:00' (PST) or '-07:00' (PDT)
-  const atHeader = `${dateStr}T${timeStr}:00${offsetStr}`;
-
-  // Verify the scheduled time is in the future — ntfy silently defers past times to +24h
-  const fireUTC = new Date(`${dateStr}T${timeStr}:00${offsetStr}`);
-  if (fireUTC <= new Date()) {
-    console.warn('scheduleNtfy: target time is in the past, skipping ntfy to avoid silent 24h deferral', atHeader);
-    return 'past';
-  }
-
+// NOTE: Scheduling is now handled server-side by the Supabase Edge Function
+// (fire-reminders) which runs every minute via pg_cron and fires ntfy instantly.
+// This function is kept for fallback instant-send only (no X-At).
+async function scheduleNtfy(title) {
   try {
     const resp = await fetch(`https://ntfy.sh/${NTFY_TOPIC}`, {
       method: 'POST',
       headers: {
         'Title': `Recordatorio: ${title}`,
-        'X-At': atHeader,
         'Priority': '3',
         'Tags': 'bell',
       },
@@ -145,7 +134,7 @@ async function scheduleNtfy(title, dateStr, timeStr) {
     });
     return resp.ok;
   } catch (e) {
-    console.warn('ntfy scheduling failed:', e);
+    console.warn('ntfy instant send failed:', e);
     return false;
   }
 }
@@ -275,15 +264,10 @@ window.submitReminder = async () => {
   const time   = _pickedTime;
   const module = _pickedModule;
 
-  // Schedule ntfy if time provided
-  let ntfyResult = false;
-  if (time) {
-    ntfyResult = await scheduleNtfy(title, date || T, time);
-  }
-
+  // Save due_time in notes — the server-side cron (fire-reminders Edge Function)
+  // will fire ntfy at the right PST minute automatically.
   const meta = {};
   if (time) meta.due_time = time;
-  if (ntfyResult === true) meta.ntfy_scheduled = true;
 
   const { error } = await supabase.from('reminders').insert({
     title,
@@ -296,12 +280,8 @@ window.submitReminder = async () => {
   if (error) { toast('Error: ' + error.message, 'error'); return; }
 
   closeAddModal();
-  if (ntfyResult === true) {
-    toast(`✅ Guardado · 📱 ntfy para ${time}`, 'success');
-  } else if (ntfyResult === 'past') {
-    toast(`✅ Guardado · ⚠️ ${time} ya pasó — sin notif`, 'info');
-  } else if (time) {
-    toast('✅ Guardado (ntfy sin conexión)', 'info');
+  if (time) {
+    toast(`✅ Guardado · 📱 notif a las ${time} PST`, 'success');
   } else {
     toast('✅ Recordatorio guardado', 'success');
   }
