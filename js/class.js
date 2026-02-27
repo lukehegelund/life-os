@@ -27,6 +27,7 @@ async function load() {
   renderClassSettingsBadge(cls);
 
   await Promise.all([
+    loadUniversalClassNotes(),
     loadOverviewNotesSection(),
     loadRoster(cls),
     loadGoldBulk(),
@@ -922,6 +923,128 @@ window.deleteLessonPlan = async (id) => {
   if (error) { toast('Error deleting plan', 'error'); return; }
   toast('Plan deleted', 'success');
   loadLessonPlans();
+};
+
+// ── Universal Class Notes (shown on ALL class pages) ──────────────────────
+// Stored in `tasks` table with module='LifeOS', notes JSON {is_universal_class_note:true, body:"..."}
+const UNIVERSAL_NOTE_FLAG = '"is_universal_class_note":true';
+
+async function loadUniversalClassNotes() {
+  const section = document.getElementById('universal-class-notes-section');
+  if (!section) return;
+
+  const { data } = await supabase
+    .from('tasks')
+    .select('id, title, notes, created_at')
+    .eq('module', 'LifeOS')
+    .eq('status', 'open')
+    .like('notes', `%${UNIVERSAL_NOTE_FLAG}%`)
+    .order('created_at');
+
+  const notes = (data || []).map(row => {
+    let meta = {};
+    try { meta = JSON.parse(row.notes || '{}'); } catch {}
+    return { id: row.id, body: meta.body || row.title || '', created_at: row.created_at };
+  });
+
+  renderUniversalNotes(notes);
+}
+
+function renderUniversalNotes(notes) {
+  const section = document.getElementById('universal-class-notes-section');
+  if (!section) return;
+
+  section.innerHTML = `
+    <div class="card" style="margin-bottom:12px;border-top:3px solid #8b5cf6">
+      <div class="card-header" style="margin-bottom:${notes.length ? '10px' : '0'}">
+        <div class="card-title" style="margin:0;color:#7c3aed">📋 Universal Class Notes</div>
+        <button class="btn btn-sm" style="background:#f5f3ff;color:#7c3aed;border:none"
+          onclick="addUniversalClassNote()">+ Note</button>
+      </div>
+      <div style="font-size:11px;color:var(--gray-400);margin:-8px 0 8px">These notes appear at the top of every class page.</div>
+      <div id="universal-notes-list">
+        ${notes.length === 0
+          ? '<div style="font-size:13px;color:var(--gray-400)">No universal notes yet. Add one to pin info across all classes.</div>'
+          : notes.map(n => `
+            <div id="un-card-${n.id}" style="background:#f5f3ff;border-radius:8px;padding:10px 12px;margin-bottom:8px;border-left:3px solid #8b5cf6">
+              <div style="display:flex;align-items:flex-start;gap:8px">
+                <div style="flex:1;font-size:13px;color:var(--gray-800);white-space:pre-wrap;line-height:1.5">${escHtml(n.body)}</div>
+                <div style="display:flex;gap:4px;flex-shrink:0">
+                  <button onclick="editUniversalClassNote('${n.id}', ${JSON.stringify(n.body).replace(/'/g,"&apos;")})"
+                    style="padding:4px 7px;border:1px solid var(--gray-200);border-radius:5px;background:var(--white);color:var(--gray-500);font-size:11px;cursor:pointer">✏️</button>
+                  <button onclick="deleteUniversalClassNote('${n.id}')"
+                    style="padding:4px 7px;border:none;border-radius:5px;background:#FEF2F2;color:var(--red);font-size:11px;cursor:pointer">🗑</button>
+                </div>
+              </div>
+            </div>`).join('')}
+      </div>
+    </div>`;
+}
+
+window.addUniversalClassNote = () => openUniversalNoteModal();
+window.editUniversalClassNote = (id, body) => openUniversalNoteModal(id, body);
+
+window.deleteUniversalClassNote = async (id) => {
+  if (!confirm('Delete this universal class note?')) return;
+  await supabase.from('tasks').delete().eq('id', id);
+  toast('Universal note deleted', 'info');
+  loadUniversalClassNotes();
+};
+
+function openUniversalNoteModal(editId = null, prefillBody = '') {
+  document.getElementById('un-modal')?.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'un-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:500;display:flex;align-items:flex-end;justify-content:center';
+  modal.innerHTML = `
+    <div style="background:var(--white);border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:600px">
+      <div style="font-size:17px;font-weight:700;margin-bottom:6px;color:#7c3aed">
+        ${editId ? '✏️ Edit Universal Note' : '📋 New Universal Class Note'}
+      </div>
+      <div style="font-size:12px;color:var(--gray-400);margin-bottom:12px">This note will appear at the top of every class page.</div>
+      <textarea id="un-modal-text" rows="5" class="form-input"
+        placeholder="e.g. All classes: remind students about the art fair on Friday."
+        style="resize:vertical;font-size:14px;line-height:1.5">${escHtml(prefillBody)}</textarea>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="btn btn-primary" style="flex:1;background:#7c3aed;border-color:#7c3aed"
+          onclick="saveUniversalClassNote(${JSON.stringify(editId)})">
+          ${editId ? 'Save Changes' : 'Add Note'}
+        </button>
+        <button class="btn btn-ghost" onclick="document.getElementById('un-modal').remove()">Cancel</button>
+      </div>
+    </div>`;
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.body.appendChild(modal);
+  setTimeout(() => document.getElementById('un-modal-text')?.focus(), 60);
+}
+
+window.saveUniversalClassNote = async (editId) => {
+  const body = document.getElementById('un-modal-text')?.value.trim();
+  if (!body) { toast('Enter a note', 'error'); return; }
+
+  const now = new Date().toISOString();
+  let error;
+  if (editId) {
+    ({ error } = await supabase.from('tasks').update({
+      notes: JSON.stringify({ is_universal_class_note: true, body }),
+      completed_at: now,
+    }).eq('id', editId));
+  } else {
+    ({ error } = await supabase.from('tasks').insert({
+      title: body.slice(0, 80),
+      notes: JSON.stringify({ is_universal_class_note: true, body }),
+      module: 'LifeOS',
+      priority: 'normal',
+      status: 'open',
+      completed_at: now,
+    }));
+  }
+
+  if (error) { toast('Error: ' + error.message, 'error'); return; }
+  toast(editId ? 'Note updated ✅' : 'Universal note added ✅', 'success');
+  document.getElementById('un-modal')?.remove();
+  loadUniversalClassNotes();
 };
 
 // ── Class Overview Notes ──────────────────────────────────────────────────
