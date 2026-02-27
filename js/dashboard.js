@@ -366,6 +366,37 @@ async function loadTodayFood() {
     </div>`).join('');
 }
 
+// ── Quick Food Log ────────────────────────────────────────────────────────────
+window.logFoodFromDash = async function() {
+  const meal  = document.getElementById('fq-meal')?.value;
+  const desc  = document.getElementById('fq-desc')?.value?.trim();
+  if (!desc) { document.getElementById('fq-desc')?.focus(); return; }
+
+  const btn = document.querySelector('.food-quick-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+
+  const { error } = await supabase.from('food_log').insert({
+    date: T,
+    meal,
+    description: desc,
+    notes: null,
+  });
+
+  if (btn) { btn.disabled = false; btn.textContent = '+'; }
+
+  if (error) { console.error('logFoodFromDash error', error); return; }
+
+  // Clear input and reload food list
+  document.getElementById('fq-desc').value = '';
+  await loadTodayFood();
+};
+
+// Also allow pressing Enter in the description input
+document.addEventListener('DOMContentLoaded', () => {
+  const input = document.getElementById('fq-desc');
+  if (input) input.addEventListener('keydown', e => { if (e.key === 'Enter') window.logFoodFromDash(); });
+});
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 load();
 loadTodayTasks();
