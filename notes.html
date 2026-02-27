@@ -6,150 +6,212 @@
 <title>Notas — Life OS</title>
 <link rel="stylesheet" href="css/main.css?v=2">
 <style>
-/* ── Keep-style masonry grid ───────────────────────────────── */
-.notes-masonry {
-  columns: 2;
-  column-gap: 10px;
+/* ── Note list ──────────────────────────────────────────────── */
+.notes-list-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
-.note-card-keep {
-  break-inside: avoid;
+
+/* ── Note card ──────────────────────────────────────────────── */
+.note-card {
+  background: var(--white, #fff);
+  border: 1.5px solid var(--gray-200);
   border-radius: 12px;
-  padding: 12px;
-  margin-bottom: 10px;
+  overflow: hidden;
+  transition: box-shadow 0.15s, border-color 0.15s;
   cursor: pointer;
-  position: relative;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.10);
-  transition: box-shadow 0.15s, transform 0.1s;
-  word-break: break-word;
 }
-.note-card-keep:hover {
-  box-shadow: 0 3px 10px rgba(0,0,0,0.16);
+.note-card:hover {
+  border-color: var(--gray-400);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
-.note-card-keep.note-card-active {
-  box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+.note-card.expanded {
+  border-color: var(--blue);
+  box-shadow: 0 4px 16px rgba(37,99,235,0.12);
   cursor: default;
-  columns: unset;
-  break-inside: avoid;
 }
-.note-pin-icon {
-  position: absolute;
-  top: 8px; right: 10px;
-  font-size: 13px;
-  pointer-events: none;
+.note-card.pinned-card {
+  border-left: 3px solid var(--orange);
+}
+.note-card.expanded.pinned-card {
+  border-left: 3px solid var(--orange);
+  border-color: var(--blue);
 }
 
-/* Title & body display (collapsed) */
-.note-title-display {
+/* Accent color strip */
+.note-card-accent {
+  height: 3px;
+  width: 100%;
+}
+
+/* Collapsed view */
+.note-card-collapsed {
+  padding: 12px 14px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 52px;
+}
+.note-card.expanded .note-card-collapsed {
+  display: none;
+}
+.note-collapsed-text {
+  flex: 1;
+  min-width: 0;
+}
+.note-collapsed-title {
   font-size: 14px;
-  font-weight: 700;
-  margin-bottom: 4px;
-  line-height: 1.35;
-  color: #1f2937;
-}
-.note-body-display {
-  font-size: 13px;
-  color: rgba(0,0,0,0.62);
-  line-height: 1.45;
-  max-height: 140px;
+  font-weight: 600;
+  color: var(--gray-800);
+  white-space: nowrap;
   overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 7;
-  -webkit-box-orient: vertical;
-  white-space: pre-wrap;
+  text-overflow: ellipsis;
 }
-.note-date-display {
+.note-collapsed-body {
+  font-size: 12px;
+  color: var(--gray-400);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.note-collapsed-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.note-meta-date {
   font-size: 11px;
-  color: rgba(0,0,0,0.38);
-  margin-top: 8px;
+  color: var(--gray-400);
+  white-space: nowrap;
+}
+.note-pin-badge {
+  font-size: 13px;
+  line-height: 1;
 }
 
-/* ── Inline editing inputs ────────────────────────────────── */
-.note-inline-title {
+/* Expanded / editing view */
+.note-card-expanded {
+  display: none;
+  padding: 14px;
+  flex-direction: column;
+  gap: 0;
+}
+.note-card.expanded .note-card-expanded {
+  display: flex;
+}
+
+.note-edit-title {
   font-size: 16px;
   font-weight: 700;
   border: none;
-  background: transparent;
-  width: 100%;
   outline: none;
-  color: #1f2937;
-  padding: 0 0 6px;
-  margin-bottom: 2px;
-  touch-action: manipulation;
+  background: transparent;
+  color: var(--gray-800);
+  width: 100%;
+  padding: 0 0 8px 0;
+  border-bottom: 1.5px solid var(--gray-100);
+  margin-bottom: 10px;
 }
-.note-inline-body {
-  font-size: 16px;
+.note-edit-title::placeholder { color: var(--gray-400); font-weight: 400; }
+
+.note-edit-body {
+  font-size: 14px;
   border: none;
-  background: transparent;
-  width: 100%;
   outline: none;
+  background: transparent;
+  color: var(--gray-800);
+  width: 100%;
   resize: none;
-  color: rgba(0,0,0,0.75);
-  line-height: 1.55;
-  min-height: 48px;
+  min-height: 80px;
+  line-height: 1.6;
+  padding: 0;
   overflow: hidden;
   white-space: pre-wrap;
-  padding: 0;
-  display: block;
-  touch-action: manipulation;
 }
-.note-inline-title::placeholder,
-.note-inline-body::placeholder { color: rgba(0,0,0,0.28); }
+.note-edit-body::placeholder { color: var(--gray-400); }
 
-/* ── Inline toolbar (shown when card is active) ─────────────── */
-.note-inline-toolbar {
+/* Expanded toolbar */
+.note-edit-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 10px;
-  padding-top: 8px;
-  border-top: 1px solid rgba(0,0,0,0.08);
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1.5px solid var(--gray-100);
+  gap: 8px;
   flex-wrap: wrap;
-  gap: 6px;
 }
-.note-colors-inline {
+.note-color-row {
   display: flex;
   gap: 6px;
+  align-items: center;
   flex-wrap: wrap;
 }
-.note-color-dot {
-  width: 22px; height: 22px;
+.note-color-swatch {
+  width: 20px; height: 20px;
   border-radius: 50%;
   cursor: pointer;
   border: 2px solid transparent;
-  transition: transform 0.1s;
+  transition: transform 0.1s, border-color 0.1s;
   flex-shrink: 0;
 }
-.note-color-dot:hover { transform: scale(1.2); }
-.note-color-dot.selected { border-color: #374151; }
-.note-card-actions {
+.note-color-swatch:hover { transform: scale(1.2); }
+.note-color-swatch.active { border-color: var(--gray-800); }
+
+.note-toolbar-actions {
   display: flex;
-  gap: 4px;
   align-items: center;
+  gap: 4px;
 }
-.note-action-btn {
+.note-tool-btn {
   background: none;
   border: none;
-  font-size: 16px;
   cursor: pointer;
-  padding: 4px 6px;
-  border-radius: 6px;
-  transition: background 0.1s;
+  padding: 5px 7px;
+  border-radius: 7px;
+  font-size: 15px;
   line-height: 1;
+  color: var(--gray-600);
+  transition: background 0.1s;
 }
-.note-action-btn:hover { background: rgba(0,0,0,0.08); }
-.close-btn {
+.note-tool-btn:hover { background: var(--gray-100); }
+.note-done-btn {
   font-size: 12px !important;
   font-weight: 600;
-  color: #374151;
-  padding: 4px 10px !important;
-  border: 1.5px solid rgba(0,0,0,0.15) !important;
+  color: var(--blue) !important;
+  padding: 5px 12px !important;
+  border: 1.5px solid var(--blue) !important;
   border-radius: 20px !important;
 }
+.note-done-btn:hover { background: var(--blue-light) !important; }
 
-/* ── FAB ─────────────────────────────────────────────────────── */
+/* Pinned section label */
+.notes-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--gray-400);
+  margin: 16px 0 6px;
+}
+
+/* Empty state */
+.notes-empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--gray-400);
+}
+.notes-empty .empty-icon { font-size: 48px; margin-bottom: 12px; }
+.notes-empty p { font-size: 15px; }
+
+/* FAB */
 .fab {
   position: fixed;
-  bottom: calc(var(--nav-height) + 16px);
+  bottom: calc(var(--nav-height, 64px) + 16px);
   right: 20px;
   width: 52px; height: 52px;
   background: var(--blue);
@@ -166,23 +228,6 @@
   transition: transform 0.15s;
 }
 .fab:active { transform: scale(0.92); }
-
-/* ── Empty & section labels ──────────────────────────────────── */
-.notes-empty {
-  text-align: center;
-  padding: 60px 20px;
-  color: var(--gray-400);
-}
-.notes-empty .empty-icon { font-size: 48px; margin-bottom: 12px; }
-.notes-empty p { font-size: 15px; }
-.notes-section-label {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--gray-400);
-  margin: 12px 0 8px;
-}
 </style>
 </head>
 <body>
@@ -205,7 +250,6 @@
   <div id="notes-list"></div>
 </main>
 
-<!-- FAB to create new note -->
 <button class="fab" onclick="createNewNote()" title="Nueva nota">+</button>
 
 <nav class="bottom-nav">
@@ -235,7 +279,7 @@
   </a>
 </nav>
 
-<script type="module" src="js/notes.js?v=3"></script>
+<script type="module" src="js/notes.js?v=4"></script>
 <script type="module" src="js/topbar.js?v=4"></script>
 </body>
 </html>
