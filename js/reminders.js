@@ -47,7 +47,8 @@ async function load() {
   const subtitle = active.length === 0
     ? 'Sin recordatorios activos'
     : `${active.length} activo${active.length !== 1 ? 's' : ''} · ${done.length} completado${done.length !== 1 ? 's' : ''}`;
-  document.getElementById('reminders-subtitle').textContent = subtitle;
+  const subtitleEl = document.getElementById('reminders-subtitle');
+  if (subtitleEl) subtitleEl.textContent = subtitle;
 
   const listEl = document.getElementById('reminders-list');
   if (active.length === 0 && done.length === 0) {
@@ -68,14 +69,14 @@ async function load() {
     const todayRem = active.filter(r => reminderStatus(r) === 'today');
     const upcoming = active.filter(r => reminderStatus(r) === 'upcoming');
 
-    if (overdue.length)  html += `<div class="section-label">⚠️ Vencidos (${overdue.length})</div>${overdue.map(renderCard).join('')}`;
-    if (todayRem.length) html += `<div class="section-label">📅 Hoy (${todayRem.length})</div>${todayRem.map(renderCard).join('')}`;
-    if (upcoming.length) html += `<div class="section-label">Próximos (${upcoming.length})</div>${upcoming.map(renderCard).join('')}`;
+    if (overdue.length)  html += `<div class="rem-section-label">⚠️ Vencidos (${overdue.length})</div>${overdue.map(renderCard).join('')}`;
+    if (todayRem.length) html += `<div class="rem-section-label">📅 Hoy (${todayRem.length})</div>${todayRem.map(renderCard).join('')}`;
+    if (upcoming.length) html += `<div class="rem-section-label">Próximos (${upcoming.length})</div>${upcoming.map(renderCard).join('')}`;
   }
 
   if (done.length > 0) {
     const shown = done.slice(0, 5); // show last 5 completed
-    html += `<div class="section-label">✅ Completados (${done.length})</div>${shown.map(renderCard).join('')}`;
+    html += `<div class="rem-section-label">✅ Completados (${done.length})</div>${shown.map(renderCard).join('')}`;
     if (done.length > 5) {
       html += `<div style="text-align:center;font-size:12px;color:var(--gray-400);padding:8px">${done.length - 5} más no mostrados</div>`;
     }

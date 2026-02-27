@@ -1,4 +1,4 @@
-// Life OS — Tasks (v9: schedule labels, reordering, recurring Today auto-flag)
+// Life OS — Tasks (v10: dynamic category tabs, category manager, reminders section)
 import { supabase } from './supabase.js';
 import { today, fmtDate, toast, showEmpty } from './utils.js';
 import { initSwipe } from './swipe-handler.js';
@@ -59,11 +59,88 @@ async function setScheduleLabel(taskId, label) {
   await supabase.from('tasks').update({ notes: newNotes }).eq('id', taskId);
 }
 
+// ── Module tabs (dynamic) ─────────────────────────────────────────────────────
+function renderModuleTabs() {
+  const row = document.getElementById('mod-tabs-row');
+  if (!row) return;
+
+  const tabs = [
+    { mod: 'All', label: 'All' },
+    ...categoryOrder.map(m => ({ mod: m, label: (MODULE_ICONS[m] ? MODULE_ICONS[m] + ' ' : '') + m })),
+    { mod: 'Repeated', label: '🔄 Repeated' },
+  ];
+
+  row.innerHTML = tabs.map(({ mod, label }) => {
+    const isActive = mod === activeModule;
+    return `<button class="btn btn-sm ${isActive ? 'btn-primary' : 'btn-ghost'} mod-btn"
+      id="mod-${mod.replace(/\s+/g,'-')}"
+      onclick="setModule(${JSON.stringify(mod)})"
+      style="white-space:nowrap">${label}</button>`;
+  }).join('');
+}
+
+// ── Category Manager ──────────────────────────────────────────────────────────
+let _catDraft = []; // working copy while modal is open
+
+window.openCategoryManager = () => {
+  _catDraft = [...categoryOrder];
+  renderCatList();
+  document.getElementById('cat-manager-modal').style.display = 'flex';
+  setTimeout(() => document.getElementById('cat-new-name')?.focus(), 50);
+};
+
+window.closeCategoryManager = () => {
+  document.getElementById('cat-manager-modal').style.display = 'none';
+};
+
+function renderCatList() {
+  const el = document.getElementById('cat-list');
+  if (!el) return;
+  if (!_catDraft.length) {
+    el.innerHTML = '<div style="font-size:13px;color:var(--gray-400);text-align:center;padding:8px">No categories yet</div>';
+    return;
+  }
+  el.innerHTML = _catDraft.map((cat, i) => `
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--gray-100)">
+      <span style="font-size:16px">${MODULE_ICONS[cat] || '📁'}</span>
+      <input type="text" value="${cat.replace(/"/g,'&quot;')}"
+        class="form-input" style="flex:1;font-size:14px;padding:6px 10px"
+        onchange="_catDraft[${i}]=this.value.trim()||_catDraft[${i}]"
+        oninput="_catDraft[${i}]=this.value">
+      <button class="btn btn-sm btn-ghost" onclick="_catDraft.splice(${i},1);renderCatList()" title="Remove" style="color:var(--coral);padding:4px 8px">✕</button>
+    </div>`).join('');
+}
+
+window.addCategory = () => {
+  const inp = document.getElementById('cat-new-name');
+  const name = inp?.value?.trim();
+  if (!name) return;
+  if (_catDraft.includes(name)) { toast('Category already exists', 'error'); return; }
+  _catDraft.push(name);
+  renderCatList();
+  if (inp) inp.value = '';
+};
+
+window.saveCategoryManager = () => {
+  // Clean: remove empties, deduplicate
+  const cleaned = [...new Set(_catDraft.map(c => c.trim()).filter(Boolean))];
+  categoryOrder = cleaned;
+  localStorage.setItem('tasks-cat-order', JSON.stringify(categoryOrder));
+  closeCategoryManager();
+  renderModuleTabs();
+  // If activeModule no longer exists, reset to All
+  if (activeModule !== 'All' && activeModule !== 'Repeated' && !categoryOrder.includes(activeModule)) {
+    setModule('All');
+  } else {
+    loadTasks();
+  }
+  toast('Categories saved ✓', 'success');
+};
+
 // ── Module filter ─────────────────────────────────────────────────────────────
 window.setModule = (mod) => {
   activeModule = mod;
-  document.querySelectorAll('.mod-btn').forEach(b => { b.classList.remove('btn-primary'); b.classList.add('btn-ghost'); });
-  document.getElementById(`mod-${mod}`)?.classList.replace('btn-ghost', 'btn-primary');
+  renderModuleTabs();
 
   // Show/hide schedule filter row — not relevant for Repeated
   const schedRow = document.querySelector('.sched-filter-row');
@@ -823,4 +900,5 @@ window.submitHomework = async () => {
   loadHomework();
 };
 
+renderModuleTabs();
 load();

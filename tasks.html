@@ -23,6 +23,34 @@
 }
 .sched-btn:hover { background:var(--gray-50); }
 .sched-btn .sched-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+
+/* Reminder cards (embedded from reminders.html) */
+.reminder-card {
+  background: var(--white);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  border-left: 3px solid var(--blue);
+  border: 1px solid var(--gray-100);
+  border-left: 3px solid var(--blue);
+}
+.reminder-card.overdue { border-left-color: #ef4444; }
+.reminder-card.done    { border-left-color: var(--gray-200); opacity: 0.6; }
+.reminder-card.today   { border-left-color: #f59e0b; }
+.reminder-icon { width:32px; height:32px; border-radius:8px; background:var(--gray-50); display:flex; align-items:center; justify-content:center; font-size:15px; flex-shrink:0; }
+.reminder-body { flex:1; min-width:0; }
+.reminder-title { font-size:14px; font-weight:600; color:var(--gray-900); line-height:1.3; margin-bottom:2px; }
+.reminder-meta { font-size:11px; color:var(--gray-500); display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+.time-chip { display:inline-flex; align-items:center; gap:3px; padding:2px 7px; border-radius:99px; font-size:11px; font-weight:600; background:var(--blue-light,#eff6ff); color:var(--blue); }
+.time-chip.overdue { background:#fef2f2; color:#ef4444; }
+.time-chip.today   { background:#fffbeb; color:#b45309; }
+.time-chip.done    { background:var(--gray-100); color:var(--gray-400); }
+.ntfy-badge { display:inline-flex; align-items:center; gap:3px; padding:2px 6px; border-radius:99px; font-size:10px; font-weight:600; background:#ecfdf5; color:#059669; }
+.rem-section-label { font-size:11px; font-weight:700; color:var(--gray-500); text-transform:uppercase; letter-spacing:.5px; margin:10px 0 6px; }
+.rem-section-label:first-child { margin-top:0; }
 </style>
 </head>
 <body>
@@ -34,16 +62,10 @@
       <div class="subtitle" id="tasks-summary"></div>
     </div>
   </div>
-  <!-- Module filter tabs -->
-  <div style="display:flex;gap:6px;margin-top:8px;overflow-x:auto;padding-bottom:2px">
-    <button class="btn btn-sm btn-primary mod-btn" id="mod-All" onclick="setModule('All')">All</button>
-    <button class="btn btn-sm btn-ghost mod-btn" id="mod-RT" onclick="setModule('RT')">🏫 RT</button>
-    <button class="btn btn-sm btn-ghost mod-btn" id="mod-TOV" onclick="setModule('TOV')">💍 TOV</button>
-    <button class="btn btn-sm btn-ghost mod-btn" id="mod-Personal" onclick="setModule('Personal')">👤 Personal</button>
-    <button class="btn btn-sm btn-ghost mod-btn" id="mod-Health" onclick="setModule('Health')">🏃 Health</button>
-    <button class="btn btn-sm btn-ghost mod-btn" id="mod-RT Admin" onclick="setModule('RT Admin')">🏛️ RT Admin</button>
-    <button class="btn btn-sm btn-ghost mod-btn" id="mod-LifeOS" onclick="setModule('LifeOS')">🖥️ LifeOS</button>
-    <button class="btn btn-sm btn-ghost mod-btn" id="mod-Repeated" onclick="setModule('Repeated')">🔄 Repeated</button>
+  <!-- Module filter tabs (dynamically rendered by tasks.js) -->
+  <div style="display:flex;align-items:center;gap:6px;margin-top:8px">
+    <div id="mod-tabs-row" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;flex:1"></div>
+    <button class="btn btn-sm btn-ghost" onclick="openCategoryManager()" title="Manage categories" style="flex-shrink:0;font-size:15px;padding:4px 8px">⚙️</button>
   </div>
   <!-- Schedule label filter tabs -->
   <div class="sched-filter-row" style="display:flex;gap:6px;margin-top:6px;overflow-x:auto;padding-bottom:2px">
@@ -69,6 +91,17 @@
 
   <!-- Homework -->
   <div id="homework-section"></div>
+
+  <!-- Reminders section -->
+  <div class="card" id="reminders-card" style="margin-top:4px">
+    <div class="card-header">
+      <div class="card-title" style="margin:0">🔔 Recordatorios</div>
+      <button class="btn btn-sm btn-primary" onclick="showAddModal()" style="flex-shrink:0">+ Nuevo</button>
+    </div>
+    <div id="reminders-list">
+      <div style="text-align:center;padding:16px;color:var(--gray-400);font-size:13px">Cargando…</div>
+    </div>
+  </div>
 
 </main>
 
@@ -295,7 +328,61 @@
   </a>
 </nav>
 
-<script type="module" src="js/tasks.js?v=9"></script>
+<!-- Add Reminder Modal -->
+<div class="modal-overlay" id="add-modal" onclick="if(event.target===this)closeAddModal()">
+  <div class="modal-sheet" style="max-height:90vh;overflow-y:auto">
+    <div class="modal-title">🔔 Nuevo recordatorio</div>
+    <div class="form-group">
+      <label class="form-label">¿Qué necesitas recordar?</label>
+      <input type="text" class="form-input" id="rem-title" placeholder="e.g. Enviar correo a padres">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Fecha</label>
+      <input type="date" class="form-input" id="rem-date">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Hora (opcional — para notificación en celular)</label>
+      <input type="time" class="form-input" id="rem-time">
+      <div style="font-size:12px;color:var(--gray-400);margin-top:4px">📱 Si pones hora, te manda notificación ntfy a esa hora exacta</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Módulo</label>
+      <select class="form-select" id="rem-module">
+        <option value="Personal">Personal</option>
+        <option value="RT">🏫 RT (River Tech)</option>
+        <option value="TOV">💍 TOV (Take One Visuals)</option>
+        <option value="Health">🏃 Health</option>
+        <option value="LifeOS">🖥️ LifeOS</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn btn-primary" style="flex:1" onclick="submitReminder()">Guardar</button>
+      <button class="btn btn-ghost" onclick="closeAddModal()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Category Manager Modal -->
+<div class="modal-overlay" id="cat-manager-modal" onclick="if(event.target===this)closeCategoryManager()">
+  <div class="modal-sheet" style="max-height:85vh;overflow-y:auto">
+    <div class="modal-title">⚙️ Manage Categories</div>
+    <div style="font-size:13px;color:var(--gray-400);margin-top:-10px;margin-bottom:14px">Add, remove, or rename your task categories.</div>
+    <div id="cat-list" style="margin-bottom:14px"></div>
+    <!-- Add new -->
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:4px">
+      <input type="text" class="form-input" id="cat-new-name" placeholder="New category name" style="flex:1"
+        onkeydown="if(event.key==='Enter')addCategory()">
+      <button class="btn btn-sm btn-primary" onclick="addCategory()">Add</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn btn-primary" style="flex:1" onclick="saveCategoryManager()">Done</button>
+      <button class="btn btn-ghost" onclick="closeCategoryManager()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="js/tasks.js?v=10"></script>
+<script type="module" src="js/reminders.js?v=2"></script>
 <script type="module" src="js/topbar.js?v=5"></script>
 </body>
 </html>
