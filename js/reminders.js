@@ -136,7 +136,7 @@ async function scheduleNtfy(title, dateStr, timeStr) {
     const resp = await fetch(`https://ntfy.sh/${NTFY_TOPIC}`, {
       method: 'POST',
       headers: {
-        'Title': `🔔 Recordatorio: ${title}`,
+        'Title': `Recordatorio: ${title}`,
         'X-At': atHeader,
         'Priority': '3',
         'Tags': 'bell',
