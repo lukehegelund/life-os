@@ -571,11 +571,13 @@ window.submitChatNote = async () => {
   const body  = document.getElementById('cn-body').value.trim();
   if (!title && !body) { alert('Escribe algo'); return; }
   const noteTitle = title || body.substring(0, 60) || 'Nota rápida';
+  const now = new Date().toISOString();
   const { error } = await supabase.from('tasks').insert({
     title: noteTitle,
     module: 'Personal',
-    status: 'pending',
-    notes: JSON.stringify({ is_note: true, body }),
+    status: 'open',
+    notes: JSON.stringify({ is_note: true, body, color: 'none', pinned: false }),
+    completed_at: now,
   });
   if (error) { alert('Error: ' + error.message); return; }
   closeChatModal('note');

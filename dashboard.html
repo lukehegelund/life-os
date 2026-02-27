@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard — Life OS</title>
+<link rel="stylesheet" href="css/main.css?v=2">
+<style>
+/* ── Smart Report Cards ───────────────────────────────────────── */
+.sr-section {
+  margin-bottom: 24px;
+}
+.sr-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  padding: 0 2px;
+}
+.sr-section-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--gray-400);
+}
+.sr-add-btn {
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 99px;
+  background: var(--blue-light, #eff6ff);
+  color: var(--blue);
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+}
+.sr-add-btn:hover { background: #dbeafe; }
+
+.sr-card {
+  background: var(--white);
+  border: 1.5px solid var(--gray-200);
+  border-radius: 14px;
+  overflow: hidden;
+  margin-bottom: 10px;
+  transition: border-color 0.15s;
+}
+.sr-card:hover { border-color: var(--gray-400); }
+
+.sr-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px 10px;
+  cursor: pointer;
+  gap: 10px;
+}
+.sr-card-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+.sr-card-icon {
+  width: 34px; height: 34px;
+  border-radius: 10px;
+  background: var(--blue-light, #eff6ff);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 17px;
+  flex-shrink: 0;
+}
+.sr-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--gray-800);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sr-card-meta {
+  font-size: 11px;
+  color: var(--gray-400);
+  margin-top: 2px;
+}
+.sr-card-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.sr-action-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 5px 6px;
+  border-radius: 7px;
+  font-size: 14px;
+  color: var(--gray-400);
+  transition: background 0.1s;
+}
+.sr-action-btn:hover { background: var(--gray-100); color: var(--gray-700); }
+
+/* Quick food entry */
+.food-quick-entry {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+  padding: 8px;
+  background: var(--gray-50, #f9fafb);
+  border-radius: 10px;
+  border: 1.5px dashed var(--gray-200);
+}
+.food-quick-select {
+  border: 1.5px solid var(--gray-200);
+  border-radius: 8px;
+  padding: 7px 8px;
+  font-size: 13px;
+  background: var(--white);
+  color: var(--gray-700);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.food-quick-input {
+  flex: 1;
+  border: 1.5px solid var(--gray-200);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 13px;
+  background: var(--white);
+  min-width: 0;
+}
+.food-quick-input:focus, .food-quick-select:focus { outline: none; border-color: var(--blue); }
+.food-quick-btn {
+  background: var(--blue);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.food-quick-btn:hover { opacity: 0.85; }
+
+/* Force-update toggle button */
+.sr-force-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 5px 6px;
+  border-radius: 7px;
+  font-size: 16px;
+  color: var(--gray-300);
+  transition: background 0.1s, transform 0.1s;
+  opacity: 0.5;
+}
+.sr-force-btn:hover { background: var(--gray-100); opacity: 1; }
+.sr-force-btn.active {
+  opacity: 1;
+  color: var(--orange, #f59e0b);
+}
+.sr-force-btn.active:hover { background: #fff7ed; }
+
+/* Response section */
+.sr-card-response {
+  padding: 0 14px 14px;
+  display: none;
+}
+.sr-card.expanded .sr-card-response { display: block; }
+.sr-response-text {
+  font-size: 13px;
+  color: var(--gray-700);
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.sr-response-empty {
+  font-size: 13px;
+  color: var(--gray-400);
+  font-style: italic;
+  padding: 4px 0;
+}
+.sr-response-date {
+  font-size: 11px;
+  color: var(--gray-400);
+  margin-top: 8px;
+}
+.sr-prompt-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--gray-400);
+  margin-bottom: 4px;
+  margin-top: 12px;
+}
+.sr-prompt-text {
+  font-size: 12px;
+  color: var(--gray-500);
+  font-style: italic;
+  line-height: 1.5;
+}
+.sr-card-divider {
+  height: 1px;
+  background: var(--gray-100);
+  margin: 0 14px;
+}
+
+/* Due badge */
+.sr-due-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 99px;
+  background: #fef3c7;
+  color: #92400e;
+}
+.sr-due-badge.overdue { background: #fee2e2; color: #991b1b; }
+.sr-due-badge.fresh { background: #dcfce7; color: #166534; }
+
+/* Empty state per section */
+.sr-empty {
+  padding: 16px 0;
+  text-align: center;
+  color: var(--gray-400);
+  font-size: 13px;
+}
+
+/* ── Today's items ─────────────────────────────────────────────── */
+.dash-task-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--white);
+  border: 1.5px solid var(--gray-200);
+  border-radius: 10px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--gray-800);
+}
+.dash-task-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--blue);
+}
+.dash-task-dot.urgent { background: var(--coral, #e8563a); }
+.dash-task-dot.normal { background: var(--blue); }
+.dash-task-module {
+  font-size: 11px;
+  color: var(--gray-400);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.dash-food-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--white);
+  border: 1.5px solid var(--gray-200);
+  border-radius: 10px;
+  margin-bottom: 6px;
+}
+.dash-food-meal {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--blue);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+  width: 60px;
+  margin-top: 1px;
+}
+.dash-food-desc {
+  font-size: 13px;
+  color: var(--gray-700);
+  line-height: 1.4;
+}
+
+/* Modal */
+.modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:500; align-items:flex-end; justify-content:center; }
+.modal-sheet { background:var(--white); border-radius:16px 16px 0 0; padding:20px; width:100%; max-width:600px; max-height:90vh; overflow-y:auto; }
+.modal-title { font-size:17px; font-weight:700; margin-bottom:16px; }
+.form-group { margin-bottom:14px; }
+.form-label { font-size:12px; font-weight:600; color:var(--gray-600); margin-bottom:6px; display:block; }
+.form-input { width:100%; padding:10px 12px; border:1.5px solid var(--gray-200); border-radius:10px; font-size:14px; background:var(--gray-50,#f9fafb); box-sizing:border-box; }
+.form-input:focus { outline:none; border-color:var(--blue); }
+textarea.form-input { resize:vertical; min-height:80px; font-family:inherit; line-height:1.5; }
+
+.freq-pills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.freq-pill {
+  padding: 7px 14px;
+  border-radius: 99px;
+  border: 1.5px solid var(--gray-200);
+  background: var(--gray-50);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gray-600);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.freq-pill.selected {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: white;
+}
+
+.dow-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-top: 6px;
+}
+.dow-btn {
+  padding: 6px 0;
+  border-radius: 7px;
+  border: 1.5px solid var(--gray-200);
+  background: var(--gray-50);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--gray-600);
+  cursor: pointer;
+  text-align: center;
+}
+.dow-btn.selected {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: white;
+}
+</style>
+</head>
+<body>
+
+<header class="page-header">
+  <div class="header-row">
+    <div>
+      <h1>Dashboard</h1>
+      <div class="subtitle" id="dash-subtitle">Smart Reports</div>
+    </div>
+    <div>
+      <span id="dash-due-count" style="display:none;font-size:12px;font-weight:600;color:#92400e;background:#fef3c7;padding:4px 10px;border-radius:99px"></span>
+    </div>
+  </div>
+</header>
+
+<main class="content">
+
+  <!-- Today's Tasks -->
+  <div class="sr-section">
+    <div class="sr-section-header">
+      <div class="sr-section-label">✅ Tareas de hoy</div>
+      <a href="tasks.html" style="font-size:12px;color:var(--blue);text-decoration:none;font-weight:600">Ver todas →</a>
+    </div>
+    <div id="today-tasks-list"><div class="sr-empty" style="padding:10px 0">Cargando...</div></div>
+  </div>
+
+  <!-- Today's Food Log -->
+  <div class="sr-section">
+    <div class="sr-section-header">
+      <div class="sr-section-label">🍽️ Comidas de hoy</div>
+      <a href="health.html" style="font-size:12px;color:var(--blue);text-decoration:none;font-weight:600">Ver historial →</a>
+    </div>
+    <div id="today-food-list"><div class="sr-empty" style="padding:10px 0">Cargando...</div></div>
+    <!-- Quick food log entry -->
+    <div class="food-quick-entry" id="food-quick-entry">
+      <select id="fq-meal" class="food-quick-select">
+        <option value="Breakfast">🌅 Desayuno</option>
+        <option value="Lunch">☀️ Almuerzo</option>
+        <option value="Dinner">🌙 Cena</option>
+        <option value="Snack">🍎 Snack</option>
+      </select>
+      <input id="fq-desc" class="food-quick-input" type="text" placeholder="¿Qué comiste?" />
+      <button class="food-quick-btn" onclick="logFoodFromDash()">+</button>
+    </div>
+  </div>
+
+  <!-- Smart Reports divider -->
+  <div style="margin:8px 0 20px;display:flex;align-items:center;gap:10px">
+    <div style="flex:1;height:1px;background:var(--gray-200)"></div>
+    <span style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.07em;white-space:nowrap">📊 Smart Reports</span>
+    <div style="flex:1;height:1px;background:var(--gray-200)"></div>
+  </div>
+
+  <div id="sr-daily" class="sr-section">
+    <div class="sr-section-header">
+      <div class="sr-section-label">📅 Diario</div>
+      <button class="sr-add-btn" onclick="showAddReport('daily')">+ Agregar</button>
+    </div>
+    <div id="sr-daily-list"><div class="sr-empty">Sin reportes diarios. Agrega uno arriba.</div></div>
+  </div>
+
+  <div id="sr-weekly" class="sr-section">
+    <div class="sr-section-header">
+      <div class="sr-section-label">📆 Semanal</div>
+      <button class="sr-add-btn" onclick="showAddReport('weekly')">+ Agregar</button>
+    </div>
+    <div id="sr-weekly-list"><div class="sr-empty">Sin reportes semanales.</div></div>
+  </div>
+
+  <div id="sr-monthly" class="sr-section">
+    <div class="sr-section-header">
+      <div class="sr-section-label">🗓️ Mensual</div>
+      <button class="sr-add-btn" onclick="showAddReport('monthly')">+ Agregar</button>
+    </div>
+    <div id="sr-monthly-list"><div class="sr-empty">Sin reportes mensuales.</div></div>
+  </div>
+</main>
+
+<!-- Add/Edit Smart Report Modal -->
+<div class="modal-overlay" id="sr-modal" onclick="if(event.target===this)closeSrModal()">
+  <div class="modal-sheet">
+    <div class="modal-title" id="sr-modal-title">📊 Nuevo Smart Report</div>
+
+    <div class="form-group">
+      <label class="form-label">Título del reporte</label>
+      <input type="text" class="form-input" id="sr-title" placeholder="Ej: Reporte de dieta semanal">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Prompt para Claude</label>
+      <textarea class="form-input" id="sr-prompt" rows="4"
+        placeholder="Ej: Reporta qué tan consistente he sido registrando comida esta semana, cómo he comido en general, áreas en las que debería seguir bien, y cómo debería mejorar mi dieta..."></textarea>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Frecuencia</label>
+      <div class="freq-pills" id="sr-freq-pills">
+        <button class="freq-pill selected" data-freq="daily" onclick="pickSrFreq(this)">Diario</button>
+        <button class="freq-pill" data-freq="weekly" onclick="pickSrFreq(this)">Semanal</button>
+        <button class="freq-pill" data-freq="monthly" onclick="pickSrFreq(this)">Mensual</button>
+      </div>
+    </div>
+
+    <!-- Weekly: day of week -->
+    <div class="form-group" id="sr-dow-section" style="display:none">
+      <label class="form-label">Día de actualización</label>
+      <div class="dow-grid" id="sr-dow-grid">
+        <button class="dow-btn" data-dow="sun" onclick="pickSrDow(this)">Do</button>
+        <button class="dow-btn" data-dow="mon" onclick="pickSrDow(this)">Lu</button>
+        <button class="dow-btn" data-dow="tue" onclick="pickSrDow(this)">Ma</button>
+        <button class="dow-btn" data-dow="wed" onclick="pickSrDow(this)">Mi</button>
+        <button class="dow-btn" data-dow="thu" onclick="pickSrDow(this)">Ju</button>
+        <button class="dow-btn" data-dow="fri" onclick="pickSrDow(this)">Vi</button>
+        <button class="dow-btn" data-dow="sat" onclick="pickSrDow(this)">Sá</button>
+      </div>
+      <div style="font-size:11px;color:var(--gray-400);margin-top:4px">El reporte actualizará ese día (o el siguiente día que abras LifeOS).</div>
+    </div>
+
+    <!-- Monthly: day of month -->
+    <div class="form-group" id="sr-dom-section" style="display:none">
+      <label class="form-label">Día del mes</label>
+      <input type="number" class="form-input" id="sr-dom" min="1" max="28" value="1" style="width:100px">
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn btn-primary" style="flex:1;font-size:15px;padding:12px" id="sr-submit-btn" onclick="submitSrReport()">Guardar reporte</button>
+      <button class="btn btn-ghost" onclick="closeSrModal()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<nav class="bottom-nav">
+  <a href="dashboard.html" class="nav-item active">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+    Inicio
+  </a>
+  <a href="school.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>
+    Escuela
+  </a>
+  <a href="apps.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+    Apps
+  </a>
+  <a href="languages.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+    Idiomas
+  </a>
+  <a href="calendar.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><circle cx="8" cy="16" r="1" fill="currentColor"/><circle cx="12" cy="16" r="1" fill="currentColor"/></svg>
+    Calendario
+  </a>
+  <a href="notes.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+    Notas
+  </a>
+  <a href="tasks.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+    Tareas
+  </a>
+  <a href="reminders.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+    Recordatorios
+  </a>
+  <a href="projects.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+    Proyectos
+  </a>
+</nav>
+
+<script type="module" src="js/dashboard.js?v=2"></script>
+<script type="module" src="js/topbar.js?v=6"></script>
+</body>
+</html>
