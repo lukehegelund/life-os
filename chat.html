@@ -553,9 +553,10 @@ window.submitChatRemind = async () => {
 window.submitChatTask = async () => {
   const title = document.getElementById('ct-title').value.trim();
   if (!title) { alert('Escribe la tarea'); return; }
-  const cat = document.querySelector('#ct-cat-pills .chat-pill.selected')?.dataset.cat || 'Personal';
+  // tasks table uses `module`, not `category`
+  const mod = document.querySelector('#ct-cat-pills .chat-pill.selected')?.dataset.cat || 'Personal';
   const { error } = await supabase.from('tasks').insert({
-    title, category: cat, status: 'pending',
+    title, module: mod, status: 'pending',
   });
   if (error) { alert('Error: ' + error.message); return; }
   closeChatModal('task');
@@ -563,15 +564,18 @@ window.submitChatTask = async () => {
 };
 
 // ── /note submit ──────────────────────────────────────────────────────────────
+// Notes live in the `tasks` table with notes JSON {is_note:true, body:"..."}
+// This matches how notes.js stores them — they show up in the Notes tab automatically.
 window.submitChatNote = async () => {
   const title = document.getElementById('cn-title').value.trim();
   const body  = document.getElementById('cn-body').value.trim();
   if (!title && !body) { alert('Escribe algo'); return; }
-  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
-  const { error } = await supabase.from('notes').insert({
-    title: title || body.substring(0, 60),
-    body,
-    date: today,
+  const noteTitle = title || body.substring(0, 60) || 'Nota rápida';
+  const { error } = await supabase.from('tasks').insert({
+    title: noteTitle,
+    module: 'Personal',
+    status: 'pending',
+    notes: JSON.stringify({ is_note: true, body }),
   });
   if (error) { alert('Error: ' + error.message); return; }
   closeChatModal('note');
