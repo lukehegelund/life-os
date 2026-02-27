@@ -85,6 +85,7 @@
 .reminder-card.overdue { border-left-color: #ef4444; }
 .reminder-card.done    { border-left-color: var(--gray-200); opacity: 0.6; }
 .reminder-card.today   { border-left-color: #f59e0b; }
+.reminder-card.recurring-card { border-left-color: #8b5cf6; }
 
 .reminder-icon {
   width:36px; height:36px; border-radius:8px;
@@ -92,6 +93,7 @@
   display:flex; align-items:center; justify-content:center;
   font-size:16px; flex-shrink:0;
 }
+.reminder-icon.recurring-icon { background:#f5f3ff; }
 .reminder-body { flex:1; min-width:0; }
 .reminder-title { font-size:15px; font-weight:600; color:var(--gray-900); line-height:1.3; margin-bottom:3px; }
 .reminder-meta { font-size:12px; color:var(--gray-500); display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
@@ -103,6 +105,7 @@
 .time-chip.overdue { background:#fef2f2; color:#ef4444; }
 .time-chip.today   { background:#fffbeb; color:#b45309; }
 .time-chip.done    { background:var(--gray-100); color:var(--gray-400); }
+.time-chip.recurring { background:#f5f3ff; color:#7c3aed; }
 
 .ntfy-badge {
   display:inline-flex; align-items:center; gap:3px;
@@ -120,6 +123,54 @@
   text-transform:uppercase; letter-spacing:.5px; margin:16px 0 8px;
 }
 .rem-section-label:first-child { margin-top:0; }
+
+/* ── Recurring section header ── */
+.recurring-header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:12px 0 8px; margin-bottom:4px;
+  border-top:1.5px solid var(--gray-100);
+  margin-top:20px;
+  cursor:pointer;
+  user-select:none;
+}
+.recurring-header:first-child { border-top:none; margin-top:0; }
+.recurring-header-title {
+  font-size:14px; font-weight:700; color:var(--gray-700);
+  display:flex; align-items:center; gap:6px;
+}
+.recurring-header-right { display:flex; align-items:center; gap:8px; }
+.recurring-toggle { font-size:12px; color:var(--gray-400); transition:transform .2s; }
+.recurring-toggle.open { transform:rotate(180deg); }
+
+/* ── Recurrence frequency pills ── */
+.freq-pills { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
+.freq-pill {
+  padding:7px 14px; border-radius:99px; font-size:13px; font-weight:600;
+  border:1.5px solid var(--gray-200); background:var(--gray-50,#f9fafb);
+  cursor:pointer; transition:all .15s; color:var(--gray-600);
+}
+.freq-pill:active { transform:scale(.97); }
+.freq-pill.selected { background:#8b5cf6; border-color:#8b5cf6; color:#fff; }
+
+/* ── Day-of-week checkboxes ── */
+.dow-grid {
+  display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-bottom:12px;
+}
+.dow-btn {
+  padding:8px 2px; border-radius:8px; font-size:11px; font-weight:700;
+  border:1.5px solid var(--gray-200); background:var(--gray-50,#f9fafb);
+  cursor:pointer; transition:all .15s; color:var(--gray-600); text-align:center;
+}
+.dow-btn:active { transform:scale(.95); }
+.dow-btn.selected { background:#8b5cf6; border-color:#8b5cf6; color:#fff; }
+
+/* ── Month day picker ── */
+.dom-input {
+  width:80px; padding:9px 12px; border-radius:10px;
+  border:1.5px solid var(--gray-200); font-size:14px;
+  background:var(--gray-50,#f9fafb); margin-bottom:12px;
+}
+.dom-input:focus { outline:none; border-color:#8b5cf6; }
 </style>
 </head>
 <body>
@@ -130,26 +181,25 @@
       <h1>🔔 Recordatorios</h1>
       <div class="subtitle" id="reminders-subtitle">Cargando…</div>
     </div>
-    <button class="btn btn-primary btn-sm" onclick="showAddModal()" style="margin-left:auto;flex-shrink:0">+ Nuevo</button>
+    <div style="display:flex;gap:6px;margin-left:auto;flex-shrink:0">
+      <button class="btn btn-ghost btn-sm" onclick="showRecurringModal()" title="Nuevo repetitivo">🔁</button>
+      <button class="btn btn-primary btn-sm" onclick="showAddModal()">+ Nuevo</button>
+    </div>
   </div>
 </header>
 
 <main class="content">
-  <div id="reminders-list">
-    <div class="empty-state">
-      <div class="empty-icon">🔔</div>
-      <div class="empty-title">Sin recordatorios</div>
-      <div class="empty-sub">Toca "+ Nuevo" para crear uno. Te llega una notificación en tu celular a la hora exacta.</div>
-    </div>
-  </div>
+  <div id="reminders-list"></div>
+  <div id="recurring-section"></div>
 </main>
 
-<!-- Add Reminder Modal -->
+<!-- ══════════════════════════════════════════════════════════════════════════
+     ADD ONE-TIME REMINDER MODAL
+═══════════════════════════════════════════════════════════════════════════ -->
 <div class="modal-overlay" id="add-modal" onclick="if(event.target===this)closeAddModal()">
   <div class="modal-sheet">
     <div class="modal-title">🔔 Nuevo recordatorio</div>
 
-    <!-- Title input -->
     <div class="form-group" style="margin-bottom:16px">
       <input type="text" class="form-input" id="rem-title"
         placeholder="¿Qué necesitas recordar?"
@@ -157,45 +207,36 @@
         onkeydown="if(event.key==='Enter')this.blur()">
     </div>
 
-    <!-- Selected time display -->
     <div class="selected-when" id="selected-when-display">
       <span>⏰</span>
       <span id="selected-when-text"></span>
       <button onclick="clearWhen()" style="margin-left:auto;background:none;border:none;cursor:pointer;font-size:16px;padding:0;color:#93c5fd">✕</button>
     </div>
 
-    <!-- Quick-pick: Today -->
     <div class="time-picker-section">
       <div class="time-picker-label">⚡ Rápido</div>
       <div class="quick-grid">
         <button class="quick-btn" data-preset="in30" onclick="pickPreset(this)">
-          <span class="qb-emoji">⏱️</span>
-          <span class="qb-label">En 30 min</span>
+          <span class="qb-emoji">⏱️</span><span class="qb-label">En 30 min</span>
         </button>
         <button class="quick-btn" data-preset="in1h" onclick="pickPreset(this)">
-          <span class="qb-emoji">🕐</span>
-          <span class="qb-label">En 1 hora</span>
+          <span class="qb-emoji">🕐</span><span class="qb-label">En 1 hora</span>
         </button>
         <button class="quick-btn" data-preset="tonight" onclick="pickPreset(this)">
-          <span class="qb-emoji">🌆</span>
-          <span class="qb-label">Esta noche (7pm)</span>
+          <span class="qb-emoji">🌆</span><span class="qb-label">Esta noche (7pm)</span>
         </button>
         <button class="quick-btn" data-preset="tmr-am" onclick="pickPreset(this)">
-          <span class="qb-emoji">🌅</span>
-          <span class="qb-label">Mañana AM (8am)</span>
+          <span class="qb-emoji">🌅</span><span class="qb-label">Mañana AM (8am)</span>
         </button>
         <button class="quick-btn" data-preset="tmr-pm" onclick="pickPreset(this)">
-          <span class="qb-emoji">☀️</span>
-          <span class="qb-label">Mañana tarde (3pm)</span>
+          <span class="qb-emoji">☀️</span><span class="qb-label">Mañana tarde (3pm)</span>
         </button>
         <button class="quick-btn" data-preset="notime" onclick="pickPreset(this)">
-          <span class="qb-emoji">📌</span>
-          <span class="qb-label">Sin hora</span>
+          <span class="qb-emoji">📌</span><span class="qb-label">Sin hora</span>
         </button>
       </div>
     </div>
 
-    <!-- Custom time -->
     <div class="custom-time-row">
       <label>🕐 Hora exacta:</label>
       <input type="time" class="custom-time-input" id="rem-time-custom"
@@ -205,7 +246,6 @@
         onchange="pickCustomDate(this.value)">
     </div>
 
-    <!-- Module pills -->
     <div style="margin-top:16px;margin-bottom:4px">
       <div class="time-picker-label" style="margin-bottom:8px">Módulo</div>
       <div class="module-pills">
@@ -220,6 +260,96 @@
     <div style="display:flex;gap:8px;margin-top:16px">
       <button class="btn btn-primary" style="flex:1;font-size:16px;padding:13px" onclick="submitReminder()">Guardar</button>
       <button class="btn btn-ghost" onclick="closeAddModal()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     RECURRING REMINDER MODAL
+═══════════════════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="recurring-modal" onclick="if(event.target===this)closeRecurringModal()">
+  <div class="modal-sheet">
+    <div class="modal-title">🔁 Recordatorio repetitivo</div>
+
+    <!-- Title -->
+    <div class="form-group" style="margin-bottom:16px">
+      <input type="text" class="form-input" id="rec-title"
+        placeholder="¿Qué necesitas recordar?"
+        style="font-size:16px;padding:12px 14px">
+    </div>
+
+    <!-- Frequency -->
+    <div class="time-picker-label" style="margin-bottom:8px">Frecuencia</div>
+    <div class="freq-pills" id="freq-pills">
+      <button class="freq-pill selected" data-freq="daily" onclick="pickFreq(this)">Cada día</button>
+      <button class="freq-pill" data-freq="weekly" onclick="pickFreq(this)">Semanal</button>
+      <button class="freq-pill" data-freq="monthly" onclick="pickFreq(this)">Mensual</button>
+      <button class="freq-pill" data-freq="custom" onclick="pickFreq(this)">Personalizado</button>
+    </div>
+
+    <!-- Days of week (shown for weekly + custom) -->
+    <div id="rec-dow-section" style="display:none">
+      <div class="time-picker-label" style="margin-bottom:8px">Días</div>
+      <div class="dow-grid" id="rec-dow-grid">
+        <button class="dow-btn" data-dow="sun" onclick="toggleDow(this)">Do</button>
+        <button class="dow-btn" data-dow="mon" onclick="toggleDow(this)">Lu</button>
+        <button class="dow-btn" data-dow="tue" onclick="toggleDow(this)">Ma</button>
+        <button class="dow-btn" data-dow="wed" onclick="toggleDow(this)">Mi</button>
+        <button class="dow-btn" data-dow="thu" onclick="toggleDow(this)">Ju</button>
+        <button class="dow-btn" data-dow="fri" onclick="toggleDow(this)">Vi</button>
+        <button class="dow-btn" data-dow="sat" onclick="toggleDow(this)">Sá</button>
+      </div>
+    </div>
+
+    <!-- Day of month (shown for monthly) -->
+    <div id="rec-dom-section" style="display:none">
+      <div class="time-picker-label" style="margin-bottom:8px">Día del mes</div>
+      <input type="number" class="dom-input" id="rec-dom" min="1" max="31" value="1" placeholder="1–31">
+    </div>
+
+    <!-- Time -->
+    <div class="time-picker-label" style="margin-bottom:8px">Hora (PST)</div>
+    <div class="quick-grid" style="margin-bottom:10px">
+      <button class="quick-btn" data-time="07:00" onclick="pickRecTime(this,'07:00')">
+        <span class="qb-emoji">🌅</span><span class="qb-label">7am</span>
+      </button>
+      <button class="quick-btn" data-time="08:00" onclick="pickRecTime(this,'08:00')">
+        <span class="qb-emoji">☕</span><span class="qb-label">8am</span>
+      </button>
+      <button class="quick-btn" data-time="12:00" onclick="pickRecTime(this,'12:00')">
+        <span class="qb-emoji">🌞</span><span class="qb-label">12pm</span>
+      </button>
+      <button class="quick-btn" data-time="15:00" onclick="pickRecTime(this,'15:00')">
+        <span class="qb-emoji">☀️</span><span class="qb-label">3pm</span>
+      </button>
+      <button class="quick-btn" data-time="18:00" onclick="pickRecTime(this,'18:00')">
+        <span class="qb-emoji">🌆</span><span class="qb-label">6pm</span>
+      </button>
+      <button class="quick-btn" data-time="21:00" onclick="pickRecTime(this,'21:00')">
+        <span class="qb-emoji">🌙</span><span class="qb-label">9pm</span>
+      </button>
+    </div>
+    <div class="custom-time-row" style="margin-top:0;margin-bottom:12px">
+      <label>Hora exacta:</label>
+      <input type="time" class="custom-time-input" id="rec-time-custom" onchange="pickRecTimeCustom(this.value)">
+    </div>
+
+    <!-- Module -->
+    <div class="time-picker-label" style="margin-bottom:8px">Módulo</div>
+    <div class="module-pills" id="rec-mod-pills">
+      <button class="mod-pill selected" data-mod="Personal" onclick="pickRecModule(this)">👤 Personal</button>
+      <button class="mod-pill" data-mod="RT" onclick="pickRecModule(this)">🏫 RT</button>
+      <button class="mod-pill" data-mod="TOV" onclick="pickRecModule(this)">💍 TOV</button>
+      <button class="mod-pill" data-mod="Health" onclick="pickRecModule(this)">🏃 Salud</button>
+      <button class="mod-pill" data-mod="LifeOS" onclick="pickRecModule(this)">🖥️ LifeOS</button>
+    </div>
+
+    <!-- Preview -->
+    <div id="rec-preview" style="margin-top:14px;padding:10px 14px;background:#f5f3ff;border-radius:10px;border:1.5px solid #ddd6fe;font-size:13px;color:#5b21b6;display:none"></div>
+
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn btn-primary" style="flex:1;font-size:16px;padding:13px;background:#8b5cf6;border-color:#8b5cf6" onclick="submitRecurring()">Guardar</button>
+      <button class="btn btn-ghost" onclick="closeRecurringModal()">Cancelar</button>
     </div>
   </div>
 </div>
@@ -245,7 +375,7 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
     Notas
   </a>
-  <a href="tasks.html" class="nav-item active">
+  <a href="tasks.html" class="nav-item">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
     Tareas
   </a>
@@ -255,7 +385,7 @@
   </a>
 </nav>
 
-<script type="module" src="js/reminders.js?v=4"></script>
+<script type="module" src="js/reminders.js?v=5"></script>
 <script type="module" src="js/topbar.js?v=6"></script>
 </body>
 </html>

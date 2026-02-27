@@ -120,6 +120,75 @@
   color: var(--gray-400);
   margin: 4px 0;
 }
+/* ── Slash command popup ── */
+.slash-menu {
+  position: fixed;
+  bottom: calc(var(--nav-height, 60px) + 60px);
+  left: 16px; right: 16px;
+  max-width: 400px;
+  margin: 0 auto;
+  background: var(--white);
+  border: 1.5px solid var(--gray-200);
+  border-radius: 14px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  z-index: 200;
+  overflow: hidden;
+}
+.slash-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background .1s;
+  border-bottom: 1px solid var(--gray-100);
+}
+.slash-menu-item:last-child { border-bottom: none; }
+.slash-menu-item:hover, .slash-menu-item.active { background: var(--gray-50); }
+.slash-menu-item .slash-icon {
+  width: 34px; height: 34px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; flex-shrink: 0;
+}
+.slash-menu-item .slash-info { flex: 1; }
+.slash-menu-item .slash-cmd { font-size: 13px; font-weight: 700; color: var(--gray-900); }
+.slash-menu-item .slash-desc { font-size: 11px; color: var(--gray-400); margin-top: 1px; }
+.slash-hint {
+  font-size: 11px; color: var(--gray-400);
+  padding: 4px 16px 8px;
+  border-top: 1px solid var(--gray-100);
+  text-align: center;
+}
+/* ── Quick-action modals inside chat ── */
+.chat-modal-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.45); z-index: 500;
+  align-items: flex-end; justify-content: center;
+}
+.chat-modal-sheet {
+  background: var(--white); border-radius: 16px 16px 0 0;
+  padding: 20px; width: 100%; max-width: 600px;
+  max-height: 80vh; overflow-y: auto;
+}
+.chat-modal-title { font-size: 16px; font-weight: 700; margin-bottom: 14px; }
+.chat-form-input {
+  width: 100%; padding: 10px 14px; border-radius: 10px;
+  border: 1.5px solid var(--gray-200); font-size: 15px;
+  font-family: inherit; box-sizing: border-box; margin-bottom: 10px;
+  background: var(--gray-50, #f9fafb);
+}
+.chat-form-input:focus { outline: none; border-color: var(--blue); }
+.chat-time-row {
+  display: flex; gap: 8px; margin-bottom: 12px;
+}
+.chat-time-row input { flex: 1; }
+.chat-pill-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.chat-pill {
+  padding: 6px 12px; border-radius: 99px; font-size: 12px; font-weight: 600;
+  border: 1.5px solid var(--gray-200); background: var(--gray-50,#f9fafb);
+  cursor: pointer; transition: all .15s; color: var(--gray-600);
+}
+.chat-pill.selected { background: var(--blue); border-color: var(--blue); color: #fff; }
 </style>
 </head>
 <body>
@@ -142,10 +211,89 @@
   </div>
 </div>
 
+<!-- Slash command popup -->
+<div class="slash-menu" id="slash-menu" style="display:none">
+  <div class="slash-menu-item" data-cmd="remind" onclick="selectSlashCmd('remind')">
+    <div class="slash-icon" style="background:#eff6ff">🔔</div>
+    <div class="slash-info">
+      <div class="slash-cmd">/remind</div>
+      <div class="slash-desc">Crear recordatorio con hora y fecha</div>
+    </div>
+  </div>
+  <div class="slash-menu-item" data-cmd="task" onclick="selectSlashCmd('task')">
+    <div class="slash-icon" style="background:#f0fdf4">✅</div>
+    <div class="slash-info">
+      <div class="slash-cmd">/task</div>
+      <div class="slash-desc">Agregar tarea a la lista</div>
+    </div>
+  </div>
+  <div class="slash-menu-item" data-cmd="note" onclick="selectSlashCmd('note')">
+    <div class="slash-icon" style="background:#fffbeb">📝</div>
+    <div class="slash-info">
+      <div class="slash-cmd">/note</div>
+      <div class="slash-desc">Crear nota rápida</div>
+    </div>
+  </div>
+  <div class="slash-hint">↑↓ navegar · Enter seleccionar · Esc cerrar</div>
+</div>
+
+<!-- /remind quick modal -->
+<div class="chat-modal-overlay" id="chat-remind-modal" onclick="if(event.target===this)closeChatModal('remind')">
+  <div class="chat-modal-sheet">
+    <div class="chat-modal-title">🔔 Nuevo recordatorio</div>
+    <input type="text" class="chat-form-input" id="cr-title" placeholder="¿Qué necesitas recordar?">
+    <div class="chat-time-row">
+      <input type="time" class="chat-form-input chat-time-row" id="cr-time" style="margin-bottom:0">
+      <input type="date" class="chat-form-input chat-time-row" id="cr-date" style="margin-bottom:0">
+    </div>
+    <div class="chat-pill-row" id="cr-mod-pills">
+      <button class="chat-pill selected" data-mod="Personal" onclick="pickChatPill(this,'cr-mod-pills')">👤 Personal</button>
+      <button class="chat-pill" data-mod="RT" onclick="pickChatPill(this,'cr-mod-pills')">🏫 RT</button>
+      <button class="chat-pill" data-mod="TOV" onclick="pickChatPill(this,'cr-mod-pills')">💍 TOV</button>
+      <button class="chat-pill" data-mod="Health" onclick="pickChatPill(this,'cr-mod-pills')">🏃 Salud</button>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" style="flex:1;padding:12px" onclick="submitChatRemind()">Guardar</button>
+      <button class="btn btn-ghost" onclick="closeChatModal('remind')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- /task quick modal -->
+<div class="chat-modal-overlay" id="chat-task-modal" onclick="if(event.target===this)closeChatModal('task')">
+  <div class="chat-modal-sheet">
+    <div class="chat-modal-title">✅ Nueva tarea</div>
+    <input type="text" class="chat-form-input" id="ct-title" placeholder="¿Qué hay que hacer?">
+    <div class="chat-pill-row" id="ct-cat-pills">
+      <button class="chat-pill selected" data-cat="Personal" onclick="pickChatPill(this,'ct-cat-pills')">👤 Personal</button>
+      <button class="chat-pill" data-cat="RT" onclick="pickChatPill(this,'ct-cat-pills')">🏫 RT</button>
+      <button class="chat-pill" data-cat="TOV" onclick="pickChatPill(this,'ct-cat-pills')">💍 TOV</button>
+      <button class="chat-pill" data-cat="Health" onclick="pickChatPill(this,'ct-cat-pills')">🏃 Salud</button>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" style="flex:1;padding:12px" onclick="submitChatTask()">Guardar</button>
+      <button class="btn btn-ghost" onclick="closeChatModal('task')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- /note quick modal -->
+<div class="chat-modal-overlay" id="chat-note-modal" onclick="if(event.target===this)closeChatModal('note')">
+  <div class="chat-modal-sheet">
+    <div class="chat-modal-title">📝 Nueva nota</div>
+    <input type="text" class="chat-form-input" id="cn-title" placeholder="Título de la nota">
+    <textarea class="chat-form-input" id="cn-body" rows="4" placeholder="Contenido…" style="resize:vertical"></textarea>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" style="flex:1;padding:12px" onclick="submitChatNote()">Guardar</button>
+      <button class="btn btn-ghost" onclick="closeChatModal('note')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <div class="chat-input-bar">
-  <textarea id="chat-input" placeholder="Mensaje para Claude…" rows="1"
-    oninput="autoResize(this)"
-    onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}"></textarea>
+  <textarea id="chat-input" placeholder="Mensaje o / para acciones rápidas…" rows="1"
+    oninput="onChatInput(this)"
+    onkeydown="onChatKeydown(event)"></textarea>
   <button class="chat-send-btn" onclick="sendMessage()" id="chat-send-btn">➤</button>
 </div>
 
@@ -275,28 +423,169 @@ window.sendMessage = async () => {
   const input = document.getElementById('chat-input');
   const text = input.value.trim();
   if (!text) return;
-
   const btn = document.getElementById('chat-send-btn');
   btn.disabled = true;
-
   const { error } = await supabase.from('claude_tasks').insert({
-    instruction: text,
-    status: 'open',
-    context: 'chat.html',
-    page: 'chat.html',
+    instruction: text, status: 'open', context: 'chat.html', page: 'chat.html',
   });
-
-  if (error) {
-    alert('Error sending: ' + error.message);
-    btn.disabled = false;
-    return;
-  }
-
+  if (error) { alert('Error sending: ' + error.message); btn.disabled = false; return; }
   input.value = '';
   input.style.height = '';
   btn.disabled = false;
   loadMessages();
 };
+
+// ── Slash command logic ───────────────────────────────────────────────────────
+let _slashActive = false;
+let _slashIdx = 0;
+const SLASH_CMDS = ['remind','task','note'];
+
+window.onChatInput = (el) => {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+  const val = el.value;
+  const menu = document.getElementById('slash-menu');
+  if (val === '/') {
+    _slashActive = true; _slashIdx = 0;
+    menu.style.display = '';
+    highlightSlashItem(_slashIdx);
+  } else if (_slashActive && val.startsWith('/')) {
+    const query = val.slice(1).toLowerCase();
+    const match = SLASH_CMDS.filter(c => c.startsWith(query));
+    if (match.length === 0) { hideSlashMenu(); }
+    // Update highlight
+  } else {
+    hideSlashMenu();
+  }
+};
+
+window.onChatKeydown = (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    if (_slashActive) {
+      e.preventDefault();
+      const items = document.querySelectorAll('.slash-menu-item');
+      const active = items[_slashIdx];
+      if (active) selectSlashCmd(active.dataset.cmd);
+      return;
+    }
+    e.preventDefault();
+    sendMessage();
+    return;
+  }
+  if (_slashActive) {
+    if (e.key === 'ArrowDown') { e.preventDefault(); _slashIdx = Math.min(_slashIdx+1, SLASH_CMDS.length-1); highlightSlashItem(_slashIdx); return; }
+    if (e.key === 'ArrowUp')   { e.preventDefault(); _slashIdx = Math.max(_slashIdx-1, 0); highlightSlashItem(_slashIdx); return; }
+    if (e.key === 'Escape')    { hideSlashMenu(); return; }
+    if (e.key === 'Backspace' && document.getElementById('chat-input').value === '/') {
+      hideSlashMenu();
+    }
+  }
+};
+
+function highlightSlashItem(idx) {
+  document.querySelectorAll('.slash-menu-item').forEach((el, i) => {
+    el.classList.toggle('active', i === idx);
+  });
+}
+function hideSlashMenu() {
+  _slashActive = false;
+  document.getElementById('slash-menu').style.display = 'none';
+}
+
+window.selectSlashCmd = (cmd) => {
+  hideSlashMenu();
+  document.getElementById('chat-input').value = '';
+  document.getElementById('chat-input').style.height = '';
+  if (cmd === 'remind') {
+    // Pre-fill today's date
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+    document.getElementById('cr-date').value = today;
+    document.getElementById('cr-title').value = '';
+    document.getElementById('cr-time').value = '';
+    document.querySelectorAll('#cr-mod-pills .chat-pill').forEach(b => b.classList.remove('selected'));
+    document.querySelector('#cr-mod-pills [data-mod="Personal"]').classList.add('selected');
+    document.getElementById('chat-remind-modal').style.display = 'flex';
+    setTimeout(() => document.getElementById('cr-title').focus(), 50);
+  } else if (cmd === 'task') {
+    document.getElementById('ct-title').value = '';
+    document.querySelectorAll('#ct-cat-pills .chat-pill').forEach(b => b.classList.remove('selected'));
+    document.querySelector('#ct-cat-pills [data-cat="Personal"]').classList.add('selected');
+    document.getElementById('chat-task-modal').style.display = 'flex';
+    setTimeout(() => document.getElementById('ct-title').focus(), 50);
+  } else if (cmd === 'note') {
+    document.getElementById('cn-title').value = '';
+    document.getElementById('cn-body').value = '';
+    document.getElementById('chat-note-modal').style.display = 'flex';
+    setTimeout(() => document.getElementById('cn-title').focus(), 50);
+  }
+};
+
+window.closeChatModal = (which) => {
+  document.getElementById(`chat-${which}-modal`).style.display = 'none';
+};
+
+window.pickChatPill = (btn, groupId) => {
+  document.querySelectorAll(`#${groupId} .chat-pill`).forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+};
+
+// ── /remind submit ────────────────────────────────────────────────────────────
+window.submitChatRemind = async () => {
+  const title = document.getElementById('cr-title').value.trim();
+  if (!title) { alert('Escribe el recordatorio'); return; }
+  const time  = document.getElementById('cr-time').value;
+  const date  = document.getElementById('cr-date').value;
+  const mod   = document.querySelector('#cr-mod-pills .chat-pill.selected')?.dataset.mod || 'Personal';
+  const meta  = {};
+  if (time) meta.due_time = time;
+  const { error } = await supabase.from('reminders').insert({
+    title, module: mod,
+    due_date: date || null,
+    status: 'active',
+    notes: Object.keys(meta).length ? JSON.stringify(meta) : null,
+  });
+  if (error) { alert('Error: ' + error.message); return; }
+  closeChatModal('remind');
+  showToast(`🔔 Recordatorio guardado${time ? ` · ${time} PST` : ''}`);
+};
+
+// ── /task submit ──────────────────────────────────────────────────────────────
+window.submitChatTask = async () => {
+  const title = document.getElementById('ct-title').value.trim();
+  if (!title) { alert('Escribe la tarea'); return; }
+  const cat = document.querySelector('#ct-cat-pills .chat-pill.selected')?.dataset.cat || 'Personal';
+  const { error } = await supabase.from('tasks').insert({
+    title, category: cat, status: 'pending',
+  });
+  if (error) { alert('Error: ' + error.message); return; }
+  closeChatModal('task');
+  showToast('✅ Tarea guardada');
+};
+
+// ── /note submit ──────────────────────────────────────────────────────────────
+window.submitChatNote = async () => {
+  const title = document.getElementById('cn-title').value.trim();
+  const body  = document.getElementById('cn-body').value.trim();
+  if (!title && !body) { alert('Escribe algo'); return; }
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+  const { error } = await supabase.from('notes').insert({
+    title: title || body.substring(0, 60),
+    body,
+    date: today,
+  });
+  if (error) { alert('Error: ' + error.message); return; }
+  closeChatModal('note');
+  showToast('📝 Nota guardada');
+};
+
+// ── Minimal toast for chat page ───────────────────────────────────────────────
+function showToast(msg) {
+  const t = document.createElement('div');
+  t.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1f2937;color:#fff;padding:10px 18px;border-radius:99px;font-size:13px;font-weight:600;z-index:999;pointer-events:none';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2500);
+}
 
 window.autoResize = (el) => {
   el.style.height = 'auto';
