@@ -1,6 +1,6 @@
 // Life OS — Class Dashboard (Phase 2, v3 — no polling, single-expand, desktop buttons)
 import { supabase } from './supabase.js';
-import { qp, today, fmtDate, fmtTime, goldStr, goldClass, toast, showSpinner, showEmpty } from './utils.js';
+import { qp, today, fmtDate, fmtTime, daysAgo, goldStr, goldClass, toast, showSpinner, showEmpty } from './utils.js';
 import { initSwipe } from './swipe-handler.js';
 
 const classId = qp('id');
@@ -283,7 +283,7 @@ async function loadOverviewNotes(studentId) {
           `<div style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:0.04em;width:100%;margin-bottom:4px">📄 Pages — This Class</div>` +
           tile('7 days', total7) +
           tile('30 days', total30) +
-          tile('last logged', lastDate ? fmtDate(lastDate) : '—');
+          tile('last logged', lastDate ? daysAgo(lastDate) : '—');
       }
     }
   }

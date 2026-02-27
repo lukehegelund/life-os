@@ -1,6 +1,6 @@
 // Life OS — Individual Student Profile (Phase 2)
 import { supabase } from './supabase.js';
-import { qp, fmtDate, fmtDateFull, goldStr, goldClass, attendanceBadge, toast, showSpinner, showEmpty } from './utils.js';
+import { qp, fmtDate, fmtDateFull, daysAgo, goldStr, goldClass, attendanceBadge, toast, showSpinner, showEmpty } from './utils.js';
 import { initSwipe } from './swipe-handler.js';
 
 const studentId = qp('id');
@@ -354,7 +354,7 @@ async function loadPagesAnalytics(s) {
             <div style="font-size:11px;color:var(--gray-400)">pages / 30 days</div>
           </div>
           <div style="flex:1;min-width:80px;background:var(--gray-50);border-radius:8px;padding:8px 10px;text-align:center">
-            <div style="font-size:13px;font-weight:600;color:var(--gray-600)">${group.lastDate ? fmtDate(group.lastDate) : '—'}</div>
+            <div style="font-size:13px;font-weight:600;color:var(--gray-600)">${group.lastDate ? daysAgo(group.lastDate) : '—'}</div>
             <div style="font-size:11px;color:var(--gray-400)">last logged</div>
           </div>
         </div>

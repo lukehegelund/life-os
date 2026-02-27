@@ -21,6 +21,19 @@ export function fmtDateLong(d) {
   return dt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 }
 
+/** Format a date as "X days ago" / "Today" / "Yesterday" (for "last logged" labels) */
+export function daysAgo(d) {
+  if (!d) return '—';
+  const dt = typeof d === 'string' ? new Date(d + 'T00:00:00') : d;
+  const now = new Date();
+  const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diffMs = todayMidnight - dt;
+  const diffDays = Math.round(diffMs / 86400000);
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  return `${diffDays}d ago`;
+}
+
 /** Today as YYYY-MM-DD string (browser local time) */
 export function today() {
   const d = new Date();
