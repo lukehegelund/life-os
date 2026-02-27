@@ -74,7 +74,7 @@ function renderModuleTabs() {
     const isActive = mod === activeModule;
     return `<button class="btn btn-sm ${isActive ? 'btn-primary' : 'btn-ghost'} mod-btn"
       id="mod-${mod.replace(/\s+/g,'-')}"
-      onclick="setModule(${JSON.stringify(mod)})"
+      onclick="setModule('${mod.replace(/'/g, "\\'")}')"
       style="white-space:nowrap">${label}</button>`;
   }).join('');
 }
