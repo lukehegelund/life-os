@@ -171,7 +171,7 @@ window.logAndCloseDay = async () => {
   btn.disabled = true;
   btn.textContent = '⏳ Logging…';
 
-  const T = today();
+  const T = selectedDate;
 
   // 1. Gather attendance stats for today
   const [attRes, pagesRes, partRes, classRes, goldRes] = await Promise.all([
