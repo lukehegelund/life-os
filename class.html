@@ -23,6 +23,18 @@
     <div id="class-unit" style="font-size:13px;color:var(--blue)"></div>
     <span id="class-settings-badge" style="display:none;font-size:12px;background:var(--blue-light);color:var(--blue);padding:2px 8px;border-radius:10px;font-weight:600"></span>
   </div>
+  <!-- Date Navigator -->
+  <div style="display:flex;align-items:center;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--gray-100)">
+    <button class="btn btn-ghost btn-sm" id="class-date-prev" style="padding:4px 10px">‹</button>
+    <button class="btn btn-ghost btn-sm" id="class-date-today" style="padding:4px 10px;font-size:12px">Hoy</button>
+    <button class="btn btn-ghost btn-sm" id="class-date-next" style="padding:4px 10px">›</button>
+    <span id="class-date-label" style="font-size:13px;font-weight:600;color:var(--blue);margin:0 4px">Hoy</span>
+    <input type="date" id="class-date-input" style="font-size:12px;border:1px solid var(--gray-200);border-radius:6px;padding:3px 6px;color:var(--gray-700);background:var(--white);margin-left:4px">
+  </div>
+  <!-- Past Day Banner -->
+  <div id="past-day-banner" style="display:none;background:var(--orange-light,#FFF7ED);color:var(--orange,#f97316);font-size:12px;font-weight:600;padding:6px 12px;border-radius:6px;margin-top:6px">
+    🕐 Modo tiempo atrás — páginas y oro son de solo lectura · Participación y asistencia se pueden editar
+  </div>
 </header>
 
 <main class="content">
@@ -35,7 +47,7 @@
 
   <!-- Roster & Attendance (expandable) -->
   <div class="card">
-    <div class="card-title">👥 Lista 👥 Lista & Asistencia Asistencia
+    <div class="card-title">👥 Lista & Asistencia
       <span style="font-size:11px;color:var(--gray-400);font-weight:400;margin-left:8px">▶ expandir · toca nombre = perfil</span>
     </div>
     <div id="roster"></div>
@@ -164,7 +176,7 @@
   </a>
 </nav>
 
-<script type="module" src="js/class.js?v=4"></script>
+<script type="module" src="js/class.js?v=5"></script>
 <script type="module" src="js/topbar.js?v=6"></script>
 </body>
 </html>
