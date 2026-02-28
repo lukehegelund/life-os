@@ -38,7 +38,7 @@ async function loadGoldOwed() {
   const sorted = Object.values(byStudent).sort((a, b) => b.total - a.total);
 
   el.innerHTML = `
-    <button class="btn btn-gold btn-full" onclick="distributeAll()">🪙 Mark All Distributed</button>
+    <button class="btn btn-gold btn-full" onclick="distributeAll()">🪙 Import Gold for This and Prior Days</button>
     <div style="margin-top:12px">
     ${sorted.map(s => `
       <div class="list-item" style="flex-direction:column;align-items:flex-start;gap:6px">
@@ -89,9 +89,10 @@ async function loadAttendance() {
   const dayOfWeek = new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long' });
   const dayShort = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(selectedDate + 'T00:00:00').getDay()];
 
-  const [classRes, attRes] = await Promise.all([
+  const [classRes, attRes, importRes] = await Promise.all([
     supabase.from('classes').select('id, name, time_start').or(`day_of_week.ilike.%${dayShort}%,day_of_week.ilike.%${dayOfWeek}%`).order('time_start', { ascending: true }),
-    supabase.from('attendance').select('class_id, status').eq('date', selectedDate)
+    supabase.from('attendance').select('class_id, status').eq('date', selectedDate),
+    supabase.from('attendance_imported').select('class_id').eq('date', selectedDate),
   ]);
 
   const classes = classRes.data || [];
@@ -102,6 +103,9 @@ async function loadAttendance() {
     attCountByClass[r.class_id] = (attCountByClass[r.class_id] || 0) + 1;
   }
 
+  // Build imported set: which class_ids are imported for this date
+  const importedClassIds = new Set((importRes.data || []).map(r => r.class_id));
+
   if (!classes.length) {
     el.innerHTML = '<div style="color:var(--gray-400);font-size:14px">No classes scheduled for this day</div>';
     return;
@@ -109,6 +113,7 @@ async function loadAttendance() {
 
   el.innerHTML = classes.map(c => {
     const count = attCountByClass[c.id] || 0;
+    const isImported = importedClassIds.has(c.id);
     return `
     <div class="list-item">
       <div class="list-item-left">
@@ -116,9 +121,11 @@ async function loadAttendance() {
         <div class="list-item-sub">${c.time_start ? c.time_start.slice(0,5) : ''}</div>
       </div>
       <div class="list-item-right">
-        ${count > 0
-          ? `<span class="badge badge-green">Logged (${count})</span>`
-          : '<span class="badge badge-gray">Not logged</span>'}
+        ${isImported
+          ? `<span class="badge badge-green">✅ Importada</span>`
+          : count > 0
+            ? `<span class="badge badge-blue">Tomada (${count})</span>`
+            : '<span class="badge badge-gray">Sin tomar</span>'}
         <a href="class.html?id=${c.id}&date=${selectedDate}" class="btn btn-sm btn-ghost">View →</a>
       </div>
     </div>`;
@@ -164,116 +171,70 @@ async function loadNotesSummary() {
     </div>`).join('');
 }
 
-// ── Log & Close Day ──────────────────────────────────────────────────────────
-window.logAndCloseDay = async () => {
-  const btn = document.getElementById('log-day-btn');
-  const statusEl = document.getElementById('log-day-status');
+// ── Import Attendance ─────────────────────────────────────────────────────────
+window.importAttendance = async () => {
+  const btn = document.getElementById('import-att-btn');
+  const statusEl = document.getElementById('import-att-status');
   btn.disabled = true;
-  btn.textContent = '⏳ Logging…';
+  btn.textContent = '⏳ Importando…';
 
   const T = selectedDate;
 
-  // 1. Gather attendance stats for today
-  const [attRes, pagesRes, partRes, classRes, goldRes] = await Promise.all([
-    supabase.from('attendance').select('class_id, status').eq('date', T),
-    supabase.from('student_pages').select('student_id, class_id, pages_delta, total_pages').eq('date', T),
-    supabase.from('participation_scores').select('student_id, class_id, score').eq('date', T),
-    supabase.from('classes').select('id, name'),
-    supabase.from('gold_transactions').select('student_id, amount').eq('distributed', false).lte('date', T),
-  ]);
+  // Get classes scheduled for this day
+  const dayOfWeek = new Date(T + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long' });
+  const dayShort = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(T + 'T00:00:00').getDay()];
 
-  const classMap = {};
-  for (const c of (classRes.data || [])) classMap[c.id] = c.name;
+  const classRes = await supabase.from('classes')
+    .select('id, name')
+    .or(`day_of_week.ilike.%${dayShort}%,day_of_week.ilike.%${dayOfWeek}%`);
 
-  // Attendance summary
-  const attByClass = {};
-  for (const a of (attRes.data || [])) {
-    if (!attByClass[a.class_id]) attByClass[a.class_id] = { P:0, L:0, A:0, E:0 };
-    const s = { Present:'P', Late:'L', Absent:'A', Excused:'E' }[a.status] || 'A';
-    attByClass[a.class_id][s]++;
-  }
-
-  // Pages summary
-  const pagesByClass = {};
-  for (const p of (pagesRes.data || [])) {
-    if (!pagesByClass[p.class_id]) pagesByClass[p.class_id] = { pages: 0, students: 0 };
-    pagesByClass[p.class_id].pages += p.pages_delta || 0;
-    pagesByClass[p.class_id].students++;
-  }
-
-  // Participation summary
-  const partByClass = {};
-  for (const p of (partRes.data || [])) {
-    if (!partByClass[p.class_id]) partByClass[p.class_id] = { total: 0, count: 0 };
-    partByClass[p.class_id].total += p.score || 0;
-    partByClass[p.class_id].count++;
-  }
-
-  // Build snapshot body text
-  const allClassIds = new Set([
-    ...Object.keys(attByClass),
-    ...Object.keys(pagesByClass),
-    ...Object.keys(partByClass),
-  ].map(Number));
-
-  let lines = [];
-  for (const cid of [...allClassIds].sort((a,b) => a - b)) {
-    const name = classMap[cid] || `Class ${cid}`;
-    const att = attByClass[cid];
-    const pg = pagesByClass[cid];
-    const pt = partByClass[cid];
-    let parts = [];
-    if (att) parts.push(`att: ${att.P}P ${att.L}L ${att.A}A ${att.E}E`);
-    if (pg) parts.push(`pages: ${pg.pages}p (${pg.students} students)`);
-    if (pt && pt.count) parts.push(`part: ${(pt.total/pt.count).toFixed(1)}/5`);
-    if (parts.length) lines.push(`• ${name}: ${parts.join(' | ')}`);
-  }
-  // Add gold summary to the body
-  const goldTxs = (goldRes?.data || []);
-  const totalGoldDistributed = goldTxs.reduce((sum, t) => sum + (t.amount || 0), 0);
-  let goldLine = '';
-  if (goldTxs.length) {
-    goldLine = `\n🪙 Total oro del día: ${totalGoldDistributed > 0 ? '+' : ''}${totalGoldDistributed} (${goldTxs.length} transacciones)`;
-  }
-  const body = (lines.length ? lines.join('\n') : '(Sin actividad hoy)') + goldLine;
-
-  // 2. Save snapshot to claude_notifications
-  const { error: logErr } = await supabase.from('claude_notifications').insert({
-    title: `📊 Daily Log: ${T}`,
-    body,
-    read: false,
-  });
-
-  if (logErr) {
-    toast('Error saving log: ' + logErr.message, 'error');
-    btn.disabled = false; btn.textContent = '📊 Log & Close Day';
+  const classes = classRes.data || [];
+  if (!classes.length) {
+    toast('No hay clases programadas para este día', 'info');
+    btn.disabled = false;
+    btn.textContent = '📥 Importar Asistencia';
     return;
   }
 
-  // 3. Reset current_gold to 0 for ALL students (gold history preserved in gold_transactions)
-  // First get all student IDs
-  const { data: allStudents } = await supabase.from('students').select('id');
-  if (allStudents && allStudents.length) {
-    await supabase.from('students').update({ current_gold: 0 }).in('id', allStudents.map(s => s.id));
+  // Check which classes already have attendance logged
+  const attRes = await supabase.from('attendance')
+    .select('class_id')
+    .eq('date', T);
+
+  const classIdsWithAtt = new Set((attRes.data || []).map(r => r.class_id));
+  const classesToImport = classes.filter(c => classIdsWithAtt.has(c.id));
+
+  if (!classesToImport.length) {
+    toast('No hay asistencia tomada para importar hoy', 'info');
+    btn.disabled = false;
+    btn.textContent = '📥 Importar Asistencia';
+    return;
   }
 
-  // 4. Also mark all undistributed gold_transactions as distributed (gold reset)
-  await supabase.from('gold_transactions')
-    .update({ distributed: true, distributed_at: new Date().toISOString() })
-    .eq('distributed', false)
-    .lte('date', T);
+  // Upsert import records for each class with attendance
+  const importRows = classesToImport.map(c => ({
+    date: T,
+    class_id: c.id,
+    imported_at: new Date().toISOString(),
+  }));
 
-  // 5. Reset student_pages total_pages counter for today
-  await supabase.from('student_pages').update({ total_pages: 0 }).eq('date', T);
+  const { error: importErr } = await supabase
+    .from('attendance_imported')
+    .upsert(importRows, { onConflict: 'date,class_id' });
 
-  // Note: attendance, participation_scores, and student_pages rows stay in DB for analytics
-  // They are date-keyed, so tomorrow's class view will load fresh (no rows for tomorrow yet)
+  if (importErr) {
+    toast('Error importando: ' + importErr.message, 'error');
+    btn.disabled = false;
+    btn.textContent = '📥 Importar Asistencia';
+    return;
+  }
 
-  // 6. Update UI
-  statusEl.textContent = `Logged at ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`;
-  btn.textContent = '✅ Day Logged';
+  const names = classesToImport.map(c => c.name).join(', ');
+  statusEl.textContent = `Importada ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`;
+  btn.textContent = '✅ Asistencia Importada';
   btn.style.background = 'var(--green)';
-  toast('Día cerrado ✅ Oro, asistencia y páginas reiniciados para mañana', 'success');
+  toast(`Asistencia importada para: ${names} ✅`, 'success');
+  loadAttendance();
   loadPastLogs();
 };
 
@@ -282,29 +243,38 @@ async function loadPastLogs() {
   const el = document.getElementById('past-logs');
   if (!el) return;
 
-  const { data } = await supabase.from('claude_notifications')
-    .select('id, title, body, created_at')
-    .like('title', '📊 Daily Log:%')
-    .order('created_at', { ascending: false })
-    .limit(30);
+  // Get attendance import history
+  const { data } = await supabase.from('attendance_imported')
+    .select('date, class_id, imported_at, classes(name)')
+    .order('imported_at', { ascending: false })
+    .limit(60);
 
   const logs = data || [];
   if (!logs.length) {
-    el.innerHTML = '<div style="color:var(--gray-400);font-size:14px">No daily logs yet</div>';
+    el.innerHTML = '<div style="color:var(--gray-400);font-size:14px">No hay asistencias importadas aún</div>';
     return;
   }
 
-  el.innerHTML = logs.map(log => {
-    const dateStr = log.title.replace('📊 Daily Log: ', '');
-    const lines = (log.body || '').split('\n');
+  // Group by date
+  const byDate = {};
+  for (const r of logs) {
+    if (!byDate[r.date]) byDate[r.date] = [];
+    byDate[r.date].push(r);
+  }
+
+  const sortedDates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
+
+  el.innerHTML = sortedDates.slice(0, 30).map(date => {
+    const entries = byDate[date];
+    const classNames = entries.map(e => e.classes?.name || `Class ${e.class_id}`).join(', ');
     return `
       <details style="margin-bottom:8px;border-bottom:1px solid var(--gray-100);padding-bottom:8px">
         <summary style="font-size:14px;font-weight:600;cursor:pointer;padding:4px 0">
-          ${fmtDate(dateStr)}
-          <span style="font-size:12px;font-weight:400;color:var(--gray-400);margin-left:8px">${lines.length} class${lines.length !== 1 ? 'es' : ''}</span>
+          ✅ ${fmtDate(date)}
+          <span style="font-size:12px;font-weight:400;color:var(--gray-400);margin-left:8px">${entries.length} clase${entries.length !== 1 ? 's' : ''}</span>
         </summary>
         <div style="margin-top:8px;font-size:13px;color:var(--gray-600)">
-          ${lines.map(l => `<div style="padding:2px 0">${l}</div>`).join('')}
+          <div style="padding:2px 0">${classNames}</div>
         </div>
       </details>`;
   }).join('');
