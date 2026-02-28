@@ -1,4 +1,4 @@
-// Life OS — Class Dashboard (Phase 2, v3 — no polling, single-expand, desktop buttons)
+// Life OS — Class Dashboard (Phase 2, v4 — full time-travel, selectedDate)
 import { supabase } from './supabase.js';
 import { qp, today, fmtDate, fmtTime, daysAgo, goldStr, goldClass, toast, showSpinner, showEmpty, pstDatePlusDays } from './utils.js';
 import { initSwipe } from './swipe-handler.js';
@@ -6,11 +6,50 @@ import { initSwipe } from './swipe-handler.js';
 const classId = qp('id');
 if (!classId) { window.location.href = 'classes.html'; }
 
-const T = today();
+// ── Date: from URL param or today ─────────────────────────────────────────────
+let selectedDate = qp('date') || today();
+// Clamp to today — never go into the future
+if (selectedDate > today()) selectedDate = today();
+
+const isToday = () => selectedDate === today();
+const isPast  = () => selectedDate < today();
+
 let cls = null;
 
 // ── Expand state: only ONE open at a time ─────────────────────────────────
-let expandedStudent = null;  // single student id, not a Set
+let expandedStudent = null;
+
+// ── Date navigation helpers ───────────────────────────────────────────────────
+function dateNavOffsetDay(offset) {
+  const [y, m, d] = selectedDate.split('-').map(Number);
+  const base = new Date(Date.UTC(y, m - 1, d + offset));
+  const next = base.toISOString().split('T')[0];
+  if (next > today()) return; // don't go into future
+  selectedDate = next;
+  updateDateNav();
+  load();
+}
+
+function updateDateNav() {
+  const el = document.getElementById('class-date-label');
+  if (!el) return;
+  if (isToday()) {
+    el.textContent = 'Hoy';
+    el.style.fontWeight = '700';
+    el.style.color = 'var(--blue)';
+  } else {
+    el.textContent = fmtDate(selectedDate);
+    el.style.fontWeight = '600';
+    el.style.color = 'var(--gray-700)';
+  }
+  // Update next button: disable if already at today
+  const nextBtn = document.getElementById('class-date-next');
+  if (nextBtn) nextBtn.disabled = isToday();
+
+  // Show/hide past-day banner
+  const banner = document.getElementById('past-day-banner');
+  if (banner) banner.style.display = isPast() ? 'block' : 'none';
+}
 
 async function load() {
   const res = await supabase.from('classes').select('*').eq('id', classId).single();
@@ -25,6 +64,7 @@ async function load() {
   if (cls.current_unit) document.getElementById('class-unit').textContent = '📖 ' + cls.current_unit;
 
   renderClassSettingsBadge(cls);
+  updateDateNav();
 
   await Promise.all([
     loadUniversalClassNotes(),
@@ -53,40 +93,54 @@ function renderClassSettingsBadge(cls) {
 const attMap = {};
 const partMap = {}; // participation scores: { studentId: score }
 let enrollments = [];
+let attImported = false; // is attendance imported for selectedDate+classId?
 
 async function loadRoster(cls) {
   const el = document.getElementById('roster');
   showSpinner(el);
 
-  const [enrRes, attRes, pagesRes, partRes] = await Promise.all([
+  const [enrRes, attRes, pagesRes, partRes, importRes] = await Promise.all([
+    // Historical enrollment: enrolled on or before selectedDate and not yet unenrolled (or unenrolled after selectedDate)
     supabase.from('class_enrollments')
       .select('*, students(id, name, current_gold, english_pages_class_id, math_pages_class_id)')
       .eq('class_id', classId)
-      .is('enrolled_until', null),
+      .or(`enrolled_until.is.null,enrolled_until.gte.${selectedDate}`),
     supabase.from('attendance')
       .select('*')
       .eq('class_id', classId)
-      .eq('date', T),
+      .eq('date', selectedDate),
     cls.track_pages !== 'None'
       ? supabase.from('student_pages')
           .select('student_id, total_pages')
           .eq('class_id', classId)
-          .eq('date', T)
+          .eq('date', selectedDate)
       : Promise.resolve({ data: [] }),
     supabase.from('participation_scores')
       .select('student_id, score')
       .eq('class_id', classId)
-      .eq('date', T),
+      .eq('date', selectedDate),
+    supabase.from('attendance_imported')
+      .select('class_id')
+      .eq('date', selectedDate)
+      .eq('class_id', Number(classId))
+      .limit(1),
   ]);
 
-  // Filter out students who skip today's day of week
-  const todayAbbr = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(T + 'T00:00:00').getDay()];
+  // Check attendance import status
+  attImported = (importRes.data || []).length > 0;
+
+  // Filter skip_days based on selectedDate's day of week
+  const dateAbbr = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(selectedDate + 'T00:00:00').getDay()];
   enrollments = (enrRes.data || []).filter(e => {
     if (!e.skip_days) return true;
     const skipList = e.skip_days.split(',').map(s => s.trim());
-    return !skipList.includes(todayAbbr);
+    return !skipList.includes(dateAbbr);
   });
   if (!enrollments.length) { showEmpty(el, '👥', 'No students enrolled'); return; }
+
+  // Clear maps and rebuild
+  for (const k in attMap) delete attMap[k];
+  for (const k in partMap) delete partMap[k];
 
   for (const a of (attRes.data || [])) {
     attMap[a.student_id] = a.status;
@@ -101,6 +155,23 @@ async function loadRoster(cls) {
     pagesMap[p.student_id] = p.total_pages;
   }
 
+  // Show imported banner on roster card if attendance is locked
+  const rosterCard = el.closest('.card');
+  if (rosterCard) {
+    let banner = rosterCard.querySelector('.att-imported-banner');
+    if (attImported) {
+      if (!banner) {
+        banner = document.createElement('div');
+        banner.className = 'att-imported-banner';
+        banner.style.cssText = 'background:var(--green-light);color:var(--green);font-size:12px;font-weight:600;padding:6px 12px;border-radius:6px;margin-bottom:8px';
+        banner.textContent = '✅ Asistencia importada — cambiar desbloqueará la importación';
+        el.before(banner);
+      }
+    } else if (banner) {
+      banner.remove();
+    }
+  }
+
   renderRoster(enrollments, pagesMap);
   // Re-expand if one was open
   if (expandedStudent) {
@@ -111,6 +182,7 @@ async function loadRoster(cls) {
 function renderRoster(enrs, pagesMap = {}) {
   const el = document.getElementById('roster');
   const trackPages = cls?.track_pages !== 'None';
+  const readOnly = isPast() && !isToday(); // pages/notes read-only on past days
 
   el.innerHTML = enrs.map(e => {
     const s = e.students;
@@ -118,6 +190,7 @@ function renderRoster(enrs, pagesMap = {}) {
     const isExpanded = expandedStudent === s.id;
     const pages = pagesMap[s.id] ?? null;
 
+    // Attendance: always editable (but will warn if imported)
     const attButtons = ['Present','Late','Absent','Excused'].map(opt => {
       const sel = status === opt;
       const colors = {
@@ -129,8 +202,9 @@ function renderRoster(enrs, pagesMap = {}) {
         onclick="setAtt(${s.id},'${opt}')">${opt[0]}</button>`;
     }).join('');
 
+    // Participation: always editable on any day
     const partScore = partMap[s.id] ?? null;
-    const partColors = ['#ef4444','#f97316','#eab308','#84cc16','#22c55e']; // 1=red … 5=green
+    const partColors = ['#ef4444','#f97316','#eab308','#84cc16','#22c55e'];
     const partLabels = ['1','2','3','4','5'];
     const partButtons = partLabels.map((lbl, idx) => {
       const val = idx + 1;
@@ -161,12 +235,12 @@ function renderRoster(enrs, pagesMap = {}) {
             ${partButtons}
           </div>
         </div>
-        ${isExpanded ? renderExpandedStudent(s, pages) : ''}
+        ${isExpanded ? renderExpandedStudent(s, pages, readOnly) : ''}
       </div>`;
   }).join('');
 }
 
-function renderExpandedStudent(s, pages) {
+function renderExpandedStudent(s, pages, readOnly) {
   const trackPages = cls?.track_pages !== 'None';
   const trackType = cls?.track_pages;
 
@@ -175,11 +249,13 @@ function renderExpandedStudent(s, pages) {
       ${trackPages ? `
         <div class="pages-control">
           <span class="pages-label">📄 ${trackType} Pages Today: <strong id="pages-display-${s.id}">${pages ?? 0}</strong></span>
+          ${!readOnly ? `
           <div class="pages-buttons">
             <button class="btn btn-sm" style="background:var(--coral-light);color:var(--red);border:none;min-width:36px" onclick="adjustPages(${s.id}, -1)">−</button>
             <button class="btn btn-sm" style="background:var(--green-light);color:var(--green);border:none;min-width:36px" onclick="adjustPages(${s.id}, 1)">+</button>
           </div>
           <span style="font-size:12px;color:var(--gray-400)">±2🪙 per page</span>
+          ` : '<span style="font-size:12px;color:var(--gray-400)">Solo lectura (día pasado)</span>'}
         </div>
         <div id="pages-stats-${s.id}" style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
           <div style="color:var(--gray-400);font-size:12px">Loading pace…</div>
@@ -187,6 +263,7 @@ function renderExpandedStudent(s, pages) {
       <div id="overview-notes-${s.id}" class="overview-notes">
         <div style="color:var(--gray-400);font-size:13px">Loading notes…</div>
       </div>
+      ${!readOnly ? `
       <div class="quick-note-form">
         <input type="text" id="quick-note-input-${s.id}" class="form-input"
           placeholder="Quick note for ${s.name}…"
@@ -204,17 +281,15 @@ function renderExpandedStudent(s, pages) {
           </label>
           <button class="btn btn-sm btn-primary" onclick="submitQuickNote(${s.id})">Add Note</button>
         </div>
-      </div>
+      </div>` : '<div style="font-size:12px;color:var(--gray-400);padding:8px 0">📌 Notas de días pasados son de solo lectura</div>'}
     </div>`;
 }
 
 // ── Single-expand: close previous, open new ────────────────────────────────
 window.toggleExpand = async (studentId) => {
   if (expandedStudent === studentId) {
-    // Close this one
     expandedStudent = null;
   } else {
-    // Open this one, close any previous
     expandedStudent = studentId;
   }
 
@@ -235,8 +310,17 @@ async function loadOverviewNotes(studentId) {
   const el = document.getElementById(`overview-notes-${studentId}`);
   if (!el) return;
 
-  const thirtyAgo = pstDatePlusDays(-30);
-  const sevenAgo  = pstDatePlusDays(-7);
+  // Shift 30-day/7-day windows relative to selectedDate
+  const thirtyAgo = (() => {
+    const [y, m, d] = selectedDate.split('-').map(Number);
+    const base = new Date(Date.UTC(y, m - 1, d - 30));
+    return base.toISOString().split('T')[0];
+  })();
+  const sevenAgo = (() => {
+    const [y, m, d] = selectedDate.split('-').map(Number);
+    const base = new Date(Date.UTC(y, m - 1, d - 7));
+    return base.toISOString().split('T')[0];
+  })();
   const trackPages = cls?.track_pages !== 'None';
 
   const fetches = [
@@ -246,6 +330,7 @@ async function loadOverviewNotes(studentId) {
       .eq('class_id', classId)
       .eq('show_in_overview', true)
       .eq('logged', false)
+      .lte('date', selectedDate)
       .order('date', { ascending: false })
       .limit(5),
   ];
@@ -257,6 +342,7 @@ async function loadOverviewNotes(studentId) {
         .eq('student_id', studentId)
         .eq('class_id', classId)
         .gte('date', thirtyAgo)
+        .lte('date', selectedDate)
         .order('date', { ascending: false })
     );
   }
@@ -323,6 +409,7 @@ window.deleteNote = async (noteId, studentId) => {
 };
 
 window.submitQuickNote = async (studentId) => {
+  if (isPast()) { toast('Notas de días pasados son de solo lectura', 'info'); return; }
   const input = document.getElementById(`quick-note-input-${studentId}`);
   const note = input?.value?.trim();
   if (!note) { toast('Enter a note first', 'info'); return; }
@@ -335,7 +422,7 @@ window.submitQuickNote = async (studentId) => {
     const { error } = await supabase.from('student_notes').insert({
       student_id: studentId,
       class_id: Number(classId),
-      date: T,
+      date: selectedDate,
       note,
       category: 'Class Note',
       show_in_overview: showInOverview,
@@ -367,6 +454,29 @@ window.submitQuickNote = async (studentId) => {
 
 // ── Attendance: side-by-side buttons ─────────────────────────────────────
 window.setAtt = async (studentId, status) => {
+  // If attendance is imported, warn and offer to un-import
+  if (attImported) {
+    const confirmed = confirm(
+      '⚠️ La asistencia de este día ya fue importada.\n\n' +
+      '¿Quieres deshacer la importación y cambiar la asistencia?\n\n' +
+      'Esto eliminará el registro de importación para esta clase en este día.'
+    );
+    if (!confirmed) return;
+
+    // Remove import record for this class/date
+    await supabase.from('attendance_imported')
+      .delete()
+      .eq('date', selectedDate)
+      .eq('class_id', Number(classId));
+    attImported = false;
+
+    // Remove the imported banner from the DOM
+    const banner = document.querySelector('.att-imported-banner');
+    if (banner) banner.remove();
+
+    toast('Importación deshecha — ahora puedes editar la asistencia', 'info');
+  }
+
   // Toggle off if same status clicked again
   const newStatus = attMap[studentId] === status ? null : status;
   const prev = attMap[studentId];
@@ -388,20 +498,18 @@ window.setAtt = async (studentId, status) => {
 
   if (newStatus) {
     const { error } = await supabase.from('attendance').upsert({
-      student_id: studentId, class_id: Number(classId), date: T, status: newStatus
+      student_id: studentId, class_id: Number(classId), date: selectedDate, status: newStatus
     }, { onConflict: 'student_id,class_id,date' });
     if (error) { toast('Error saving attendance', 'error'); attMap[studentId] = prev; }
   } else {
-    // Remove attendance record
     await supabase.from('attendance').delete()
-      .eq('student_id', studentId).eq('class_id', Number(classId)).eq('date', T);
+      .eq('student_id', studentId).eq('class_id', Number(classId)).eq('date', selectedDate);
   }
 };
 
 // ── Participation Score ───────────────────────────────────────────────────
 window.setParticipation = async (studentId, score) => {
   const prev = partMap[studentId];
-  // Toggle off if same score clicked again
   const newScore = prev === score ? null : score;
   partMap[studentId] = newScore;
 
@@ -419,18 +527,20 @@ window.setParticipation = async (studentId, score) => {
     const { error } = await supabase.from('participation_scores').upsert({
       student_id: studentId,
       class_id: Number(classId),
-      date: T,
+      date: selectedDate,
       score: newScore,
     }, { onConflict: 'student_id,class_id,date' });
     if (error) { toast('Error saving participation', 'error'); partMap[studentId] = prev; }
   } else {
     await supabase.from('participation_scores').delete()
-      .eq('student_id', studentId).eq('class_id', Number(classId)).eq('date', T);
+      .eq('student_id', studentId).eq('class_id', Number(classId)).eq('date', selectedDate);
   }
 };
 
 // ── Pages tracking ────────────────────────────────────────────────────────
 window.adjustPages = async (studentId, delta) => {
+  if (isPast()) { toast('Páginas de días pasados son de solo lectura', 'info'); return; }
+
   const displayEl = document.getElementById(`pages-display-${studentId}`);
   const currentPages = parseInt(displayEl?.textContent || '0', 10);
   const newPages = Math.max(0, currentPages + delta);
@@ -445,12 +555,11 @@ window.adjustPages = async (studentId, delta) => {
 
   document.querySelectorAll(`#roster-row-${studentId} .roster-gold`).forEach(el => el.textContent = newGold + '🪙');
 
-  // Fetch existing row for today first, then update or insert
   const { data: existingRows } = await supabase.from('student_pages')
     .select('id, total_pages, gold_delta, pages_delta')
     .eq('student_id', studentId)
     .eq('class_id', Number(classId))
-    .eq('date', T)
+    .eq('date', selectedDate)
     .limit(1);
 
   let pagesErr;
@@ -466,7 +575,7 @@ window.adjustPages = async (studentId, delta) => {
     const result = await supabase.from('student_pages').insert({
       student_id: studentId,
       class_id: Number(classId),
-      date: T,
+      date: selectedDate,
       pages_delta: delta,
       total_pages: newPages,
       gold_delta: goldDelta,
@@ -480,18 +589,17 @@ window.adjustPages = async (studentId, delta) => {
   await supabase.from('gold_transactions').insert({
     student_id: studentId,
     class_id: Number(classId),
-    date: T,
+    date: selectedDate,
     amount: goldDelta,
     reason: `Pages: ${delta > 0 ? '+' : ''}${delta} page${Math.abs(delta) !== 1 ? 's' : ''}`,
     category: 'Participation',
     distributed: false,
   });
 
-  // Refresh analytics without full reload
   if (cls?.track_pages !== 'None') loadAnalytics();
 };
 
-// ── Bulk Gold (no polling — user-driven only) ─────────────────────────────
+// ── Bulk Gold (read-only on past days) ────────────────────────────────────
 const goldChecked = new Set();
 let goldBulkRendered = false;
 
@@ -499,12 +607,12 @@ async function loadGoldBulk() {
   const res = await supabase.from('class_enrollments')
     .select('student_id, skip_days, students(id, name, current_gold)')
     .eq('class_id', classId)
-    .is('enrolled_until', null);
-  // Filter out students skipping today
-  const todayAbbrG = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(T + 'T00:00:00').getDay()];
+    .or(`enrolled_until.is.null,enrolled_until.gte.${selectedDate}`);
+  // Filter skip_days based on selectedDate
+  const dateAbbrG = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(selectedDate + 'T00:00:00').getDay()];
   const filtered = (res.data || []).filter(e => {
     if (!e.skip_days) return true;
-    return !e.skip_days.split(',').map(s => s.trim()).includes(todayAbbrG);
+    return !e.skip_days.split(',').map(s => s.trim()).includes(dateAbbrG);
   });
   renderGoldBulk(filtered);
   goldBulkRendered = true;
@@ -513,6 +621,12 @@ async function loadGoldBulk() {
 function renderGoldBulk(enrs) {
   const el = document.getElementById('gold-adder');
   if (!el) return;
+
+  if (isPast()) {
+    el.innerHTML = '<div style="color:var(--gray-400);font-size:13px;padding:8px 0">🔒 El oro solo se puede agregar en el día de hoy.</div>';
+    return;
+  }
+
   el.innerHTML = `
     <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
       <input type="number" id="gold-amount" class="form-input" placeholder="Amount" min="-999" max="999" style="width:90px;text-align:center">
@@ -561,6 +675,7 @@ window.setAmount = (val) => {
 };
 
 window.submitBulkGold = async () => {
+  if (isPast()) { toast('El oro solo se puede agregar en el día de hoy', 'info'); return; }
   const amountRaw = parseInt(document.getElementById('gold-amount').value, 10);
   const reason = document.getElementById('gold-reason').value.trim() || 'Class gold';
   if (!amountRaw || amountRaw === 0) { toast('Enter an amount', 'info'); return; }
@@ -569,7 +684,7 @@ window.submitBulkGold = async () => {
   const inserts = [];
   for (const sid of goldChecked) {
     inserts.push({
-      student_id: sid, class_id: Number(classId), date: T,
+      student_id: sid, class_id: Number(classId), date: selectedDate,
       amount: amountRaw, reason,
       category: amountRaw > 0 ? 'Participation' : 'Behavior',
       distributed: false,
@@ -592,13 +707,14 @@ window.submitBulkGold = async () => {
   loadGoldBulk();
 };
 
-// ── Recent Notes (class-level) — desktop action buttons + swipe ───────────
+// ── Recent Notes (class-level) — show notes logged as of selectedDate ─────
 async function loadRecentNotes() {
   const el = document.getElementById('recent-notes');
   const res = await supabase.from('student_notes')
     .select('*, students(id, name), classes(name)')
     .eq('class_id', classId)
     .eq('logged', false)
+    .lte('date', selectedDate)
     .order('date', { ascending: false })
     .limit(20);
   const notes = res.data || [];
@@ -664,21 +780,27 @@ window.changeNoteClass = async (noteId, newClassId) => {
   toast('Note moved', 'success');
 };
 
-// ── Attendance Grid ────────────────────────────────────────────────────────
+// ── Attendance Grid — relative to selectedDate ────────────────────────────
 async function loadAttendanceGrid() {
   const el = document.getElementById('att-grid');
-  const start = pstDatePlusDays(-14);
+
+  // Show 10 days ending at selectedDate
+  const start = (() => {
+    const [y, m, d] = selectedDate.split('-').map(Number);
+    const base = new Date(Date.UTC(y, m - 1, d - 14));
+    return base.toISOString().split('T')[0];
+  })();
 
   const [rosterRes, attRes] = await Promise.all([
     supabase.from('class_enrollments')
       .select('student_id, students(id, name)')
       .eq('class_id', classId)
-      .is('enrolled_until', null),
+      .or(`enrolled_until.is.null,enrolled_until.gte.${selectedDate}`),
     supabase.from('attendance')
       .select('*')
       .eq('class_id', classId)
       .gte('date', start)
-      .lte('date', T),
+      .lte('date', selectedDate),
   ]);
 
   const students = (rosterRes.data || []).map(e => e.students);
@@ -689,9 +811,12 @@ async function loadAttendanceGrid() {
     histMap[a.student_id][a.date] = a.status;
   }
 
+  // Build last 10 days up to selectedDate
   const days = [];
   for (let i = 9; i >= 0; i--) {
-    days.push(pstDatePlusDays(-i));
+    const [y, m, d] = selectedDate.split('-').map(Number);
+    const base = new Date(Date.UTC(y, m - 1, d - i));
+    days.push(base.toISOString().split('T')[0]);
   }
 
   const colors = { Present: 'var(--green)', Absent: 'var(--red)', Late: 'var(--orange)', Excused: 'var(--gray-400)' };
@@ -719,24 +844,29 @@ async function loadAttendanceGrid() {
     </div>`;
 }
 
-// ── Class Analytics (pages tracking classes only) ─────────────────────────
+// ── Class Analytics — relative to selectedDate ────────────────────────────
 async function loadAnalytics() {
   const el = document.getElementById('analytics-section');
   if (!el) return;
   el.style.display = 'block';
 
-  const weekAgo = pstDatePlusDays(-7);
+  // 7 days ending at selectedDate
+  const weekAgo = (() => {
+    const [y, m, d] = selectedDate.split('-').map(Number);
+    const base = new Date(Date.UTC(y, m - 1, d - 7));
+    return base.toISOString().split('T')[0];
+  })();
 
   const [pagesRes, enrRes] = await Promise.all([
     supabase.from('student_pages')
       .select('student_id, total_pages, pages_delta, date')
       .eq('class_id', classId)
       .gte('date', weekAgo)
-      .lte('date', T),
+      .lte('date', selectedDate),
     supabase.from('class_enrollments')
       .select('student_id, students(id, name, current_gold)')
       .eq('class_id', classId)
-      .is('enrolled_until', null),
+      .or(`enrolled_until.is.null,enrolled_until.gte.${selectedDate}`),
   ]);
 
   const pagesData = pagesRes.data || [];
@@ -754,19 +884,21 @@ async function loadAnalytics() {
     .map(s => ({ ...s, weekPages: weekTotals[s.id] || 0, activeDays: daysWithPages[s.id]?.size || 0 }))
     .sort((a, b) => b.weekPages - a.weekPages);
 
-  const todayPages = pagesData.filter(p => p.date === T);
-  const todaySet = new Set(todayPages.map(p => p.student_id));
+  const datePages = pagesData.filter(p => p.date === selectedDate);
+  const dateSet = new Set(datePages.map(p => p.student_id));
+
+  const dateLabel = isToday() ? 'Today' : fmtDate(selectedDate);
 
   el.innerHTML = `
-    <div class="card-title">📊 Pages Analytics (Last 7 Days)</div>
+    <div class="card-title">📊 Pages Analytics (7 Days to ${isToday() ? 'Today' : fmtDate(selectedDate)})</div>
     <div style="margin-bottom:12px">
-      <div style="font-size:13px;color:var(--gray-400);margin-bottom:6px">📅 Today's Pages</div>
+      <div style="font-size:13px;color:var(--gray-400);margin-bottom:6px">📅 ${dateLabel}'s Pages</div>
       ${students.map(s => `
         <div class="list-item" style="padding:6px 0">
           <div class="list-item-left"><div style="font-size:14px">${s.name}</div></div>
           <div class="list-item-right">
-            ${todaySet.has(s.id)
-              ? `<span class="badge badge-green">✓ ${pagesData.find(p => p.student_id === s.id && p.date === T)?.total_pages || 0}p</span>`
+            ${dateSet.has(s.id)
+              ? `<span class="badge badge-green">✓ ${pagesData.find(p => p.student_id === s.id && p.date === selectedDate)?.total_pages || 0}p</span>`
               : '<span class="badge badge-gray">—</span>'}
           </div>
         </div>`).join('')}
@@ -813,7 +945,7 @@ window.saveClassSettings = async () => {
   load();
 };
 
-// ── Lesson Plans ──────────────────────────────────────────────────────────
+// ── Lesson Plans — show plans that existed as of selectedDate ─────────────
 async function loadLessonPlans() {
   const el = document.getElementById('lesson-plans-content');
   if (!el) return;
@@ -823,6 +955,7 @@ async function loadLessonPlans() {
     .from('lesson_plans')
     .select('*')
     .eq('class_id', classId)
+    .lte('date', selectedDate)  // Only show plans up to selectedDate
     .order('date', { ascending: false })
     .limit(20);
 
@@ -832,20 +965,19 @@ async function loadLessonPlans() {
     return;
   }
 
-  const today = T; // "YYYY-MM-DD"
   el.innerHTML = data.map(p => {
-    const isToday = p.date === today;
-    const isPast  = p.date < today;
-    const dateLabel = isToday ? '📌 Today' : fmtDate(p.date);
+    const isSelectedDay = p.date === selectedDate;
+    const isPastPlan  = p.date < selectedDate;
+    const dateLabel = isSelectedDay ? (isToday() ? '📌 Today' : `📌 ${fmtDate(selectedDate)}`) : fmtDate(p.date);
     const statusDot = p.completed
       ? '<span style="display:inline-block;width:8px;height:8px;background:var(--green);border-radius:50%;margin-left:6px;vertical-align:middle" title="Completed"></span>'
       : '';
-    return `<div class="lesson-plan-item${isToday ? ' lp-today' : ''}${isPast && !p.completed ? ' lp-past' : ''}"
-      style="border-left:3px solid ${isToday ? 'var(--blue)' : p.completed ? 'var(--green)' : 'var(--gray-200)'};
-             padding:10px 12px;margin-bottom:8px;border-radius:0 6px 6px 0;background:${isToday ? 'var(--blue-light,#EFF6FF)' : 'var(--gray-50)'}">
+    return `<div class="lesson-plan-item${isSelectedDay ? ' lp-today' : ''}${isPastPlan && !p.completed ? ' lp-past' : ''}"
+      style="border-left:3px solid ${isSelectedDay ? 'var(--blue)' : p.completed ? 'var(--green)' : 'var(--gray-200)'};
+             padding:10px 12px;margin-bottom:8px;border-radius:0 6px 6px 0;background:${isSelectedDay ? 'var(--blue-light,#EFF6FF)' : 'var(--gray-50)'}">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
         <div>
-          <span style="font-size:12px;font-weight:700;color:${isToday ? 'var(--blue)' : 'var(--gray-500)'}">${dateLabel}</span>${statusDot}
+          <span style="font-size:12px;font-weight:700;color:${isSelectedDay ? 'var(--blue)' : 'var(--gray-500)'}">${dateLabel}</span>${statusDot}
           ${p.title ? `<div style="font-size:14px;font-weight:600;color:var(--gray-800);margin-top:2px">${p.title}</div>` : ''}
         </div>
         <div style="display:flex;gap:4px;flex-shrink:0">
@@ -867,7 +999,7 @@ window.openLessonPlanModal = (prefill = {}) => {
   modal.style.display = 'flex';
   document.getElementById('lp-modal-title').textContent = prefill.id ? '✏️ Edit Lesson Plan' : '📋 New Lesson Plan';
   document.getElementById('lp-edit-id').value = prefill.id || '';
-  document.getElementById('lp-date').value = prefill.date || T;
+  document.getElementById('lp-date').value = prefill.date || selectedDate;
   document.getElementById('lp-title').value = prefill.title || '';
   document.getElementById('lp-objectives').value = prefill.objectives || '';
   document.getElementById('lp-materials').value = prefill.materials || '';
@@ -925,20 +1057,21 @@ window.deleteLessonPlan = async (id) => {
   loadLessonPlans();
 };
 
-// ── Universal Class Notes (shown on ALL class pages) ──────────────────────
-// Stored in `tasks` table with module='LifeOS', notes JSON {is_universal_class_note:true, body:"..."}
+// ── Universal Class Notes — show notes that existed as of selectedDate ─────
 const UNIVERSAL_NOTE_FLAG = '"is_universal_class_note":true';
 
 async function loadUniversalClassNotes() {
   const section = document.getElementById('universal-class-notes-section');
   if (!section) return;
 
+  // For time travel: show universal notes created on or before selectedDate
   const { data } = await supabase
     .from('tasks')
     .select('id, title, notes, created_at')
     .eq('module', 'LifeOS')
     .eq('status', 'open')
     .like('notes', `%${UNIVERSAL_NOTE_FLAG}%`)
+    .lte('created_at', selectedDate + 'T23:59:59')
     .order('created_at');
 
   const notes = (data || []).map(row => {
@@ -958,8 +1091,8 @@ function renderUniversalNotes(notes) {
     <div class="card" style="margin-bottom:12px;border-top:3px solid #8b5cf6">
       <div class="card-header" style="margin-bottom:${notes.length ? '10px' : '0'}">
         <div class="card-title" style="margin:0;color:#7c3aed">📋 Universal Class Notes</div>
-        <button class="btn btn-sm" style="background:#f5f3ff;color:#7c3aed;border:none"
-          onclick="addUniversalClassNote()">+ Note</button>
+        ${isToday() ? `<button class="btn btn-sm" style="background:#f5f3ff;color:#7c3aed;border:none"
+          onclick="addUniversalClassNote()">+ Note</button>` : ''}
       </div>
       <div style="font-size:11px;color:var(--gray-400);margin:-8px 0 8px">These notes appear at the top of every class page.</div>
       <div id="universal-notes-list">
@@ -969,12 +1102,13 @@ function renderUniversalNotes(notes) {
             <div id="un-card-${n.id}" style="background:#f5f3ff;border-radius:8px;padding:10px 12px;margin-bottom:8px;border-left:3px solid #8b5cf6">
               <div style="display:flex;align-items:flex-start;gap:8px">
                 <div style="flex:1;font-size:13px;color:var(--gray-800);white-space:pre-wrap;line-height:1.5">${escHtml(n.body)}</div>
+                ${isToday() ? `
                 <div style="display:flex;gap:4px;flex-shrink:0">
                   <button onclick="editUniversalClassNote('${n.id}', ${JSON.stringify(n.body).replace(/'/g,"&apos;")})"
                     style="padding:4px 7px;border:1px solid var(--gray-200);border-radius:5px;background:var(--white);color:var(--gray-500);font-size:11px;cursor:pointer">✏️</button>
                   <button onclick="deleteUniversalClassNote('${n.id}')"
                     style="padding:4px 7px;border:none;border-radius:5px;background:#FEF2F2;color:var(--red);font-size:11px;cursor:pointer">🗑</button>
-                </div>
+                </div>` : ''}
               </div>
             </div>`).join('')}
       </div>
@@ -1047,7 +1181,7 @@ window.saveUniversalClassNote = async (editId) => {
   loadUniversalClassNotes();
 };
 
-// ── Class Overview Notes ──────────────────────────────────────────────────
+// ── Class Overview Notes — show notes that existed as of selectedDate ──────
 async function loadOverviewNotesSection() {
   const section = document.getElementById('class-overview-notes-section');
   if (!section) return;
@@ -1056,6 +1190,7 @@ async function loadOverviewNotesSection() {
     .from('class_overview_notes')
     .select('*')
     .eq('class_id', classId)
+    .lte('created_at', selectedDate + 'T23:59:59')
     .order('sort_order')
     .order('created_at');
 
@@ -1070,7 +1205,7 @@ function renderOverviewNotesSection(notes) {
     <div class="card" style="margin-bottom:12px">
       <div class="card-header" style="margin-bottom:${notes.length ? '10px' : '0'}">
         <div class="card-title" style="margin:0">📌 Class Overview Notes</div>
-        <button class="btn btn-sm btn-primary" onclick="addOverviewNote()">+ Note</button>
+        ${isToday() ? `<button class="btn btn-sm btn-primary" onclick="addOverviewNote()">+ Note</button>` : ''}
       </div>
       <div id="overview-notes-list">
         ${notes.length === 0
@@ -1097,6 +1232,7 @@ function renderOverviewNoteCard(n) {
               ${n.collapsed ? '▼ Show more' : '▲ Collapse'}
             </button>` : ''}
         </div>
+        ${isToday() ? `
         <div style="display:flex;gap:4px;flex-shrink:0">
           <button onclick="editOverviewNote('${n.id}')"
             style="padding:4px 7px;border:1px solid var(--gray-200);border-radius:5px;
@@ -1104,7 +1240,7 @@ function renderOverviewNoteCard(n) {
           <button onclick="deleteOverviewNote('${n.id}')"
             style="padding:4px 7px;border:none;border-radius:5px;
                    background:#FEF2F2;color:var(--red);font-size:11px;cursor:pointer">🗑</button>
-        </div>
+        </div>` : ''}
       </div>
     </div>`;
 }
@@ -1132,7 +1268,6 @@ window.toggleOverviewNoteCollapse = async (id, collapsed) => {
 };
 
 function openOverviewNoteModal(prefill = {}) {
-  // Remove any existing modal
   document.getElementById('on-modal')?.remove();
 
   const modal = document.createElement('div');
@@ -1177,6 +1312,32 @@ window.saveOverviewNote = async (editId) => {
   document.getElementById('on-modal')?.remove();
   loadOverviewNotesSection();
 };
+
+// ── Date navigator event listeners ────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  const prevBtn  = document.getElementById('class-date-prev');
+  const nextBtn  = document.getElementById('class-date-next');
+  const todayBtn = document.getElementById('class-date-today');
+  const dateInput = document.getElementById('class-date-input');
+
+  if (prevBtn)  prevBtn.addEventListener('click', () => dateNavOffsetDay(-1));
+  if (nextBtn)  nextBtn.addEventListener('click', () => dateNavOffsetDay(1));
+  if (todayBtn) todayBtn.addEventListener('click', () => {
+    selectedDate = today();
+    updateDateNav();
+    load();
+  });
+  if (dateInput) {
+    dateInput.addEventListener('change', () => {
+      const val = dateInput.value;
+      if (val && val <= today()) {
+        selectedDate = val;
+        updateDateNav();
+        load();
+      }
+    });
+  }
+});
 
 load();
 // No polling — data updates happen manually via user actions
