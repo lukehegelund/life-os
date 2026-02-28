@@ -48,21 +48,21 @@
     <div id="notes-summary"></div>
   </div>
 
-  <!-- Log & Close Day -->
-  <div class="card" id="log-day-card">
+  <!-- Import Attendance -->
+  <div class="card" id="import-att-card">
     <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
-      📊 Fin del Día
-      <span id="log-day-status" style="font-size:12px;color:var(--gray-400)"></span>
+      📥 Importar Asistencia
+      <span id="import-att-status" style="font-size:12px;color:var(--gray-400)"></span>
     </div>
-    <div id="log-day-content">
-      <p style="font-size:14px;color:var(--gray-600);margin:0 0 12px">Captura las páginas, asistencia y participación de hoy, luego reinicia los contadores.</p>
-      <button class="btn btn-primary btn-full" onclick="logAndCloseDay()" id="log-day-btn">📊 Registrar y Cerrar Día</button>
+    <div id="import-att-content">
+      <p style="font-size:14px;color:var(--gray-600);margin:0 0 12px">Marca la asistencia del día como importada. Solo afecta la asistencia — el oro, páginas y notas no cambian.</p>
+      <button class="btn btn-primary btn-full" onclick="importAttendance()" id="import-att-btn">📥 Importar Asistencia</button>
     </div>
   </div>
 
-  <!-- Past Resumen del Día Logs -->
+  <!-- Attendance Import History -->
   <div class="card">
-    <div class="card-title">📅 Historial de Resúmenes</div>
+    <div class="card-title">📅 Historial de Asistencias Importadas</div>
     <div id="past-logs"></div>
   </div>
 
@@ -103,7 +103,7 @@
   </a>
 </nav>
 
-<script type="module" src="js/daily.js"></script>
+<script type="module" src="js/daily.js?v=2"></script>
 <script type="module" src="js/topbar.js?v=6"></script>
 </body>
 </html>
