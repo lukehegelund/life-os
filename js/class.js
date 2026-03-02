@@ -550,10 +550,18 @@ window.adjustPages = async (studentId, delta) => {
 
   const studentEnr = enrollments.find(e => e.students?.id === studentId);
   const studentData = studentEnr?.students;
-  const currentGold = studentData?.current_gold ?? 0;
+
+  // Read current gold from DOM (stays accurate across rapid clicks) with in-memory fallback
+  const goldEl = document.querySelector(`#roster-row-${studentId} .roster-gold`);
+  const currentGold = goldEl
+    ? parseInt(goldEl.textContent, 10) || 0
+    : (studentData?.current_gold ?? 0);
   const newGold = currentGold + goldDelta;
 
+  // Update DOM immediately for instant feedback
   document.querySelectorAll(`#roster-row-${studentId} .roster-gold`).forEach(el => el.textContent = newGold + '🪙');
+  // Also keep in-memory object in sync so future reads are correct
+  if (studentData) studentData.current_gold = newGold;
 
   const { data: existingRows } = await supabase.from('student_pages')
     .select('id, total_pages, gold_delta, pages_delta')
