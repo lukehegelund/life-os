@@ -353,9 +353,7 @@ function injectModals() {
         <select id="qa-module"
           style="width:100%;border:1.5px solid var(--gray-200);border-radius:8px;padding:10px 12px;
                  font-size:14px;margin-bottom:10px;background:var(--white);color:var(--gray-800);outline:none">
-          <option value="RT">🏫 River Tech</option>
-          <option value="TOV">💍 Take One Visuals</option>
-          <option value="Personal">👤 Personal</option>
+          <!-- Options populated dynamically by showQuickAgregar -->
         </select>
 
         <!-- Schedule toggle -->
@@ -574,6 +572,19 @@ window.showQuickAgregar = () => {
   document.getElementById('qa-schedule-toggle').checked = false;
   document.getElementById('qa-date').style.display = 'none';
   qaSetTab('task');
+
+  // Populate module dropdown dynamically from same source as tasks.js
+  const MODULE_ICONS = { RT: '🏫', 'RT Admin': '🏛️', TOV: '💍', Personal: '👤', Health: '🏃', LifeOS: '🖥️' };
+  const defaultCats = ['RT', 'RT Admin', 'TOV', 'Personal', 'Health', 'LifeOS'];
+  const categoryOrder = JSON.parse(localStorage.getItem('tasks-cat-order') || 'null') || defaultCats;
+  const modSel = document.getElementById('qa-module');
+  const prevVal = modSel.value;
+  modSel.innerHTML = categoryOrder.map(cat =>
+    `<option value="${cat}">${(MODULE_ICONS[cat] || '📁') + ' ' + cat}</option>`
+  ).join('');
+  // Restore previous selection if still valid
+  if (categoryOrder.includes(prevVal)) modSel.value = prevVal;
+
   setTimeout(() => document.getElementById('qa-title').focus(), 50);
 };
 
