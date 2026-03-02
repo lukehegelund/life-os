@@ -18,6 +18,7 @@ class ProxyQueryBuilder {
     this._single = false;
     this._count = null;
     this._head = false;
+    this._upsertOpts = null;
   }
 
   // --- Operation setters ---
@@ -31,7 +32,12 @@ class ProxyQueryBuilder {
   insert(data) { this._op = 'insert'; this._data = data; return this; }
   update(data) { this._op = 'update'; this._data = data; return this; }
   delete() { this._op = 'delete'; return this; }
-  upsert(data) { this._op = 'upsert'; this._data = data; return this; }
+  upsert(data, opts = {}) {
+    this._op = 'upsert';
+    this._data = data;
+    if (opts && Object.keys(opts).length) this._upsertOpts = opts;
+    return this;
+  }
 
   // --- Filter methods ---
   eq(col, val)  { this._filters.eq  = { ...(this._filters.eq  || {}), [col]: val }; return this; }
@@ -64,16 +70,17 @@ class ProxyQueryBuilder {
 
   async _execute() {
     const payload = {
-      table:   this._table,
-      op:      this._op,
-      filters: Object.keys(this._filters).length ? this._filters : undefined,
-      data:    this._data,
-      select:  this._select !== '*' ? this._select : undefined,
-      order:   this._order.length ? this._order : undefined,
-      limit:   this._limit,
-      single:  this._single || undefined,
-      count:   this._count || undefined,
-      head:    this._head || undefined,
+      table:       this._table,
+      op:          this._op,
+      filters:     Object.keys(this._filters).length ? this._filters : undefined,
+      data:        this._data,
+      select:      this._select !== '*' ? this._select : undefined,
+      order:       this._order.length ? this._order : undefined,
+      limit:       this._limit,
+      single:      this._single || undefined,
+      count:       this._count  || undefined,
+      head:        this._head   || undefined,
+      upsertOpts:  this._upsertOpts || undefined,
     };
 
     try {
