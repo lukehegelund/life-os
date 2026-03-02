@@ -446,6 +446,102 @@
 .proj-edit-row {
   display: flex; gap: 8px; margin-top: 8px;
 }
+
+/* ── Project Chat ──────────────────────────────────────────────────── */
+.proj-chat-box {
+  background: var(--white);
+  border: 1.5px solid var(--gray-200);
+  border-radius: 12px;
+  margin-bottom: 14px;
+  overflow: hidden;
+}
+.proj-chat-header {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gray-700);
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid var(--gray-100);
+  background: var(--gray-50);
+}
+.proj-chat-messages {
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.proj-chat-empty {
+  font-size: 12px;
+  color: var(--gray-400);
+  text-align: center;
+  padding: 16px 0;
+  font-style: italic;
+}
+.proj-chat-msg {
+  display: flex;
+  flex-direction: column;
+  max-width: 85%;
+}
+.msg-luke { align-self: flex-end; align-items: flex-end; }
+.msg-claude { align-self: flex-start; align-items: flex-start; }
+.proj-chat-bubble {
+  padding: 7px 11px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.msg-luke .proj-chat-bubble {
+  background: var(--blue);
+  color: white;
+  border-bottom-right-radius: 3px;
+}
+.msg-claude .proj-chat-bubble {
+  background: var(--gray-100);
+  color: var(--gray-800);
+  border-bottom-left-radius: 3px;
+}
+.proj-chat-ts {
+  font-size: 10px;
+  color: var(--gray-400);
+  margin-top: 2px;
+  padding: 0 2px;
+}
+.proj-chat-input-row {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--gray-100);
+  align-items: flex-end;
+}
+.proj-chat-input {
+  flex: 1;
+  border: 1.5px solid var(--gray-200);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  resize: none;
+  outline: none;
+  font-family: inherit;
+  line-height: 1.4;
+  max-height: 100px;
+}
+.proj-chat-input:focus { border-color: var(--blue); }
+.proj-chat-send {
+  background: var(--blue);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.proj-chat-send:hover { opacity: 0.88; }
 </style>
 </head>
 <body>
