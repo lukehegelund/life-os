@@ -83,6 +83,7 @@ interface ProxyRequest {
   single?: boolean
   count?: 'exact' | 'planned' | 'estimated'
   head?: boolean
+  upsertOpts?: Record<string, any>
 }
 
 function err(msg: string, status = 403) {
@@ -119,7 +120,7 @@ Deno.serve(async (req) => {
 
   try {
     const body: ProxyRequest = await req.json()
-    const { table, op, filters, data, select, order, limit, single, count, head } = body
+    const { table, op, filters, data, select, order, limit, single, count, head, upsertOpts } = body
 
     // ── Fase 1: Table-level checks ────────────────────────────────────────────
 
@@ -176,7 +177,7 @@ Deno.serve(async (req) => {
     } else if (op === 'delete') {
       query = sb.from(table).delete()
     } else if (op === 'upsert') {
-      query = sb.from(table).upsert(data)
+      query = sb.from(table).upsert(data, upsertOpts || undefined)
     }
 
     // Apply filters
