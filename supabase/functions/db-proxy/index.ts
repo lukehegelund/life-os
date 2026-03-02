@@ -81,6 +81,8 @@ interface ProxyRequest {
   order?: { column: string; ascending?: boolean }[]
   limit?: number
   single?: boolean
+  count?: 'exact' | 'planned' | 'estimated'
+  head?: boolean
 }
 
 function err(msg: string, status = 403) {
@@ -117,7 +119,7 @@ Deno.serve(async (req) => {
 
   try {
     const body: ProxyRequest = await req.json()
-    const { table, op, filters, data, select, order, limit, single } = body
+    const { table, op, filters, data, select, order, limit, single, count, head } = body
 
     // ── Fase 1: Table-level checks ────────────────────────────────────────────
 
@@ -162,7 +164,10 @@ Deno.serve(async (req) => {
     let query: any
 
     if (op === 'select') {
-      query = sb.from(table).select(select || '*')
+      const selectOpts: any = {}
+      if (count) selectOpts.count = count
+      if (head)  selectOpts.head  = true
+      query = sb.from(table).select(select || '*', Object.keys(selectOpts).length ? selectOpts : undefined)
     } else if (op === 'insert') {
       query = sb.from(table).insert(data)
       if (select) query = query.select(select)
@@ -201,7 +206,7 @@ Deno.serve(async (req) => {
     // Single row
     if (single) query = query.single()
 
-    const { data: result, error } = await query
+    const { data: result, error, count: resultCount } = await query
 
     if (error) {
       return new Response(JSON.stringify({ error: error.message }), {
@@ -209,7 +214,7 @@ Deno.serve(async (req) => {
       })
     }
 
-    return new Response(JSON.stringify({ data: result }), {
+    return new Response(JSON.stringify({ data: result, count: resultCount ?? undefined }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
 
