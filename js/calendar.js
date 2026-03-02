@@ -445,6 +445,7 @@ function renderWeekGrid() {
 
   // Attach interaction listeners after DOM is rendered
   attachWeekInteractions();
+  attachSwipeNavigation();
 }
 
 // ── Week view interactions ────────────────────────────────────────────────────
@@ -452,37 +453,78 @@ function attachWeekInteractions() {
   const dayCols = document.querySelectorAll('.wgcal-day-col');
   const body = document.getElementById('wgcal-body');
 
-  // Helper: get minutes from a mouse Y relative to the time grid body
+  // Helper: get minutes from a Y coordinate (clientY) relative to a day column element
   function yToMins(colEl, clientY) {
     const rect = colEl.getBoundingClientRect();
     const py = Math.max(0, Math.min(TOTAL_HEIGHT, clientY - rect.top));
     return snapMins(Math.round(pxToMins(py)));
   }
 
-  dayCols.forEach(col => {
-    const dateStr = col.dataset.date;
+  // Helper: extract clientX/clientY from a touch or mouse event
+  function getXY(e) {
+    if (e.touches && e.touches.length > 0) {
+      return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }
+    if (e.changedTouches && e.changedTouches.length > 0) {
+      return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+    }
+    return { x: e.clientX, y: e.clientY };
+  }
 
-    // ── Click on column background → create event ─────────────────────────
+  // Helper: find which day column a clientX falls into
+  function colAtX(clientX) {
+    let found = null;
+    document.querySelectorAll('.wgcal-day-col').forEach(col => {
+      const rect = col.getBoundingClientRect();
+      if (clientX >= rect.left && clientX <= rect.right) found = col;
+    });
+    return found;
+  }
+
+  // Track touch hold timer for long-press-to-create on column background
+  let touchHoldTimer = null;
+  let touchStartInfo = null; // { col, dateStr, x, y }
+
+  dayCols.forEach(col => {
+    const colDateStr = col.dataset.date;
+
+    // ── Mousedown on column background → create event ─────────────────────
     col.addEventListener('mousedown', (e) => {
-      // Only act on direct column clicks (not on events or resize handles)
       if (e.target !== col) return;
       e.preventDefault();
-
       const startM = yToMins(col, e.clientY);
       const endM   = startM + 60;
-
-      // Create a ghost block
-      const ghost = createGhostBlock(col, startM, endM, dateStr);
-
-      dragState = {
-        type: 'create',
-        col, dateStr, startM, endM,
-        anchorM: startM,
-        ghost,
-      };
+      const ghost = createGhostBlock(col, startM, endM, colDateStr);
+      dragState = { type: 'create', col, dateStr: colDateStr, startM, endM, anchorM: startM, ghost };
     });
 
-    // ── Mousedown on editable events ──────────────────────────────────────
+    // ── Touchstart on column background → long-press to start create drag ─
+    col.addEventListener('touchstart', (e) => {
+      if (e.target !== col) return;
+      const { x, y } = getXY(e);
+      touchStartInfo = { col, dateStr: colDateStr, x, y };
+      touchHoldTimer = setTimeout(() => {
+        // Long press confirmed — start a create drag
+        e.preventDefault();
+        const startM = yToMins(col, y);
+        const endM   = startM + 60;
+        const ghost = createGhostBlock(col, startM, endM, colDateStr);
+        dragState = { type: 'create', col, dateStr: colDateStr, startM, endM, anchorM: startM, ghost };
+        touchStartInfo = null;
+      }, 300);
+    }, { passive: true });
+
+    col.addEventListener('touchend', () => {
+      if (touchHoldTimer) { clearTimeout(touchHoldTimer); touchHoldTimer = null; }
+      touchStartInfo = null;
+    });
+
+    col.addEventListener('touchcancel', () => {
+      if (touchHoldTimer) { clearTimeout(touchHoldTimer); touchHoldTimer = null; }
+      touchStartInfo = null;
+    });
+
+    // ── Mousedown / Touchstart on editable events ──────────────────────────
     col.querySelectorAll('.wcal-ev-editable').forEach(evEl => {
       const evId      = evEl.dataset.evId;
       const classId   = evEl.dataset.classId;
@@ -493,32 +535,35 @@ function attachWeekInteractions() {
 
       // Resize handle
       const resizeHandle = evEl.querySelector('.wcal-resize-handle');
-      if (resizeHandle) {
-        resizeHandle.addEventListener('mousedown', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          dragState = {
-            type: 'resize',
-            evEl, evId, classId, evType, evDate,
-            startM: timeToMinutes(evStart),
-            endM:   timeToMinutes(evEnd) || timeToMinutes(evStart) + 60,
-            col,
-          };
-        });
+
+      function startResize(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        dragState = {
+          type: 'resize',
+          evEl, evId, classId, evType, evDate,
+          startM: timeToMinutes(evStart),
+          endM:   timeToMinutes(evEnd) || timeToMinutes(evStart) + 60,
+          col,
+        };
       }
 
-      // Move (drag entire event)
-      evEl.addEventListener('mousedown', (e) => {
+      if (resizeHandle) {
+        resizeHandle.addEventListener('mousedown', startResize);
+        resizeHandle.addEventListener('touchstart', startResize, { passive: false });
+      }
+
+      function startMove(e) {
         if (e.target === resizeHandle) return;
         e.preventDefault();
         e.stopPropagation();
-
-        const clickMins = yToMins(col, e.clientY);
+        const { x, y } = getXY(e);
+        const clickMins = yToMins(col, y);
         const sMins = timeToMinutes(evStart);
         const eMins = timeToMinutes(evEnd) || sMins + 60;
         dragState = {
           type: 'move',
-          evEl, evId, classId, evType, evDate: dateStr,
+          evEl, evId, classId, evType, evDate: colDateStr,
           startM: sMins,
           endM:   eMins,
           duration: eMins - sMins,
@@ -527,7 +572,10 @@ function attachWeekInteractions() {
         };
         evEl.style.opacity = '0.6';
         evEl.style.cursor = 'grabbing';
-      });
+      }
+
+      evEl.addEventListener('mousedown', startMove);
+      evEl.addEventListener('touchstart', startMove, { passive: false });
 
       // Click (no drag) → open detail popup (only for gcal events)
       evEl.addEventListener('click', (e) => {
@@ -542,15 +590,22 @@ function attachWeekInteractions() {
     });
   });
 
-  // ── Global mouse move ─────────────────────────────────────────────────────
-  document.addEventListener('mousemove', handleMouseMove);
-  document.addEventListener('mouseup', handleMouseUp);
+  // ── Global mouse + touch move ──────────────────────────────────────────────
+  document.addEventListener('mousemove', handleMove);
+  document.addEventListener('mouseup', handleUp);
+  document.addEventListener('touchmove', handleMove, { passive: false });
+  document.addEventListener('touchend', handleUp);
+  document.addEventListener('touchcancel', handleUp);
 
-  function handleMouseMove(e) {
+  function handleMove(e) {
     if (!dragState) return;
+    // Prevent page scroll while dragging in the calendar
+    if (e.cancelable) e.preventDefault();
+
+    const { x, y } = getXY(e);
 
     if (dragState.type === 'create') {
-      const m = yToMins(dragState.col, e.clientY);
+      const m = yToMins(dragState.col, y);
       if (m > dragState.anchorM) {
         dragState.startM = dragState.anchorM;
         dragState.endM = m;
@@ -563,9 +618,8 @@ function attachWeekInteractions() {
     }
 
     if (dragState.type === 'resize') {
-      const m = yToMins(dragState.col, e.clientY);
+      const m = yToMins(dragState.col, y);
       dragState.endM = Math.max(dragState.startM + SNAP_MINS, m);
-      const topPct = minutesToPct(dragState.startM);
       const heightPx = Math.max(20, (dragState.endM - dragState.startM) / 60 * HOUR_HEIGHT_PX);
       dragState.evEl.style.minHeight = heightPx + 'px';
       // Update time label
@@ -574,36 +628,27 @@ function attachWeekInteractions() {
     }
 
     if (dragState.type === 'move') {
-      // Determine which column we're over
-      let targetCol = null;
-      let targetDate = dragState.evDate;
-      document.querySelectorAll('.wgcal-day-col').forEach(col => {
-        const rect = col.getBoundingClientRect();
-        if (e.clientX >= rect.left && e.clientX <= rect.right) {
-          targetCol = col;
-          targetDate = col.dataset.date;
-        }
-      });
+      // Determine which column we're over (by clientX)
+      const targetCol = colAtX(x);
       if (!targetCol) return;
+      const targetDate = targetCol.dataset.date;
 
-      const m = yToMins(targetCol, e.clientY);
+      const m = yToMins(targetCol, y);
       dragState.startM = m - dragState.offsetM;
       dragState.endM   = dragState.startM + dragState.duration;
       dragState.col = targetCol;
       dragState.evDate = targetDate;
 
-      const topPct = minutesToPct(dragState.startM);
-      dragState.evEl.style.top = topPct + '%';
+      dragState.evEl.style.top = minutesToPct(dragState.startM) + '%';
     }
   }
 
-  function handleMouseUp(e) {
+  function handleUp(e) {
     if (!dragState) return;
     const ds = dragState;
     dragState = null;
 
     if (ds.type === 'create') {
-      // Remove ghost, open create modal
       ds.ghost.remove();
       if (ds.endM - ds.startM < SNAP_MINS) return; // too small, ignore
       openCreateModal(ds.dateStr, minsToTimeStr(ds.startM), minsToTimeStr(ds.endM));
@@ -629,9 +674,43 @@ function attachWeekInteractions() {
     }
 
     // Clean up listeners
-    document.removeEventListener('mousemove', handleMouseMove);
-    document.removeEventListener('mouseup', handleMouseUp);
+    document.removeEventListener('mousemove', handleMove);
+    document.removeEventListener('mouseup', handleUp);
+    document.removeEventListener('touchmove', handleMove);
+    document.removeEventListener('touchend', handleUp);
+    document.removeEventListener('touchcancel', handleUp);
   }
+}
+
+// ── Swipe left/right to navigate weeks (mobile) ───────────────────────────────
+function attachSwipeNavigation() {
+  const wrap = document.querySelector('.week-gcal-wrap');
+  if (!wrap) return;
+
+  let swipeStartX = null;
+  let swipeStartY = null;
+  const SWIPE_THRESHOLD = 60; // px
+
+  wrap.addEventListener('touchstart', (e) => {
+    if (dragState) return; // don't interfere with a drag in progress
+    swipeStartX = e.touches[0].clientX;
+    swipeStartY = e.touches[0].clientY;
+  }, { passive: true });
+
+  wrap.addEventListener('touchend', (e) => {
+    if (swipeStartX === null || dragState) { swipeStartX = null; return; }
+    const dx = e.changedTouches[0].clientX - swipeStartX;
+    const dy = e.changedTouches[0].clientY - swipeStartY;
+    swipeStartX = null;
+    swipeStartY = null;
+    // Only count as a swipe if horizontal movement is dominant and big enough
+    if (Math.abs(dx) > SWIPE_THRESHOLD && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      if (dx < 0) window.next();   // swipe left → next week
+      else         window.prev();  // swipe right → prev week
+    }
+  }, { passive: true });
+
+  wrap.addEventListener('touchcancel', () => { swipeStartX = null; }, { passive: true });
 }
 
 function createGhostBlock(col, startM, endM, dateStr) {
