@@ -150,7 +150,42 @@ function renderPanelBody(p) {
       </div>`
     : '';
 
+  // ── Chat history for this project (from log) ─────────────────────────────
+  let chatEntries = [];
+  try { chatEntries = Array.isArray(p.log) ? p.log : JSON.parse(p.log || '[]'); } catch {}
+  const chatMsgs = chatEntries.filter(e => e.text && (
+    e.text.startsWith('💬 Luke:') ||
+    e.text.startsWith('📋 Claude preguntó:') ||
+    e.text.startsWith('✅ Luke respondió:') ||
+    e.text.startsWith('💬 Claude:')
+  ));
+
+  const chatHtml = `
+    <div class="proj-chat-box">
+      <div class="proj-chat-header">💬 Chat del Proyecto</div>
+      <div class="proj-chat-messages" id="proj-chat-msgs-${p.id}">
+        ${chatMsgs.length === 0
+          ? `<div class="proj-chat-empty">Sin mensajes aún. Escríbele a Claude sobre este proyecto.</div>`
+          : chatMsgs.map(e => {
+              const isLuke = e.text.startsWith('💬 Luke:') || e.text.startsWith('✅ Luke respondió:');
+              const isClaude = e.text.startsWith('📋 Claude preguntó:') || e.text.startsWith('💬 Claude:');
+              const ts = e.ts ? new Date(e.ts).toLocaleString('es-MX', {timeZone:'America/Los_Angeles', hour:'2-digit', minute:'2-digit', month:'short', day:'numeric'}) : '';
+              return `<div class="proj-chat-msg ${isLuke ? 'msg-luke' : 'msg-claude'}">
+                <div class="proj-chat-bubble">${esc(e.text)}</div>
+                <div class="proj-chat-ts">${ts}</div>
+              </div>`;
+            }).join('')
+        }
+      </div>
+      <div class="proj-chat-input-row">
+        <textarea id="proj-chat-input-${p.id}" placeholder="Escríbele a Claude..." rows="2" class="proj-chat-input"></textarea>
+        <button class="proj-chat-send" onclick="sendProjectChat('${p.id}')">Enviar</button>
+      </div>
+    </div>
+  `;
+
   body.innerHTML = `
+    ${chatHtml}
     ${actionHtml}
 
     <div class="proj-block theme-blue">
@@ -227,10 +262,25 @@ function renderPanelBody(p) {
     if (inp) {
       inp.addEventListener('keydown', e => { if (e.key === 'Enter') window.submitProjectReply(p.id); });
       inp.addEventListener('focus', () => {
-        // Give the keyboard time to open, then scroll the input into view
-        setTimeout(() => {
-          inp.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }, 320);
+        setTimeout(() => { inp.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 320);
+      });
+    }
+
+    // Scroll chat messages to bottom
+    const msgs = document.getElementById(`proj-chat-msgs-${p.id}`);
+    if (msgs) msgs.scrollTop = msgs.scrollHeight;
+
+    // Ctrl+Enter or Shift+Enter = newline, plain Enter = send on desktop
+    const chatInp = document.getElementById(`proj-chat-input-${p.id}`);
+    if (chatInp) {
+      chatInp.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey) {
+          e.preventDefault();
+          window.sendProjectChat(p.id);
+        }
+      });
+      chatInp.addEventListener('focus', () => {
+        setTimeout(() => { chatInp.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 320);
       });
     }
   }, 50);
@@ -272,6 +322,42 @@ window.submitProjectReply = async function(id) {
   if (_openProjectId === id) {
     openProject(id);
   }
+};
+
+// ── Project chat — send a message to Claude about this project ────────────────
+window.sendProjectChat = async function(id) {
+  const inp = document.getElementById(`proj-chat-input-${id}`);
+  const msg = inp?.value?.trim();
+  if (!msg) return;
+
+  const p = allProjects.find(x => x.id === id);
+  if (!p) return;
+
+  inp.value = '';
+  inp.disabled = true;
+
+  const now = new Date().toISOString();
+
+  // 1. Append the message to the project log so it shows in chat history
+  let log = [];
+  try { log = Array.isArray(p.log) ? [...p.log] : JSON.parse(p.log || '[]'); } catch {}
+  log.push({ ts: now, text: `💬 Luke: ${msg}` });
+
+  await supabase.from('claude_projects').update({ log, updated_at: now }).eq('id', id);
+
+  // 2. Create a claude_task so Claude picks it up in the next LifeOS session
+  await supabase.from('claude_tasks').insert({
+    instruction: `[Proyecto: ${p.title}] ${msg}`,
+    status: 'open',
+    context: `Mensaje de chat enviado desde el proyecto "${p.title}" (id: ${id}) en projects.html`,
+    page: 'chat.html',
+  });
+
+  inp.disabled = false;
+
+  // Refresh the panel to show the new message
+  p.log = log;
+  renderPanelBody(p);
 };
 
 // ── Edit detailed instructions ────────────────────────────────────────────────
