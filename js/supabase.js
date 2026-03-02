@@ -38,6 +38,7 @@ class ProxyQueryBuilder {
   in(col, vals)    { this._filters.in     = { ...(this._filters.in     || {}), [col]: vals }; return this; }
   contains(col, val) { this._filters.contains = { ...(this._filters.contains || {}), [col]: val }; return this; }
   overlaps(col, val) { this._filters.overlaps = { ...(this._filters.overlaps || {}), [col]: val }; return this; }
+  or(query) { this._filters.or = query; return this; }
 
   // --- Modifiers ---
   order(col, opts = {}) {
