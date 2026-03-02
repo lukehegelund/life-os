@@ -177,7 +177,10 @@ Deno.serve(async (req) => {
     // Apply filters
     if (filters) {
       for (const [method, args] of Object.entries(filters)) {
-        if (typeof args === 'object' && !Array.isArray(args)) {
+        if (method === 'or' && typeof args === 'string') {
+          // .or() takes a raw query string, not a col/val pair
+          query = query.or(args)
+        } else if (typeof args === 'object' && !Array.isArray(args)) {
           for (const [col, val] of Object.entries(args as Record<string, any>)) {
             query = query[method](col, val)
           }
