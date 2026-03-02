@@ -474,6 +474,8 @@ function renderTaskGroup(tasks, inTodaySection, groupKey) {
         </div>
         <button class="btn btn-sm" style="background:#f3f4f6;color:#6b7280;border:none;font-size:13px;padding:4px 6px;line-height:1"
           onclick="openSchedulePicker(${t.id}, ${label ? `'${label}'` : 'null'}, event)" title="Schedule">📅</button>
+        <button class="btn btn-sm" style="background:#f3f4f6;color:#6b7280;border:none;font-size:11px;padding:4px 6px;line-height:1;font-weight:600"
+          onclick="openCategoryPicker(${t.id}, '${(displayModule(t)).replace(/'/g, "\\'")}', event)" title="Change category">${MODULE_ICONS[displayModule(t)] || '📁'}</button>
       </div>
     </div>`;
   }).join('');
@@ -618,6 +620,67 @@ window.deleteTask = async (id, e) => {
   await supabase.from('tasks').update({ status: 'cancelled' }).eq('id', id);
   toast('Task deleted', 'info');
   setTimeout(() => load(), 300);
+};
+
+window.openCategoryPicker = (id, currentMod, e) => {
+  e.stopPropagation();
+  // Remove any existing picker
+  document.getElementById('cat-picker-popup')?.remove();
+
+  const btn = e.currentTarget;
+  const rect = btn.getBoundingClientRect();
+
+  const popup = document.createElement('div');
+  popup.id = 'cat-picker-popup';
+  popup.style.cssText = `
+    position:fixed;z-index:999;
+    background:var(--white);border-radius:10px;
+    box-shadow:0 8px 24px rgba(0,0,0,0.18);
+    border:1px solid var(--gray-200);
+    padding:6px;min-width:150px;
+    top:${Math.min(rect.bottom + 4, window.innerHeight - 220)}px;
+    left:${Math.min(rect.left, window.innerWidth - 160)}px;
+  `;
+
+  popup.innerHTML = categoryOrder.map(cat => {
+    const icon = MODULE_ICONS[cat] || '📁';
+    const isActive = cat === currentMod;
+    return `<div onclick="setCategoryForTask(${id}, '${cat.replace(/'/g,"\\'")}', this)"
+      style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:${isActive ? '700' : '500'};
+      background:${isActive ? 'var(--gray-100)' : 'transparent'};color:${isActive ? 'var(--blue)' : 'var(--gray-700)'};"
+      onmouseover="this.style.background='var(--gray-100)'" onmouseout="this.style.background='${isActive ? 'var(--gray-100)' : 'transparent'}'">
+      <span>${icon}</span><span>${cat}</span>${isActive ? '<span style="margin-left:auto;color:var(--blue)">✓</span>' : ''}
+    </div>`;
+  }).join('');
+
+  document.body.appendChild(popup);
+  setTimeout(() => document.addEventListener('click', () => document.getElementById('cat-picker-popup')?.remove(), { once: true }), 10);
+  popup.addEventListener('click', ev => ev.stopPropagation());
+};
+
+window.setCategoryForTask = async (id, newCat, el) => {
+  document.getElementById('cat-picker-popup')?.remove();
+  const row = document.getElementById(`task-${id}`);
+  if (row) { row.style.opacity = '0.5'; }
+
+  // Fetch current notes so we can preserve note text and schedule_label
+  const { data: existing } = await supabase.from('tasks').select('notes').eq('id', id).single();
+  let parsed = {};
+  try { parsed = JSON.parse(existing?.notes || '{}'); } catch(e) { parsed = {}; }
+
+  // Build updated notes: set/clear rt_admin flag, preserve note + schedule_label
+  if (newCat === 'RT Admin') {
+    parsed.rt_admin = true;
+  } else {
+    delete parsed.rt_admin;
+  }
+  const newNotes = Object.keys(parsed).length ? JSON.stringify(parsed) : null;
+  const storeModule = storageModule(newCat); // 'RT Admin' → 'RT', everything else → itself
+
+  const { error } = await supabase.from('tasks').update({ module: storeModule, notes: newNotes }).eq('id', id);
+  if (error) { toast('Error: ' + error.message, 'error'); if (row) row.style.opacity = ''; return; }
+  toast(`Moved to ${newCat} ✅`, 'success');
+  load();
 };
 
 window.markDone = async (id, checkEl) => {
