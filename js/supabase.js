@@ -16,10 +16,18 @@ class ProxyQueryBuilder {
     this._order = [];
     this._limit = null;
     this._single = false;
+    this._count = null;
+    this._head = false;
   }
 
   // --- Operation setters ---
-  select(cols = '*') { this._select = cols; this._op = 'select'; return this; }
+  select(cols = '*', opts = {}) {
+    this._select = cols;
+    this._op = 'select';
+    if (opts && opts.count) this._count = opts.count;
+    if (opts && opts.head)  this._head  = true;
+    return this;
+  }
   insert(data) { this._op = 'insert'; this._data = data; return this; }
   update(data) { this._op = 'update'; this._data = data; return this; }
   delete() { this._op = 'delete'; return this; }
@@ -64,6 +72,8 @@ class ProxyQueryBuilder {
       order:   this._order.length ? this._order : undefined,
       limit:   this._limit,
       single:  this._single || undefined,
+      count:   this._count || undefined,
+      head:    this._head || undefined,
     };
 
     try {
@@ -74,7 +84,7 @@ class ProxyQueryBuilder {
       });
       const json = await res.json();
       if (json.error) return { data: null, error: { message: json.error } };
-      return { data: json.data, error: null };
+      return { data: json.data, error: null, count: json.count ?? null };
     } catch (e) {
       return { data: null, error: { message: String(e) } };
     }
