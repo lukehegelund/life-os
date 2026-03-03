@@ -52,6 +52,15 @@ function injectButtons() {
         background:#ef4444;color:white;border-radius:50%;width:16px;height:16px;font-size:10px;
         font-weight:700;align-items:center;justify-content:center;line-height:1"></span>
     </div>
+    <div id="topbar-bug-wrap" style="position:relative;flex-shrink:0">
+      <button id="topbar-bug" onclick="window.toggleBugPanel()" title="Auto-reported errors"
+        style="width:34px;height:34px;border-radius:50%;background:var(--gray-100);color:var(--gray-700);border:1px solid var(--gray-200);
+               font-size:16px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;
+               box-shadow:var(--shadow)">🐛</button>
+      <span id="topbar-bug-badge" style="display:none;position:absolute;top:-3px;right:-3px;
+        background:#ef4444;color:white;border-radius:50%;width:16px;height:16px;font-size:10px;
+        font-weight:700;align-items:center;justify-content:center;line-height:1"></span>
+    </div>
   `;
 
   // Always append directly to headerRow (not inside a nested container)
@@ -61,6 +70,7 @@ function injectButtons() {
   // Load unread badge on init
   loadBellBadge();
   loadChatBadge();
+  loadBugBadge();
 }
 
 // ── Bell badge ─────────────────────────────────────────────────────────────────
@@ -100,6 +110,99 @@ async function loadChatBadge() {
 
 // Keep alias for any existing callers
 async function loadQueueBadge() { await loadChatBadge(); }
+
+// ── Bug badge (auto-reported console errors) ───────────────────────────────────
+async function loadBugBadge() {
+  const { data } = await supabase
+    .from('console_errors')
+    .select('id')
+    .eq('status', 'open');
+  const count = data?.length || 0;
+  const badge = document.getElementById('topbar-bug-badge');
+  if (!badge) return;
+  if (count > 0) {
+    badge.textContent = count > 9 ? '9+' : count;
+    badge.style.display = 'flex';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+// ── Bug Panel ──────────────────────────────────────────────────────────────────
+let bugPanelOpen = false;
+
+window.toggleBugPanel = async () => {
+  const panel = document.getElementById('bug-panel');
+  if (!panel) return;
+  bugPanelOpen = !bugPanelOpen;
+  const backdrop = document.getElementById('topbar-backdrop');
+  if (bugPanelOpen) {
+    panel.style.display = 'flex';
+    if (backdrop) backdrop.style.display = 'block';
+    await renderBugPanel();
+  } else {
+    panel.style.display = 'none';
+    if (backdrop) backdrop.style.display = 'none';
+  }
+};
+
+async function renderBugPanel() {
+  const list = document.getElementById('bug-list');
+  if (!list) return;
+  list.innerHTML = '<div style="text-align:center;color:var(--gray-400);padding:20px;font-size:13px">Loading…</div>';
+
+  const { data, error } = await supabase
+    .from('console_errors')
+    .select('*')
+    .eq('status', 'open')
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  if (error || !data?.length) {
+    list.innerHTML = '<div style="text-align:center;color:var(--gray-400);padding:24px;font-size:13px">✅ No open errors</div>';
+    return;
+  }
+
+  list.innerHTML = data.map(e => {
+    const ts = new Date(e.created_at);
+    const timeStr = ts.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
+                    ' · ' + ts.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    const typeColors = { uncaught_error: '#ef4444', unhandled_rejection: '#f97316', console_error: '#eab308' };
+    const typeColor = typeColors[e.error_type] || '#6b7280';
+    return `
+      <div style="padding:11px 14px;border-bottom:1px solid var(--gray-100)">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+          <span style="font-size:10px;font-weight:700;color:${typeColor};text-transform:uppercase;letter-spacing:0.04em">${e.error_type || 'error'}</span>
+          <span style="font-size:10px;color:var(--gray-400)">· ${e.page}</span>
+          <span style="font-size:10px;color:var(--gray-400);margin-left:auto">${timeStr}</span>
+          <button onclick="window.dismissBugError(${e.id}, this)" title="Dismiss"
+            style="font-size:14px;background:none;border:none;cursor:pointer;color:var(--gray-300);padding:0 2px;line-height:1"
+            onmouseenter="this.style.color='var(--gray-500)'" onmouseleave="this.style.color='var(--gray-300)'">×</button>
+        </div>
+        <div style="font-size:12px;color:var(--gray-800);font-weight:500;line-height:1.4;word-break:break-word">${esc(e.message)}</div>
+        ${e.stack ? `<details style="margin-top:5px"><summary style="font-size:11px;color:var(--gray-400);cursor:pointer">Stack trace</summary>
+          <pre style="font-size:10px;color:var(--gray-500);margin:4px 0 0;white-space:pre-wrap;word-break:break-all;line-height:1.4">${esc(e.stack)}</pre></details>` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+window.dismissBugError = async (id, btn) => {
+  await supabase.from('console_errors').update({ status: 'resolved' }).eq('id', id);
+  btn.closest('div[style]').remove();
+  loadBugBadge();
+  // Show empty state if no rows left
+  const list = document.getElementById('bug-list');
+  if (list && !list.children.length) {
+    list.innerHTML = '<div style="text-align:center;color:var(--gray-400);padding:24px;font-size:13px">✅ No open errors</div>';
+  }
+};
+
+window.dismissAllBugs = async () => {
+  await supabase.from('console_errors').update({ status: 'resolved' }).eq('status', 'open');
+  await renderBugPanel();
+  loadBugBadge();
+};
 
 // ── Notification Panel ─────────────────────────────────────────────────────────
 let notifPanelOpen = false;
@@ -457,6 +560,28 @@ function injectModals() {
       <div id="notif-list" style="overflow-y:auto;flex:1"></div>
     </div>
 
+    <!-- Bug Panel (auto-reported console errors) -->
+    <div id="bug-panel" style="display:none;position:fixed;bottom:0;left:0;right:0;
+         background:var(--white);border-radius:16px 16px 0 0;box-shadow:0 -4px 32px rgba(0,0,0,0.15);
+         border-top:1px solid var(--gray-200);z-index:999;overflow:hidden;flex-direction:column;
+         max-height:70vh">
+      <!-- Drag handle -->
+      <div style="display:flex;justify-content:center;padding:10px 0 4px;flex-shrink:0">
+        <div style="width:36px;height:4px;border-radius:2px;background:var(--gray-200)"></div>
+      </div>
+      <!-- Header -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px 10px;
+                  border-bottom:1px solid var(--gray-100);flex-shrink:0">
+        <div style="font-size:15px;font-weight:700;color:var(--gray-800)">🐛 Auto-Reported Errors</div>
+        <button onclick="window.dismissAllBugs()"
+          style="font-size:11px;color:#ef4444;background:none;border:none;cursor:pointer;font-weight:600;padding:2px 4px">
+          Dismiss all
+        </button>
+      </div>
+      <!-- List -->
+      <div id="bug-list" style="overflow-y:auto;flex:1"></div>
+    </div>
+
     <!-- Claude Chat Panel (single conversation) -->
     <div id="chat-panel" style="display:none;position:fixed;bottom:0;left:0;right:0;
          background:#1e1e2e;border-radius:16px 16px 0 0;box-shadow:0 -4px 32px rgba(0,0,0,0.45);
@@ -535,6 +660,7 @@ function injectModals() {
   backdrop.addEventListener('click', () => {
     if (notifPanelOpen) { document.getElementById('notif-panel').style.display = 'none'; notifPanelOpen = false; }
     if (chatPanelOpen) { document.getElementById('chat-panel').style.display = 'none'; chatPanelOpen = false; }
+    if (bugPanelOpen) { document.getElementById('bug-panel').style.display = 'none'; bugPanelOpen = false; }
     backdrop.style.display = 'none';
   });
   document.body.appendChild(backdrop);
@@ -555,6 +681,14 @@ function injectModals() {
     if (cPanel && chatPanelOpen && !cPanel.contains(e.target) && !cWrap?.contains(e.target)) {
       cPanel.style.display = 'none';
       chatPanelOpen = false;
+      document.getElementById('topbar-backdrop').style.display = 'none';
+    }
+    // Bug panel
+    const bPanel = document.getElementById('bug-panel');
+    const bWrap = document.getElementById('topbar-bug-wrap');
+    if (bPanel && bugPanelOpen && !bPanel.contains(e.target) && !bWrap?.contains(e.target)) {
+      bPanel.style.display = 'none';
+      bugPanelOpen = false;
       document.getElementById('topbar-backdrop').style.display = 'none';
     }
   });
