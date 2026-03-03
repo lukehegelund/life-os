@@ -255,6 +255,7 @@ window.addWord = async () => {
     english, translation, language, example_sentence,
     srs_stage: 0,
     next_review: T,
+    added_date: T,
     times_seen: 0, times_correct: 0, times_wrong: 0,
   });
 
