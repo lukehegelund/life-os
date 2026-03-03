@@ -4,6 +4,40 @@
 
 const PROXY_URL = 'https://kxsuzgpnvtepsyhkezin.supabase.co/functions/v1/db-proxy';
 
+// ── Error reporter shim ───────────────────────────────────────────────────────
+// Reports Supabase proxy errors to the console_errors table.
+// Uses a separate fetch directly (never routes through ProxyQueryBuilder,
+// to avoid infinite loops if console_errors itself has a proxy error).
+const PAGE = window.location.pathname.split('/').pop() || 'index.html';
+const _recentDbErrors = new Map();
+
+function _reportDbError(message, context) {
+  // Never report errors from console_errors itself (avoid infinite loops)
+  if (context?.table === 'console_errors') return;
+
+  // Deduplicate: same message within 10 seconds
+  const now = Date.now();
+  if (_recentDbErrors.has(message) && now - _recentDbErrors.get(message) < 10_000) return;
+  _recentDbErrors.set(message, now);
+
+  // Fire-and-forget via raw fetch (bypasses ProxyQueryBuilder entirely)
+  fetch(PROXY_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      table: 'console_errors',
+      op: 'insert',
+      data: {
+        page: PAGE,
+        message: String(message).slice(0, 500),
+        stack: context ? JSON.stringify(context).slice(0, 2000) : null,
+        error_type: 'supabase_error',
+        status: 'open',
+      },
+    }),
+  }).catch(() => {}); // silently swallow any failure here
+}
+
 // Minimal query builder that mirrors the supabase-js chained API
 // but sends everything to the secure proxy instead of directly to PostgREST
 class ProxyQueryBuilder {
@@ -89,10 +123,28 @@ class ProxyQueryBuilder {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
+
+      // ── HTTP-level errors (403 Forbidden, 500 Internal Server Error, etc.) ──
+      if (!res.ok) {
+        const msg = `db-proxy HTTP ${res.status} on ${this._op} '${this._table}'`;
+        _reportDbError(msg, { table: this._table, op: this._op, status: res.status });
+        return { data: null, error: { message: msg } };
+      }
+
       const json = await res.json();
-      if (json.error) return { data: null, error: { message: json.error } };
+
+      // ── Application-level errors ("table not allowed", RLS violations, etc.) ──
+      if (json.error) {
+        const msg = `db-proxy error on ${this._op} '${this._table}': ${json.error}`;
+        _reportDbError(msg, { table: this._table, op: this._op, error: json.error });
+        return { data: null, error: { message: json.error } };
+      }
+
       return { data: json.data, error: null, count: json.count ?? null };
     } catch (e) {
+      // ── Network-level errors (offline, CORS failure, etc.) ──
+      const msg = `db-proxy network error on ${this._op} '${this._table}': ${e}`;
+      _reportDbError(msg, { table: this._table, op: this._op, error: String(e) });
       return { data: null, error: { message: String(e) } };
     }
   }
