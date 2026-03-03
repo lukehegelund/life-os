@@ -550,7 +550,7 @@
   <div class="header-row">
     <div>
       <h1>Proyectos</h1>
-      <div class="subtitle" id="proj-subtitle">Proyectos de Claude</div>
+      <div class="subtitle" id="proj-subtitle">Claude Projects</div>
     </div>
     <div id="proj-action-count" style="display:none;font-size:12px;font-weight:700;color:#92400e;background:#fef3c7;padding:4px 12px;border-radius:99px"></div>
   </div>
@@ -558,12 +558,12 @@
 
 <main class="content">
   <div id="proj-list">
-    <div class="sr-empty" style="padding:20px 0">Cargando proyectos...</div>
+    <div class="sr-empty" style="padding:20px 0">Loading projects...</div>
   </div>
 </main>
 
 <button class="proj-add-fab" onclick="showNewProjectModal()">
-  <span style="font-size:20px;line-height:1">+</span> Nuevo Proyecto
+  <span style="font-size:20px;line-height:1">+</span> New Project
 </button>
 
 <!-- Detail panel -->
@@ -580,14 +580,14 @@
 <!-- New Project modal -->
 <div class="modal-overlay" id="new-proj-modal">
   <div class="modal-sheet" onclick="event.stopPropagation()">
-    <div class="modal-title">✨ Nuevo Proyecto</div>
-    <div class="modal-label">Título</div>
-    <input class="modal-input" id="np-title" type="text" placeholder="Nombre corto del proyecto" />
-    <div class="modal-label">Objetivo principal</div>
-    <textarea class="modal-input modal-textarea" id="np-prompt" placeholder="¿Qué quieres que Claude haga? Sé todo lo específico que puedas..."></textarea>
+    <div class="modal-title">✨ New Project</div>
+    <div class="modal-label">Title</div>
+    <input class="modal-input" id="np-title" type="text" placeholder="Short project name" />
+    <div class="modal-label">Main Goal</div>
+    <textarea class="modal-input modal-textarea" id="np-prompt" placeholder="What do you want Claude to do? Be as specific as possible..."></textarea>
     <div class="modal-actions">
-      <button class="modal-btn cancel" onclick="closeNewModal()">Cancelar</button>
-      <button class="modal-btn save" onclick="submitNewProject()">Crear Proyecto</button>
+      <button class="modal-btn cancel" onclick="closeNewModal()">Cancel</button>
+      <button class="modal-btn save" onclick="submitNewProject()">Create Project</button>
     </div>
   </div>
 </div>
@@ -627,7 +627,7 @@
   </a>
 </nav>
 
-<script type="module" src="js/projects.js?v=2"></script>
+<script type="module" src="js/projects.js?v=3"></script>
 <script type="module" src="js/error-reporter.js?v=1"></script>
 <script type="module" src="js/topbar.js?v=6"></script>
 </body>
