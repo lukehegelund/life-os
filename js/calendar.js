@@ -1088,5 +1088,19 @@ function classMatchesDow(dayOfWeek, dow) {
   return d.toLowerCase().includes(dowName.toLowerCase()) || d.toLowerCase().includes(dowShort.toLowerCase());
 }
 
+// ── FAB (Floating Action Button) ──────────────────────────────────────────────
+window.calFabClick = () => {
+  // Use today's date and round current time to nearest 30 min
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+  const roundedMin = now.getMinutes() < 30 ? 30 : 0;
+  const roundedHr  = now.getMinutes() < 30 ? now.getHours() : now.getHours() + 1;
+  const clampedHr  = Math.min(roundedHr, 23);
+  const startTime  = `${pad(clampedHr)}:${pad(roundedMin)}`;
+  const endHr      = Math.min(clampedHr + 1, 23);
+  const endTime    = `${pad(endHr)}:${pad(roundedMin)}`;
+  openCreateModal(todayStr, startTime, endTime);
+};
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 render();

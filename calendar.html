@@ -291,6 +291,21 @@
 
 </main>
 
+<!-- FAB — Floating Action Button for quick event creation -->
+<button id="cal-fab" onclick="calFabClick()" title="New event"
+  style="position:fixed;bottom:80px;right:16px;z-index:200;
+    width:52px;height:52px;border-radius:50%;border:none;
+    background:var(--blue);color:white;font-size:24px;cursor:pointer;
+    box-shadow:0 4px 16px rgba(0,0,0,0.25);
+    display:flex;align-items:center;justify-content:center;
+    transition:transform 0.15s,box-shadow 0.15s">
+  +
+</button>
+<style>
+  #cal-fab:hover { transform:scale(1.08); box-shadow:0 6px 20px rgba(0,0,0,0.3); }
+  #cal-fab:active { transform:scale(0.96); }
+</style>
+
 <nav class="bottom-nav">
   <a href="dashboard.html" class="nav-item">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
@@ -330,7 +345,7 @@
   </a>
 </nav>
 
-<script type="module" src="js/calendar.js?v=4"></script>
+<script type="module" src="js/calendar.js?v=5"></script>
 <script type="module" src="js/error-reporter.js?v=1"></script>
 <script type="module" src="js/topbar.js?v=6"></script>
 </body>
