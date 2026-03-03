@@ -50,6 +50,7 @@ class ProxyQueryBuilder {
     this._order = [];
     this._limit = null;
     this._single = false;
+    this._maybeSingle = false;
     this._count = null;
     this._head = false;
     this._upsertOpts = null;
@@ -95,6 +96,7 @@ class ProxyQueryBuilder {
   }
   limit(n) { this._limit = n; return this; }
   single() { this._single = true; return this; }
+  maybeSingle() { this._maybeSingle = true; return this; }
 
   // --- Execute ---
   then(resolve, reject) {
@@ -112,6 +114,7 @@ class ProxyQueryBuilder {
       order:       this._order.length ? this._order : undefined,
       limit:       this._limit,
       single:      this._single || undefined,
+      maybeSingle: this._maybeSingle || undefined,
       count:       this._count  || undefined,
       head:        this._head   || undefined,
       upsertOpts:  this._upsertOpts || undefined,
@@ -138,6 +141,12 @@ class ProxyQueryBuilder {
         const msg = `db-proxy error on ${this._op} '${this._table}': ${json.error}`;
         _reportDbError(msg, { table: this._table, op: this._op, error: json.error });
         return { data: null, error: { message: json.error } };
+      }
+
+      // ── maybeSingle: return first row or null — never an error for empty results ──
+      if (this._maybeSingle) {
+        const rows = Array.isArray(json.data) ? json.data : [];
+        return { data: rows[0] ?? null, error: null };
       }
 
       return { data: json.data, error: null, count: json.count ?? null };
