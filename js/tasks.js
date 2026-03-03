@@ -344,8 +344,82 @@ async function loadTasks() {
     </div>`;
   }
 
-  // ── Normal tasks grouped by module ──
-  if (nonTodayTasks.length) {
+  // ── Schedule section headers (when All filter is active) ──
+  // Show "Next Up", "Later", "Down the Road" as labeled dividers
+  const SCHED_SECTIONS = ['Next Up', 'Later', 'Down the Road'];
+  if (activeScheduleFilter === 'All' && nonTodayTasks.length) {
+    const unlabeled = nonTodayTasks.filter(t => !getScheduleLabel(t) || !SCHED_SECTIONS.includes(getScheduleLabel(t)));
+    for (const sched of SCHED_SECTIONS) {
+      const schedTasks = nonTodayTasks.filter(t => getScheduleLabel(t) === sched);
+      if (!schedTasks.length) continue;
+      const sc = SCHEDULE_COLORS[sched];
+      const schedKey = `__sched_${sched}__`;
+      const orderedSched = applyTaskOrder(schedTasks, schedKey);
+      html += `<div class="card" style="border-left:4px solid ${sc.border};padding:0;overflow:hidden;margin-bottom:12px">
+        <div style="padding:8px 14px;background:${sc.bg}">
+          <div style="font-size:12px;font-weight:700;color:${sc.color};margin-bottom:6px;letter-spacing:0.3px">${sched === 'Next Up' ? '⏩' : sched === 'Later' ? '🔵' : '🔜'} ${sched.toUpperCase()} (${orderedSched.length})</div>
+          <div id="task-group-${schedKey.replace(/\s+/g,'-')}" class="task-group-body">
+            ${renderTaskGroup(orderedSched, true, schedKey)}
+          </div>
+        </div>
+      </div>`;
+    }
+    // Render unlabeled tasks in module groups below
+    if (unlabeled.length) {
+      const groups = {};
+      for (const t of unlabeled) {
+        const m = displayModule(t);
+        if (!groups[m]) groups[m] = [];
+        groups[m].push(t);
+      }
+      const sortedMods = Object.keys(groups).sort((a, b) => {
+        const ai = categoryOrder.indexOf(a); const bi = categoryOrder.indexOf(b);
+        return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+      });
+      for (const mod of sortedMods) {
+        const color  = MODULE_COLORS[mod] || 'var(--blue)';
+        const icon   = MODULE_ICONS[mod] || '';
+        const safeId = mod.replace(/\s+/g, '-');
+        const groupKey = mod;
+        const orderedGroup = applyTaskOrder(groups[mod], groupKey);
+        html += `<div class="card task-category-card" data-module="${mod}"
+          draggable="true"
+          ondragstart="window.catDragStart(event)"
+          ondragover="window.catDragOver(event)"
+          ondrop="window.catDrop(event)"
+          ondragend="window.catDragEnd(event)"
+          style="border-top:3px solid ${color};margin-bottom:12px;cursor:grab">
+          <div class="task-group-header">
+            <div class="task-group-label" style="display:flex;align-items:center;gap:6px">
+              <span style="font-size:12px;color:var(--gray-300);cursor:grab" title="Drag to reorder">⠿</span>
+              ${icon} ${mod}
+            </div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <span class="badge badge-gray">${groups[mod].length}</span>
+              <button class="btn btn-sm btn-ghost" style="font-size:11px;padding:2px 8px;line-height:1.4"
+                onclick="event.stopPropagation();showInlineAdd('${mod}')" title="Add task to ${mod}">+ Add</button>
+            </div>
+          </div>
+          <div id="task-group-${safeId}" class="task-group-body">
+            ${renderTaskGroup(orderedGroup, false, groupKey)}
+          </div>
+          <div id="inline-add-${safeId}" style="display:none;padding:8px 0 4px 0;border-top:1px solid var(--gray-100);margin-top:4px">
+            <div style="display:flex;gap:6px;align-items:center">
+              <input type="text" id="inline-title-${safeId}"
+                placeholder="New task…"
+                style="flex:1;border:1px solid var(--gray-200);border-radius:8px;padding:6px 10px;font-size:13px;outline:none"
+                onkeydown="if(event.key==='Enter'){submitInlineTask('${mod}')}else if(event.key==='Escape'){hideInlineAdd('${mod}')}">
+              <button class="btn btn-sm" style="background:${color};color:white;border:none;padding:6px 12px;flex-shrink:0"
+                onclick="submitInlineTask('${mod}')">Add</button>
+              <button class="btn btn-sm btn-ghost" style="padding:6px 8px;flex-shrink:0"
+                onclick="hideInlineAdd('${mod}')">✕</button>
+            </div>
+          </div>
+        </div>`;
+      }
+    }
+  } else if (nonTodayTasks.length) {
+  // ── Normal tasks grouped by module (filtered mode or unlabeled) ──
     const groups = {};
     for (const t of nonTodayTasks) {
       const m = displayModule(t);
@@ -446,22 +520,26 @@ function renderTaskGroup(tasks, inTodaySection, groupKey) {
     const modLabel = !inTodaySection ? '' : `<span style="font-size:11px;color:var(--gray-400)">${MODULE_ICONS[displayModule(t)] || ''} ${displayModule(t)}</span>`;
     const isFirst = idx === 0;
     const isLast  = idx === tasks.length - 1;
+    const noteText = notesDisplay(t);
     return `
     <div class="task-row task-swipe-row" id="task-${t.id}" data-id="${t.id}" style="touch-action:pan-y;overflow:hidden;position:relative;display:flex;align-items:center;gap:8px">
       <div data-swipe-inner style="display:flex;align-items:flex-start;gap:10px;flex:1">
-        <div class="task-check ${t.priority === 'urgent' ? 'urgent-check' : ''}" onclick="markDone(${t.id}, this)">
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" style="display:none" id="check-${t.id}">
-            <polyline points="2,6 5,10 11,3" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <div class="task-check ${t.priority === 'urgent' ? 'urgent-check' : ''}" onclick="markDone(${t.id}, this)"
+          style="width:28px;height:28px;border-radius:7px;flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid ${t.priority === 'urgent' ? 'var(--red)' : 'var(--gray-200)'};background:var(--white);transition:all 0.15s;-webkit-tap-highlight-color:transparent"
+          title="Mark done">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="display:none" id="check-${t.id}">
+            <polyline points="2,7 6,11 12,3" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </div>
         <div class="task-content" style="flex:1;min-width:0">
           <div class="task-title" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             ${t.title}
+            ${labelBadge}
           </div>
           <div class="task-meta" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:3px">
             ${t.due_date ? `<span>Due ${fmtDate(t.due_date)}</span>` : ''}
             ${modLabel}
-            ${notesDisplay(t) ? `<span style="color:var(--gray-500)">${notesDisplay(t)}</span>` : ''}
+            ${noteText ? `<span style="color:var(--gray-500)">${noteText}</span>` : ''}
           </div>
         </div>
       </div>
@@ -474,6 +552,8 @@ function renderTaskGroup(tasks, inTodaySection, groupKey) {
         </div>
         <button class="btn btn-sm" style="background:#f3f4f6;color:#6b7280;border:none;font-size:13px;padding:4px 6px;line-height:1"
           onclick="openSchedulePicker(${t.id}, ${label ? `'${label}'` : 'null'}, event)" title="Schedule">📅</button>
+        <button class="btn btn-sm" style="background:#f3f4f6;color:#6b7280;border:none;font-size:11px;padding:4px 7px;line-height:1"
+          onclick="openEditTaskModal(${t.id}, event)" title="Edit task">✏️</button>
         <button class="btn btn-sm" style="background:#f3f4f6;color:#6b7280;border:none;font-size:11px;padding:4px 6px;line-height:1;font-weight:600"
           onclick="openCategoryPicker(${t.id}, '${(displayModule(t)).replace(/'/g, "\\'")}', event)" title="Change category">${MODULE_ICONS[displayModule(t)] || '📁'}</button>
       </div>
@@ -700,6 +780,96 @@ window.markDone = async (id, checkEl) => {
   }
   setTimeout(() => { if (row) row.remove(); }, 400);
   toast('Task done! ✅', 'success');
+};
+
+// ── Edit Task modal ───────────────────────────────────────────────────────────
+window.openEditTaskModal = async (id, event) => {
+  if (event) event.stopPropagation();
+  // Fetch current task data
+  const { data: t, error } = await supabase.from('tasks').select('*').eq('id', id).single();
+  if (error || !t) { toast('Could not load task', 'error'); return; }
+
+  const parsed = (() => { try { return JSON.parse(t.notes || '{}'); } catch { return {}; } })();
+  const currentLabel = parsed.schedule_label || '';
+  const currentNote  = parsed.note || (typeof t.notes === 'string' && !t.notes.startsWith('{') ? t.notes : '');
+  const currentMod   = isRTAdmin(t) ? 'RT Admin' : (t.module || 'Personal');
+
+  // Remove any existing edit modal
+  document.getElementById('edit-task-modal')?.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'edit-task-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:600;display:flex;align-items:flex-end;justify-content:center';
+  modal.innerHTML = `
+    <div style="background:var(--white);border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:600px;max-height:90vh;overflow-y:auto">
+      <div style="font-size:17px;font-weight:700;margin-bottom:16px">✏️ Edit Task</div>
+      <input type="hidden" id="edit-task-id" value="${id}">
+      <div class="form-group">
+        <label class="form-label">Title</label>
+        <input type="text" class="form-input" id="edit-task-title" value="${(t.title || '').replace(/"/g, '&quot;')}" placeholder="Task description">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Module</label>
+        <select class="form-select" id="edit-task-module">
+          ${['Personal','RT','RT Admin','TOV','Health','LifeOS'].map(m => `<option value="${m}" ${currentMod === m ? 'selected' : ''}>${m}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Priority</label>
+        <select class="form-select" id="edit-task-priority">
+          <option value="normal" ${t.priority !== 'urgent' ? 'selected' : ''}>Normal</option>
+          <option value="urgent" ${t.priority === 'urgent' ? 'selected' : ''}>Urgent</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Schedule</label>
+        <select class="form-select" id="edit-task-schedule">
+          <option value="" ${!currentLabel ? 'selected' : ''}>No label</option>
+          <option value="Today" ${currentLabel === 'Today' ? 'selected' : ''}>📅 Today</option>
+          <option value="Next Up" ${currentLabel === 'Next Up' ? 'selected' : ''}>⏩ Next Up</option>
+          <option value="Later" ${currentLabel === 'Later' ? 'selected' : ''}>🔵 Later</option>
+          <option value="Down the Road" ${currentLabel === 'Down the Road' ? 'selected' : ''}>🔜 Down the Road</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Due Date (optional)</label>
+        <input type="date" class="form-input" id="edit-task-due" value="${t.due_date || ''}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes (optional)</label>
+        <input type="text" class="form-input" id="edit-task-notes" value="${(currentNote || '').replace(/"/g, '&quot;')}" placeholder="Brief notes">
+      </div>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button class="btn btn-primary" style="flex:1" onclick="saveEditTask()">Save Changes</button>
+        <button class="btn btn-ghost" onclick="document.getElementById('edit-task-modal').remove()">Cancel</button>
+      </div>
+    </div>`;
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.body.appendChild(modal);
+  setTimeout(() => document.getElementById('edit-task-title')?.focus(), 60);
+};
+
+window.saveEditTask = async () => {
+  const id       = document.getElementById('edit-task-id')?.value;
+  const title    = document.getElementById('edit-task-title')?.value.trim();
+  const modSel   = document.getElementById('edit-task-module')?.value;
+  const priority = document.getElementById('edit-task-priority')?.value;
+  const schedule = document.getElementById('edit-task-schedule')?.value;
+  const due      = document.getElementById('edit-task-due')?.value || null;
+  const noteRaw  = document.getElementById('edit-task-notes')?.value.trim();
+  if (!title) { toast('Enter a title', 'error'); return; }
+
+  const module = storageModule(modSel);
+  const base = modSel === 'RT Admin' ? { rt_admin: true } : {};
+  if (noteRaw) base.note = noteRaw;
+  if (schedule) base.schedule_label = schedule;
+  const notes = Object.keys(base).length ? JSON.stringify(base) : null;
+
+  const { error } = await supabase.from('tasks').update({ title, module, priority, due_date: due, notes }).eq('id', id);
+  if (error) { toast('Error saving: ' + error.message, 'error'); return; }
+  toast('Task updated ✅', 'success');
+  document.getElementById('edit-task-modal').remove();
+  load();
 };
 
 // ── Add Task modal ────────────────────────────────────────────────────────────
