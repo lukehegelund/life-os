@@ -108,12 +108,12 @@ async function fetchEvents() {
     supabase.from('reminders')
       .select('id, title, due_date, module')
       .eq('status', 'active')
-      .not('due_date', 'is', null)
+      .filter('due_date', 'not.is', null)
       .gte('due_date', startStr)
       .lte('due_date', endStr),
     supabase.from('tov_clients')
       .select('id, name, wedding_date')
-      .not('wedding_date', 'is', null)
+      .filter('wedding_date', 'not.is', null)
       .gte('wedding_date', startStr)
       .lte('wedding_date', endStr),
     supabase.from('classes').select('id, name, day_of_week, time_start, time_end, subject'),
