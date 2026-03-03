@@ -393,8 +393,21 @@
   </div>
 </div>
 
-<script type="module" src="js/tasks.js?v=11"></script>
+<!-- Default View Manager Modal -->
+<div class="modal-overlay" id="default-manager-modal" onclick="if(event.target===this)closeDefaultManager()">
+  <div class="modal-sheet" style="max-height:85vh;overflow-y:auto">
+    <div class="modal-title">⭐ Customize Default View</div>
+    <div style="font-size:13px;color:var(--gray-400);margin-top:-10px;margin-bottom:14px">Choose which categories appear in your Default view.</div>
+    <div id="default-cat-list" style="margin-bottom:14px"></div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn btn-primary" style="flex:1" onclick="saveDefaultManager()">Save</button>
+      <button class="btn btn-ghost" onclick="closeDefaultManager()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="js/tasks.js?v=12"></script>
 <script type="module" src="js/error-reporter.js?v=1"></script>
-<script type="module" src="js/topbar.js?v=6"></script>
+<script type="module" src="js/topbar.js?v=7"></script>
 </body>
 </html>

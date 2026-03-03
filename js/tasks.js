@@ -1,13 +1,15 @@
-// Life OS — Tasks (v10: dynamic category tabs, category manager, reminders section)
+// Life OS — Tasks (v11: default view, dynamic category tabs, category manager, reminders section)
 import { supabase } from './supabase.js';
 import { today, fmtDate, toast, showEmpty, pstDatePlusDays } from './utils.js';
 import { initSwipe } from './swipe-handler.js';
 
 const T = today();
-let activeModule = 'All';
+let activeModule = 'Default';
 let activeScheduleFilter = 'All'; // 'All', 'Today', 'Next Up', 'Later', 'Down the Road', 'Unlabeled'
 // User-defined category order (persisted in localStorage)
 let categoryOrder = JSON.parse(localStorage.getItem('tasks-cat-order') || 'null') || ['RT', 'RT Admin', 'TOV', 'Personal', 'Health', 'LifeOS'];
+// Default view: which categories to show (persisted in localStorage)
+let defaultViewCategories = JSON.parse(localStorage.getItem('tasks-default-cats') || 'null') || ['RT', 'Personal'];
 // Task order within each group: { groupKey: [id, id, ...] }
 let taskOrderMap = JSON.parse(localStorage.getItem('tasks-item-order') || '{}');
 
@@ -65,6 +67,7 @@ function renderModuleTabs() {
   if (!row) return;
 
   const tabs = [
+    { mod: 'Default', label: '⭐ Default' },
     { mod: 'All', label: 'All' },
     ...categoryOrder.map(m => ({ mod: m, label: (MODULE_ICONS[m] ? MODULE_ICONS[m] + ' ' : '') + m })),
     { mod: 'Repeated', label: '🔄 Repeated' },
@@ -72,6 +75,19 @@ function renderModuleTabs() {
 
   row.innerHTML = tabs.map(({ mod, label }) => {
     const isActive = mod === activeModule;
+    // Default tab gets a small customize icon inline
+    if (mod === 'Default') {
+      return `<div style="display:inline-flex;align-items:center;gap:0;flex-shrink:0">
+        <button class="btn btn-sm ${isActive ? 'btn-primary' : 'btn-ghost'} mod-btn"
+          id="mod-Default"
+          onclick="setModule('Default')"
+          style="white-space:nowrap;border-radius:20px 0 0 20px;border-right:none">${label}</button>
+        <button class="btn btn-sm ${isActive ? 'btn-primary' : 'btn-ghost'}"
+          onclick="event.stopPropagation();openDefaultManager()"
+          title="Customize Default view"
+          style="white-space:nowrap;border-radius:0 20px 20px 0;padding:0 8px;font-size:13px;${isActive ? '' : 'border-left:1px solid var(--gray-200)'}">✏️</button>
+      </div>`;
+    }
     return `<button class="btn btn-sm ${isActive ? 'btn-primary' : 'btn-ghost'} mod-btn"
       id="mod-${mod.replace(/\s+/g,'-')}"
       onclick="setModule('${mod.replace(/'/g, "\\'")}')"
@@ -129,12 +145,55 @@ window.saveCategoryManager = () => {
   closeCategoryManager();
   renderModuleTabs();
   // If activeModule no longer exists, reset to All
-  if (activeModule !== 'All' && activeModule !== 'Repeated' && !categoryOrder.includes(activeModule)) {
-    setModule('All');
+  if (activeModule !== 'All' && activeModule !== 'Repeated' && activeModule !== 'Default' && !categoryOrder.includes(activeModule)) {
+    setModule('Default');
   } else {
     loadTasks();
   }
   toast('Categories saved ✓', 'success');
+};
+
+// ── Default View Manager ──────────────────────────────────────────────────────
+window.openDefaultManager = () => {
+  renderDefaultManagerList();
+  document.getElementById('default-manager-modal').style.display = 'flex';
+};
+
+window.closeDefaultManager = () => {
+  document.getElementById('default-manager-modal').style.display = 'none';
+};
+
+function renderDefaultManagerList() {
+  const el = document.getElementById('default-cat-list');
+  if (!el) return;
+  // All available categories (from categoryOrder)
+  const allCats = categoryOrder;
+  el.innerHTML = allCats.map(cat => {
+    const checked = defaultViewCategories.includes(cat);
+    const icon = MODULE_ICONS[cat] || '📁';
+    const color = MODULE_COLORS[cat] || 'var(--blue)';
+    return `<label style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--gray-100);cursor:pointer">
+      <input type="checkbox" value="${cat}" ${checked ? 'checked' : ''}
+        style="width:18px;height:18px;accent-color:${color};cursor:pointer">
+      <span style="font-size:16px">${icon}</span>
+      <span style="font-size:14px;font-weight:500;color:var(--gray-800)">${cat}</span>
+    </label>`;
+  }).join('');
+}
+
+window.saveDefaultManager = () => {
+  const el = document.getElementById('default-cat-list');
+  if (!el) return;
+  const checked = [...el.querySelectorAll('input[type=checkbox]:checked')].map(cb => cb.value);
+  if (!checked.length) {
+    toast('Select at least one category', 'error');
+    return;
+  }
+  defaultViewCategories = checked;
+  localStorage.setItem('tasks-default-cats', JSON.stringify(defaultViewCategories));
+  closeDefaultManager();
+  if (activeModule === 'Default') loadTasks();
+  toast('Default view updated ✓', 'success');
 };
 
 // ── Module filter ─────────────────────────────────────────────────────────────
@@ -299,7 +358,13 @@ async function loadTasks() {
     .order('created_at');
 
   let tasks = res.data || [];
-  if (activeModule === 'RT Admin') {
+  if (activeModule === 'Default') {
+    // Show tasks from selected default categories only
+    tasks = tasks.filter(t => {
+      const m = displayModule(t);
+      return defaultViewCategories.includes(m);
+    });
+  } else if (activeModule === 'RT Admin') {
     tasks = tasks.filter(t => isRTAdmin(t));
   } else if (activeModule !== 'All') {
     tasks = tasks.filter(t => t.module === activeModule && !isRTAdmin(t));
@@ -623,8 +688,13 @@ async function loadFutureProjects() {
 
   const { data } = await supabase.from('tasks').select('*').eq('status', 'future').order('created_at', { ascending: false });
   let projects = data || [];
-  if (activeModule === 'RT Admin') projects = projects.filter(p => isRTAdmin(p));
-  else if (activeModule !== 'All') projects = projects.filter(p => p.module === activeModule && !isRTAdmin(p));
+  if (activeModule === 'Default') {
+    projects = projects.filter(p => defaultViewCategories.includes(displayModule(p)));
+  } else if (activeModule === 'RT Admin') {
+    projects = projects.filter(p => isRTAdmin(p));
+  } else if (activeModule !== 'All') {
+    projects = projects.filter(p => p.module === activeModule && !isRTAdmin(p));
+  }
 
   if (!projects.length) {
     el.innerHTML = `<div class="card" style="margin-bottom:12px">
