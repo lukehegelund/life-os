@@ -1,6 +1,6 @@
 // Life OS — Global Error Reporter
-// Auto-captures console errors on every page and writes them to
-// the console_errors Supabase table for Claude to review each session.
+// Auto-captures JS errors, unhandled promise rejections, console.error calls,
+// and failed resource loads on every page → writes to console_errors Supabase table.
 // Import this module on every HTML page alongside topbar.js.
 
 import { supabase } from './supabase.js';
@@ -11,6 +11,9 @@ const recentErrors = new Map(); // message → timestamp
 
 async function reportError(message, stack, errorType) {
   if (!message) return;
+
+  // Never report errors from console_errors itself (supabase.js handles that guard too)
+  if (String(message).includes("console_errors")) return;
 
   // Deduplicate: skip if same message reported within last 10 seconds
   const now = Date.now();
@@ -33,7 +36,7 @@ async function reportError(message, stack, errorType) {
   }
 }
 
-// ── Intercept uncaught errors ─────────────────────────────────────────────────
+// ── Intercept uncaught JS errors ──────────────────────────────────────────────
 const _origOnError = window.onerror;
 window.onerror = (message, source, lineno, colno, error) => {
   const stack = error?.stack || `${source}:${lineno}:${colno}`;
@@ -61,3 +64,20 @@ console.error = (...args) => {
   const stack = args.find(a => a instanceof Error)?.stack || null;
   reportError(message, stack, 'console_error');
 };
+
+// ── Intercept failed resource loads (scripts, stylesheets) ───────────────────
+// Uses capture phase so it fires before the element's own handler.
+// Ignores favicons (noisy, harmless) and image 404s (too common to be actionable).
+window.addEventListener('error', (event) => {
+  const el = event.target;
+  if (!el || el === window) return; // JS errors are handled by window.onerror above
+
+  const tag = el.tagName?.toUpperCase();
+  const src = el.src || el.href || '';
+
+  // Only report scripts and stylesheets — not images/favicons
+  if (tag !== 'SCRIPT' && tag !== 'LINK') return;
+
+  const message = `Failed to load ${tag.toLowerCase()}: ${src}`;
+  reportError(message, null, 'resource_load_error');
+}, true); // <-- true = capture phase, required for resource errors
