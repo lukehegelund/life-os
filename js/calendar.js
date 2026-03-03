@@ -313,7 +313,8 @@ function pxToMins(px) {
 }
 
 // ── Drag state ────────────────────────────────────────────────────────────────
-let dragState = null; // { type: 'create'|'move'|'resize', ... }
+let dragState = null;
+let lastDragEnd = 0; // timestamp of last completed drag, to suppress click // { type: 'create'|'move'|'resize', ... }
 
 function renderWeekGrid() {
   document.getElementById('cal-day-labels').style.display = 'none';
@@ -577,7 +578,7 @@ function attachWeekInteractions() {
 
       // Click (no drag) → open detail popup (only for gcal events)
       evEl.addEventListener('click', (e) => {
-        if (dragState) return; // was a drag, not a click
+        if (Date.now() - lastDragEnd < 400) return; // was a drag, not a click
         e.stopPropagation();
         if (evType === 'gcal') {
           openEventPopup(evId, evStart, evEnd, evEl.title.replace(` ${evStart}–${evEnd}`, '').trim(), evDate, evEl);
@@ -654,6 +655,7 @@ function attachWeekInteractions() {
 
     if (ds.type === 'resize') {
       ds.evEl.style.cursor = '';
+      lastDragEnd = Date.now();
       if (ds.evType === 'class' && ds.classId) {
         saveClassTime(ds.classId, minsToTimeStr(ds.startM), minsToTimeStr(ds.endM));
       } else {
@@ -664,6 +666,7 @@ function attachWeekInteractions() {
     if (ds.type === 'move') {
       ds.evEl.style.opacity = '';
       ds.evEl.style.cursor = 'grab';
+      lastDragEnd = Date.now();
       if (ds.evType === 'class' && ds.classId) {
         saveClassTime(ds.classId, minsToTimeStr(ds.startM), minsToTimeStr(ds.endM));
       } else {
