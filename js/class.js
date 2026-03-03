@@ -1321,6 +1321,35 @@ window.saveOverviewNote = async (editId) => {
   loadOverviewNotesSection();
 };
 
+// ── Mark All PR Sent ──────────────────────────────────────────────────────────
+window.markAllPRSent = async () => {
+  // Get all student IDs in this class
+  const studentIds = enrollments.map(e => e.students?.id).filter(Boolean);
+  if (!studentIds.length) { toast('No students in this class', 'error'); return; }
+
+  // Check how many pending PR items exist for these students
+  const { data: pending, error: fetchErr } = await supabase
+    .from('parent_crm')
+    .select('id')
+    .in('student_id', studentIds)
+    .eq('status', 'pending');
+
+  if (fetchErr) { toast('Error fetching PR items: ' + fetchErr.message, 'error'); return; }
+  if (!pending || !pending.length) { toast('No pending parent reports for this class ✅', 'info'); return; }
+
+  const confirmed = confirm(`Mark ${pending.length} parent report item${pending.length !== 1 ? 's' : ''} as sent for this class?`);
+  if (!confirmed) return;
+
+  const ids = pending.map(p => p.id);
+  const { error: updateErr } = await supabase
+    .from('parent_crm')
+    .update({ status: 'sent', communicated_at: new Date().toISOString() })
+    .in('id', ids);
+
+  if (updateErr) { toast('Error updating: ' + updateErr.message, 'error'); return; }
+  toast(`✅ Marked ${pending.length} PR item${pending.length !== 1 ? 's' : ''} as sent!`, 'success');
+};
+
 // ── Date navigator event listeners ────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   const prevBtn  = document.getElementById('class-date-prev');
