@@ -13,7 +13,7 @@ const SERVICE_KEY  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 // Tables the browser is allowed to read (SELECT)
 const READABLE_TABLES = new Set([
   'attendance', 'calendar_events', 'class_enrollments', 'class_overview_notes',
-  'classes', 'claude_notifications', 'claude_projects', 'claude_tasks',
+  'classes', 'claude_notifications', 'claude_projects', 'claude_tasks', 'console_errors',
   'daily_sessions', 'events', 'exercise_log', 'food_log', 'gold_transactions',
   'grades', 'health_notes', 'language_errors', 'lesson_plans', 'lifeos_feedback',
   'pages_completed', 'parent_contacts', 'parent_crm', 'participation_scores',
@@ -25,8 +25,8 @@ const READABLE_TABLES = new Set([
 
 // Tables the browser is allowed to INSERT or UPDATE
 const INSERT_UPDATE_TABLES = new Set([
-  'attendance', 'calendar_events', 'class_overview_notes', 'claude_notifications',
-  'claude_projects', 'claude_tasks', 'daily_sessions', 'exercise_log', 'food_log',
+  'attendance', 'calendar_events', 'class_overview_notes', 'classes', 'claude_notifications',
+  'claude_projects', 'claude_tasks', 'console_errors', 'daily_sessions', 'exercise_log', 'food_log',
   'gold_transactions', 'grades', 'health_notes', 'language_errors', 'lesson_plans',
   'lifeos_feedback', 'pages_completed', 'parent_contacts', 'parent_crm',
   'participation_scores', 'reminders', 'smart_reports', 'spelling_tests',
