@@ -824,9 +824,9 @@ class GameScene extends Phaser.Scene {
 
   spawnUnit(unit){
     const {x,y}=isoPos(unit.col,unit.row);
-    // Settler feet sit at the tile center (bottom vertex of diamond)
-    const footX=x, footY=y+TH;
-    const shadow=this.add.ellipse(footX+4, footY-4, 30,11, 0x000000, 0.28);
+    // Place feet at the tile's visual center (midpoint of diamond, not bottom tip)
+    const footX=x, footY=y+TH/2;
+    const shadow=this.add.ellipse(footX, footY+2, 22, 8, 0x000000, 0.30);
     const sp=this.add.image(footX, footY, 'settler_normal').setOrigin(0.5,1.0);
     this.unitLayer.add(shadow); this.unitLayer.add(sp);
     this.unitSprites[unit.id]={sprite:sp, shadow, baseX:footX, baseY:footY};
@@ -838,20 +838,18 @@ class GameScene extends Phaser.Scene {
 
     for(const unit of GS.units){
       const s=this.unitSprites[unit.id]; if(!s) continue;
-      const bob=Math.sin(t*2+unit.id*1.2)*2.5;
-      s.sprite.y=s.baseY-bob;
-      s.shadow.setScale(1-bob*.012, 1-bob*.008);
 
       const isSel=GS.selectedUnit&&GS.selectedUnit.id===unit.id;
       s.sprite.setTexture(isSel?'settler_selected':'settler_normal');
+      s.sprite.y=s.baseY; // no floating
 
       if(isSel){
-        if(!s.selRing){s.selRing=this.add.ellipse(s.baseX,s.baseY,58,22,0,0).setStrokeStyle(3,0xffe060,1);this.unitLayer.add(s.selRing);}
-        s.selRing.x=s.baseX; s.selRing.y=s.baseY-bob*.25;
-        if(!s.pulseRing){s.pulseRing=this.add.ellipse(s.baseX,s.baseY,58,22,0,0).setStrokeStyle(3.5,0xffe060,0);this.unitLayer.add(s.pulseRing);}
+        if(!s.selRing){s.selRing=this.add.ellipse(s.baseX,s.baseY,44,16,0,0).setStrokeStyle(2.5,0xffe060,1);this.unitLayer.add(s.selRing);}
+        s.selRing.x=s.baseX; s.selRing.y=s.baseY+2;
+        if(!s.pulseRing){s.pulseRing=this.add.ellipse(s.baseX,s.baseY,44,16,0,0).setStrokeStyle(2.5,0xffe060,0);this.unitLayer.add(s.pulseRing);}
         const pulse=(Math.sin(t*2.5)+1)*.5;
-        s.pulseRing.x=s.baseX; s.pulseRing.y=s.baseY-bob*.25;
-        s.pulseRing.setSize(58+pulse*20,22+pulse*8); s.pulseRing.setStrokeStyle(3,0xffe060,pulse*.45);
+        s.pulseRing.x=s.baseX; s.pulseRing.y=s.baseY+2;
+        s.pulseRing.setSize(44+pulse*16,16+pulse*6); s.pulseRing.setStrokeStyle(2.5,0xffe060,pulse*.45);
       } else {
         if(s.selRing){s.selRing.destroy();s.selRing=null;}
         if(s.pulseRing){s.pulseRing.destroy();s.pulseRing=null;}
@@ -899,7 +897,7 @@ class GameScene extends Phaser.Scene {
   moveUnit(unit,col,row){
     const s=this.unitSprites[unit.id]; if(!s) return;
     const {x,y}=isoPos(col,row);
-    const newFX=x, newFY=y+TH;
+    const newFX=x, newFY=y+TH/2;
     const peakY=Math.min(s.baseY,newFY)-36;
 
     this.tweens.add({targets:s.sprite, x:newFX, duration:380, ease:'Cubic.easeInOut'});
