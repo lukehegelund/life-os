@@ -34,8 +34,6 @@
     z-index: 100;
     box-shadow: 0 3px 20px rgba(0,0,0,0.8);
   }
-
-  /* Gold divider lines at top and bottom of top bar */
   #top-bar::before {
     content: '';
     position: absolute;
@@ -52,94 +50,68 @@
   }
 
   .empire-title {
-    display: flex;
-    flex-direction: column;
-    margin-right: 16px;
-    line-height: 1;
+    display: flex; flex-direction: column;
+    margin-right: 16px; line-height: 1;
   }
   .empire-name {
     font-family: 'Cinzel Decorative', serif;
-    font-size: 13px;
-    color: #f0d080;
+    font-size: 13px; color: #f0d080;
     letter-spacing: 2px;
     text-shadow: 0 0 12px rgba(240,208,128,0.5), 0 1px 2px rgba(0,0,0,0.8);
     white-space: nowrap;
   }
   .empire-sub {
-    font-size: 9px;
-    color: #8a6a30;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    font-family: sans-serif;
-    margin-top: 2px;
+    font-size: 9px; color: #8a6a30;
+    letter-spacing: 2px; text-transform: uppercase;
+    font-family: sans-serif; margin-top: 2px;
   }
 
   .top-divider {
-    width: 1px;
-    height: 36px;
+    width: 1px; height: 36px;
     background: linear-gradient(180deg, transparent, #4a3010, transparent);
     margin: 0 4px;
   }
 
   .resource-pill {
-    display: flex;
-    align-items: center;
-    gap: 7px;
+    display: flex; align-items: center; gap: 7px;
     background: linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(0,0,0,0.2) 100%);
     border: 1px solid rgba(120,80,20,0.4);
-    border-radius: 3px;
-    padding: 5px 11px 5px 8px;
-    min-width: 88px;
-    position: relative;
-    overflow: hidden;
+    border-radius: 3px; padding: 5px 11px 5px 8px;
+    min-width: 88px; position: relative; overflow: hidden;
   }
   .resource-pill::after {
     content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 1px;
+    position: absolute; top: 0; left: 0; right: 0; height: 1px;
     background: linear-gradient(90deg, transparent, rgba(240,208,128,0.15), transparent);
   }
   .res-icon { font-size: 15px; flex-shrink: 0; }
   .res-data { display: flex; flex-direction: column; gap: 1px; }
   .res-val { color: #f5e090; font-weight: 600; font-size: 14px; font-family: 'Cinzel', serif; line-height: 1; }
   .res-label { color: #6a5030; font-size: 9px; font-family: sans-serif; letter-spacing: 1px; text-transform: uppercase; }
-  .res-delta { color: #6a8a40; font-size: 9px; font-family: sans-serif; }
 
   .spacer { flex: 1; }
 
   #turn-info {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    margin-right: 8px;
+    display: flex; flex-direction: column;
+    align-items: flex-end; margin-right: 8px;
   }
   #turn-era { font-family: 'Cinzel', serif; font-size: 11px; color: #a08040; letter-spacing: 1px; }
   #turn-counter { font-size: 10px; color: #6a5030; font-family: sans-serif; }
 
   .turn-btn {
     background: linear-gradient(180deg, #9a6a20 0%, #5a3808 100%);
-    border: 1px solid #c8841e;
-    border-radius: 3px;
-    color: #f5e090;
-    font-family: 'Cinzel', Georgia, serif;
-    font-size: 12px;
-    font-weight: 600;
-    padding: 8px 20px;
-    cursor: pointer;
-    letter-spacing: 1.5px;
+    border: 1px solid #c8841e; border-radius: 3px;
+    color: #f5e090; font-family: 'Cinzel', Georgia, serif;
+    font-size: 12px; font-weight: 600; padding: 8px 20px;
+    cursor: pointer; letter-spacing: 1.5px;
     text-shadow: 0 1px 3px rgba(0,0,0,0.6);
     box-shadow: 0 2px 8px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,220,100,0.2);
-    transition: all 0.12s;
-    white-space: nowrap;
-    position: relative;
-    overflow: hidden;
+    transition: all 0.12s; white-space: nowrap;
+    position: relative; overflow: hidden;
   }
   .turn-btn::after {
     content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 1px;
+    position: absolute; top: 0; left: 0; right: 0; height: 1px;
     background: linear-gradient(90deg, transparent, rgba(255,220,120,0.4), transparent);
   }
   .turn-btn:hover {
@@ -151,93 +123,62 @@
 
   /* ── RIGHT PANEL ── */
   #right-panel {
-    position: fixed;
-    top: 56px; right: 0; bottom: 0;
+    position: fixed; top: 56px; right: 0; bottom: 0;
     width: 248px;
-    background: linear-gradient(180deg, #0e0c08 0%, #09080500 100%);
-    border-left: 1px solid #3a2810;
-    z-index: 90;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
+    background: linear-gradient(180deg, #0e0c08 0%, rgba(9,8,5,0.97) 100%);
+    border-left: 1px solid #3a2810; z-index: 90;
+    display: flex; flex-direction: column; overflow: hidden;
   }
-  /* Inner gold highlight edge */
   #right-panel::before {
     content: '';
-    position: absolute;
-    top: 0; left: 0; bottom: 0;
-    width: 1px;
+    position: absolute; top: 0; left: 0; bottom: 0; width: 1px;
     background: linear-gradient(180deg, transparent, #5a3810 20%, #5a3810 80%, transparent);
     pointer-events: none;
   }
 
   .panel-section {
     border-bottom: 1px solid rgba(58,40,16,0.8);
-    padding: 12px 14px;
-    position: relative;
+    padding: 12px 14px; position: relative;
   }
   .panel-section:last-child { border-bottom: none; flex: 1; min-height: 0; }
 
   .panel-title {
-    font-size: 9px;
-    letter-spacing: 3px;
-    color: #8a6020;
-    text-transform: uppercase;
-    margin-bottom: 10px;
-    font-family: sans-serif;
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    font-size: 9px; letter-spacing: 3px; color: #8a6020;
+    text-transform: uppercase; margin-bottom: 10px;
+    font-family: sans-serif; display: flex; align-items: center; gap: 8px;
   }
   .panel-title::after {
-    content: '';
-    flex: 1;
-    height: 1px;
+    content: ''; flex: 1; height: 1px;
     background: linear-gradient(90deg, #3a2810, transparent);
   }
 
-  /* Selected tile */
   #tile-icon { font-size: 28px; margin-bottom: 4px; }
   #tile-name { font-size: 13px; color: #f0d080; font-weight: 600; margin-bottom: 4px; min-height: 18px; }
   #tile-desc { font-size: 10px; color: #8a7050; line-height: 1.6; font-family: sans-serif; min-height: 32px; }
   #tile-yield { font-size: 10px; color: #6a8040; font-family: sans-serif; margin-top: 6px; }
 
-  /* Minimap */
   #minimap-canvas {
     width: 218px; height: 130px;
-    border: 1px solid #2a1e0a;
-    border-radius: 2px;
-    display: block;
-    box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+    border: 1px solid #2a1e0a; border-radius: 2px;
+    display: block; box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
   }
 
-  /* Rival rows */
   .rival-row {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    margin-bottom: 9px;
-    padding: 5px 6px;
-    border-radius: 3px;
-    background: rgba(0,0,0,0.2);
+    display: flex; align-items: center; gap: 9px;
+    margin-bottom: 9px; padding: 5px 6px;
+    border-radius: 3px; background: rgba(0,0,0,0.2);
     border: 1px solid rgba(255,255,255,0.03);
   }
   .rival-flag {
-    width: 12px; height: 12px;
-    border-radius: 2px;
-    flex-shrink: 0;
-    box-shadow: 0 0 4px currentColor;
+    width: 12px; height: 12px; border-radius: 2px;
+    flex-shrink: 0; box-shadow: 0 0 4px currentColor;
   }
   .rival-info { flex: 1; min-width: 0; }
   .rival-name { font-size: 11px; color: #b8a080; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .rival-bar-bg {
-    height: 3px; background: rgba(255,255,255,0.06);
-    border-radius: 2px; margin-top: 4px; overflow: hidden;
-  }
+  .rival-bar-bg { height: 3px; background: rgba(255,255,255,0.06); border-radius: 2px; margin-top: 4px; overflow: hidden; }
   .rival-bar { height: 100%; border-radius: 2px; transition: width 0.5s; }
   .rival-power { font-size: 9px; color: #5a4820; font-family: sans-serif; float: right; }
 
-  /* Event log */
   #event-log-wrap { flex: 1; overflow-y: auto; padding: 12px 14px; min-height: 0; }
   #event-log { font-size: 10px; color: #5a4a30; font-family: sans-serif; line-height: 1.8; }
   #event-log div { border-bottom: 1px solid rgba(255,255,255,0.02); padding-bottom: 2px; }
@@ -245,80 +186,57 @@
 
   /* ── BOTTOM BAR ── */
   #bottom-bar {
-    position: fixed;
-    bottom: 0; left: 0; right: 248px;
+    position: fixed; bottom: 0; left: 0; right: 248px;
     height: 64px;
     background: linear-gradient(0deg, #0e0c08 0%, transparent 100%);
     border-top: 1px solid #2a1e0a;
-    display: flex;
-    align-items: center;
-    padding: 0 18px;
-    gap: 8px;
-    z-index: 90;
+    display: flex; align-items: center; padding: 0 18px; gap: 8px; z-index: 90;
   }
   #bottom-bar::before {
     content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 1px;
+    position: absolute; top: 0; left: 0; right: 0; height: 1px;
     background: linear-gradient(90deg, transparent, #4a3010 30%, #4a3010 70%, transparent);
   }
 
   .action-btn {
     background: linear-gradient(180deg, #1a1610 0%, #100e08 100%);
-    border: 1px solid #2e2010;
-    border-radius: 3px;
-    color: #8a7040;
-    font-size: 11px;
-    padding: 7px 14px;
-    cursor: pointer;
-    font-family: 'Cinzel', serif;
-    font-weight: 400;
-    letter-spacing: 0.5px;
-    transition: all 0.12s;
-    white-space: nowrap;
-    position: relative;
+    border: 1px solid #2e2010; border-radius: 3px;
+    color: #8a7040; font-size: 11px; padding: 7px 14px;
+    cursor: pointer; font-family: 'Cinzel', serif;
+    font-weight: 400; letter-spacing: 0.5px;
+    transition: all 0.12s; white-space: nowrap;
   }
   .action-btn:hover {
-    border-color: #5a3a18;
-    color: #c8a060;
+    border-color: #5a3a18; color: #c8a060;
     background: linear-gradient(180deg, #241e12 0%, #1a1408 100%);
   }
   .action-btn.active {
-    border-color: #9a6820;
-    color: #f0d080;
+    border-color: #9a6820; color: #f0d080;
     background: linear-gradient(180deg, #2a200e 0%, #1a1206 100%);
     box-shadow: 0 0 8px rgba(200,140,30,0.15), inset 0 1px 0 rgba(255,220,100,0.1);
   }
 
   #status-text {
-    flex: 1;
-    font-size: 10px;
-    color: #4a3a20;
-    font-family: sans-serif;
-    padding-left: 12px;
-    letter-spacing: 0.5px;
+    flex: 1; font-size: 10px; color: #4a3a20;
+    font-family: sans-serif; padding-left: 12px; letter-spacing: 0.5px;
   }
 
-  /* ── NOTIFICATIONS ── */
+  /* Zoom indicator */
+  #zoom-indicator {
+    font-size: 9px; color: #4a3a20; font-family: sans-serif;
+    letter-spacing: 0.5px; white-space: nowrap;
+  }
+
   #notif-stack {
-    position: fixed;
-    bottom: 74px; left: 16px;
-    width: 290px;
-    z-index: 200;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
+    position: fixed; bottom: 74px; left: 16px;
+    width: 290px; z-index: 200;
+    display: flex; flex-direction: column; gap: 6px;
   }
   .notif {
     background: linear-gradient(135deg, #1c180e 0%, #120e07 100%);
-    border: 1px solid #5a3e18;
-    border-left: 3px solid #c8841e;
-    border-radius: 3px;
-    padding: 9px 12px;
-    font-size: 11px;
-    color: #c8a860;
-    font-family: sans-serif;
+    border: 1px solid #5a3e18; border-left: 3px solid #c8841e;
+    border-radius: 3px; padding: 9px 12px;
+    font-size: 11px; color: #c8a860; font-family: sans-serif;
     animation: slideIn 0.3s ease;
     box-shadow: 0 2px 14px rgba(0,0,0,0.6);
   }
@@ -327,7 +245,6 @@
     to { opacity: 1; transform: translateX(0); }
   }
 
-  /* ── LOADING ── */
   #loading {
     position: fixed; inset: 0;
     background: radial-gradient(ellipse at center, #0e0c08 0%, #04040a 70%);
@@ -344,43 +261,30 @@
     text-transform: uppercase;
   }
   #loading p { font-size: 11px; color: #5a4820; letter-spacing: 4px; font-family: sans-serif; text-transform: uppercase; }
-  .load-bar-wrap {
-    width: 280px; height: 2px;
-    background: rgba(255,255,255,0.06);
-    border-radius: 1px; overflow: hidden; margin-top: 8px;
-  }
+  .load-bar-wrap { width: 280px; height: 2px; background: rgba(255,255,255,0.06); border-radius: 1px; overflow: hidden; margin-top: 8px; }
   #load-bar {
     height: 100%;
     background: linear-gradient(90deg, #7a4e10, #f0d080, #7a4e10);
     background-size: 200% 100%;
     border-radius: 1px;
     animation: shimmer 1.8s infinite;
-    transition: width 0.4s;
-    width: 0%;
+    transition: width 0.4s; width: 0%;
   }
   @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
-  /* ── TOOLTIP ── */
   #tooltip {
     position: fixed;
     background: linear-gradient(135deg, #14100a 0%, #0c0906 100%);
-    border: 1px solid #5a3e18;
-    border-radius: 3px;
-    padding: 8px 12px;
-    font-size: 11px;
-    color: #c8a860;
-    font-family: sans-serif;
-    pointer-events: none;
-    z-index: 300;
-    display: none;
+    border: 1px solid #5a3e18; border-radius: 3px;
+    padding: 8px 12px; font-size: 11px; color: #c8a860;
+    font-family: sans-serif; pointer-events: none;
+    z-index: 300; display: none;
     box-shadow: 0 4px 16px rgba(0,0,0,0.7);
-    max-width: 190px;
-    line-height: 1.5;
+    max-width: 190px; line-height: 1.5;
   }
   #tooltip .tt-title { color: #f0d080; font-weight: bold; font-size: 12px; margin-bottom: 3px; font-family: 'Cinzel', serif; }
   #tooltip .tt-owner { font-size: 9px; margin-top: 4px; letter-spacing: 1px; }
 
-  /* ── SCROLLBAR ── */
   ::-webkit-scrollbar { width: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: #3a2810; border-radius: 2px; }
@@ -388,7 +292,6 @@
 </head>
 <body>
 
-<!-- Loading -->
 <div id="loading">
   <div class="crest">🏛</div>
   <h1>LifeOS Empire</h1>
@@ -396,21 +299,21 @@
   <div class="load-bar-wrap"><div id="load-bar"></div></div>
 </div>
 
-<!-- Tooltip -->
 <div id="tooltip">
   <div class="tt-title" id="tt-title"></div>
   <div id="tt-body"></div>
   <div class="tt-owner" id="tt-owner"></div>
 </div>
 
-<!-- Canvas -->
 <canvas id="game-canvas"></canvas>
 
-<!-- Top Bar -->
+<!-- Star field canvas (behind main) -->
+<canvas id="star-canvas" style="position:fixed;top:0;left:0;pointer-events:none;z-index:0;"></canvas>
+
 <div id="top-bar">
   <div class="empire-title">
     <div class="empire-name">🏛 Hegelund Republic</div>
-    <div class="empire-sub">Year 1 · Ancient Era</div>
+    <div class="empire-sub" id="empire-sub-text">Year 1 · Ancient Era</div>
   </div>
   <div class="top-divider"></div>
 
@@ -458,9 +361,7 @@
   <button class="turn-btn" onclick="endTurn()">End Turn ▶</button>
 </div>
 
-<!-- Right Panel -->
 <div id="right-panel">
-  <!-- Selected Tile -->
   <div class="panel-section">
     <div class="panel-title">Selected</div>
     <div id="tile-icon" style="font-size:26px; margin-bottom:4px;">—</div>
@@ -468,14 +369,10 @@
     <div id="tile-desc">Click a hex to inspect it.</div>
     <div id="tile-yield"></div>
   </div>
-
-  <!-- Minimap -->
   <div class="panel-section">
     <div class="panel-title">World Map</div>
     <canvas id="minimap-canvas" width="218" height="130"></canvas>
   </div>
-
-  <!-- Rivals -->
   <div class="panel-section">
     <div class="panel-title">Rival Empires</div>
     <div id="rivals-list">
@@ -505,15 +402,12 @@
       </div>
     </div>
   </div>
-
-  <!-- Event Log -->
   <div class="panel-section" style="flex:1; display:flex; flex-direction:column; min-height:0;">
     <div class="panel-title">Event Log</div>
     <div id="event-log-wrap"><div id="event-log"></div></div>
   </div>
 </div>
 
-<!-- Bottom Bar -->
 <div id="bottom-bar">
   <button class="action-btn active" id="btn-map" onclick="setMode('map')">🗺 Map</button>
   <button class="action-btn" id="btn-city" onclick="setMode('city')">🏛 Cities</button>
@@ -521,56 +415,55 @@
   <button class="action-btn" id="btn-tech" onclick="setMode('tech')">🔬 Research</button>
   <button class="action-btn" id="btn-diplo" onclick="setMode('diplo')">🤝 Diplomacy</button>
   <div id="status-text">Select a hex to begin your conquest.</div>
+  <div id="zoom-indicator">100%</div>
 </div>
 
-<!-- Notifications -->
 <div id="notif-stack"></div>
 
 <script>
 // ══════════════════════════════════════════════════════════
 // CONSTANTS
 // ══════════════════════════════════════════════════════════
-const COLS = 16, ROWS = 10;
-const HEX_SIZE = 54;
+const COLS = 18, ROWS = 11;
+const BASE_HEX = 54;
 const RIGHT_W = 248;
 const TOP_H = 56;
 const BOT_H = 64;
 
-// ── BIOME CONFIG ──
 const BIOMES = {
-  plains:   { label: 'Grasslands',    yield: '+2 📚 +1 ⚡',  desc: 'Fertile rolling hills — ideal for settlement.' },
-  forest:   { label: 'Forest',        yield: '+1 💪 +1 🌐',  desc: 'Ancient woodland — rich in resources.' },
-  mountain: { label: 'Mountains',     yield: '+3 💰 +1 📚',  desc: 'Rugged peaks — mineral wealth awaits.' },
-  water:    { label: 'Water',         yield: '+2 💪',         desc: 'Lakes and rivers — sustains your people.' },
-  desert:   { label: 'Desert',        yield: '+1 💰',         desc: 'Harsh terrain — hidden riches, strategic.' },
-  tundra:   { label: 'Tundra',        yield: '+1 💪',         desc: 'Frozen wastes — +2 Vitality when settled.' },
-  city:     { label: 'Capital City',  yield: '+5 all',        desc: 'Hegelund — the heart of your empire.' },
-  town:     { label: 'Settlement',    yield: '+2 all',        desc: 'A growing town — ripe for development.' },
-  enemy:    { label: 'Enemy Fortress',yield: '⚠ Rival',      desc: 'Rival stronghold. Conquer to expand.' },
+  plains:   { label:'Grasslands',    yield:'+2 📚 +1 ⚡',  desc:'Fertile rolling hills — ideal for settlement.' },
+  forest:   { label:'Forest',        yield:'+1 💪 +1 🌐',  desc:'Ancient woodland — rich in resources and cover.' },
+  mountain: { label:'Mountains',     yield:'+3 💰 +1 📚',  desc:'Rugged peaks — mineral wealth awaits below.' },
+  water:    { label:'Water',         yield:'+2 💪',         desc:'Lakes and rivers — sustains your people.' },
+  desert:   { label:'Desert',        yield:'+1 💰',         desc:'Harsh terrain — hidden riches, strategic position.' },
+  tundra:   { label:'Tundra',        yield:'+1 💪',         desc:'Frozen wastes — +2 Vitality when settled.' },
+  city:     { label:'Capital City',  yield:'+5 all',        desc:'Hegelund — the heart of your empire.' },
+  town:     { label:'Settlement',    yield:'+2 all',        desc:'A growing town — ripe for development.' },
+  enemy:    { label:'Enemy Fortress',yield:'⚠ Rival',      desc:'A rival stronghold. Conquer to expand your domain.' },
 };
 
 // ══════════════════════════════════════════════════════════
-// NOISE HELPERS
+// NOISE
 // ══════════════════════════════════════════════════════════
 function hash(x, y, seed) {
   let n = Math.sin(x * 127.1 + y * 311.7 + seed * 74.9) * 43758.5453;
   return n - Math.floor(n);
 }
 function smoothNoise(x, y, seed) {
-  const ix = Math.floor(x), iy = Math.floor(y);
-  const fx = x - ix, fy = y - iy;
-  const a = hash(ix, iy, seed), b = hash(ix+1, iy, seed);
-  const c = hash(ix, iy+1, seed), d = hash(ix+1, iy+1, seed);
-  const ux = fx*fx*(3 - 2*fx), uy = fy*fy*(3 - 2*fy);
-  return a + (b-a)*ux + (c-a)*uy + (a-b-c+d)*ux*uy;
+  const ix=Math.floor(x), iy=Math.floor(y);
+  const fx=x-ix, fy=y-iy;
+  const a=hash(ix,iy,seed), b=hash(ix+1,iy,seed);
+  const c=hash(ix,iy+1,seed), d=hash(ix+1,iy+1,seed);
+  const ux=fx*fx*(3-2*fx), uy=fy*fy*(3-2*fy);
+  return a+(b-a)*ux+(c-a)*uy+(a-b-c+d)*ux*uy;
 }
 function fbm(x, y, seed, octaves=4) {
   let v=0, amp=1, freq=1, max=0;
-  for (let i=0; i<octaves; i++) {
-    v += smoothNoise(x*freq, y*freq, seed+i*997) * amp;
-    max += amp; amp *= 0.5; freq *= 2;
+  for (let i=0;i<octaves;i++) {
+    v += smoothNoise(x*freq, y*freq, seed+i*997)*amp;
+    max += amp; amp*=0.5; freq*=2;
   }
-  return v / max;
+  return v/max;
 }
 
 // ══════════════════════════════════════════════════════════
@@ -583,20 +476,36 @@ let rivalData = [
   { name:'Wellness Empire',  color:'#40b070', maxPower:200, power:80  },
 ];
 
+// Particles near capital
+let particles = [];
+function spawnParticles(cx, cy) {
+  for (let i=0; i<3; i++) {
+    const a = Math.random()*Math.PI*2;
+    const r = 5+Math.random()*20;
+    particles.push({
+      x: cx+Math.cos(a)*r, y: cy+Math.sin(a)*r,
+      vx: (Math.random()-0.5)*0.3, vy: -0.4-Math.random()*0.4,
+      life: 1.0, size: 1+Math.random()*1.5,
+      color: Math.random()<0.5 ? '#f0d080' : '#c8a840'
+    });
+  }
+  if (particles.length > 80) particles.splice(0, particles.length - 80);
+}
+
 function generateWorld() {
   world = [];
   for (let r=0; r<ROWS; r++) {
     for (let c=0; c<COLS; c++) {
-      const nx = c/COLS, ny = r/ROWS;
+      const nx=c/COLS, ny=r/ROWS;
       const elev = fbm(nx*3+1, ny*3+1, 42);
       const moist = fbm(nx*2.5+10, ny*2.5+10, 7);
       let biome;
-      if (elev < 0.22) biome = 'water';
-      else if (elev < 0.34) biome = (moist > 0.55) ? 'tundra' : 'plains';
-      else if (elev < 0.50) biome = (moist > 0.52) ? 'forest' : 'plains';
-      else if (elev < 0.62) biome = (moist > 0.48) ? 'forest' : 'plains';
-      else if (elev < 0.72) biome = (moist < 0.4) ? 'desert' : 'plains';
-      else biome = 'mountain';
+      if (elev < 0.22) biome='water';
+      else if (elev < 0.34) biome=(moist>0.55)?'tundra':'plains';
+      else if (elev < 0.50) biome=(moist>0.52)?'forest':'plains';
+      else if (elev < 0.62) biome=(moist>0.48)?'forest':'plains';
+      else if (elev < 0.72) biome=(moist<0.4)?'desert':'plains';
+      else biome='mountain';
 
       world.push({
         col:c, row:r, biome, owner:null,
@@ -604,29 +513,28 @@ function generateWorld() {
         elevation:elev, moisture:moist,
         selected:false, hovered:false,
         city:null, unit:null,
-        treeSeeds: [hash(c,r,1), hash(c+100,r,2), hash(c,r+100,3)],
+        treeSeeds:[hash(c,r,1), hash(c+100,r,2), hash(c,r+100,3)],
+        // Per-tile cached canvas
+        _bgCache: null, _bgCacheZoom: -1,
       });
     }
   }
 
-  // Player capital
-  const cap = getHex(7, 5);
-  cap.biome = 'city'; cap.owner = 'player'; cap.revealed = true; cap.fogAlpha = 0;
-  cap.city = { name:'Hegelund', pop:2, level:1 };
-  revealRing(7, 5, 3);
+  const cap = getHex(8, 5);
+  cap.biome='city'; cap.owner='player'; cap.revealed=true; cap.fogAlpha=0;
+  cap.city={name:'Hegelund', pop:2, level:1};
+  revealRing(8, 5, 3);
 
-  // Rival capitals
-  [[1,1],[14,1],[14,8]].forEach(([c,r], i) => {
-    const h = getHex(c, r);
-    h.biome = 'enemy'; h.owner = `r${i}`;
-    h.revealed = true; h.fogAlpha = 0;
-    h.city = { name: ['Bot Citadel','Lingua Keep','Vitae Hold'][i] };
+  [[1,1],[16,1],[16,9]].forEach(([c,r],i) => {
+    const h=getHex(c,r);
+    h.biome='enemy'; h.owner=`r${i}`;
+    h.revealed=true; h.fogAlpha=0;
+    h.city={name:['Bot Citadel','Lingua Keep','Vitae Hold'][i]};
   });
 
-  // Neutral towns
-  [[4,3],[10,6],[6,8],[12,3],[3,7]].forEach(([c,r]) => {
-    const h = getHex(c,r);
-    if (h.biome !== 'water' && h.biome !== 'mountain') h.biome = 'town';
+  [[4,3],[11,6],[6,8],[13,3],[3,7],[8,2],[5,6]].forEach(([c,r]) => {
+    const h=getHex(c,r);
+    if (h && h.biome!=='water' && h.biome!=='mountain') h.biome='town';
   });
 }
 
@@ -636,544 +544,835 @@ function getHex(c, r) {
 }
 
 function revealRing(cc, cr, radius) {
-  for (let dr=-radius; dr<=radius; dr++) {
+  for (let dr=-radius; dr<=radius; dr++)
     for (let dc=-radius; dc<=radius; dc++) {
-      const h = getHex(cc+dc, cr+dr);
-      if (h) { h.revealed = true; h.fogAlpha = 0; }
+      const h=getHex(cc+dc, cr+dr);
+      if (h) { h.revealed=true; h.fogAlpha=0; }
     }
-  }
 }
 
 // ══════════════════════════════════════════════════════════
-// HEX MATH (offset, pointy-top)
+// CAMERA / ZOOM
 // ══════════════════════════════════════════════════════════
-const W = Math.sqrt(3) * HEX_SIZE;
-const H = 2 * HEX_SIZE;
+let cameraX=60, cameraY=40;
+let zoomLevel=1.0;
+const MIN_ZOOM=0.5, MAX_ZOOM=2.0;
+
+function hexSize() { return BASE_HEX * zoomLevel; }
+function W_w()     { return Math.sqrt(3) * hexSize(); }
+function H_h()     { return 2 * hexSize(); }
 
 function hexCenter(c, r) {
-  const x = c * W + (r % 2 === 1 ? W/2 : 0) + cameraX + W/2;
-  const y = r * H * 0.75 + cameraY + TOP_H + HEX_SIZE;
-  return { x, y };
+  const hs = hexSize();
+  const ww = W_w();
+  const x = c*ww + (r%2===1 ? ww/2 : 0) + cameraX + ww/2;
+  const y = r*H_h()*0.75 + cameraY + TOP_H + hs;
+  return {x, y};
 }
 
 function pixelToHex(px, py) {
-  // Reverse-map pixel → hex (approximate)
-  const adjY = py - cameraY - TOP_H - HEX_SIZE;
-  const r = Math.round(adjY / (H * 0.75));
-  const offset = (r % 2 === 1) ? W/2 : 0;
-  const adjX = px - cameraX - offset - W/2;
-  const c = Math.round(adjX / W);
-  // Check neighbours for closest
-  let best = null, bestD = Infinity;
+  const ww=W_w(), hh=H_h(), hs=hexSize();
+  const adjY = py - cameraY - TOP_H - hs;
+  const r = Math.round(adjY / (hh*0.75));
+  const offset = (r%2===1) ? ww/2 : 0;
+  const adjX = px - cameraX - offset - ww/2;
+  const c = Math.round(adjX / ww);
+  let best=null, bestD=Infinity;
   for (let dr=-1; dr<=1; dr++) for (let dc=-1; dc<=1; dc++) {
-    const tc = c+dc, tr = r+dr;
-    const h = getHex(tc, tr);
+    const tc=c+dc, tr=r+dr;
+    const h=getHex(tc,tr);
     if (!h) continue;
-    const {x,y} = hexCenter(tc, tr);
-    const d = Math.hypot(px-x, py-y);
-    if (d < bestD) { bestD = d; best = h; }
+    const {x,y}=hexCenter(tc,tr);
+    const d=Math.hypot(px-x, py-y);
+    if (d<bestD) { bestD=d; best=h; }
   }
-  return (bestD < HEX_SIZE * 1.1) ? best : null;
+  return (bestD < hs*1.15) ? best : null;
 }
 
 function hexPath(ctx, cx, cy, size) {
   ctx.beginPath();
   for (let i=0; i<6; i++) {
-    const a = Math.PI/180 * (60*i - 30);  // pointy-top
-    const x = cx + size * Math.cos(a);
-    const y = cy + size * Math.sin(a);
+    const a = Math.PI/180*(60*i-30);
+    const x = cx + size*Math.cos(a);
+    const y = cy + size*Math.sin(a);
     i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
   }
   ctx.closePath();
 }
 
 // ══════════════════════════════════════════════════════════
-// TERRAIN RENDERERS (canvas-drawn detail art)
+// BIOME COLORS
 // ══════════════════════════════════════════════════════════
+const BIOME_COLORS = {
+  plains:   {base:'#5a7032', dark:'#3a4e1e', edge:'#2a3a10'},
+  forest:   {base:'#1e4220', dark:'#122a14', edge:'#0c1e0c'},
+  mountain: {base:'#6a5e50', dark:'#4a4038', edge:'#3a3028'},
+  water:    {base:'#1a3e62', dark:'#0e2840', edge:'#091c30'},
+  desert:   {base:'#b89040', dark:'#8a6820', edge:'#6a5010'},
+  tundra:   {base:'#7a8e9a', dark:'#5a6e7a', edge:'#3a4e5a'},
+  city:     {base:'#8a7028', dark:'#5a4a18', edge:'#3a3010'},
+  town:     {base:'#7a6828', dark:'#5a4a18', edge:'#3a3010'},
+  enemy:    {base:'#7a2828', dark:'#4a1818', edge:'#2a0c0c'},
+};
 
-function drawTrees(ctx, cx, cy, seeds, count=3, fogAlpha=0) {
-  if (fogAlpha > 0.5) return;
+function clamp(v,mn,mx) { return Math.max(mn,Math.min(mx,v)); }
+
+function adjustColor(hex, amount) {
+  const r=clamp(parseInt(hex.slice(1,3),16)+amount,0,255);
+  const g=clamp(parseInt(hex.slice(3,5),16)+amount,0,255);
+  const b=clamp(parseInt(hex.slice(5,7),16)+amount,0,255);
+  return `rgb(${r},${g},${b})`;
+}
+
+function hexFillStyle(ctx, cx, cy, hex) {
+  const bc=BIOME_COLORS[hex.biome]||BIOME_COLORS.plains;
+  const hs=hexSize();
+  const elev=hex.elevation;
+  const lighten=(elev-0.5)*35;
+  const grad=ctx.createLinearGradient(cx, cy-hs*0.9, cx, cy+hs*0.9);
+  grad.addColorStop(0, adjustColor(bc.base, lighten+22));
+  grad.addColorStop(0.35, adjustColor(bc.base, lighten+8));
+  grad.addColorStop(0.7, adjustColor(bc.base, lighten));
+  grad.addColorStop(1, adjustColor(bc.dark, lighten-15));
+  return grad;
+}
+
+// ══════════════════════════════════════════════════════════
+// TERRAIN DETAIL DRAWING
+// ══════════════════════════════════════════════════════════
+function drawTrees(ctx, cx, cy, seeds, count=3, fogAlpha=0, scale=1) {
+  if (fogAlpha>0.5) return;
   ctx.save();
-  ctx.globalAlpha = (1 - fogAlpha) * 0.9;
+  ctx.globalAlpha=(1-fogAlpha)*0.92;
   for (let i=0; i<count; i++) {
-    const seed = seeds[i % seeds.length];
-    const angle = seed * Math.PI * 2;
-    const dist = 8 + seed * 14;
-    const tx = cx + Math.cos(angle) * dist;
-    const ty = cy + Math.sin(angle) * dist;
-    const h = 11 + (seeds[(i+1)%seeds.length] || 0.5) * 8;
-    const w = h * 0.5;
+    const seed=seeds[i%seeds.length];
+    const s2=seeds[(i+1)%seeds.length];
+    const angle=seed*Math.PI*2;
+    const dist=(7+seed*13)*scale;
+    const tx=cx+Math.cos(angle)*dist;
+    const ty=cy+Math.sin(angle)*dist;
+    const h=(12+s2*10)*scale;
+    const w=h*0.52;
+
+    // Ground shadow
+    ctx.fillStyle='rgba(0,0,0,0.18)';
+    ctx.beginPath();
+    ctx.ellipse(tx, ty+3*scale, w*0.7, 3*scale, 0, 0, Math.PI*2);
+    ctx.fill();
+
     // Trunk
-    ctx.fillStyle = '#3a2510';
-    ctx.fillRect(tx - 1.5, ty - 1, 3, 5);
-    // Canopy (layered triangles)
-    ctx.fillStyle = '#1e4a1e';
+    ctx.fillStyle='#3a2510';
+    ctx.fillRect(tx-1.5*scale, ty-2*scale, 3*scale, 6*scale);
+
+    // 3-layer canopy
+    const layers=[
+      {y:ty-h-1*scale,  w:w*0.58, col:'#1b4a1b'},
+      {y:ty-h+h*0.32,   w:w*0.8,  col:'#286028'},
+      {y:ty-h*0.5+2*scale, w:w,   col:'#357035'},
+    ];
+    layers.forEach(l => {
+      // Shadow on right side
+      ctx.fillStyle='rgba(0,0,0,0.15)';
+      ctx.beginPath();
+      ctx.moveTo(tx, l.y);
+      ctx.lineTo(tx, l.y+h*0.35);
+      ctx.lineTo(tx+l.w, l.y+h*0.35);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle=l.col;
+      ctx.beginPath();
+      ctx.moveTo(tx, l.y);
+      ctx.lineTo(tx-l.w, l.y+h*0.35);
+      ctx.lineTo(tx+l.w, l.y+h*0.35);
+      ctx.closePath();
+      ctx.fill();
+    });
+    // Snow highlight on top layer
+    ctx.fillStyle='rgba(220,240,255,0.1)';
     ctx.beginPath();
-    ctx.moveTo(tx, ty - h - 2);
-    ctx.lineTo(tx - w*0.7, ty - h*0.4);
-    ctx.lineTo(tx + w*0.7, ty - h*0.4);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = '#2a5e2a';
-    ctx.beginPath();
-    ctx.moveTo(tx, ty - h + 2);
-    ctx.lineTo(tx - w*0.9, ty - h*0.2 + 2);
-    ctx.lineTo(tx + w*0.9, ty - h*0.2 + 2);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = '#3a6e2a';
-    ctx.beginPath();
-    ctx.moveTo(tx, ty - h*0.5 + 3);
-    ctx.lineTo(tx - w, ty + 1);
-    ctx.lineTo(tx + w, ty + 1);
+    ctx.moveTo(tx, ty-h-1*scale);
+    ctx.lineTo(tx-w*0.2, ty-h+h*0.1);
+    ctx.lineTo(tx+w*0.2, ty-h+h*0.1);
     ctx.closePath();
     ctx.fill();
   }
   ctx.restore();
 }
 
-function drawMountain(ctx, cx, cy, seed, fogAlpha=0) {
-  if (fogAlpha > 0.5) return;
+function drawMountain(ctx, cx, cy, seed, fogAlpha=0, scale=1) {
+  if (fogAlpha>0.5) return;
   ctx.save();
-  ctx.globalAlpha = (1 - fogAlpha) * 0.95;
-  const h = 24 + seed * 12;
-  const w = 28 + seed * 10;
-  // Shadow/base
-  ctx.fillStyle = '#3a3028';
+  ctx.globalAlpha=(1-fogAlpha)*0.97;
+  const h=(26+seed*14)*scale;
+  const w=(30+seed*12)*scale;
+
+  // Cast shadow (ellipse on ground)
+  ctx.fillStyle='rgba(0,0,0,0.25)';
   ctx.beginPath();
-  ctx.moveTo(cx, cy - h - 2);
-  ctx.lineTo(cx - w*0.6, cy + 4);
-  ctx.lineTo(cx + w*0.6, cy + 4);
+  ctx.ellipse(cx+w*0.2, cy+6*scale, w*0.6, 6*scale, -0.15, 0, Math.PI*2);
+  ctx.fill();
+
+  // Base / dark silhouette
+  ctx.fillStyle='#30281e';
+  ctx.beginPath();
+  ctx.moveTo(cx, cy-h-3*scale);
+  ctx.lineTo(cx-w*0.65, cy+5*scale);
+  ctx.lineTo(cx+w*0.65, cy+5*scale);
   ctx.closePath();
   ctx.fill();
-  // Main peak
-  ctx.fillStyle = '#6a5e50';
+
+  // Right face (lighter — lit by "sun")
+  ctx.fillStyle='#7a6e5a';
   ctx.beginPath();
-  ctx.moveTo(cx, cy - h);
-  ctx.lineTo(cx - w*0.55, cy + 2);
-  ctx.lineTo(cx + w*0.55, cy + 2);
+  ctx.moveTo(cx, cy-h);
+  ctx.lineTo(cx+0.5*scale, cy-h*0.1);
+  ctx.lineTo(cx+w*0.58, cy+4*scale);
   ctx.closePath();
   ctx.fill();
+
   // Left face (darker)
-  ctx.fillStyle = '#4a4038';
+  ctx.fillStyle='#4a4030';
   ctx.beginPath();
-  ctx.moveTo(cx, cy - h);
-  ctx.lineTo(cx - w*0.55, cy + 2);
-  ctx.lineTo(cx - 2, cy + 2);
+  ctx.moveTo(cx, cy-h);
+  ctx.lineTo(cx-0.5*scale, cy-h*0.1);
+  ctx.lineTo(cx-w*0.58, cy+4*scale);
   ctx.closePath();
   ctx.fill();
-  // Snow cap
-  ctx.fillStyle = '#dde8ee';
+
+  // Snow cap top
+  ctx.fillStyle='#e8f0f4';
   ctx.beginPath();
-  ctx.moveTo(cx, cy - h);
-  ctx.lineTo(cx - w*0.18, cy - h + h*0.28);
-  ctx.lineTo(cx + w*0.18, cy - h + h*0.28);
+  ctx.moveTo(cx, cy-h);
+  ctx.lineTo(cx-w*0.2, cy-h+h*0.27);
+  ctx.lineTo(cx+w*0.2, cy-h+h*0.27);
   ctx.closePath();
   ctx.fill();
+
+  // Snow shadow line
+  ctx.fillStyle='rgba(180,200,215,0.4)';
+  ctx.beginPath();
+  ctx.moveTo(cx, cy-h);
+  ctx.lineTo(cx-w*0.2, cy-h+h*0.27);
+  ctx.lineTo(cx-w*0.1, cy-h+h*0.22);
+  ctx.lineTo(cx, cy-h+h*0.05);
+  ctx.closePath();
+  ctx.fill();
+
   ctx.restore();
 }
 
-function drawWater(ctx, cx, cy, anim, fogAlpha=0) {
-  if (fogAlpha > 0.5) return;
+function drawWater(ctx, cx, cy, anim, fogAlpha=0, scale=1) {
+  if (fogAlpha>0.5) return;
   ctx.save();
-  ctx.globalAlpha = (1 - fogAlpha) * 0.8;
+  ctx.globalAlpha=(1-fogAlpha)*0.85;
+  const wavePhase=anim*0.035;
+  // Glint reflection
+  ctx.fillStyle='rgba(120,200,255,0.06)';
+  ctx.beginPath();
+  ctx.ellipse(cx-6*scale, cy-8*scale, 8*scale, 3*scale, -0.3, 0, Math.PI*2);
+  ctx.fill();
   // Wave lines
-  const wavePhase = anim * 0.04;
-  for (let wi=0; wi<3; wi++) {
-    const wy = cy - 6 + wi * 6;
-    ctx.strokeStyle = `rgba(100,180,255,${0.25 - wi*0.05})`;
-    ctx.lineWidth = 1.5;
+  for (let wi=0; wi<4; wi++) {
+    const wy=cy-8*scale+wi*5*scale;
+    const alpha=0.22-wi*0.04;
+    ctx.strokeStyle=`rgba(100,180,255,${alpha})`;
+    ctx.lineWidth=1.4*scale;
     ctx.beginPath();
-    for (let wxi=-18; wxi<=18; wxi+=4) {
-      const wx = cx + wxi;
-      const dy = Math.sin(wxi*0.3 + wavePhase + wi*1.5) * 2.5;
-      wxi===-18 ? ctx.moveTo(wx, wy+dy) : ctx.lineTo(wx, wy+dy);
+    for (let wxi=-18*scale; wxi<=18*scale; wxi+=3*scale) {
+      const wx=cx+wxi;
+      const dy=Math.sin(wxi*0.28+wavePhase+wi*1.7)*2.8*scale;
+      wxi===-18*scale ? ctx.moveTo(wx, wy+dy) : ctx.lineTo(wx, wy+dy);
     }
     ctx.stroke();
   }
   ctx.restore();
 }
 
-function drawDesertDune(ctx, cx, cy, seed, fogAlpha=0) {
-  if (fogAlpha > 0.5) return;
+function drawDesertDune(ctx, cx, cy, seed, fogAlpha=0, scale=1) {
+  if (fogAlpha>0.5) return;
   ctx.save();
-  ctx.globalAlpha = (1 - fogAlpha) * 0.6;
-  // Dune curves
-  for (let di=0; di<2; di++) {
-    const dy = cy - 4 + di * 8;
-    const dx = cx - 12 + seed * 6;
-    ctx.strokeStyle = `rgba(200,160,60,${0.5 - di*0.15})`;
-    ctx.lineWidth = 2;
+  ctx.globalAlpha=(1-fogAlpha)*0.65;
+  for (let di=0; di<3; di++) {
+    const dy=cy-8*scale+di*7*scale;
+    const dx=cx-14*scale+seed*8*scale;
+    ctx.strokeStyle=`rgba(210,170,70,${0.55-di*0.12})`;
+    ctx.lineWidth=(2-di*0.3)*scale;
     ctx.beginPath();
-    ctx.moveTo(dx - 10, dy + 3);
-    ctx.bezierCurveTo(dx, dy - 4, dx + 10, dy - 4, dx + 20, dy + 3);
+    ctx.moveTo(dx-12*scale, dy+4*scale);
+    ctx.bezierCurveTo(dx-4*scale, dy-5*scale, dx+8*scale, dy-5*scale, dx+22*scale, dy+4*scale);
     ctx.stroke();
   }
+  // Cactus silhouette
+  ctx.globalAlpha=(1-fogAlpha)*0.4;
+  const tx=cx+seed*10*scale-5*scale, ty=cy+2*scale;
+  ctx.fillStyle='#6a7a40';
+  ctx.fillRect(tx-1.5*scale, ty-12*scale, 3*scale, 14*scale);
+  ctx.fillRect(tx-6*scale, ty-8*scale, 4.5*scale, 2.5*scale);
+  ctx.fillRect(tx+1.5*scale, ty-7*scale, 4.5*scale, 2.5*scale);
   ctx.restore();
 }
 
-function drawTundraIce(ctx, cx, cy, seed, fogAlpha=0) {
-  if (fogAlpha > 0.5) return;
+function drawTundraIce(ctx, cx, cy, seed, fogAlpha=0, scale=1) {
+  if (fogAlpha>0.5) return;
   ctx.save();
-  ctx.globalAlpha = (1 - fogAlpha) * 0.7;
-  for (let i=0; i<4; i++) {
-    const a = seed * Math.PI + i * Math.PI/2;
-    const r = 8 + hash(cx,cy,i)*8;
-    const tx = cx + Math.cos(a)*r;
-    const ty = cy + Math.sin(a)*r;
-    ctx.strokeStyle = 'rgba(180,210,240,0.5)';
-    ctx.lineWidth = 1;
-    // Snowflake arm
+  ctx.globalAlpha=(1-fogAlpha)*0.75;
+  // Ice cracks
+  ctx.strokeStyle='rgba(160,200,230,0.35)';
+  ctx.lineWidth=0.8*scale;
+  for (let i=0; i<3; i++) {
+    const a=seed*Math.PI+i*(Math.PI*2/3);
+    const r=4+hash(cx,cy,i+10)*12;
+    const tx=cx+Math.cos(a)*r*scale, ty=cy+Math.sin(a)*r*scale;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(tx, ty);
+    ctx.stroke();
+    // Sub-crack
+    ctx.beginPath();
+    const a2=a+0.6;
+    ctx.moveTo(tx, ty);
+    ctx.lineTo(tx+Math.cos(a2)*4*scale, ty+Math.sin(a2)*4*scale);
+    ctx.stroke();
+  }
+  // Snowflake arms
+  ctx.globalAlpha=(1-fogAlpha)*0.6;
+  for (let i=0; i<6; i++) {
+    const a=seed*Math.PI+i*Math.PI/3;
+    const r=8+hash(cx,cy,i)*8;
+    const tx=cx+Math.cos(a)*r*scale;
+    const ty=cy+Math.sin(a)*r*scale;
+    ctx.strokeStyle='rgba(190,220,245,0.55)';
+    ctx.lineWidth=1*scale;
     ctx.beginPath();
     ctx.moveTo(tx, ty);
-    ctx.lineTo(tx + Math.cos(a)*6, ty + Math.sin(a)*6);
+    ctx.lineTo(tx+Math.cos(a)*5*scale, ty+Math.sin(a)*5*scale);
     ctx.stroke();
     ctx.beginPath();
-    ctx.moveTo(tx + Math.cos(a)*3, ty + Math.sin(a)*3);
-    ctx.lineTo(tx + Math.cos(a+0.8)*4, ty + Math.sin(a+0.8)*4);
+    ctx.moveTo(tx+Math.cos(a)*2*scale, ty+Math.sin(a)*2*scale);
+    ctx.lineTo(tx+Math.cos(a+0.7)*4*scale, ty+Math.sin(a+0.7)*4*scale);
     ctx.stroke();
   }
   ctx.restore();
 }
 
-function drawCity(ctx, cx, cy, cityData, isEnemy, anim, fogAlpha=0) {
-  if (fogAlpha > 0.5) return;
+function drawGrass(ctx, cx, cy, seeds, fogAlpha=0, scale=1) {
+  if (fogAlpha>0.5) return;
   ctx.save();
-  ctx.globalAlpha = 1 - fogAlpha * 0.6;
+  ctx.globalAlpha=(1-fogAlpha)*0.45;
+  for (let i=0; i<8; i++) {
+    const a=seeds[i%3]*Math.PI*2+i*0.8;
+    const r=(5+seeds[(i+1)%3]*18)*scale;
+    const tx=cx+Math.cos(a)*r, ty=cy+Math.sin(a)*r;
+    ctx.strokeStyle=i%3===0?'#6a8a38':i%3===1?'#4e6e28':'#5a7e30';
+    ctx.lineWidth=1*scale;
+    ctx.beginPath();
+    ctx.moveTo(tx, ty+4*scale);
+    ctx.quadraticCurveTo(
+      tx+(seeds[i%3]*5-2.5)*scale, ty-3*scale,
+      tx+(seeds[(i+2)%3]*4-2)*scale, ty-9*scale
+    );
+    ctx.stroke();
+  }
+  // Field row lines
+  ctx.strokeStyle='rgba(80,100,40,0.15)';
+  ctx.lineWidth=0.8*scale;
+  for (let ri=0; ri<3; ri++) {
+    const ry=cy-8*scale+ri*8*scale;
+    ctx.beginPath();
+    ctx.moveTo(cx-20*scale, ry);
+    ctx.lineTo(cx+20*scale, ry);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawTown(ctx, cx, cy, fogAlpha=0, scale=1) {
+  if (fogAlpha>0.5) return;
+  ctx.save();
+  ctx.globalAlpha=1-fogAlpha;
+  // Ground shadow
+  ctx.fillStyle='rgba(0,0,0,0.2)';
+  ctx.beginPath();
+  ctx.ellipse(cx, cy+6*scale, 12*scale, 4*scale, 0, 0, Math.PI*2);
+  ctx.fill();
+  // House body
+  ctx.fillStyle='#b09040';
+  ctx.fillRect(cx-7*scale, cy-8*scale, 14*scale, 12*scale);
+  // Roof
+  ctx.fillStyle='#8a6820';
+  ctx.beginPath();
+  ctx.moveTo(cx, cy-16*scale);
+  ctx.lineTo(cx-9*scale, cy-8*scale);
+  ctx.lineTo(cx+9*scale, cy-8*scale);
+  ctx.closePath();
+  ctx.fill();
+  // Roof shadow
+  ctx.fillStyle='rgba(0,0,0,0.2)';
+  ctx.beginPath();
+  ctx.moveTo(cx, cy-16*scale);
+  ctx.lineTo(cx-9*scale, cy-8*scale);
+  ctx.lineTo(cx-1*scale, cy-8*scale);
+  ctx.closePath();
+  ctx.fill();
+  // Door
+  ctx.fillStyle='#4a2808';
+  ctx.fillRect(cx-2.5*scale, cy-2*scale, 5*scale, 7*scale);
+  // Window
+  ctx.fillStyle='rgba(255,220,100,0.6)';
+  ctx.fillRect(cx-6*scale, cy-6*scale, 4*scale, 3.5*scale);
+  ctx.fillRect(cx+2*scale, cy-6*scale, 4*scale, 3.5*scale);
+  ctx.restore();
+}
+
+function drawCity(ctx, cx, cy, cityData, isEnemy, anim, fogAlpha=0, scale=1) {
+  if (fogAlpha>0.5) return;
+  ctx.save();
+  ctx.globalAlpha=1-fogAlpha*0.5;
+  const hs=hexSize();
 
   if (!isEnemy) {
-    // Glow halo
-    const haloR = HEX_SIZE * 0.9;
-    const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, haloR);
-    grd.addColorStop(0, 'rgba(240,200,80,0.18)');
+    // Gold ambient glow
+    const haloR=hs*1.0;
+    const grd=ctx.createRadialGradient(cx,cy,0, cx,cy,haloR);
+    grd.addColorStop(0, 'rgba(240,200,80,0.22)');
+    grd.addColorStop(0.5, 'rgba(220,160,40,0.08)');
     grd.addColorStop(1, 'rgba(240,200,80,0)');
-    ctx.fillStyle = grd;
+    ctx.fillStyle=grd;
+    ctx.beginPath(); ctx.arc(cx, cy, haloR, 0, Math.PI*2); ctx.fill();
+
+    // Ground shadow
+    ctx.fillStyle='rgba(0,0,0,0.28)';
     ctx.beginPath();
-    ctx.arc(cx, cy, haloR, 0, Math.PI*2);
+    ctx.ellipse(cx+3*scale, cy+6*scale, 20*scale, 6*scale, 0, 0, Math.PI*2);
     ctx.fill();
 
-    // City walls (circle)
-    ctx.strokeStyle = '#c8a040';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(cx, cy, 16, 0, Math.PI*2);
-    ctx.stroke();
+    // Outer ring wall
+    ctx.strokeStyle='#b89030';
+    ctx.lineWidth=2.5*scale;
+    ctx.beginPath(); ctx.arc(cx, cy, 20*scale, 0, Math.PI*2); ctx.stroke();
+    // Wall battlements (8 turrets on ring)
+    for (let i=0; i<8; i++) {
+      const a=i*Math.PI/4;
+      const tx=cx+Math.cos(a)*20*scale, ty=cy+Math.sin(a)*20*scale;
+      ctx.fillStyle='#c89030';
+      ctx.beginPath(); ctx.arc(tx, ty, 3*scale, 0, Math.PI*2); ctx.fill();
+    }
 
-    // Central keep
-    ctx.fillStyle = '#c0952a';
-    ctx.fillRect(cx - 7, cy - 12, 14, 18);
+    // Central keep body
+    ctx.fillStyle='#c09a2a';
+    ctx.fillRect(cx-9*scale, cy-14*scale, 18*scale, 22*scale);
+    // Keep shadow (left)
+    ctx.fillStyle='rgba(0,0,0,0.2)';
+    ctx.fillRect(cx-9*scale, cy-14*scale, 5*scale, 22*scale);
     // Roof
-    ctx.fillStyle = '#a07020';
+    ctx.fillStyle='#a07820';
     ctx.beginPath();
-    ctx.moveTo(cx, cy - 18); ctx.lineTo(cx-9, cy-12); ctx.lineTo(cx+9, cy-12);
+    ctx.moveTo(cx, cy-22*scale);
+    ctx.lineTo(cx-11*scale, cy-14*scale);
+    ctx.lineTo(cx+11*scale, cy-14*scale);
     ctx.closePath(); ctx.fill();
+    // Roof shadow
+    ctx.fillStyle='rgba(0,0,0,0.15)';
+    ctx.beginPath();
+    ctx.moveTo(cx, cy-22*scale);
+    ctx.lineTo(cx-11*scale, cy-14*scale);
+    ctx.lineTo(cx-2*scale, cy-14*scale);
+    ctx.closePath(); ctx.fill();
+
     // Door
-    ctx.fillStyle = '#5a3008';
-    ctx.fillRect(cx - 3, cy - 2, 6, 8);
-    // Windows
-    ctx.fillStyle = 'rgba(255,220,100,0.8)';
-    const glow = Math.sin(anim * 0.06) * 0.3 + 0.7;
-    ctx.globalAlpha = glow * (1 - fogAlpha * 0.6);
-    ctx.fillRect(cx - 6, cy - 9, 4, 4);
-    ctx.fillRect(cx + 2, cy - 9, 4, 4);
-    ctx.globalAlpha = 1 - fogAlpha * 0.6;
-    // Towers
-    [[-10, 2], [10, 2]].forEach(([ox, oy]) => {
-      ctx.fillStyle = '#a07828';
-      ctx.fillRect(cx + ox - 4, cy + oy - 14, 8, 16);
-      ctx.fillStyle = '#7a5a18';
+    ctx.fillStyle='#4a2808';
+    ctx.beginPath();
+    ctx.moveTo(cx-4*scale, cy+8*scale);
+    ctx.lineTo(cx-4*scale, cy-1*scale);
+    ctx.quadraticCurveTo(cx, cy-5*scale, cx+4*scale, cy-1*scale);
+    ctx.lineTo(cx+4*scale, cy+8*scale);
+    ctx.closePath(); ctx.fill();
+
+    // Windows with glow
+    const glow=Math.sin(anim*0.06)*0.35+0.65;
+    ctx.fillStyle=`rgba(255,220,100,${glow*0.85})`;
+    ctx.globalAlpha=(1-fogAlpha*0.5)*glow;
+    ctx.fillRect(cx-8*scale, cy-10*scale, 4.5*scale, 4*scale);
+    ctx.fillRect(cx+3.5*scale, cy-10*scale, 4.5*scale, 4*scale);
+    ctx.fillRect(cx-2.5*scale, cy-10*scale, 5*scale, 4*scale);
+    ctx.globalAlpha=1-fogAlpha*0.5;
+
+    // Twin towers
+    [[-12, 0], [12, 0]].forEach(([ox]) => {
+      // Tower body
+      ctx.fillStyle='#a87828';
+      ctx.fillRect(cx+ox*scale-4.5*scale, cy-4*scale-(16+Math.abs(ox)*0.2)*scale, 9*scale, 18*scale);
+      // Tower shadow
+      ctx.fillStyle='rgba(0,0,0,0.18)';
+      ctx.fillRect(cx+ox*scale-4.5*scale, cy-4*scale-(16+Math.abs(ox)*0.2)*scale, 3*scale, 18*scale);
+      // Tower roof
+      ctx.fillStyle='#7a5818';
       ctx.beginPath();
-      ctx.moveTo(cx+ox, cy+oy-20);
-      ctx.lineTo(cx+ox-4, cy+oy-14);
-      ctx.lineTo(cx+ox+4, cy+oy-14);
+      ctx.moveTo(cx+ox*scale, cy-4*scale-(24+Math.abs(ox)*0.2)*scale);
+      ctx.lineTo(cx+ox*scale-5.5*scale, cy-4*scale-(16+Math.abs(ox)*0.2)*scale);
+      ctx.lineTo(cx+ox*scale+5.5*scale, cy-4*scale-(16+Math.abs(ox)*0.2)*scale);
+      ctx.closePath(); ctx.fill();
+      // Tower window
+      ctx.fillStyle=`rgba(255,210,80,${glow*0.7})`;
+      ctx.globalAlpha=(1-fogAlpha*0.5)*glow;
+      ctx.fillRect(cx+ox*scale-2*scale, cy-4*scale-(12+Math.abs(ox)*0.2)*scale, 4*scale, 4*scale);
+      ctx.globalAlpha=1-fogAlpha*0.5;
+    });
+
+    // Animated banner flags on towers
+    const flagWave=Math.sin(anim*0.04)*4*scale;
+    [[-12, -20], [12, -20]].forEach(([ox, oy]) => {
+      const bx=cx+ox*scale, by=cy+oy*scale;
+      // Flagpole
+      ctx.strokeStyle='#c8a030'; ctx.lineWidth=1.2*scale;
+      ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx, by-9*scale); ctx.stroke();
+      // Flag with wave
+      const fc=ox<0?'#c84040':'#c84040';
+      ctx.fillStyle=fc;
+      ctx.beginPath();
+      ctx.moveTo(bx, by-9*scale);
+      ctx.lineTo(bx+7*scale, by-7*scale+flagWave);
+      ctx.lineTo(bx+7*scale, by-5*scale+flagWave);
+      ctx.lineTo(bx, by-5*scale);
       ctx.closePath(); ctx.fill();
     });
+
   } else {
-    // Enemy fortress
-    ctx.fillStyle = '#7a3030';
-    ctx.fillRect(cx - 9, cy - 13, 18, 20);
-    ctx.fillStyle = '#5a1e1e';
+    // Ground shadow
+    ctx.fillStyle='rgba(0,0,0,0.25)';
     ctx.beginPath();
-    ctx.moveTo(cx, cy - 19); ctx.lineTo(cx-10, cy-13); ctx.lineTo(cx+10, cy-13);
+    ctx.ellipse(cx+3*scale, cy+5*scale, 16*scale, 5*scale, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    // Main fortress body
+    ctx.fillStyle='#6a2c2c';
+    ctx.fillRect(cx-10*scale, cy-15*scale, 20*scale, 22*scale);
+    // Shadow side
+    ctx.fillStyle='rgba(0,0,0,0.22)';
+    ctx.fillRect(cx-10*scale, cy-15*scale, 6*scale, 22*scale);
+    // Dark roof
+    ctx.fillStyle='#501818';
+    ctx.beginPath();
+    ctx.moveTo(cx, cy-22*scale);
+    ctx.lineTo(cx-12*scale, cy-15*scale);
+    ctx.lineTo(cx+12*scale, cy-15*scale);
     ctx.closePath(); ctx.fill();
-    // Battlements
-    [-8,-2,4].forEach(ox => {
-      ctx.fillStyle = '#6a2a2a';
-      ctx.fillRect(cx+ox-1, cy-20, 4, 6);
-    });
-    // Red glow
-    const gr = ctx.createRadialGradient(cx, cy, 0, cx, cy, 24);
-    gr.addColorStop(0,'rgba(200,0,0,0.15)');
+
+    // Battlements (crenellations)
+    for (let bi=-4; bi<=4; bi+=2) {
+      ctx.fillStyle='#5a2222';
+      ctx.fillRect(cx+bi*2.5*scale-2*scale, cy-28*scale, 4*scale, 7*scale);
+    }
+
+    // Red glow aura
+    const gr=ctx.createRadialGradient(cx,cy,0, cx,cy,28*scale);
+    gr.addColorStop(0,'rgba(220,20,20,0.18)');
+    gr.addColorStop(0.5,'rgba(180,0,0,0.07)');
     gr.addColorStop(1,'rgba(200,0,0,0)');
-    ctx.fillStyle = gr;
-    ctx.beginPath(); ctx.arc(cx, cy, 24, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle=gr;
+    ctx.beginPath(); ctx.arc(cx,cy,28*scale,0,Math.PI*2); ctx.fill();
+
+    // Animated torch flicker at entrance
+    const flicker=0.7+Math.sin(anim*0.11)*0.3;
+    const fx=cx, fy=cy+6*scale;
+    const tg=ctx.createRadialGradient(fx,fy,0, fx,fy,12*scale);
+    tg.addColorStop(0, `rgba(255,120,20,${flicker*0.4})`);
+    tg.addColorStop(1, 'rgba(220,40,0,0)');
+    ctx.fillStyle=tg;
+    ctx.beginPath(); ctx.arc(fx,fy,12*scale,0,Math.PI*2); ctx.fill();
   }
 
-  // City name below
-  ctx.globalAlpha = Math.max(0, 1 - fogAlpha);
-  ctx.font = 'bold 8px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'top';
-  ctx.fillStyle = isEnemy ? '#e09090' : '#f0d080';
-  ctx.shadowColor = 'rgba(0,0,0,0.9)';
-  ctx.shadowBlur = 4;
-  ctx.fillText(cityData?.name || '', cx, cy + HEX_SIZE * 0.5);
-  ctx.shadowBlur = 0;
-  ctx.restore();
-}
-
-// Plains detail
-function drawGrass(ctx, cx, cy, seeds, fogAlpha=0) {
-  if (fogAlpha > 0.5) return;
-  ctx.save();
-  ctx.globalAlpha = (1-fogAlpha)*0.5;
-  for (let i=0; i<6; i++) {
-    const a = seeds[i%3]*Math.PI*2 + i*1.05;
-    const r = 6 + seeds[(i+1)%3]*16;
-    const tx = cx + Math.cos(a)*r;
-    const ty = cy + Math.sin(a)*r;
-    ctx.strokeStyle = '#5a7830';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(tx, ty+4);
-    ctx.quadraticCurveTo(tx + seeds[i%3]*4-2, ty-4, tx + seeds[(i+2)%3]*3-1.5, ty-9);
-    ctx.stroke();
-  }
+  // City name label with background
+  ctx.globalAlpha=Math.max(0,1-fogAlpha);
+  const name=cityData?.name||'';
+  ctx.font=`bold ${Math.round(8*scale)}px sans-serif`;
+  ctx.textAlign='center'; ctx.textBaseline='top';
+  const tw=ctx.measureText(name).width;
+  const labelY=cy+hs*0.52;
+  ctx.fillStyle='rgba(0,0,0,0.5)';
+  ctx.fillRect(cx-tw/2-3, labelY-1, tw+6, 11*scale);
+  ctx.fillStyle=isEnemy?'#e09090':'#f0d080';
+  ctx.shadowColor='rgba(0,0,0,0.9)'; ctx.shadowBlur=4*scale;
+  ctx.fillText(name, cx, labelY);
+  ctx.shadowBlur=0;
   ctx.restore();
 }
 
 // ══════════════════════════════════════════════════════════
-// BIOME COLORS
+// STARS (background layer)
 // ══════════════════════════════════════════════════════════
-const BIOME_COLORS = {
-  plains:   { base:'#5a7032', dark:'#3a4e1e', edge:'#2a3a10' },
-  forest:   { base:'#1e4220', dark:'#122a14', edge:'#0c1e0c' },
-  mountain: { base:'#6a5e50', dark:'#4a4038', edge:'#3a3028' },
-  water:    { base:'#1a3e62', dark:'#0e2840', edge:'#091c30' },
-  desert:   { base:'#b89040', dark:'#8a6820', edge:'#6a5010' },
-  tundra:   { base:'#7a8e9a', dark:'#5a6e7a', edge:'#3a4e5a' },
-  city:     { base:'#8a7028', dark:'#5a4a18', edge:'#3a3010' },
-  town:     { base:'#7a6828', dark:'#5a4a18', edge:'#3a3010' },
-  enemy:    { base:'#7a2828', dark:'#4a1818', edge:'#2a0c0c' },
-};
+const starCanvas = document.getElementById('star-canvas');
+const starCtx = starCanvas.getContext('2d');
+let stars = [];
 
-function hexFillStyle(ctx, cx, cy, hex) {
-  const bc = BIOME_COLORS[hex.biome] || BIOME_COLORS.plains;
-  const elev = hex.elevation;
-  const lighten = (elev - 0.5) * 40;
-
-  const grad = ctx.createLinearGradient(cx, cy - HEX_SIZE*0.9, cx, cy + HEX_SIZE*0.9);
-  const topColor = adjustColor(bc.base, lighten + 20);
-  const midColor = adjustColor(bc.base, lighten);
-  const botColor = adjustColor(bc.dark, lighten - 10);
-  grad.addColorStop(0, topColor);
-  grad.addColorStop(0.4, midColor);
-  grad.addColorStop(1, botColor);
-  return grad;
+function generateStars() {
+  stars = [];
+  const W=starCanvas.width, H=starCanvas.height;
+  for (let i=0; i<200; i++) {
+    stars.push({
+      x: Math.random()*W, y: Math.random()*H,
+      r: 0.3+Math.random()*1.2,
+      alpha: 0.2+Math.random()*0.5,
+      twinkle: Math.random()*Math.PI*2,
+      speed: 0.01+Math.random()*0.03,
+    });
+  }
 }
 
-function adjustColor(hex, amount) {
-  const r = clamp(parseInt(hex.slice(1,3),16) + amount, 0, 255);
-  const g = clamp(parseInt(hex.slice(3,5),16) + amount, 0, 255);
-  const b = clamp(parseInt(hex.slice(5,7),16) + amount, 0, 255);
-  return `rgb(${r},${g},${b})`;
+function renderStars(frame) {
+  starCtx.clearRect(0,0,starCanvas.width,starCanvas.height);
+  stars.forEach(s => {
+    s.twinkle += s.speed;
+    const a = s.alpha * (0.6+Math.sin(s.twinkle)*0.4);
+    starCtx.fillStyle = `rgba(220,210,190,${a})`;
+    starCtx.beginPath();
+    starCtx.arc(s.x, s.y, s.r, 0, Math.PI*2);
+    starCtx.fill();
+  });
 }
-function clamp(v, mn, mx) { return Math.max(mn, Math.min(mx, v)); }
 
 // ══════════════════════════════════════════════════════════
-// CAMERA & STATE
+// PARTICLES
 // ══════════════════════════════════════════════════════════
-let cameraX = 40, cameraY = 30;
-let isDragging = false, dragStart = {x:0,y:0}, dragMoved = false;
-let mouseDown = false;
-let selectedHex = null, hoveredHex = null;
-let turn = 1, animFrame = 0;
-let resources = { knowledge:0, gold:0, influence:0, vitality:0, energy:0 };
+function updateParticles(canvas_ctx, frame) {
+  if (frame%12===0) {
+    const cap=world.find(h=>h.biome==='city'&&h.owner==='player');
+    if (cap) {
+      const {x,y}=hexCenter(cap.col, cap.row);
+      if (x>0&&x<canvas_ctx.canvas.width&&y>TOP_H&&y<canvas_ctx.canvas.height) {
+        spawnParticles(x, y-20*zoomLevel);
+      }
+    }
+  }
+  particles.forEach(p => {
+    p.x += p.vx; p.y += p.vy;
+    p.life -= 0.012;
+  });
+  particles = particles.filter(p=>p.life>0);
+  particles.forEach(p => {
+    canvas_ctx.save();
+    canvas_ctx.globalAlpha = p.life * 0.7;
+    canvas_ctx.fillStyle = p.color;
+    canvas_ctx.beginPath();
+    canvas_ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+    canvas_ctx.fill();
+    canvas_ctx.restore();
+  });
+}
 
-const SEASONS = ['Spring','Summer','Autumn','Winter'];
-const ERAS = ['Ancient Era','Classical Era','Medieval Era','Renaissance','Industrial Era'];
+// ══════════════════════════════════════════════════════════
+// CAMERA STATE
+// ══════════════════════════════════════════════════════════
+let isDragging=false, dragStart={x:0,y:0}, dragMoved=false, mouseDown=false;
+let selectedHex=null, hoveredHex=null;
+let turn=1, animFrame=0;
+let resources={knowledge:0, gold:0, influence:0, vitality:0, energy:0};
+const SEASONS=['Spring','Summer','Autumn','Winter'];
+const ERAS=['Ancient Era','Classical Era','Medieval Era','Renaissance','Industrial Era'];
 
 // ══════════════════════════════════════════════════════════
 // RENDERING
 // ══════════════════════════════════════════════════════════
-const canvas = document.getElementById('game-canvas');
-const ctx = canvas.getContext('2d');
+const canvas=document.getElementById('game-canvas');
+const ctx=canvas.getContext('2d');
 
 function resize() {
-  canvas.width = window.innerWidth - RIGHT_W;
-  canvas.height = window.innerHeight;
+  const w=window.innerWidth-RIGHT_W, h=window.innerHeight;
+  canvas.width=w; canvas.height=h;
+  canvas.style.width=w+'px'; canvas.style.height=h+'px';
+  starCanvas.width=w; starCanvas.height=h;
+  generateStars();
 }
 
 function render() {
   animFrame++;
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const hs=hexSize();
+  ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  // ── Background ──
-  const bg = ctx.createRadialGradient(canvas.width/2, canvas.height/2, 0, canvas.width/2, canvas.height/2, canvas.width*0.8);
-  bg.addColorStop(0, '#0c0e0a');
-  bg.addColorStop(1, '#040408');
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  // Background
+  const bg=ctx.createRadialGradient(canvas.width/2, canvas.height/2, 0, canvas.width/2, canvas.height/2, canvas.width*0.85);
+  bg.addColorStop(0,'#0c0e0c');
+  bg.addColorStop(1,'#030406');
+  ctx.fillStyle=bg;
+  ctx.fillRect(0,0,canvas.width,canvas.height);
 
-  // ── Render each hex ──
+  // Stars
+  renderStars(animFrame);
+
+  // Ambient light gradient from capital
+  const cap=world.find(h=>h.biome==='city'&&h.owner==='player');
+  if (cap) {
+    const {x,y}=hexCenter(cap.col, cap.row);
+    const ag=ctx.createRadialGradient(x,y,0, x,y,200*zoomLevel);
+    ag.addColorStop(0,'rgba(240,200,80,0.06)');
+    ag.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=ag;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+  }
+
+  // Render hexes — two passes: terrain first, then borders/overlay
+  // Pass 1: terrain fills
   world.forEach(hex => {
-    const {x, y} = hexCenter(hex.col, hex.row);
-    // Cull
-    if (x < -HEX_SIZE*2 || x > canvas.width+HEX_SIZE*2) return;
-    if (y < TOP_H-HEX_SIZE*2 || y > canvas.height+HEX_SIZE*2) return;
+    const {x,y}=hexCenter(hex.col, hex.row);
+    if (x<-hs*2||x>canvas.width+hs*2) return;
+    if (y<TOP_H-hs*2||y>canvas.height+hs*2) return;
 
     if (!hex.revealed) {
-      // Pure fog
-      hexPath(ctx, x, y, HEX_SIZE - 0.5);
-      ctx.fillStyle = '#060508';
+      hexPath(ctx, x, y, hs-0.5);
+      ctx.fillStyle='#050408';
       ctx.fill();
-      ctx.strokeStyle = '#0d0b10';
-      ctx.lineWidth = 0.5;
+      // Subtle edge
+      ctx.strokeStyle='#0c0a10';
+      ctx.lineWidth=0.4;
       ctx.stroke();
       return;
     }
 
-    // ── Base terrain fill ──
-    hexPath(ctx, x, y, HEX_SIZE - 0.5);
-    ctx.fillStyle = hexFillStyle(ctx, x, y, hex);
+    // Base terrain
+    hexPath(ctx, x, y, hs-0.5);
+    ctx.fillStyle=hexFillStyle(ctx, x, y, hex);
     ctx.fill();
 
-    // ── Edge highlight (top-left lighter) ──
-    hexPath(ctx, x, y, HEX_SIZE - 0.5);
-    ctx.strokeStyle = adjustColor((BIOME_COLORS[hex.biome]||BIOME_COLORS.plains).base, 25);
-    ctx.lineWidth = 0.5;
-    ctx.globalAlpha = 0.25;
+    // Top bevel highlight
+    hexPath(ctx, x, y, hs-0.5);
+    ctx.strokeStyle=adjustColor((BIOME_COLORS[hex.biome]||BIOME_COLORS.plains).base, 30);
+    ctx.lineWidth=0.6;
+    ctx.globalAlpha=0.2;
     ctx.stroke();
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha=1;
 
-    // ── Terrain detail art ──
-    if (hex.fogAlpha < 0.9) {
-      const fog = hex.fogAlpha;
-      switch(hex.biome) {
-        case 'forest':
-          drawTrees(ctx, x, y - 4, hex.treeSeeds, 3, fog); break;
-        case 'mountain':
-          drawMountain(ctx, x, y - 2, hex.treeSeeds[0], fog); break;
-        case 'water':
-          drawWater(ctx, x, y, animFrame, fog); break;
-        case 'desert':
-          drawDesertDune(ctx, x, y, hex.treeSeeds[0], fog); break;
-        case 'tundra':
-          drawTundraIce(ctx, x, y, hex.treeSeeds[0], fog); break;
-        case 'plains':
-          drawGrass(ctx, x, y, hex.treeSeeds, fog); break;
-        case 'city':
-          drawCity(ctx, x, y, hex.city, false, animFrame, fog); break;
-        case 'town':
-          // Small house
-          if (fog < 0.5) {
-            ctx.save(); ctx.globalAlpha = 1 - fog;
-            ctx.fillStyle = '#b09040'; ctx.fillRect(x-6, y-8, 12, 10);
-            ctx.fillStyle = '#8a6820';
-            ctx.beginPath(); ctx.moveTo(x,y-15); ctx.lineTo(x-8,y-8); ctx.lineTo(x+8,y-8); ctx.closePath(); ctx.fill();
-            ctx.fillStyle = '#4a2808'; ctx.fillRect(x-2, y-2, 4, 6);
-            ctx.restore();
-          }
-          break;
-        case 'enemy':
-          drawCity(ctx, x, y, hex.city, true, animFrame, fog); break;
-      }
+    // Inner ambient occlusion ring
+    hexPath(ctx, x, y, hs-2.5);
+    ctx.strokeStyle='rgba(0,0,0,0.12)';
+    ctx.lineWidth=3;
+    ctx.stroke();
+  });
+
+  // Pass 2: terrain detail art
+  world.forEach(hex => {
+    const {x,y}=hexCenter(hex.col, hex.row);
+    if (!hex.revealed || x<-hs*2||x>canvas.width+hs*2) return;
+    if (y<TOP_H-hs*2||y>canvas.height+hs*2) return;
+    if (hex.fogAlpha>=0.9) return;
+
+    const sc=zoomLevel;
+    const fog=hex.fogAlpha;
+    switch(hex.biome) {
+      case 'forest':   drawTrees(ctx, x, y-4*sc, hex.treeSeeds, 3, fog, sc); break;
+      case 'mountain': drawMountain(ctx, x, y-2*sc, hex.treeSeeds[0], fog, sc); break;
+      case 'water':    drawWater(ctx, x, y, animFrame, fog, sc); break;
+      case 'desert':   drawDesertDune(ctx, x, y, hex.treeSeeds[0], fog, sc); break;
+      case 'tundra':   drawTundraIce(ctx, x, y, hex.treeSeeds[0], fog, sc); break;
+      case 'plains':   drawGrass(ctx, x, y, hex.treeSeeds, fog, sc); break;
+      case 'town':     drawTown(ctx, x, y, fog, sc); break;
+      case 'city':     drawCity(ctx, x, y, hex.city, false, animFrame, fog, sc); break;
+      case 'enemy':    drawCity(ctx, x, y, hex.city, true, animFrame, fog, sc); break;
     }
+  });
 
-    // ── Territory border ──
-    let borderColor = (BIOME_COLORS[hex.biome]||BIOME_COLORS.plains).edge;
-    let borderW = 0.8;
-    if (hex.owner === 'player') { borderColor = '#d4b040'; borderW = 2; }
-    else if (hex.owner === 'r0') { borderColor = '#c04040'; borderW = 1.5; }
-    else if (hex.owner === 'r1') { borderColor = '#4090c0'; borderW = 1.5; }
-    else if (hex.owner === 'r2') { borderColor = '#40b070'; borderW = 1.5; }
+  // Pass 3: borders, fog, overlays
+  world.forEach(hex => {
+    const {x,y}=hexCenter(hex.col, hex.row);
+    if (x<-hs*2||x>canvas.width+hs*2) return;
+    if (y<TOP_H-hs*2||y>canvas.height+hs*2) return;
+    if (!hex.revealed) return;
 
-    if (hex.hovered && !hex.selected) { borderColor = 'rgba(255,255,255,0.6)'; borderW = 1.5; }
+    // Territory border
+    let borderColor=(BIOME_COLORS[hex.biome]||BIOME_COLORS.plains).edge;
+    let borderW=0.7;
+    if (hex.owner==='player') { borderColor='#d4b040'; borderW=2.2; }
+    else if (hex.owner==='r0') { borderColor='#c04040'; borderW=1.6; }
+    else if (hex.owner==='r1') { borderColor='#4090c0'; borderW=1.6; }
+    else if (hex.owner==='r2') { borderColor='#40b070'; borderW=1.6; }
+    if (hex.hovered&&!hex.selected) { borderColor='rgba(255,255,255,0.65)'; borderW=1.6; }
     if (hex.selected) {
-      const pulse = Math.sin(animFrame * 0.09) * 0.5 + 0.5;
-      borderColor = `rgba(255,220,60,${0.7 + pulse*0.3})`;
-      borderW = 2.5;
+      const pulse=Math.sin(animFrame*0.09)*0.5+0.5;
+      borderColor=`rgba(255,220,60,${0.72+pulse*0.28})`;
+      borderW=2.8;
     }
 
-    hexPath(ctx, x, y, HEX_SIZE - 0.5);
-    ctx.strokeStyle = borderColor;
-    ctx.lineWidth = borderW;
+    hexPath(ctx, x, y, hs-0.5);
+    ctx.strokeStyle=borderColor;
+    ctx.lineWidth=borderW;
     ctx.stroke();
 
-    // ── Fog overlay ──
-    if (hex.fogAlpha > 0) {
-      hexPath(ctx, x, y, HEX_SIZE - 0.5);
-      ctx.fillStyle = `rgba(5,4,8,${hex.fogAlpha * 0.88})`;
+    // Fog overlay
+    if (hex.fogAlpha>0) {
+      hexPath(ctx, x, y, hs-0.5);
+      ctx.fillStyle=`rgba(4,3,8,${hex.fogAlpha*0.9})`;
       ctx.fill();
     }
 
-    // ── Owner territory dot ──
-    if (hex.owner && hex.biome !== 'city' && hex.biome !== 'enemy' && hex.biome !== 'town' && hex.fogAlpha < 0.5) {
-      const oc = hex.owner === 'player' ? '#f0d080' : rivalData[parseInt(hex.owner[1])]?.color || '#aaa';
+    // Owner dot (for non-city owned hexes)
+    if (hex.owner&&hex.biome!=='city'&&hex.biome!=='enemy'&&hex.biome!=='town'&&hex.fogAlpha<0.5) {
+      const oc=hex.owner==='player'?'#f0d080':rivalData[parseInt(hex.owner[1])]?.color||'#aaa';
       ctx.beginPath();
-      ctx.arc(x + HEX_SIZE*0.45, y - HEX_SIZE*0.6, 4, 0, Math.PI*2);
-      ctx.fillStyle = oc;
+      ctx.arc(x+hs*0.45, y-hs*0.6, 4*zoomLevel, 0, Math.PI*2);
+      ctx.fillStyle=oc;
       ctx.fill();
-      ctx.strokeStyle = 'rgba(0,0,0,0.5)';
-      ctx.lineWidth = 1;
+      ctx.strokeStyle='rgba(0,0,0,0.5)'; ctx.lineWidth=1;
       ctx.stroke();
     }
   });
 
-  // ── Selection outer ring ──
-  if (selectedHex && selectedHex.revealed) {
-    const {x, y} = hexCenter(selectedHex.col, selectedHex.row);
-    const pulse = Math.sin(animFrame * 0.09) * 0.5 + 0.5;
-    hexPath(ctx, x, y, HEX_SIZE + 4);
-    ctx.strokeStyle = `rgba(255,220,60,${0.2 + pulse*0.2})`;
-    ctx.lineWidth = 3;
+  // Selection outer ring
+  if (selectedHex&&selectedHex.revealed) {
+    const {x,y}=hexCenter(selectedHex.col, selectedHex.row);
+    const pulse=Math.sin(animFrame*0.09)*0.5+0.5;
+    hexPath(ctx, x, y, hs+5);
+    ctx.strokeStyle=`rgba(255,220,60,${0.18+pulse*0.2})`;
+    ctx.lineWidth=3;
     ctx.stroke();
   }
 
-  // ── Minimap ──
+  // Particles
+  updateParticles(ctx, animFrame);
+
+  // Minimap
   renderMinimap();
 
-  // ── Vignette ──
-  const vig = ctx.createRadialGradient(canvas.width/2, canvas.height/2, canvas.height*0.3, canvas.width/2, canvas.height/2, canvas.width*0.8);
-  vig.addColorStop(0, 'rgba(0,0,0,0)');
-  vig.addColorStop(1, 'rgba(0,0,0,0.45)');
-  ctx.fillStyle = vig;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  // Vignette
+  const vig=ctx.createRadialGradient(canvas.width/2, canvas.height/2, canvas.height*0.28, canvas.width/2, canvas.height/2, canvas.width*0.85);
+  vig.addColorStop(0,'rgba(0,0,0,0)');
+  vig.addColorStop(1,'rgba(0,0,0,0.5)');
+  ctx.fillStyle=vig;
+  ctx.fillRect(0,0,canvas.width,canvas.height);
 }
 
 function renderMinimap() {
-  const mc = document.getElementById('minimap-canvas');
-  const mx = mc.getContext('2d');
-  const mw = mc.width, mh = mc.height;
-  mx.clearRect(0, 0, mw, mh);
-  mx.fillStyle = '#050406';
-  mx.fillRect(0, 0, mw, mh);
+  const mc=document.getElementById('minimap-canvas');
+  const mx=mc.getContext('2d');
+  const mw=mc.width, mh=mc.height;
+  mx.clearRect(0,0,mw,mh);
+  mx.fillStyle='#04030a';
+  mx.fillRect(0,0,mw,mh);
 
-  const cw = mw/COLS, ch = mh/ROWS;
+  const cw=mw/COLS, ch=mh/ROWS;
   world.forEach(hex => {
-    const px = hex.col*cw, py = hex.row*ch;
-    if (!hex.revealed) { mx.fillStyle = '#0a080e'; }
+    const px=hex.col*cw, py=hex.row*ch;
+    if (!hex.revealed) { mx.fillStyle='#08060f'; }
     else {
-      const bc = BIOME_COLORS[hex.biome] || BIOME_COLORS.plains;
-      mx.fillStyle = bc.base;
-      if (hex.owner === 'player') mx.fillStyle = '#d4b040';
-      else if (hex.owner === 'r0') mx.fillStyle = '#c04040';
-      else if (hex.owner === 'r1') mx.fillStyle = '#4090c0';
-      else if (hex.owner === 'r2') mx.fillStyle = '#40b070';
+      const bc=BIOME_COLORS[hex.biome]||BIOME_COLORS.plains;
+      mx.fillStyle=bc.base;
+      if (hex.owner==='player') mx.fillStyle='#d4b040';
+      else if (hex.owner==='r0') mx.fillStyle='#c04040';
+      else if (hex.owner==='r1') mx.fillStyle='#4090c0';
+      else if (hex.owner==='r2') mx.fillStyle='#40b070';
     }
     mx.fillRect(px+0.5, py+0.5, cw-0.5, ch-0.5);
   });
 
-  // Viewport rect
-  const totalW = COLS * W;
-  const totalH = ROWS * H * 0.75;
-  const vx = (-cameraX/totalW)*mw;
-  const vy = (-cameraY/totalH)*mh;
-  const vw = (canvas.width/totalW)*mw;
-  const vh = ((canvas.height-TOP_H)/totalH)*mh;
-  mx.strokeStyle = '#f0d080';
-  mx.lineWidth = 1.5;
-  mx.strokeRect(vx, vy, vw, vh);
+  // Viewport
+  const totalW=COLS*W_w();
+  const totalH=ROWS*H_h()*0.75;
+  const vx=(-cameraX/totalW)*mw;
+  const vy=(-cameraY/totalH)*mh;
+  const vw=(canvas.width/totalW)*mw;
+  const vh=((canvas.height-TOP_H)/totalH)*mh;
+  mx.strokeStyle='rgba(240,208,128,0.8)';
+  mx.lineWidth=1.5;
+  mx.strokeRect(vx,vy,vw,vh);
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1188,124 +1387,127 @@ function loop() {
 // EVENTS
 // ══════════════════════════════════════════════════════════
 canvas.addEventListener('mousedown', e => {
-  if (e.button !== 0) return;
-  mouseDown = true;
-  dragMoved = false;
-  dragStart = {x: e.clientX, y: e.clientY};
+  if (e.button!==0) return;
+  mouseDown=true; dragMoved=false;
+  dragStart={x:e.clientX, y:e.clientY};
 });
 
 canvas.addEventListener('mousemove', e => {
   if (mouseDown) {
-    const dx = e.clientX - dragStart.x, dy = e.clientY - dragStart.y;
-    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
-      dragMoved = true;
-      cameraX += dx; cameraY += dy;
-      dragStart = {x: e.clientX, y: e.clientY};
+    const dx=e.clientX-dragStart.x, dy=e.clientY-dragStart.y;
+    if (Math.abs(dx)>3||Math.abs(dy)>3) {
+      dragMoved=true;
+      cameraX+=dx; cameraY+=dy;
+      dragStart={x:e.clientX, y:e.clientY};
     }
   }
-  // Hover
-  const h = pixelToHex(e.clientX, e.clientY);
-  if (hoveredHex) { hoveredHex.hovered = false; }
-  if (h && h.revealed) {
-    h.hovered = true; hoveredHex = h;
-    showTooltip(e.clientX, e.clientY, h);
-  } else {
-    hoveredHex = null;
-    hideTooltip();
-  }
+  const h=pixelToHex(e.clientX, e.clientY);
+  if (hoveredHex) hoveredHex.hovered=false;
+  if (h&&h.revealed) { h.hovered=true; hoveredHex=h; showTooltip(e.clientX,e.clientY,h); }
+  else { hoveredHex=null; hideTooltip(); }
 });
 
 canvas.addEventListener('mouseup', e => {
-  mouseDown = false;
-  if (e.button !== 0 || dragMoved) return;
-  // Click
-  const h = pixelToHex(e.clientX, e.clientY);
-  if (selectedHex) selectedHex.selected = false;
-  if (h && h.revealed) {
-    h.selected = true;
-    selectedHex = h;
-    updateTilePanel(h);
-  } else {
-    selectedHex = null;
-    updateTilePanel(null);
-  }
+  mouseDown=false;
+  if (e.button!==0||dragMoved) return;
+  const h=pixelToHex(e.clientX, e.clientY);
+  if (selectedHex) selectedHex.selected=false;
+  if (h&&h.revealed) { h.selected=true; selectedHex=h; updateTilePanel(h); }
+  else { selectedHex=null; updateTilePanel(null); }
 });
 
 canvas.addEventListener('mouseleave', () => {
-  mouseDown = false;
-  if (hoveredHex) { hoveredHex.hovered = false; hoveredHex = null; }
+  mouseDown=false;
+  if (hoveredHex) { hoveredHex.hovered=false; hoveredHex=null; }
   hideTooltip();
 });
 
+// Zoom with mouse wheel
 canvas.addEventListener('wheel', e => {
   e.preventDefault();
-  cameraX -= e.deltaX * 0.6;
-  cameraY -= e.deltaY * 0.6;
+  const zoomSensitivity=0.001;
+  const oldZoom=zoomLevel;
+  zoomLevel=clamp(zoomLevel - e.deltaY*zoomSensitivity, MIN_ZOOM, MAX_ZOOM);
+  // Zoom toward mouse position
+  const mx=e.clientX, my=e.clientY;
+  const factor=zoomLevel/oldZoom;
+  cameraX = mx - factor*(mx-cameraX);
+  cameraY = (my-TOP_H) - factor*((my-TOP_H)-cameraY);
+  document.getElementById('zoom-indicator').textContent=Math.round(zoomLevel*100)+'%';
 }, {passive:false});
 
-window.addEventListener('resize', resize);
+window.addEventListener('resize', () => { resize(); });
+
+// Keyboard shortcuts
+window.addEventListener('keydown', e => {
+  const SPEED=40;
+  if (e.key==='ArrowLeft'||e.key==='a') cameraX+=SPEED;
+  if (e.key==='ArrowRight'||e.key==='d') cameraX-=SPEED;
+  if (e.key==='ArrowUp'||e.key==='w') cameraY+=SPEED;
+  if (e.key==='ArrowDown'||e.key==='s') cameraY-=SPEED;
+  if (e.key==='+'||e.key==='=') { zoomLevel=clamp(zoomLevel+0.1,MIN_ZOOM,MAX_ZOOM); document.getElementById('zoom-indicator').textContent=Math.round(zoomLevel*100)+'%'; }
+  if (e.key==='-') { zoomLevel=clamp(zoomLevel-0.1,MIN_ZOOM,MAX_ZOOM); document.getElementById('zoom-indicator').textContent=Math.round(zoomLevel*100)+'%'; }
+  if (e.key==='Home'||e.key==='h') { cameraX=60; cameraY=40; zoomLevel=1.0; document.getElementById('zoom-indicator').textContent='100%'; }
+});
 
 // ══════════════════════════════════════════════════════════
 // TOOLTIP
 // ══════════════════════════════════════════════════════════
-const tooltip = document.getElementById('tooltip');
-function showTooltip(mx, my, hex) {
-  const b = BIOMES[hex.biome] || {};
-  document.getElementById('tt-title').textContent = b.label || hex.biome;
-  document.getElementById('tt-body').textContent = b.desc || '';
-  const ownerMap = { player:'✦ Your territory', r0:'⚠ Productivity Bot', r1:'⚠ Linguist Guild', r2:'⚠ Wellness Empire' };
-  document.getElementById('tt-owner').textContent = hex.owner ? (ownerMap[hex.owner] || '') : '';
-  document.getElementById('tt-owner').style.color = hex.owner === 'player' ? '#f0d080' : '#e07060';
-  tooltip.style.display = 'block';
-  let tx = mx + 14, ty = my - 60;
-  if (tx + 200 > window.innerWidth - RIGHT_W) tx = mx - 210;
-  if (ty < 60) ty = my + 12;
-  tooltip.style.left = tx + 'px';
-  tooltip.style.top = ty + 'px';
+const tooltip=document.getElementById('tooltip');
+function showTooltip(mx,my,hex) {
+  const b=BIOMES[hex.biome]||{};
+  document.getElementById('tt-title').textContent=b.label||hex.biome;
+  document.getElementById('tt-body').textContent=b.desc||'';
+  const ownerMap={player:'✦ Your territory', r0:'⚠ Productivity Bot', r1:'⚠ Linguist Guild', r2:'⚠ Wellness Empire'};
+  document.getElementById('tt-owner').textContent=hex.owner?(ownerMap[hex.owner]||''):'';
+  document.getElementById('tt-owner').style.color=hex.owner==='player'?'#f0d080':'#e07060';
+  tooltip.style.display='block';
+  let tx=mx+14, ty=my-60;
+  if (tx+200>window.innerWidth-RIGHT_W) tx=mx-210;
+  if (ty<60) ty=my+12;
+  tooltip.style.left=tx+'px'; tooltip.style.top=ty+'px';
 }
-function hideTooltip() { tooltip.style.display = 'none'; }
+function hideTooltip() { tooltip.style.display='none'; }
 
 // ══════════════════════════════════════════════════════════
 // UI UPDATES
 // ══════════════════════════════════════════════════════════
 function updateTilePanel(hex) {
   if (!hex) {
-    document.getElementById('tile-icon').textContent = '—';
-    document.getElementById('tile-name').textContent = '—';
-    document.getElementById('tile-desc').textContent = 'Click a hex to inspect it.';
-    document.getElementById('tile-yield').textContent = '';
-    return;
+    document.getElementById('tile-icon').textContent='—';
+    document.getElementById('tile-name').textContent='—';
+    document.getElementById('tile-desc').textContent='Click a hex to inspect it.';
+    document.getElementById('tile-yield').textContent=''; return;
   }
-  const icons = {plains:'🌾',forest:'🌲',mountain:'⛰️',water:'💧',desert:'🏜️',tundra:'❄️',city:'🏛️',town:'🏘️',enemy:'🏯'};
-  const b = BIOMES[hex.biome] || {};
-  document.getElementById('tile-icon').textContent = icons[hex.biome] || '?';
-  document.getElementById('tile-name').textContent = b.label || hex.biome;
-  let desc = b.desc || '';
-  if (hex.owner === 'player') desc += ' ✦ Your territory.';
+  const icons={plains:'🌾',forest:'🌲',mountain:'⛰️',water:'💧',desert:'🏜️',tundra:'❄️',city:'🏛️',town:'🏘️',enemy:'🏯'};
+  const b=BIOMES[hex.biome]||{};
+  document.getElementById('tile-icon').textContent=icons[hex.biome]||'?';
+  document.getElementById('tile-name').textContent=b.label||hex.biome;
+  let desc=b.desc||'';
+  if (hex.owner==='player') desc+=' ✦ Your territory.';
   else if (hex.owner?.startsWith('r')) {
-    const idx = parseInt(hex.owner[1]);
-    desc += ` ⚠ ${rivalData[idx]?.name || 'Rival'} controls this.`;
+    const idx=parseInt(hex.owner[1]);
+    desc+=` ⚠ ${rivalData[idx]?.name||'Rival'} controls this.`;
   }
-  document.getElementById('tile-desc').textContent = desc;
-  document.getElementById('tile-yield').textContent = b.yield ? 'Yield: ' + b.yield : '';
+  document.getElementById('tile-desc').textContent=desc;
+  document.getElementById('tile-yield').textContent=b.yield?'Yield: '+b.yield:'';
 }
 
 function updateResourceUI() {
   Object.entries(resources).forEach(([k,v]) => {
-    const el = document.getElementById('res-' + k);
-    if (el) el.textContent = v;
+    const el=document.getElementById('res-'+k);
+    if (el) el.textContent=v;
   });
-  const era = ERAS[Math.min(Math.floor((turn-1)/12), ERAS.length-1)];
-  document.getElementById('turn-era').textContent = era;
-  document.getElementById('turn-counter').textContent = `Turn ${turn} · ${SEASONS[(turn-1)%4]}`;
-  document.querySelector('.empire-sub').textContent = `${era.toUpperCase()} · YEAR ${turn}`;
+  const era=ERAS[Math.min(Math.floor((turn-1)/12), ERAS.length-1)];
+  document.getElementById('turn-era').textContent=era;
+  document.getElementById('turn-counter').textContent=`Turn ${turn} · ${SEASONS[(turn-1)%4]}`;
+  document.getElementById('empire-sub-text').textContent=`${era.toUpperCase()} · YEAR ${turn}`;
 
-  // Rivals
-  const maxP = Math.max(...rivalData.map(r=>r.power), 200);
-  rivalData.forEach((rv, i) => {
-    document.getElementById(`rival${i}-pow`).textContent = rv.power;
-    const bar = document.getElementById(`rbar-${i}`);
-    if (bar) bar.style.width = Math.round((rv.power/maxP)*100) + '%';
+  const maxP=Math.max(...rivalData.map(r=>r.power), 200);
+  rivalData.forEach((rv,i) => {
+    document.getElementById(`rival${i}-pow`).textContent=rv.power;
+    const bar=document.getElementById(`rbar-${i}`);
+    if (bar) bar.style.width=Math.round((rv.power/maxP)*100)+'%';
   });
 }
 
@@ -1314,47 +1516,47 @@ function updateResourceUI() {
 // ══════════════════════════════════════════════════════════
 function endTurn() {
   turn++;
-  resources.knowledge += 3 + Math.floor(turn/5);
-  resources.gold      += 2 + Math.floor(turn/8);
+  resources.knowledge += 3+Math.floor(turn/5);
+  resources.gold      += 2+Math.floor(turn/8);
   resources.influence += 2;
   resources.vitality  += 1;
   resources.energy    += 2;
-  rivalData.forEach(r => { r.power = Math.min(r.maxPower, r.power + Math.floor(Math.random()*6)+2); });
+  rivalData.forEach(r => { r.power=Math.min(r.maxPower, r.power+Math.floor(Math.random()*6)+2); });
   updateResourceUI();
   addEvent(`⏭ Turn ${turn} · ${SEASONS[(turn-1)%4]}`);
-  if (turn % 4 === 0) addEvent(`📜 The ${ERAS[Math.min(Math.floor((turn-1)/12),4)]} begins.`);
+  if (turn%4===0) addEvent(`📜 The ${ERAS[Math.min(Math.floor((turn-1)/12),4)]} begins.`);
+  showNotif(`Turn ${turn} — ${SEASONS[(turn-1)%4]} arrives.`);
 }
 
 function setMode(mode) {
-  ['map','city','units','tech','diplo'].forEach(m => document.getElementById('btn-'+m)?.classList.remove('active'));
+  ['map','city','units','tech','diplo'].forEach(m=>document.getElementById('btn-'+m)?.classList.remove('active'));
   document.getElementById('btn-'+mode)?.classList.add('active');
-  const msgs = {
-    map: 'Map view — explore your empire.',
-    city: 'City management — grow your settlements.',
-    units: 'Military — deploy and command your armies.',
-    tech: 'Research — unlock new technologies.',
-    diplo: 'Diplomacy — forge alliances or issue ultimatums.',
+  const msgs={
+    map:'Map view — explore your empire.',
+    city:'City management — grow your settlements.',
+    units:'Military — deploy and command your armies.',
+    tech:'Research — unlock new technologies.',
+    diplo:'Diplomacy — forge alliances or issue ultimatums.',
   };
-  document.getElementById('status-text').textContent = msgs[mode] || '';
+  document.getElementById('status-text').textContent=msgs[mode]||'';
 }
 
 function addEvent(text) {
-  const log = document.getElementById('event-log');
-  const div = document.createElement('div');
-  div.textContent = text;
+  const log=document.getElementById('event-log');
+  const div=document.createElement('div');
+  div.textContent=text;
   log.prepend(div);
-  while (log.children.length > 30) log.removeChild(log.lastChild);
+  while (log.children.length>40) log.removeChild(log.lastChild);
 }
 
 function showNotif(text) {
-  const stack = document.getElementById('notif-stack');
-  const el = document.createElement('div');
-  el.className = 'notif'; el.textContent = text;
+  const stack=document.getElementById('notif-stack');
+  const el=document.createElement('div');
+  el.className='notif'; el.textContent=text;
   stack.prepend(el);
-  setTimeout(() => {
-    el.style.transition = 'opacity 0.6s';
-    el.style.opacity = '0';
-    setTimeout(() => el.remove(), 700);
+  setTimeout(()=>{
+    el.style.transition='opacity 0.6s'; el.style.opacity='0';
+    setTimeout(()=>el.remove(),700);
   }, 4500);
 }
 
@@ -1366,29 +1568,29 @@ function init() {
   generateWorld();
   updateResourceUI();
 
-  const bar = document.getElementById('load-bar');
-  let pct = 0;
-  const iv = setInterval(() => {
-    pct += Math.random() * 14 + 4;
-    bar.style.width = Math.min(pct, 100) + '%';
-    if (pct >= 100) {
+  const bar=document.getElementById('load-bar');
+  let pct=0;
+  const iv=setInterval(()=>{
+    pct += Math.random()*14+4;
+    bar.style.width=Math.min(pct,100)+'%';
+    if (pct>=100) {
       clearInterval(iv);
-      setTimeout(() => {
-        const ld = document.getElementById('loading');
-        ld.style.transition = 'opacity 1s';
-        ld.style.opacity = '0';
-        setTimeout(() => {
-          ld.style.display = 'none';
+      setTimeout(()=>{
+        const ld=document.getElementById('loading');
+        ld.style.transition='opacity 1s'; ld.style.opacity='0';
+        setTimeout(()=>{
+          ld.style.display='none';
           loop();
           addEvent('⚔ The Hegelund Republic rises!');
           addEvent('📜 Year 1, Spring — begin your conquest.');
           addEvent('👁 The world awaits discovery...');
+          addEvent('⌨ WASD/arrows to scroll · Scroll to zoom · H to reset view');
           showNotif('🏛 Welcome, Emperor. Your empire awaits.');
           updateResourceUI();
-        }, 1000);
-      }, 200);
+        },1000);
+      },200);
     }
-  }, 70);
+  },70);
 }
 
 init();
