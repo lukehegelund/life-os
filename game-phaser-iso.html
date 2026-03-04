@@ -61,32 +61,28 @@ body{background:#0d1220;overflow:hidden;font-family:'Cinzel',Georgia,serif;user-
 
 <script>
 // ══════════════════════════════════════════════════════
-//  ISOMETRIC TILE MATH — clean derivation
+//  ISOMETRIC TILE MATH — true isometric projection
 //
-//  We use a plain offset-row rectangular grid projected
-//  into isometric view. Each tile is a diamond:
-//    width  = TW  (full width)
-//    height = TH  (= TW/2 for classic 2:1 iso)
+//  Classic isometric formula (no stagger, no overlap):
+//    screen_x = (col - row) * TW/2
+//    screen_y = (col + row) * TH/2
 //
-//  Grid positions:
-//    screen_x = col * TW/2  +  (row%2) * TW/4
-//    screen_y = row * TH/2
+//  This places each tile's TOP VERTEX at that position.
+//  Adjacent tiles share edges exactly — zero gap, zero overlap.
 //
 //  The tile canvas stores:
-//    • ABOVE_PX pixels of space for features/units above the diamond
-//    • Then the diamond itself (TH pixels tall)
-//    • Then DEPTH pixels of side-face below the diamond
+//    • ABOVE px of space above the diamond top vertex (for features)
+//    • The diamond itself (TH pixels tall)
+//    • DEPTH px of side-face below the bottom vertex (thin edge only)
 //
-//  Phaser origin for tile sprites = (0.5,  ABOVE_PX / canvas_height)
-//  so the "pivot" lands exactly on the diamond top vertex.
-//  This means placing a tile at (screen_x, screen_y) puts
-//  its top vertex at that point — tiles tessellate perfectly.
+//  Phaser origin = (0.5, ABOVE/TC_H)
+//  → placing sprite at isoPos(col,row) pins the top vertex there.
 // ══════════════════════════════════════════════════════
 
-const TW     = 192;   // tile diamond width
-const TH     = 96;    // tile diamond height  (TW/2)
-const DEPTH  = 10;    // side-face depth — thin, Polytopia-style flat ground
-const ABOVE  = 64;    // canvas pixels above the diamond top vertex (for features)
+const TW     = 128;   // tile diamond width
+const TH     = 64;    // tile diamond height  (TW/2 for 2:1 iso)
+const DEPTH  = 10;    // side-face depth — thin bottom edge only
+const ABOVE  = 48;    // canvas pixels above the diamond top vertex (for features)
 
 // Canvas dimensions for a standard terrain tile
 const TC_W   = TW;
@@ -95,10 +91,9 @@ const TC_H   = ABOVE + TH + DEPTH;
 const OX     = 0.5;
 const OY     = ABOVE / TC_H;
 
-// Grid step
-const STEP_X  = TW / 2;        // column step
-const STEP_Y  = TH / 2;        // row step
-const ROW_OFF = TW / 4;        // odd-row x offset
+// Grid steps for true isometric
+const STEP_X  = TW / 2;   // (col-row) multiplier
+const STEP_Y  = TH / 2;   // (col+row) multiplier
 
 const COLS = 18, ROWS = 11;
 const TOP_H = 52, BOT_H = 110;
@@ -134,10 +129,11 @@ const MAP_DATA=[
 
 // ── ISO POSITION ──
 // Returns the screen coordinate of the diamond TOP VERTEX for tile (col,row)
+// Using true isometric: x=(col-row)*TW/2,  y=(col+row)*TH/2
 function isoPos(col, row) {
   return {
-    x: col * STEP_X + (row % 2) * ROW_OFF,
-    y: row * STEP_Y,
+    x: (col - row) * STEP_X,
+    y: (col + row) * STEP_Y,
   };
 }
 
@@ -159,21 +155,20 @@ const CITY_NAMES=['Aurum','Veridian','Solmere','Caelthon','Rivenmoor','Dunhallow
 // ══════════════════════════════════════════════════════
 //  TILE CANVAS BUILDER
 //
-//  Layout inside each tile canvas (height = ABOVE + TH + DEPTH):
+//  Canvas layout (height = ABOVE + TH + DEPTH):
 //
-//   y=0          ┌─────────────────┐  ← canvas top
-//                │   ABOVE (64px)  │  features drawn here, upward
-//   y=ABOVE      │       ◆         │  ← diamond TOP VERTEX  ← pivot/origin
-//                │      ◆ ◆        │
-//                │     ◆   ◆       │
-//   y=ABOVE+TH/2 │    ◆     ◆      │  left/right mid-points
-//                │     ◆   ◆       │
-//   y=ABOVE+TH   │      ◆ ◆        │  ← diamond BOTTOM VERTEX
-//                │   depth faces   │
-//   y=ABOVE+TH+D └─────────────────┘  ← canvas bottom
+//   y=0       ┌──────────────────┐  ← canvas top
+//             │    ABOVE (48px)  │  feature art drawn upward from here
+//   y=ABOVE   │        ◆         │  ← diamond TOP VERTEX  ← pivot/origin
+//             │       ◆ ◆        │
+//   y=A+TH/2  │      ◆   ◆       │  ← left/right tips
+//             │       ◆ ◆        │
+//   y=A+TH    │        ◆         │  ← diamond BOTTOM VERTEX
+//             │  thin depth edge │
+//   y=A+TH+D  └──────────────────┘  ← canvas bottom
 //
-//  Phaser origin: (0.5,  ABOVE/TC_H)
-//  → placing sprite at isoPos(col,row) puts the top vertex there.
+//  Phaser origin: (0.5, ABOVE/TC_H)
+//  Placing sprite at isoPos(col,row) pins the top vertex there.
 // ══════════════════════════════════════════════════════
 
 function makeTile(type, t, featureFn) {
@@ -796,7 +791,8 @@ class GameScene extends Phaser.Scene {
     // Camera center
     const {x:sx,y:sy}=isoPos(SC,SR);
     this.cameras.main.centerOn(sx, sy+TH/2);
-    this.cameras.main.setBounds(-400,-300,4500,2800);
+    // True iso bounds: x from (0-ROWS)*STEP_X to (COLS-0)*STEP_X, y from 0 to (COLS+ROWS)*STEP_Y
+    this.cameras.main.setBounds(-ROWS*STEP_X - 200, -200, (COLS+ROWS)*STEP_X + 400, (COLS+ROWS)*STEP_Y + 200);
 
     // ── Input ──
     this._dragStartX=0; this._dragStartY=0; this._hasDragged=false;
