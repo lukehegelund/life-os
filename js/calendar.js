@@ -981,9 +981,9 @@ function openCreateModal(dateStr, startTime, endTime) {
         <option value="none">🔂 Doesn't repeat</option>
         <option value="daily">📅 Daily (30 days)</option>
         <option value="weekdays">🗓 Weekdays Mon–Fri (8 weeks)</option>
-        <option value="weekly">📆 Weekly (12 weeks)</option>
-        <option value="biweekly">📆 Every 2 weeks (12 occurrences)</option>
-        <option value="monthly">🗓 Monthly (6 months)</option>
+        <option value="weekly">📆 Weekly (2 years)</option>
+        <option value="biweekly">📆 Every 2 weeks (2 years)</option>
+        <option value="monthly">🗓 Monthly (3 years)</option>
       </select>
       <div style="display:flex;gap:8px">
         <button onclick="document.getElementById('cal-ev-modal').remove()"
@@ -1074,19 +1074,22 @@ function buildRecurDates(startDateStr, recur) {
       if (i > 200) break;
     }
   } else if (recur === 'weekly') {
-    for (let i = 1; i < 12; i++) {
+    // 2 years of weekly occurrences
+    for (let i = 1; i < 104; i++) {
       const d = new Date(start);
       d.setDate(d.getDate() + i * 7);
       dates.push(dateStr(d));
     }
   } else if (recur === 'biweekly') {
-    for (let i = 1; i < 12; i++) {
+    // 2 years of biweekly occurrences
+    for (let i = 1; i < 52; i++) {
       const d = new Date(start);
       d.setDate(d.getDate() + i * 14);
       dates.push(dateStr(d));
     }
   } else if (recur === 'monthly') {
-    for (let i = 1; i < 6; i++) {
+    // 3 years of monthly
+    for (let i = 1; i < 36; i++) {
       const d = new Date(start);
       d.setMonth(d.getMonth() + i);
       dates.push(dateStr(d));
