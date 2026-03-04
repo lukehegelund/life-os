@@ -2,1028 +2,1097 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Hegelund Republic — Educator's Empire</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LifeOS Empire</title>
 <style>
-/* ── Reset & Base ─────────────────────────────────────────────────────────── */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-:root {
-  --bg: #1a1c2e;
-  --bg2: #16182a;
-  --panel: #1e2235;
-  --panel2: #242840;
-  --border: #2e3350;
-  --gold: #f5c842;
-  --gold2: #d4a017;
-  --blue: #4a9eff;
-  --blue2: #2563eb;
-  --green: #22c55e;
-  --red: #ef4444;
-  --purple: #a855f7;
-  --orange: #f97316;
-  --teal: #14b8a6;
-  --text: #e8eaf0;
-  --text2: #9aa0b8;
-  --text3: #5a6180;
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a12;
+    color: #e8dfc8;
+    font-family: 'Cinzel', 'Georgia', serif;
+    overflow: hidden;
+    user-select: none;
+  }
 
-  /* Biome colors */
-  --biome-plains:    #4a7c59;
-  --biome-knowledge: #1e40af;
-  --biome-commercial:#92400e;
-  --biome-academy:   #5b21b6;
-  --biome-health:    #065f46;
-  --biome-wilderness:#1f2937;
-  --biome-rival-p:   #991b1b;
-  --biome-rival-l:   #1e3a5f;
-  --biome-rival-w:   #14532d;
-}
+  #game-canvas {
+    display: block;
+    cursor: grab;
+  }
+  #game-canvas:active { cursor: grabbing; }
 
-html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; }
+  /* ── TOP BAR ── */
+  #top-bar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 52px;
+    background: linear-gradient(180deg, #1a1410 0%, #110e0a 100%);
+    border-bottom: 2px solid #5a3e1b;
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 8px;
+    z-index: 100;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.6);
+  }
 
-/* ── Layout ───────────────────────────────────────────────────────────────── */
-#game-wrap {
-  display: grid;
-  grid-template-rows: 56px 1fr 52px;
-  grid-template-columns: 1fr 280px;
-  height: 100vh;
-  width: 100vw;
-}
+  .empire-name {
+    font-size: 15px;
+    font-weight: bold;
+    color: #f0d080;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-right: 20px;
+    text-shadow: 0 0 8px rgba(240,208,128,0.4);
+    white-space: nowrap;
+  }
 
-/* ── Top Bar ──────────────────────────────────────────────────────────────── */
-#topbar {
-  grid-column: 1 / -1;
-  background: var(--bg2);
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  padding: 0 12px;
-  gap: 8px;
-  position: relative;
-  z-index: 10;
-}
-#empire-title {
-  font-size: 14px;
-  font-weight: 800;
-  color: var(--gold);
-  letter-spacing: .05em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  margin-right: 4px;
-}
-#era-badge {
-  font-size: 10px;
-  background: var(--panel2);
-  border: 1px solid var(--border);
-  color: var(--text2);
-  padding: 2px 8px;
-  border-radius: 99px;
-  font-weight: 600;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-}
-#xp-bar-wrap {
-  flex: 1;
-  max-width: 160px;
-  height: 6px;
-  background: var(--panel2);
-  border-radius: 99px;
-  overflow: hidden;
-  margin: 0 6px;
-}
-#xp-bar { height: 100%; background: linear-gradient(90deg, var(--gold2), var(--gold)); border-radius: 99px; transition: width .5s ease; width: 0%; }
-#level-label { font-size: 11px; color: var(--gold); font-weight: 700; white-space: nowrap; }
-.res-pill {
-  display: flex; align-items: center; gap: 4px;
-  background: var(--panel2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 4px 9px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text);
-  white-space: nowrap;
-}
-.res-pill .ico { font-size: 13px; }
-#topbar-back {
-  margin-left: auto;
-  background: var(--panel2);
-  border: 1px solid var(--border);
-  color: var(--text2);
-  font-size: 11px;
-  font-weight: 600;
-  padding: 5px 12px;
-  border-radius: 7px;
-  cursor: pointer;
-  text-decoration: none;
-}
-#topbar-back:hover { background: var(--border); color: var(--text); }
+  .resource-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 12px;
+    color: #ccc;
+    min-width: 80px;
+  }
+  .resource-pill .icon { font-size: 14px; }
+  .resource-pill .val { color: #f0d080; font-weight: bold; font-size: 13px; }
+  .resource-pill .label { color: #888; font-size: 10px; font-family: sans-serif; }
 
-/* ── Map Area ─────────────────────────────────────────────────────────────── */
-#map-area {
-  position: relative;
-  overflow: hidden;
-  background: var(--bg);
-  cursor: grab;
-}
-#map-area:active { cursor: grabbing; }
-#map-canvas {
-  position: absolute;
-  top: 0; left: 0;
-}
+  .spacer { flex: 1; }
 
-/* ── Right Panel ──────────────────────────────────────────────────────────── */
-#right-panel {
-  background: var(--panel);
-  border-left: 1px solid var(--border);
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-.rp-section {
-  border-bottom: 1px solid var(--border);
-  padding: 12px 12px 10px;
-}
-.rp-title {
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  color: var(--text3);
-  margin-bottom: 10px;
-}
+  .turn-btn {
+    background: linear-gradient(180deg, #8b5e1a 0%, #5a3a08 100%);
+    border: 1px solid #c8841e;
+    border-radius: 4px;
+    color: #f5e0a0;
+    font-family: 'Cinzel', Georgia, serif;
+    font-size: 13px;
+    padding: 6px 18px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,220,100,0.15);
+    transition: all 0.15s;
+  }
+  .turn-btn:hover {
+    background: linear-gradient(180deg, #aa7520 0%, #7a4e0a 100%);
+    box-shadow: 0 2px 10px rgba(200,132,30,0.3), inset 0 1px 0 rgba(255,220,100,0.2);
+  }
 
-/* Resources grid */
-.res-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-.res-card {
-  background: var(--panel2);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 8px 10px;
-  display: flex; flex-direction: column; gap: 3px;
-}
-.res-card-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--text3); }
-.res-card-val { font-size: 22px; font-weight: 900; line-height: 1; }
-.res-card-sub { font-size: 9px; color: var(--text3); }
-.res-knowledge { color: var(--blue); }
-.res-gold      { color: var(--gold); }
-.res-influence { color: var(--purple); }
-.res-vitality  { color: var(--green); }
-.res-energy    { color: var(--orange); }
+  #turn-counter {
+    font-size: 11px;
+    color: #888;
+    font-family: sans-serif;
+    white-space: nowrap;
+  }
 
-/* Rivals */
-.rival-row {
-  display: flex; align-items: center; gap: 8px;
-  padding: 6px 0;
-  border-bottom: 1px solid var(--border);
-}
-.rival-row:last-child { border-bottom: none; }
-.rival-icon { font-size: 18px; flex-shrink: 0; }
-.rival-info { flex: 1; min-width: 0; }
-.rival-name { font-size: 11px; font-weight: 700; color: var(--text); }
-.rival-power { font-size: 10px; color: var(--text3); margin-top: 1px; }
-.rival-bar-wrap { height: 3px; background: var(--bg); border-radius: 99px; margin-top: 4px; overflow: hidden; }
-.rival-bar { height: 100%; border-radius: 99px; }
-.rival-productivity .rival-bar { background: var(--red); }
-.rival-linguist .rival-bar     { background: var(--blue); }
-.rival-wellness .rival-bar     { background: var(--green); }
+  /* ── RIGHT PANEL ── */
+  #right-panel {
+    position: fixed;
+    top: 52px; right: 0; bottom: 0;
+    width: 240px;
+    background: linear-gradient(180deg, #110e0a 0%, #0d0b08 100%);
+    border-left: 2px solid #3a2a12;
+    z-index: 90;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
 
-/* Action feed */
-#action-feed { flex: 1; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
-.feed-item {
-  background: var(--panel2);
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  padding: 7px 10px;
-  font-size: 11px;
-  color: var(--text2);
-  line-height: 1.45;
-}
-.feed-item .feed-title { font-weight: 700; color: var(--text); font-size: 12px; margin-bottom: 2px; }
-.feed-item .feed-gain { color: var(--green); font-weight: 700; font-size: 10px; margin-top: 3px; }
+  .panel-section {
+    border-bottom: 1px solid #2a1e0e;
+    padding: 12px 14px;
+  }
+  .panel-section:last-child { border-bottom: none; flex: 1; }
 
-/* ── Bottom Bar ───────────────────────────────────────────────────────────── */
-#bottom-bar {
-  grid-column: 1 / -1;
-  background: var(--bg2);
-  border-top: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  padding: 0 12px;
-  gap: 8px;
-  overflow-x: auto;
-}
-.action-btn {
-  display: flex; align-items: center; gap: 6px;
-  background: var(--panel2);
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  padding: 7px 14px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text);
-  cursor: pointer;
-  white-space: nowrap;
-  flex-shrink: 0;
-  transition: background .15s, border-color .15s;
-}
-.action-btn:hover { background: var(--border); border-color: var(--text3); }
-.action-btn .btn-ico { font-size: 15px; }
-.action-btn.primary { background: var(--blue2); border-color: var(--blue); color: #fff; }
-.action-btn.primary:hover { background: #1d4ed8; }
-.action-btn.gold { background: #422006; border-color: var(--gold2); color: var(--gold); }
-.action-btn.gold:hover { background: #5a3010; }
+  .panel-title {
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: #9a7030;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    font-family: sans-serif;
+  }
 
-/* ── Hex Info Panel (floats on map) ──────────────────────────────────────── */
-#hex-info {
-  display: none;
-  position: absolute;
-  bottom: 12px; left: 12px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 12px 14px;
-  min-width: 180px;
-  z-index: 50;
-  pointer-events: none;
-}
-#hex-info.visible { display: block; }
-#hex-info-title { font-size: 14px; font-weight: 800; color: var(--gold); margin-bottom: 4px; }
-#hex-info-biome { font-size: 11px; color: var(--text2); margin-bottom: 6px; }
-#hex-info-owner { font-size: 11px; font-weight: 700; }
-#hex-info-building { font-size: 11px; color: var(--teal); margin-top: 4px; }
+  /* Selected tile info */
+  #tile-name {
+    font-size: 14px;
+    color: #f0d080;
+    font-weight: bold;
+    margin-bottom: 4px;
+    min-height: 20px;
+  }
+  #tile-desc {
+    font-size: 11px;
+    color: #a09070;
+    line-height: 1.5;
+    font-family: sans-serif;
+    min-height: 32px;
+  }
 
-/* ── Toast ─────────────────────────────────────────────────────────────────── */
-#toast-wrap { position: fixed; top: 70px; left: 50%; transform: translateX(-50%); z-index: 999; display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
-.toast {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 9px 16px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-  box-shadow: 0 4px 20px rgba(0,0,0,.5);
-  animation: toast-in .25s ease, toast-out .3s ease 2.2s forwards;
-  white-space: nowrap;
-}
-.toast.gain { border-color: var(--green); color: var(--green); }
-.toast.warn { border-color: var(--gold); color: var(--gold); }
-@keyframes toast-in  { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
-@keyframes toast-out { from { opacity:1; } to { opacity:0; transform:translateY(-8px); } }
+  /* Minimap */
+  #minimap-canvas {
+    width: 210px;
+    height: 140px;
+    border: 1px solid #3a2a12;
+    border-radius: 3px;
+    image-rendering: pixelated;
+  }
 
-/* ── Modal overlay ──────────────────────────────────────────────────────────── */
-.modal-bg {
-  display: none;
-  position: fixed; inset: 0;
-  background: rgba(0,0,0,.65);
-  z-index: 500;
-  align-items: center; justify-content: center;
-}
-.modal-bg.open { display: flex; }
-.modal-box {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  padding: 22px 20px 20px;
-  width: min(360px, 92vw);
-  max-height: 80vh;
-  overflow-y: auto;
-}
-.modal-title { font-size: 17px; font-weight: 800; color: var(--gold); margin-bottom: 14px; }
-.modal-body  { font-size: 13px; color: var(--text2); line-height: 1.6; }
-.modal-actions { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
-.modal-btn {
-  flex: 1; padding: 10px;
-  border-radius: 10px;
-  font-size: 13px; font-weight: 700;
-  border: none; cursor: pointer;
-}
-.modal-btn.primary { background: var(--blue2); color: #fff; }
-.modal-btn.primary:hover { background: #1d4ed8; }
-.modal-btn.cancel  { background: var(--panel2); color: var(--text2); border: 1px solid var(--border); }
-.modal-btn.cancel:hover { background: var(--border); }
-.building-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px; }
-.building-card {
-  background: var(--panel2);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 10px;
-  cursor: pointer;
-  transition: border-color .15s;
-}
-.building-card:hover { border-color: var(--gold); }
-.building-card.disabled { opacity: .4; pointer-events: none; }
-.building-card-name { font-size: 12px; font-weight: 700; color: var(--text); }
-.building-card-cost { font-size: 10px; color: var(--text3); margin-top: 3px; }
-.building-card-effect { font-size: 10px; color: var(--teal); margin-top: 2px; }
+  /* Rivals list */
+  .rival-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .rival-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .rival-info { flex: 1; }
+  .rival-name { font-size: 11px; color: #c8b890; }
+  .rival-stat { font-size: 10px; color: #6a5a40; font-family: sans-serif; }
+
+  /* ── BOTTOM BAR ── */
+  #bottom-bar {
+    position: fixed;
+    bottom: 0; left: 0; right: 240px;
+    height: 100px;
+    background: linear-gradient(0deg, #110e0a 0%, #0d0b0800 100%);
+    border-top: 1px solid #2a1e0e;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 10px;
+    z-index: 90;
+  }
+
+  .action-btn {
+    background: linear-gradient(180deg, #1e1a14 0%, #141008 100%);
+    border: 1px solid #3a2a12;
+    border-radius: 4px;
+    color: #c8a860;
+    font-size: 11px;
+    padding: 8px 14px;
+    cursor: pointer;
+    font-family: sans-serif;
+    letter-spacing: 0.5px;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .action-btn:hover {
+    border-color: #6a4a1e;
+    background: linear-gradient(180deg, #2a2018 0%, #1a140c 100%);
+    color: #f0d080;
+  }
+  .action-btn.active {
+    border-color: #c8841e;
+    color: #f0d080;
+    background: linear-gradient(180deg, #2a1e10 0%, #1a1208 100%);
+  }
+
+  #status-text {
+    flex: 1;
+    font-size: 11px;
+    color: #6a5a40;
+    font-family: sans-serif;
+    padding-left: 10px;
+  }
+
+  /* ── NOTIFICATIONS ── */
+  #notif-stack {
+    position: fixed;
+    bottom: 110px;
+    left: 20px;
+    width: 280px;
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .notif {
+    background: linear-gradient(135deg, #1e1a10 0%, #150f08 100%);
+    border: 1px solid #5a3e1b;
+    border-left: 3px solid #c8841e;
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-size: 11px;
+    color: #c8a860;
+    font-family: sans-serif;
+    animation: slideIn 0.3s ease;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+  }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(-20px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  /* ── LOADING SCREEN ── */
+  #loading {
+    position: fixed;
+    inset: 0;
+    background: #0a0a12;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    gap: 20px;
+  }
+  #loading h1 {
+    font-size: 36px;
+    color: #f0d080;
+    letter-spacing: 6px;
+    text-shadow: 0 0 30px rgba(240,208,128,0.5);
+    text-transform: uppercase;
+  }
+  #loading p {
+    font-size: 13px;
+    color: #6a5a40;
+    letter-spacing: 3px;
+    font-family: sans-serif;
+    text-transform: uppercase;
+  }
+  .load-bar-wrap {
+    width: 300px;
+    height: 3px;
+    background: #1a1410;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  #load-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #8b5e1a, #f0d080, #8b5e1a);
+    background-size: 200% 100%;
+    border-radius: 2px;
+    animation: shimmer 1.5s infinite;
+    transition: width 0.5s;
+    width: 0%;
+  }
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* ── TOOLTIP ── */
+  #tooltip {
+    position: fixed;
+    background: rgba(15, 11, 6, 0.95);
+    border: 1px solid #5a3e1b;
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-size: 11px;
+    color: #c8a860;
+    font-family: sans-serif;
+    pointer-events: none;
+    z-index: 300;
+    display: none;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.6);
+    max-width: 180px;
+  }
+  #tooltip .tt-title { color: #f0d080; font-weight: bold; margin-bottom: 3px; }
+
+  /* Google Fonts link fallback */
 </style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body>
 
-<!-- Top bar -->
-<div id="game-wrap">
-<div id="topbar">
-  <div id="empire-title">⚔️ Hegelund Republic</div>
-  <div id="era-badge">Ancient Era</div>
-  <div id="xp-bar-wrap"><div id="xp-bar"></div></div>
-  <div id="level-label">Lv 1</div>
-  <div class="res-pill"><span class="ico">📚</span><span id="res-k">0</span></div>
-  <div class="res-pill"><span class="ico">🪙</span><span id="res-g">0</span></div>
-  <div class="res-pill"><span class="ico">🌐</span><span id="res-i">0</span></div>
-  <div class="res-pill"><span class="ico">💚</span><span id="res-v">0</span></div>
-  <div class="res-pill"><span class="ico">⚡</span><span id="res-e">0</span></div>
-  <a href="dashboard.html" class="topbar-back" id="topbar-back">← LifeOS</a>
-</div>
-
-<!-- Map -->
-<div id="map-area">
-  <canvas id="map-canvas"></canvas>
-  <div id="hex-info">
-    <div id="hex-info-title">—</div>
-    <div id="hex-info-biome">—</div>
-    <div id="hex-info-owner">—</div>
-    <div id="hex-info-building"></div>
+<!-- Loading Screen -->
+<div id="loading">
+  <h1>LifeOS Empire</h1>
+  <p>Building the world&hellip;</p>
+  <div class="load-bar-wrap">
+    <div id="load-bar"></div>
   </div>
 </div>
 
-<!-- Right panel -->
+<!-- Tooltip -->
+<div id="tooltip">
+  <div class="tt-title" id="tt-title"></div>
+  <div id="tt-body"></div>
+</div>
+
+<!-- Canvas -->
+<canvas id="game-canvas"></canvas>
+
+<!-- Top Bar -->
+<div id="top-bar">
+  <div class="empire-name">🏛 Hegelund Republic</div>
+  <div class="resource-pill">
+    <span class="icon">📚</span>
+    <div>
+      <div class="val" id="res-knowledge">0</div>
+      <div class="label">Knowledge</div>
+    </div>
+  </div>
+  <div class="resource-pill">
+    <span class="icon">💰</span>
+    <div>
+      <div class="val" id="res-gold">0</div>
+      <div class="label">Gold</div>
+    </div>
+  </div>
+  <div class="resource-pill">
+    <span class="icon">🌐</span>
+    <div>
+      <div class="val" id="res-influence">0</div>
+      <div class="label">Influence</div>
+    </div>
+  </div>
+  <div class="resource-pill">
+    <span class="icon">💪</span>
+    <div>
+      <div class="val" id="res-vitality">0</div>
+      <div class="label">Vitality</div>
+    </div>
+  </div>
+  <div class="resource-pill">
+    <span class="icon">⚡</span>
+    <div>
+      <div class="val" id="res-energy">0</div>
+      <div class="label">Energy</div>
+    </div>
+  </div>
+  <div class="spacer"></div>
+  <span id="turn-counter">Turn 1 · Spring</span>
+  &nbsp;
+  <button class="turn-btn" onclick="endTurn()">End Turn ▶</button>
+</div>
+
+<!-- Right Panel -->
 <div id="right-panel">
-  <div class="rp-section">
-    <div class="rp-title">Resources</div>
-    <div class="res-grid">
-      <div class="res-card"><div class="res-card-label">Knowledge</div><div class="res-card-val res-knowledge" id="rp-k">0</div><div class="res-card-sub">📚 Saber</div></div>
-      <div class="res-card"><div class="res-card-label">Gold</div><div class="res-card-val res-gold" id="rp-g">0</div><div class="res-card-sub">🪙 Oro</div></div>
-      <div class="res-card"><div class="res-card-label">Influence</div><div class="res-card-val res-influence" id="rp-i">0</div><div class="res-card-sub">🌐 Poder</div></div>
-      <div class="res-card"><div class="res-card-label">Vitality</div><div class="res-card-val res-vitality" id="rp-v">0</div><div class="res-card-sub">💚 Salud</div></div>
-      <div class="res-card" style="grid-column:1/-1"><div class="res-card-label">Energy</div><div class="res-card-val res-energy" id="rp-e">0</div><div class="res-card-sub">⚡ Fuerza</div></div>
+  <div class="panel-section">
+    <div class="panel-title">Selected Tile</div>
+    <div id="tile-name">—</div>
+    <div id="tile-desc">Click a hex to inspect it.</div>
+  </div>
+
+  <div class="panel-section">
+    <div class="panel-title">Overview</div>
+    <canvas id="minimap-canvas" width="210" height="140"></canvas>
+  </div>
+
+  <div class="panel-section">
+    <div class="panel-title">Rival Empires</div>
+    <div id="rivals-list">
+      <div class="rival-row">
+        <div class="rival-dot" style="background:#e05050"></div>
+        <div class="rival-info">
+          <div class="rival-name">Productivity Bot</div>
+          <div class="rival-stat" id="rival1-stat">Power: —</div>
+        </div>
+      </div>
+      <div class="rival-row">
+        <div class="rival-dot" style="background:#50b0e0"></div>
+        <div class="rival-info">
+          <div class="rival-name">Linguist Guild</div>
+          <div class="rival-stat" id="rival2-stat">Power: —</div>
+        </div>
+      </div>
+      <div class="rival-row">
+        <div class="rival-dot" style="background:#50e090"></div>
+        <div class="rival-info">
+          <div class="rival-name">Wellness Empire</div>
+          <div class="rival-stat" id="rival3-stat">Power: —</div>
+        </div>
+      </div>
     </div>
   </div>
 
-  <div class="rp-section">
-    <div class="rp-title">Rivals</div>
-    <div id="rivals-list"></div>
-  </div>
-
-  <div class="rp-title" style="padding:10px 12px 4px">Recent Activity</div>
-  <div id="action-feed">
-    <div class="feed-item"><div class="feed-title">🏛️ Empire Founded</div>The Hegelund Republic has risen. Build, learn, and conquer.</div>
+  <div class="panel-section" style="flex:1; overflow-y:auto;">
+    <div class="panel-title">Event Log</div>
+    <div id="event-log" style="font-size:10px; color:#6a5a40; font-family:sans-serif; line-height:1.7;"></div>
   </div>
 </div>
 
-<!-- Bottom action bar -->
+<!-- Bottom Bar -->
 <div id="bottom-bar">
-  <button class="action-btn primary btn-ico" onclick="showEarnModal()"><span class="btn-ico">⚡</span> Earn Resources</button>
-  <button class="action-btn gold" onclick="showBuildModal()"><span class="btn-ico">🏗️</span> Build</button>
-  <button class="action-btn" onclick="showBattleModal()"><span class="btn-ico">⚔️</span> Battle</button>
-  <button class="action-btn" onclick="showEventLog()"><span class="btn-ico">📜</span> Event Log</button>
-  <button class="action-btn" onclick="syncFromLifeOS()" id="sync-btn"><span class="btn-ico">🔄</span> Sync LifeOS</button>
-</div>
-</div><!-- end game-wrap -->
-
-<!-- Toast container -->
-<div id="toast-wrap"></div>
-
-<!-- Earn Resources Modal -->
-<div class="modal-bg" id="earn-modal">
-  <div class="modal-box" onclick="event.stopPropagation()">
-    <div class="modal-title">⚡ Earn Resources</div>
-    <div class="modal-body">Log an action to earn resources for your empire:</div>
-    <div style="display:flex;flex-direction:column;gap:8px;margin-top:12px" id="earn-actions"></div>
-    <div class="modal-actions">
-      <button class="modal-btn cancel" onclick="closeModal('earn-modal')">Close</button>
-    </div>
-  </div>
+  <button class="action-btn active" id="btn-map" onclick="setMode('map')">🗺 Map</button>
+  <button class="action-btn" id="btn-city" onclick="setMode('city')">🏛 City</button>
+  <button class="action-btn" id="btn-units" onclick="setMode('units')">⚔ Units</button>
+  <button class="action-btn" id="btn-tech" onclick="setMode('tech')">🔬 Research</button>
+  <button class="action-btn" id="btn-diplo" onclick="setMode('diplo')">🤝 Diplomacy</button>
+  <div id="status-text">Select a hex to begin. Right-click to move units.</div>
 </div>
 
-<!-- Build Modal -->
-<div class="modal-bg" id="build-modal">
-  <div class="modal-box" onclick="event.stopPropagation()">
-    <div class="modal-title">🏗️ Build a Structure</div>
-    <div class="modal-body" style="margin-bottom:10px">Spend resources to construct buildings that boost your empire:</div>
-    <div class="building-grid" id="building-grid"></div>
-    <div class="modal-actions">
-      <button class="modal-btn cancel" onclick="closeModal('build-modal')">Close</button>
-    </div>
-  </div>
-</div>
+<!-- Notifications -->
+<div id="notif-stack"></div>
 
-<!-- Battle Modal -->
-<div class="modal-bg" id="battle-modal">
-  <div class="modal-box" onclick="event.stopPropagation()">
-    <div class="modal-title">⚔️ Battle a Rival</div>
-    <div class="modal-body" id="battle-body">Choose a rival to challenge this week:</div>
-    <div style="display:flex;flex-direction:column;gap:8px;margin-top:12px" id="battle-rivals"></div>
-    <div class="modal-actions">
-      <button class="modal-btn cancel" onclick="closeModal('battle-modal')">Close</button>
-    </div>
-  </div>
-</div>
+<script>
+// ══════════════════════════════════════════════════════════
+// CONSTANTS & CONFIG
+// ══════════════════════════════════════════════════════════
+const COLS = 13, ROWS = 9;
+const HEX_SIZE = 52; // px, flat-top
+const CANVAS_PADDING = 60;
+const RIGHT_PANEL_W = 240;
+const TOP_BAR_H = 52;
+const BOTTOM_BAR_H = 100;
 
-<!-- Event Log Modal -->
-<div class="modal-bg" id="eventlog-modal">
-  <div class="modal-box" onclick="event.stopPropagation()">
-    <div class="modal-title">📜 Event Log</div>
-    <div id="eventlog-body" style="display:flex;flex-direction:column;gap:6px;max-height:55vh;overflow-y:auto"></div>
-    <div class="modal-actions">
-      <button class="modal-btn cancel" onclick="closeModal('eventlog-modal')">Close</button>
-    </div>
-  </div>
-</div>
-
-<script type="module">
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
-
-const SUPABASE_URL = 'https://kxsuzgpnvtepsyhkezin.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4c3V6Z3BudnRlcHN5aGtlemluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3Nzc1MDAsImV4cCI6MjA4NzM1MzUwMH0.oKtpiH63heyK-wJ87ZRvkhUzRqy6NT6Z2XWF1xjbtxA';
-const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
-
-// ── State ──────────────────────────────────────────────────────────────────
-let state = { level:1, xp:0, xp_next:100, era:'Ancient', turn:1, empire_name:'Hegelund Republic', id:null };
-let resources = { knowledge:0, gold:0, influence:0, vitality:0, energy:0, id:null };
-let hexMap = [];
-let rivals = [];
-let events = [];
-
-// ── BIOME CONFIG ───────────────────────────────────────────────────────────
+// Hex biome types with visual config
 const BIOMES = {
-  plains:      { label:'Plains',           color:'#2d5a3d', icon:'🌿', border:'#3d7a50' },
-  knowledge_zone: { label:'Knowledge Zone', color:'#1e3a7a', icon:'📚', border:'#2563eb' },
-  commercial:  { label:'Commercial District', color:'#5a3a10', icon:'🪙', border:'#d97706' },
-  academy:     { label:'Academy',           color:'#3b1a7a', icon:'🎓', border:'#7c3aed' },
-  health_fort: { label:'Health Fortress',   color:'#0a4a30', icon:'💚', border:'#16a34a' },
-  wilderness:  { label:'Wilderness',        color:'#111827', icon:'🌑', border:'#1f2937' },
-  'rival_productivity':{ label:'Rival Territory', color:'#4a1010', icon:'⚡', border:'#7f1d1d' },
-  'rival_linguist':    { label:'Rival Territory', color:'#0a1f3a', icon:'🌐', border:'#1e3a5f' },
-  'rival_wellness':    { label:'Rival Territory', color:'#0a2a1a', icon:'💚', border:'#14532d' },
+  plains:    { label: 'Plains',        color: '#6b7e3a', dark: '#4a5a28', icon: '🌾', desc: 'Fertile lands — +2 Knowledge per turn.' },
+  forest:    { label: 'Forest',        color: '#2d5a2d', dark: '#1e3e1e', icon: '🌲', desc: 'Dense forest — +1 Vitality, +1 Influence.' },
+  mountain:  { label: 'Mountains',     color: '#7a6a5a', dark: '#5a4e40', icon: '⛰', desc: 'Rugged peaks — rich in minerals. +3 Gold.' },
+  water:     { label: 'Lake / River',  color: '#1e4a6e', dark: '#132e4a', icon: '🌊', desc: 'Water source — boosts Vitality.' },
+  desert:    { label: 'Desert',        color: '#b09050', dark: '#7a6030', icon: '🏜', desc: 'Harsh terrain — low yield, high strategic value.' },
+  tundra:    { label: 'Tundra',        color: '#8899aa', dark: '#5a6a7a', icon: '❄', desc: 'Frozen land — +2 Vitality if settled.' },
+  city:      { label: 'Capital City',  color: '#c0a060', dark: '#8a6a30', icon: '🏛', desc: 'Your capital. Heart of the Hegelund Republic.' },
+  town:      { label: 'Town',          color: '#c0a060', dark: '#7a6030', icon: '🏘', desc: 'A growing settlement.' },
+  enemy_city:{ label: 'Enemy City',    color: '#8a3030', dark: '#5a1e1e', icon: '🏯', desc: 'Rival stronghold. Must be conquered.' },
 };
-const OWNER_COLORS = { player:'#f5c842', neutral:'#4b5563', rival_productivity:'#ef4444', rival_linguist:'#3b82f6', rival_wellness:'#22c55e' };
 
-// ── HEX CANVAS ─────────────────────────────────────────────────────────────
-const canvas = document.getElementById('map-canvas');
-const ctx = canvas.getContext('2d');
-let HEX_SIZE = 56;
-let offsetX = 0, offsetY = 0;
-let isDragging = false, dragStart = null;
-let selectedHex = null;
+// Elevation noise seed
+function noise(x, y, seed = 42) {
+  let n = Math.sin(x * 127.1 + y * 311.7 + seed * 57.3) * 43758.5453;
+  return n - Math.floor(n);
+}
 
+// ══════════════════════════════════════════════════════════
+// WORLD GENERATION
+// ══════════════════════════════════════════════════════════
+let world = [];
+let rivalData = [
+  { name: 'Productivity Bot', color: '#e05050', power: 120, hexes: [] },
+  { name: 'Linguist Guild',   color: '#50b0e0', power: 90,  hexes: [] },
+  { name: 'Wellness Empire',  color: '#50e090', power: 80,  hexes: [] },
+];
+
+function generateWorld() {
+  world = [];
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const n0 = noise(c, r, 0);
+      const n1 = noise(c * 2, r * 2, 13);
+      const n2 = noise(c * 0.5, r * 0.5, 77);
+      const elev = (n0 * 0.5 + n1 * 0.3 + n2 * 0.2);
+
+      let biome;
+      if (elev < 0.18) biome = 'water';
+      else if (elev < 0.32) biome = 'tundra';
+      else if (elev < 0.45) biome = 'plains';
+      else if (elev < 0.58) biome = 'forest';
+      else if (elev < 0.68) biome = 'plains';
+      else if (elev < 0.78) biome = 'desert';
+      else biome = 'mountain';
+
+      world.push({
+        col: c, row: r,
+        biome,
+        owner: null, // null=neutral, 'player', 'rival0', 'rival1', 'rival2'
+        revealed: false,
+        city: null,
+        elevation: elev,
+        selected: false,
+        hovered: false,
+        unit: null,
+        fogAlpha: 1.0, // 1 = full fog
+      });
+    }
+  }
+
+  // Player capital
+  const playerStart = world[r2i(4, 6)];
+  playerStart.biome = 'city';
+  playerStart.owner = 'player';
+  playerStart.revealed = true;
+  playerStart.fogAlpha = 0;
+  playerStart.city = { name: 'Hegelund', pop: 2, level: 1 };
+
+  // Reveal 2-ring around capital
+  revealAround(4, 6, 2, 'player');
+
+  // Rival capitals
+  const rivalPositions = [[1,1], [11,1], [11,7]];
+  rivalPositions.forEach(([c, r], i) => {
+    const h = world[r2i(r, c)];
+    h.biome = 'enemy_city';
+    h.owner = `rival${i}`;
+    h.city = { name: rivalData[i].name.split(' ')[0] + ' Keep', pop: 2, level: 1 };
+    h.revealed = true;
+    h.fogAlpha = 0;
+    rivalData[i].hexes.push(r2i(r, c));
+  });
+
+  // Scatter some towns
+  [[3, 2], [8, 4], [5, 7], [10, 5]].forEach(([r, c]) => {
+    const h = world[r2i(r, c)];
+    if (h.biome !== 'water' && h.biome !== 'mountain') {
+      h.biome = 'town';
+    }
+  });
+}
+
+function r2i(r, c) {
+  return Math.max(0, Math.min(ROWS * COLS - 1, r * COLS + c));
+}
+
+function revealAround(col, row, radius, owner) {
+  for (let r = -radius; r <= radius; r++) {
+    for (let c = -radius; c <= radius; c++) {
+      const nr = row + r;
+      const nc = col + c;
+      if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
+        const h = world[r2i(nr, nc)];
+        h.revealed = true;
+        h.fogAlpha = 0;
+        if (!h.owner && owner === 'player') {
+          // just reveal, don't claim
+        }
+      }
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// HEX MATH (flat-top hexagons)
+// ══════════════════════════════════════════════════════════
 function hexToPixel(col, row) {
-  const w = HEX_SIZE * 2;
-  const h = Math.sqrt(3) * HEX_SIZE;
-  const x = offsetX + col * (w * 0.75) + HEX_SIZE;
-  const y = offsetY + row * h + (col % 2 === 1 ? h / 2 : 0) + HEX_SIZE;
+  const w = Math.sqrt(3) * HEX_SIZE;
+  const h = 2 * HEX_SIZE;
+  const x = col * w + (row % 2 === 0 ? 0 : w / 2) + cameraX;
+  const y = row * h * 0.75 + cameraY + TOP_BAR_H + CANVAS_PADDING;
   return { x, y };
 }
 
-function hexCorners(cx, cy, size) {
-  const pts = [];
-  for (let i = 0; i < 6; i++) {
-    const angle = Math.PI / 180 * (60 * i - 30);
-    pts.push({ x: cx + size * Math.cos(angle), y: cy + size * Math.sin(angle) });
-  }
-  return pts;
+function pixelToHex(px, py) {
+  const w = Math.sqrt(3) * HEX_SIZE;
+  const h = 2 * HEX_SIZE * 0.75;
+  const row = Math.round((py - TOP_BAR_H - CANVAS_PADDING - cameraY) / h);
+  const offset = row % 2 === 0 ? 0 : w / 2;
+  const col = Math.round((px - offset - cameraX) / w);
+  if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return null;
+  return { col, row };
 }
 
-function drawHex(hex) {
-  const { x, y } = hexToPixel(hex.col, hex.row);
-  const bm = BIOMES[hex.biome] || BIOMES.wilderness;
-  const pts = hexCorners(x, y, HEX_SIZE - 2);
-  const isSelected = selectedHex && selectedHex.col === hex.col && selectedHex.row === hex.row;
-  const isPlayer = hex.owner === 'player';
-
+// Draw a flat-top hexagon
+function drawHex(ctx, cx, cy, size, fillStyle, strokeStyle, lineWidth = 1) {
   ctx.beginPath();
-  ctx.moveTo(pts[0].x, pts[0].y);
-  for (let i = 1; i < 6; i++) ctx.lineTo(pts[i].x, pts[i].y);
-  ctx.closePath();
-
-  // Fill
-  if (!hex.unlocked && hex.owner === 'neutral') {
-    ctx.fillStyle = '#0d1117';
-  } else {
-    // Radial gradient for depth
-    const grad = ctx.createRadialGradient(x, y - HEX_SIZE * 0.15, 0, x, y, HEX_SIZE);
-    const base = bm.color;
-    grad.addColorStop(0, lighten(base, 30));
-    grad.addColorStop(1, base);
-    ctx.fillStyle = grad;
+  for (let i = 0; i < 6; i++) {
+    const angle = (Math.PI / 180) * (60 * i + 30);
+    const x = cx + size * Math.cos(angle);
+    const y = cy + size * Math.sin(angle);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
   }
+  ctx.closePath();
+  ctx.fillStyle = fillStyle;
   ctx.fill();
-
-  // Border
-  ctx.strokeStyle = isSelected ? '#f5c842' : (bm.border || '#2e3350');
-  ctx.lineWidth = isSelected ? 2.5 : 1.5;
-  ctx.stroke();
-
-  // Ownership ring for player territory
-  if (isPlayer) {
-    const ringPts = hexCorners(x, y, HEX_SIZE - 6);
-    ctx.beginPath();
-    ctx.moveTo(ringPts[0].x, ringPts[0].y);
-    for (let i = 1; i < 6; i++) ctx.lineTo(ringPts[i].x, ringPts[i].y);
-    ctx.closePath();
-    ctx.strokeStyle = 'rgba(245,200,66,0.35)';
-    ctx.lineWidth = 2;
+  if (strokeStyle) {
+    ctx.strokeStyle = strokeStyle;
+    ctx.lineWidth = lineWidth;
     ctx.stroke();
   }
-
-  // Icon
-  if (hex.unlocked || hex.owner !== 'neutral') {
-    ctx.font = `${HEX_SIZE * 0.38}px serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(bm.icon, x, y - 4);
-  } else {
-    ctx.font = `${HEX_SIZE * 0.32}px serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#374151';
-    ctx.fillText('❓', x, y);
-  }
-
-  // Building indicator
-  if (hex.building) {
-    ctx.font = `${HEX_SIZE * 0.28}px serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(buildingIcon(hex.building), x + HEX_SIZE * 0.35, y - HEX_SIZE * 0.35);
-  }
-
-  // Coord label (tiny, dev only — remove later)
-  // ctx.font = '9px monospace'; ctx.fillStyle='#555'; ctx.fillText(`${hex.col},${hex.row}`, x, y + HEX_SIZE*0.5);
 }
 
-function buildingIcon(b) {
-  const icons = { library:'📖', video_studio:'🎬', language_tower:'🗼', granary:'🌾', war_room:'🏰' };
-  return icons[b] || '🏗️';
+// ══════════════════════════════════════════════════════════
+// CAMERA & INTERACTION
+// ══════════════════════════════════════════════════════════
+let cameraX = 40;
+let cameraY = 20;
+let isDragging = false;
+let dragStart = { x: 0, y: 0 };
+let selectedHex = null;
+let hoveredHex = null;
+let turn = 1;
+let season = ['Spring', 'Summer', 'Autumn', 'Winter'];
+let resources = { knowledge: 0, gold: 0, influence: 0, vitality: 0, energy: 0 };
+
+// ══════════════════════════════════════════════════════════
+// RENDERING
+// ══════════════════════════════════════════════════════════
+const canvas = document.getElementById('game-canvas');
+const ctx = canvas.getContext('2d');
+
+function resize() {
+  canvas.width = window.innerWidth - RIGHT_PANEL_W;
+  canvas.height = window.innerHeight;
 }
 
-function lighten(hex, pct) {
-  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
-  return `rgb(${Math.min(255,r+pct)},${Math.min(255,g+pct)},${Math.min(255,b+pct)})`;
+// Ground texture gradient per biome
+const biomeGradientCache = {};
+
+function getBiomeColor(hex, variant = 'base') {
+  const b = BIOMES[hex.biome] || BIOMES.plains;
+  if (variant === 'dark') return b.dark;
+  // Add slight elevation shading
+  const elev = hex.elevation || 0.5;
+  const shade = Math.round((elev - 0.5) * 30);
+  return shadeHex(b.color, shade);
 }
 
-function resizeCanvas() {
-  const area = document.getElementById('map-area');
-  canvas.width = area.clientWidth;
-  canvas.height = area.clientHeight;
-  // Center map initially
-  if (offsetX === 0 && offsetY === 0) {
-    offsetX = canvas.width / 2 - (HEX_SIZE * 2 * 0.75 * 3);
-    offsetY = canvas.height / 2 - (Math.sqrt(3) * HEX_SIZE * 3);
-  }
-  drawMap();
+function shadeHex(col, amount) {
+  // Parse #rrggbb and add amount to each channel
+  const r = Math.min(255, Math.max(0, parseInt(col.slice(1,3),16) + amount));
+  const g = Math.min(255, Math.max(0, parseInt(col.slice(3,5),16) + amount));
+  const b = Math.min(255, Math.max(0, parseInt(col.slice(5,7),16) + amount));
+  return `rgb(${r},${g},${b})`;
 }
 
-function drawMap() {
+function ownerBorderColor(owner) {
+  if (!owner) return null;
+  if (owner === 'player') return '#f0d080';
+  const idx = parseInt(owner.replace('rival',''));
+  return rivalData[idx]?.color || '#fff';
+}
+
+let animFrame = 0;
+
+function render() {
+  animFrame++;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // Background grid vibe
-  ctx.fillStyle = '#12141f';
+  // Sky gradient background
+  const sky = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  sky.addColorStop(0, '#080818');
+  sky.addColorStop(1, '#12100a');
+  ctx.fillStyle = sky;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // Draw star field
-  ctx.fillStyle = 'rgba(255,255,255,0.04)';
-  for (let i = 0; i < 120; i++) {
-    ctx.beginPath();
-    ctx.arc((i * 137 + 50) % canvas.width, (i * 97 + 30) % canvas.height, Math.random() * 1.2 + 0.3, 0, Math.PI * 2);
-    ctx.fill();
+  // Grid lines layer (very subtle)
+  ctx.globalAlpha = 0.03;
+  for (let x = 0; x < canvas.width; x += 40) {
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
   }
+  for (let y = 0; y < canvas.height; y += 40) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
 
-  hexMap.forEach(h => drawHex(h));
-}
+  // ── Draw hexes ──
+  world.forEach(hex => {
+    const { x, y } = hexToPixel(hex.col, hex.row);
+    // Cull offscreen
+    const R = HEX_SIZE + 4;
+    if (x < -R || x > canvas.width + R || y < TOP_BAR_H - R || y > canvas.height + R) return;
 
-// ── Mouse / Touch interaction ──────────────────────────────────────────────
-function pixelToHex(px, py) {
-  let closest = null, minDist = Infinity;
-  hexMap.forEach(h => {
-    const { x, y } = hexToPixel(h.col, h.row);
-    const d = Math.hypot(px - x, py - y);
-    if (d < HEX_SIZE && d < minDist) { minDist = d; closest = h; }
+    if (!hex.revealed) {
+      // Full fog — draw dark hex only
+      drawHex(ctx, x, y, HEX_SIZE - 1, '#070608', '#0a090e', 0.5);
+      return;
+    }
+
+    // Base color
+    const baseCol = getBiomeColor(hex);
+    const darkCol = getBiomeColor(hex, 'dark');
+
+    // Gradient fill
+    const grad = ctx.createLinearGradient(x, y - HEX_SIZE, x, y + HEX_SIZE);
+    grad.addColorStop(0, shadeHex(baseCol, 15));
+    grad.addColorStop(0.5, baseCol);
+    grad.addColorStop(1, darkCol);
+
+    // Selection pulse
+    const pulse = hex.selected ? (Math.sin(animFrame * 0.08) * 0.3 + 0.7) : 1;
+
+    drawHex(ctx, x, y, HEX_SIZE - 1, grad, null);
+
+    // Inner detail lines (terrain texture)
+    ctx.globalAlpha = 0.12;
+    for (let i = 0; i < 3; i++) {
+      const angle = (Math.PI / 3) * i;
+      const len = HEX_SIZE * 0.3 * (0.6 + noise(hex.col + i, hex.row, i * 7) * 0.4);
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x + Math.cos(angle) * (HEX_SIZE * 0.1), y + Math.sin(angle) * (HEX_SIZE * 0.1));
+      ctx.lineTo(x + Math.cos(angle) * len, y + Math.sin(angle) * len);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // Border
+    let borderCol = '#1a1208';
+    let borderW = 0.7;
+    const ownerCol = ownerBorderColor(hex.owner);
+    if (ownerCol) {
+      borderCol = ownerCol;
+      borderW = 1.5;
+    }
+    if (hex.hovered && !hex.selected) {
+      borderCol = '#ffffff';
+      borderW = 1.2;
+    }
+    if (hex.selected) {
+      borderCol = '#ffe060';
+      borderW = 2.2 * pulse;
+    }
+    drawHex(ctx, x, y, HEX_SIZE - 1, 'rgba(0,0,0,0)', borderCol, borderW);
+
+    // Fog partial overlay
+    if (hex.fogAlpha > 0) {
+      ctx.globalAlpha = hex.fogAlpha * 0.85;
+      drawHex(ctx, x, y, HEX_SIZE - 1, '#070608', null);
+      ctx.globalAlpha = 1;
+    }
+
+    // ── Icons & labels ──
+    const biome = BIOMES[hex.biome];
+    if (biome && hex.fogAlpha < 0.8) {
+      ctx.globalAlpha = 1 - hex.fogAlpha;
+      ctx.font = `${Math.round(HEX_SIZE * 0.38)}px serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      // Shadow behind icon
+      ctx.shadowColor = 'rgba(0,0,0,0.7)';
+      ctx.shadowBlur = 4;
+
+      if (hex.biome === 'city') {
+        // Capital: larger icon + glow ring
+        ctx.font = `${Math.round(HEX_SIZE * 0.52)}px serif`;
+        ctx.shadowColor = 'rgba(240,208,0,0.6)';
+        ctx.shadowBlur = 14;
+        ctx.fillText('🏛', x, y - 4);
+        ctx.shadowBlur = 0;
+
+        // City name
+        ctx.font = 'bold 8px sans-serif';
+        ctx.fillStyle = '#f0d080';
+        ctx.shadowColor = 'rgba(0,0,0,0.9)';
+        ctx.shadowBlur = 3;
+        ctx.fillText(hex.city?.name || '', x, y + HEX_SIZE * 0.55);
+        ctx.shadowBlur = 0;
+
+      } else if (hex.biome === 'enemy_city') {
+        ctx.font = `${Math.round(HEX_SIZE * 0.48)}px serif`;
+        ctx.shadowColor = 'rgba(200,0,0,0.5)';
+        ctx.shadowBlur = 10;
+        ctx.fillText('🏯', x, y - 4);
+        ctx.shadowBlur = 0;
+        ctx.font = 'bold 8px sans-serif';
+        ctx.fillStyle = '#e08080';
+        ctx.shadowColor = 'rgba(0,0,0,0.9)';
+        ctx.shadowBlur = 3;
+        ctx.fillText(hex.city?.name || '', x, y + HEX_SIZE * 0.55);
+        ctx.shadowBlur = 0;
+
+      } else if (hex.biome === 'town') {
+        ctx.fillText('🏘', x, y);
+      } else {
+        // Subtle terrain icon
+        ctx.globalAlpha = (1 - hex.fogAlpha) * 0.75;
+        ctx.fillText(biome.icon, x, y);
+      }
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
+    }
+
+    // Owner territory marker (small dot in corner)
+    if (hex.owner && hex.biome !== 'city' && hex.biome !== 'enemy_city') {
+      const oc = ownerBorderColor(hex.owner);
+      if (oc) {
+        ctx.beginPath();
+        ctx.arc(x + HEX_SIZE * 0.4, y - HEX_SIZE * 0.55, 4, 0, Math.PI * 2);
+        ctx.fillStyle = oc;
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+    }
   });
-  return closest;
+
+  // ── Selected hex highlight ring ──
+  if (selectedHex) {
+    const { x, y } = hexToPixel(selectedHex.col, selectedHex.row);
+    const pulse = Math.sin(animFrame * 0.08) * 0.5 + 0.5;
+    ctx.globalAlpha = 0.3 + pulse * 0.3;
+    drawHex(ctx, x, y, HEX_SIZE + 3, 'rgba(255,220,80,0.1)', '#ffe060', 2);
+    ctx.globalAlpha = 1;
+  }
+
+  // ── Minimap ──
+  renderMinimap();
 }
 
+function renderMinimap() {
+  const mc = document.getElementById('minimap-canvas');
+  const mx = mc.getContext('2d');
+  const mw = mc.width, mh = mc.height;
+  mx.clearRect(0, 0, mw, mh);
+  mx.fillStyle = '#080810';
+  mx.fillRect(0, 0, mw, mh);
+
+  const cellW = mw / COLS;
+  const cellH = mh / ROWS;
+
+  world.forEach(hex => {
+    const px = hex.col * cellW;
+    const py = hex.row * cellH;
+    if (!hex.revealed) {
+      mx.fillStyle = '#0d0d14';
+    } else {
+      const b = BIOMES[hex.biome] || BIOMES.plains;
+      mx.fillStyle = b.color;
+      if (hex.owner === 'player') mx.fillStyle = '#f0d080';
+      else if (hex.owner?.startsWith('rival')) {
+        const idx = parseInt(hex.owner.replace('rival',''));
+        mx.fillStyle = rivalData[idx]?.color || '#888';
+      }
+    }
+    mx.fillRect(px + 0.5, py + 0.5, cellW - 0.5, cellH - 0.5);
+  });
+
+  // Viewport indicator
+  const mapW = COLS * Math.sqrt(3) * HEX_SIZE;
+  const mapH = ROWS * HEX_SIZE * 1.5;
+  const vx = (-cameraX / mapW) * mw;
+  const vy = (-cameraY / mapH) * mh;
+  const vw = (canvas.width / mapW) * mw;
+  const vh = ((canvas.height - TOP_BAR_H) / mapH) * mh;
+  mx.strokeStyle = '#f0d080';
+  mx.lineWidth = 1.5;
+  mx.strokeRect(vx, vy, vw, vh);
+}
+
+// ══════════════════════════════════════════════════════════
+// GAME LOOP
+// ══════════════════════════════════════════════════════════
+function loop() {
+  render();
+  requestAnimationFrame(loop);
+}
+
+// ══════════════════════════════════════════════════════════
+// EVENTS
+// ══════════════════════════════════════════════════════════
 canvas.addEventListener('mousedown', e => {
-  isDragging = true;
-  dragStart = { x: e.clientX - offsetX, y: e.clientY - offsetY };
+  if (e.button === 0) {
+    isDragging = false;
+    dragStart = { x: e.clientX, y: e.clientY };
+    canvas._dragMoved = false;
+    canvas._mousedown = true;
+    canvas._mdPos = { x: e.clientX, y: e.clientY };
+  }
 });
+
 canvas.addEventListener('mousemove', e => {
-  if (isDragging) {
-    offsetX = e.clientX - dragStart.x;
-    offsetY = e.clientY - dragStart.y;
-    drawMap();
+  if (canvas._mousedown) {
+    const dx = e.clientX - dragStart.x;
+    const dy = e.clientY - dragStart.y;
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
+      isDragging = true;
+      canvas._dragMoved = true;
+      cameraX += e.clientX - dragStart.x;
+      cameraY += e.clientY - dragStart.y;
+      dragStart = { x: e.clientX, y: e.clientY };
+    }
+  }
+
+  // Hovered hex
+  const h = pixelToHex(e.clientX, e.clientY);
+  if (hoveredHex) {
+    const prev = world.find(w => w.col === hoveredHex.col && w.row === hoveredHex.row);
+    if (prev) prev.hovered = false;
+  }
+  if (h) {
+    const hex = world[r2i(h.row, h.col)];
+    if (hex && hex.revealed) {
+      hex.hovered = true;
+      hoveredHex = h;
+      showTooltip(e.clientX + 12, e.clientY - 10, hex);
+    } else {
+      hideTooltip();
+      hoveredHex = null;
+    }
+  } else {
+    hideTooltip();
+    hoveredHex = null;
   }
 });
+
 canvas.addEventListener('mouseup', e => {
-  if (!isDragging) return;
-  isDragging = false;
-  const dist = Math.hypot(e.clientX - (dragStart.x + offsetX), e.clientY - (dragStart.y + offsetY));
-  if (dist < 5) {
-    const rect = canvas.getBoundingClientRect();
-    const h = pixelToHex(e.clientX - rect.left, e.clientY - rect.top);
-    selectHex(h);
+  canvas._mousedown = false;
+  if (!canvas._dragMoved) {
+    // Click
+    const h = pixelToHex(e.clientX, e.clientY);
+    if (h) {
+      // Deselect old
+      if (selectedHex) {
+        const old = world[r2i(selectedHex.row, selectedHex.col)];
+        if (old) old.selected = false;
+      }
+      const hex = world[r2i(h.row, h.col)];
+      if (hex && hex.revealed) {
+        hex.selected = true;
+        selectedHex = h;
+        updateTilePanel(hex);
+      } else {
+        selectedHex = null;
+        updateTilePanel(null);
+      }
+    }
   }
-  dragStart = null;
-});
-canvas.addEventListener('mouseleave', () => { isDragging = false; });
-
-// Touch support
-canvas.addEventListener('touchstart', e => {
-  e.preventDefault();
-  const t = e.touches[0];
-  isDragging = true;
-  dragStart = { x: t.clientX - offsetX, y: t.clientY - offsetY, ox: t.clientX, oy: t.clientY };
-}, { passive: false });
-canvas.addEventListener('touchmove', e => {
-  e.preventDefault();
-  if (!isDragging) return;
-  const t = e.touches[0];
-  offsetX = t.clientX - dragStart.x;
-  offsetY = t.clientY - dragStart.y;
-  drawMap();
-}, { passive: false });
-canvas.addEventListener('touchend', e => {
-  if (!isDragging) return;
   isDragging = false;
-  const t = e.changedTouches[0];
-  if (dragStart && Math.hypot(t.clientX - dragStart.ox, t.clientY - dragStart.oy) < 8) {
-    const rect = canvas.getBoundingClientRect();
-    const h = pixelToHex(t.clientX - rect.left, t.clientY - rect.top);
-    selectHex(h);
-  }
-  dragStart = null;
 });
 
-// Scroll zoom
+canvas.addEventListener('mouseleave', () => {
+  canvas._mousedown = false;
+  isDragging = false;
+  hideTooltip();
+});
+
 canvas.addEventListener('wheel', e => {
   e.preventDefault();
-  const factor = e.deltaY < 0 ? 1.1 : 0.9;
-  HEX_SIZE = Math.max(28, Math.min(90, HEX_SIZE * factor));
-  drawMap();
+  // Zoom toward cursor (scale HEX_SIZE)
+  // For simplicity: just pan
+  cameraX -= e.deltaX * 0.5;
+  cameraY -= e.deltaY * 0.5;
 }, { passive: false });
 
-function selectHex(h) {
-  selectedHex = h;
-  const info = document.getElementById('hex-info');
-  if (!h) { info.classList.remove('visible'); drawMap(); return; }
-  const bm = BIOMES[h.biome] || BIOMES.wilderness;
-  document.getElementById('hex-info-title').textContent = `${bm.icon} ${bm.label}`;
-  document.getElementById('hex-info-biome').textContent = h.unlocked ? 'Unlocked territory' : (h.owner === 'neutral' ? 'Unexplored — complete more actions to unlock' : 'Rival territory');
-  const ownerLabel = h.owner === 'player' ? '🟡 Your territory' : h.owner === 'neutral' ? '⬜ Neutral' : '🔴 Rival';
-  document.getElementById('hex-info-owner').textContent = ownerLabel;
-  document.getElementById('hex-info-owner').style.color = OWNER_COLORS[h.owner] || '#9ca3af';
-  document.getElementById('hex-info-building').textContent = h.building ? `🏗️ ${h.building.replace('_',' ')}` : '';
-  info.classList.add('visible');
-  drawMap();
+window.addEventListener('resize', () => { resize(); });
+
+// ══════════════════════════════════════════════════════════
+// TOOLTIP
+// ══════════════════════════════════════════════════════════
+const tooltip = document.getElementById('tooltip');
+function showTooltip(x, y, hex) {
+  const b = BIOMES[hex.biome] || {};
+  document.getElementById('tt-title').textContent = b.label || hex.biome;
+  document.getElementById('tt-body').textContent = b.desc || '';
+  tooltip.style.display = 'block';
+  let tx = x, ty = y;
+  if (tx + 200 > window.innerWidth - RIGHT_PANEL_W) tx = x - 200;
+  tooltip.style.left = tx + 'px';
+  tooltip.style.top = ty + 'px';
+}
+function hideTooltip() {
+  tooltip.style.display = 'none';
 }
 
-// ── Data loading ───────────────────────────────────────────────────────────
-async function loadAll() {
-  const [stateRes, resRes, hexRes, rivalRes, eventRes] = await Promise.all([
-    sb.from('empire_state').select('*').limit(1).single(),
-    sb.from('empire_resources').select('*').limit(1).single(),
-    sb.from('hex_territories').select('*').order('col').order('row'),
-    sb.from('rival_state').select('*'),
-    sb.from('game_events').select('*').order('created_at', { ascending: false }).limit(20),
-  ]);
-
-  if (stateRes.data) { state = { ...stateRes.data }; updateTopBar(); }
-  if (resRes.data)   { resources = { ...resRes.data }; updateResUI(); }
-  if (hexRes.data)   { hexMap = hexRes.data; }
-  if (rivalRes.data) { rivals = rivalRes.data; updateRivals(); }
-  if (eventRes.data) { events = eventRes.data; updateFeed(); }
-
-  resizeCanvas();
+// ══════════════════════════════════════════════════════════
+// PANEL UPDATES
+// ══════════════════════════════════════════════════════════
+function updateTilePanel(hex) {
+  if (!hex) {
+    document.getElementById('tile-name').textContent = '—';
+    document.getElementById('tile-desc').textContent = 'Click a hex to inspect it.';
+    return;
+  }
+  const b = BIOMES[hex.biome] || {};
+  document.getElementById('tile-name').textContent = (b.icon || '') + ' ' + (b.label || hex.biome);
+  let desc = b.desc || '';
+  if (hex.owner === 'player') desc += ' ✦ Your territory.';
+  else if (hex.owner?.startsWith('rival')) {
+    const idx = parseInt(hex.owner.replace('rival',''));
+    desc += ` ⚠ Controlled by ${rivalData[idx]?.name}.`;
+  }
+  document.getElementById('tile-desc').textContent = desc;
 }
 
-function updateTopBar() {
-  const pct = Math.min(100, (state.xp / state.xp_next) * 100);
-  document.getElementById('xp-bar').style.width = pct + '%';
-  document.getElementById('level-label').textContent = `Lv ${state.level}`;
-  document.getElementById('era-badge').textContent = state.era + ' Era';
-  document.getElementById('empire-title').textContent = '⚔️ ' + (state.empire_name || 'Hegelund Republic');
-  // Topbar mini resources
-  document.getElementById('res-k').textContent = resources.knowledge || 0;
-  document.getElementById('res-g').textContent = resources.gold || 0;
-  document.getElementById('res-i').textContent = resources.influence || 0;
-  document.getElementById('res-v').textContent = resources.vitality || 0;
-  document.getElementById('res-e').textContent = resources.energy || 0;
+function updateResourceUI() {
+  for (const [k, v] of Object.entries(resources)) {
+    const el = document.getElementById(`res-${k}`);
+    if (el) el.textContent = v;
+  }
+  document.getElementById('turn-counter').textContent = `Turn ${turn} · ${season[(turn - 1) % 4]}`;
+  document.getElementById('rival1-stat').textContent = `Power: ${rivalData[0].power}`;
+  document.getElementById('rival2-stat').textContent = `Power: ${rivalData[1].power}`;
+  document.getElementById('rival3-stat').textContent = `Power: ${rivalData[2].power}`;
 }
 
-function updateResUI() {
-  document.getElementById('rp-k').textContent = resources.knowledge || 0;
-  document.getElementById('rp-g').textContent = resources.gold || 0;
-  document.getElementById('rp-i').textContent = resources.influence || 0;
-  document.getElementById('rp-v').textContent = resources.vitality || 0;
-  document.getElementById('rp-e').textContent = resources.energy || 0;
-  updateTopBar();
+// ══════════════════════════════════════════════════════════
+// GAME ACTIONS
+// ══════════════════════════════════════════════════════════
+function endTurn() {
+  turn++;
+  // Small passive resource gain
+  resources.knowledge += 3;
+  resources.gold += 2;
+  resources.influence += 1;
+  resources.vitality += 1;
+  resources.energy += 2;
+  // Rivals grow
+  rivalData.forEach(r => { r.power += Math.floor(Math.random() * 5) + 2; });
+  updateResourceUI();
+  addEvent(`⏭ Turn ${turn} begins. ${season[(turn-1)%4]}.`);
 }
 
-function updateRivals() {
-  const el = document.getElementById('rivals-list');
-  const archetypeIcons = { energy:'⚡', influence:'🌐', vitality:'💚' };
-  const archetypeClass = { energy:'rival-productivity', influence:'rival-linguist', vitality:'rival-wellness' };
-  const maxPower = Math.max(...rivals.map(r => r.knowledge + r.gold + r.influence + r.vitality + r.energy), 1);
-  el.innerHTML = rivals.map(r => {
-    const power = r.knowledge + r.gold + r.influence + r.vitality + r.energy;
-    const pct = Math.round((power / maxPower) * 100);
-    return `<div class="rival-row ${archetypeClass[r.archetype] || ''}">
-      <div class="rival-icon">${archetypeIcons[r.archetype] || '🤖'}</div>
-      <div class="rival-info">
-        <div class="rival-name">${r.name}</div>
-        <div class="rival-power">Power: ${power} | Lv ${r.level}</div>
-        <div class="rival-bar-wrap"><div class="rival-bar" style="width:${pct}%"></div></div>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-function updateFeed() {
-  const feed = document.getElementById('action-feed');
-  if (!events.length) return;
-  const items = events.slice(0, 8).map(e => {
-    const gains = Object.entries(e.resource_changes || {}).filter(([,v]) => v).map(([k,v]) => `+${v} ${k}`).join(' ');
-    return `<div class="feed-item">
-      <div class="feed-title">${e.title || e.event_type}</div>
-      <div>${e.description || ''}</div>
-      ${gains ? `<div class="feed-gain">${gains}</div>` : ''}
-    </div>`;
-  }).join('');
-  feed.innerHTML = items + feed.innerHTML;
-}
-
-// ── Earn Resources ─────────────────────────────────────────────────────────
-const ACTIONS = [
-  { id:'task',     label:'✅ Completed a Task',        icon:'✅', gains:{ energy:2 } },
-  { id:'grade',    label:'📋 Graded a Student',        icon:'📋', gains:{ knowledge:3, influence:1 } },
-  { id:'food',     label:'🥗 Logged Food',             icon:'🥗', gains:{ vitality:2 } },
-  { id:'vocab',    label:'📖 Reviewed Vocab Cards',    icon:'📖', gains:{ influence:3 } },
-  { id:'booking',  label:'🎬 Confirmed TOV Booking',   icon:'🎬', gains:{ gold:10 } },
-  { id:'exercise', label:'🏃 Logged Exercise',         icon:'🏃', gains:{ vitality:5 } },
-  { id:'report',   label:'📊 Completed Smart Report',  icon:'📊', gains:{ knowledge:4 } },
-  { id:'grant',    label:'📝 Submitted Grant App',     icon:'📝', gains:{ gold:15 } },
-];
-
-window.showEarnModal = function() {
-  const el = document.getElementById('earn-actions');
-  el.innerHTML = ACTIONS.map(a => {
-    const gainsStr = Object.entries(a.gains).map(([k,v]) => `+${v} ${k}`).join(', ');
-    return `<button onclick="earnResource('${a.id}')" style="background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;text-align:left;cursor:pointer;color:var(--text);font-size:13px;transition:border-color .15s" onmouseover="this.style.borderColor='var(--gold)'" onmouseout="this.style.borderColor='var(--border)'">
-      <div style="font-weight:700">${a.label}</div>
-      <div style="font-size:11px;color:#22c55e;margin-top:2px">${gainsStr}</div>
-    </button>`;
-  }).join('');
-  openModal('earn-modal');
-};
-
-window.earnResource = async function(actionId) {
-  const a = ACTIONS.find(x => x.id === actionId);
-  if (!a) return;
-
-  // Update resources
-  const updates = {};
-  const totalUpdates = {};
-  Object.entries(a.gains).forEach(([k, v]) => {
-    updates[k] = (resources[k] || 0) + v;
-    totalUpdates[k + '_total'] = (resources[k + '_total'] || 0) + v;
+function setMode(mode) {
+  ['map','city','units','tech','diplo'].forEach(m => {
+    document.getElementById('btn-' + m)?.classList.remove('active');
   });
-
-  const { error } = await sb.from('empire_resources').update({ ...updates, ...totalUpdates, updated_at: new Date().toISOString() }).eq('id', resources.id);
-  if (error) { toast('Error saving!', 'warn'); return; }
-
-  Object.entries(a.gains).forEach(([k, v]) => { resources[k] = updates[k]; });
-  updateResUI();
-
-  // Award XP and check level up
-  const xpGained = Object.values(a.gains).reduce((s, v) => s + v, 0);
-  await awardXP(xpGained);
-
-  // Log event
-  await logEvent('action', a.label, `${a.icon} You ${a.label.toLowerCase()}`, a.gains);
-
-  // Show toast
-  const gainsStr = Object.entries(a.gains).map(([k,v]) => `+${v} ${k}`).join(' ');
-  toast(`${a.icon} ${gainsStr}`, 'gain');
-  closeModal('earn-modal');
-};
-
-async function awardXP(amount) {
-  let newXP = (state.xp || 0) + amount * 2;
-  let newLevel = state.level;
-  let newXPNext = state.xp_next_level;
-  let leveledUp = false;
-
-  while (newXP >= newXPNext) {
-    newXP -= newXPNext;
-    newLevel++;
-    newXPNext = Math.round(newXPNext * 1.4);
-    leveledUp = true;
-  }
-
-  await sb.from('empire_state').update({ xp: newXP, level: newLevel, xp_next_level: newXPNext, updated_at: new Date().toISOString() }).eq('id', state.id);
-  state.xp = newXP; state.level = newLevel; state.xp_next_level = newXPNext;
-  updateTopBar();
-
-  if (leveledUp) {
-    toast(`🎉 Level Up! Now Level ${newLevel}!`, 'gain');
-    await logEvent('level_up', `Level ${newLevel} Reached!`, `The Hegelund Republic has grown in power!`, {});
-  }
+  document.getElementById('btn-' + mode)?.classList.add('active');
+  const msgs = {
+    map: 'Map view — click hexes to explore.',
+    city: 'City view — manage your settlements.',
+    units: 'Military view — deploy and command units.',
+    tech: 'Research tree — unlock new technologies.',
+    diplo: 'Diplomacy — negotiate with rival empires.',
+  };
+  document.getElementById('status-text').textContent = msgs[mode] || '';
 }
 
-// ── Build Structures ───────────────────────────────────────────────────────
-const BUILDINGS = [
-  { id:'library',       name:'Library',         icon:'📖', cost:{ knowledge:50 }, effect:'+10% Influence/day', desc:'Unlocked once built on a Knowledge Zone hex.' },
-  { id:'video_studio',  name:'Video Studio',    icon:'🎬', cost:{ gold:20, knowledge:30 }, effect:'TOV metrics visible in-game', desc:'Requires a Commercial hex.' },
-  { id:'language_tower',name:'Language Tower',  icon:'🗼', cost:{ influence:100 }, effect:'Unlocks Language Battle vs rivals', desc:'Requires 100 Influence.' },
-  { id:'granary',       name:'Granary',         icon:'🌾', cost:{ vitality:30 }, effect:'+5% Vitality bonus', desc:'Requires 30 Vitality (7-day food log streak).' },
-  { id:'war_room',      name:'War Room',        icon:'🏰', cost:{ knowledge:50, gold:50, influence:100, vitality:30 }, effect:'Enables wars & territorial conquest', desc:'Requires all other buildings.' },
-];
-
-window.showBuildModal = function() {
-  const grid = document.getElementById('building-grid');
-  grid.innerHTML = BUILDINGS.map(b => {
-    const costStr = Object.entries(b.cost).map(([k,v]) => `${v} ${k}`).join(', ');
-    const canAfford = Object.entries(b.cost).every(([k,v]) => (resources[k] || 0) >= v);
-    return `<div class="building-card ${canAfford ? '' : 'disabled'}" onclick="buildStructure('${b.id}')">
-      <div style="font-size:22px;margin-bottom:4px">${b.icon}</div>
-      <div class="building-card-name">${b.name}</div>
-      <div class="building-card-cost">Cost: ${costStr}</div>
-      <div class="building-card-effect">${b.effect}</div>
-    </div>`;
-  }).join('');
-  openModal('build-modal');
-};
-
-window.buildStructure = async function(buildingId) {
-  const b = BUILDINGS.find(x => x.id === buildingId);
-  if (!b) return;
-  const canAfford = Object.entries(b.cost).every(([k,v]) => (resources[k]||0) >= v);
-  if (!canAfford) { toast('Not enough resources!', 'warn'); return; }
-
-  // Deduct cost
-  const updates = {};
-  Object.entries(b.cost).forEach(([k,v]) => { updates[k] = (resources[k]||0) - v; });
-  await sb.from('empire_resources').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', resources.id);
-  Object.entries(b.cost).forEach(([k,v]) => { resources[k] = updates[k]; });
-  updateResUI();
-
-  // Place on first eligible hex
-  const target = hexMap.find(h => h.owner === 'player' && !h.building);
-  if (target) {
-    await sb.from('hex_territories').update({ building: buildingId }).eq('id', target.id);
-    target.building = buildingId;
-    drawMap();
-  }
-
-  await logEvent('build', `${b.icon} ${b.name} Built!`, `${b.name} now stands in your empire. ${b.effect}`, {});
-  toast(`🏗️ ${b.name} constructed!`, 'gain');
-  closeModal('build-modal');
-};
-
-// ── Battle ─────────────────────────────────────────────────────────────────
-window.showBattleModal = function() {
-  const el = document.getElementById('battle-rivals');
-  const myPower = resources.knowledge + resources.gold + resources.influence + resources.vitality + resources.energy;
-  el.innerHTML = rivals.map(r => {
-    const rivalPower = r.knowledge + r.gold + r.influence + r.vitality + r.energy;
-    const odds = Math.round((myPower / (myPower + rivalPower)) * 100);
-    return `<button onclick="doBattle('${r.id}')" style="background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:left;cursor:pointer;color:var(--text);font-size:13px;width:100%;transition:border-color .15s" onmouseover="this.style.borderColor='var(--red)'" onmouseout="this.style.borderColor='var(--border)'">
-      <div style="font-weight:700;margin-bottom:4px">⚔️ ${r.name}</div>
-      <div style="font-size:11px;color:var(--text2)">Their power: ${rivalPower} | Your odds: ${odds}%</div>
-    </button>`;
-  }).join('');
-  openModal('battle-modal');
-};
-
-window.doBattle = async function(rivalId) {
-  const rival = rivals.find(r => r.id === rivalId);
-  if (!rival) return;
-
-  const myPower = resources.knowledge + resources.gold + resources.influence + resources.vitality + resources.energy;
-  const rivalPower = rival.knowledge + rival.gold + rival.influence + rival.vitality + rival.energy;
-
-  // Dice roll ±15%
-  const myRoll = myPower * (0.85 + Math.random() * 0.30);
-  const theirRoll = rivalPower * (0.85 + Math.random() * 0.30);
-  const won = myRoll > theirRoll;
-
-  if (won) {
-    // Steal territory: find a rival hex
-    const rivalBiome = rival.archetype === 'energy' ? 'rival_productivity' : rival.archetype === 'influence' ? 'rival_linguist' : 'rival_wellness';
-    const rivalHex = hexMap.find(h => h.biome === rivalBiome);
-    if (rivalHex) {
-      await sb.from('hex_territories').update({ owner: 'player', biome: 'plains', unlocked: true }).eq('id', rivalHex.id);
-      rivalHex.owner = 'player'; rivalHex.biome = 'plains'; rivalHex.unlocked = true;
-    }
-    await logEvent('battle_win', `⚔️ Victory vs ${rival.name}!`, `Your forces rolled ${Math.round(myRoll)} vs their ${Math.round(theirRoll)}. Territory captured!`, { energy: 5 });
-    toast(`🏆 Victory! Captured territory from ${rival.name}!`, 'gain');
-    resources.energy = (resources.energy || 0) + 5;
-    await sb.from('empire_resources').update({ energy: resources.energy }).eq('id', resources.id);
-    updateResUI();
-  } else {
-    await logEvent('battle_loss', `💀 Defeat vs ${rival.name}`, `Your forces rolled ${Math.round(myRoll)} vs their ${Math.round(theirRoll)}. Regroup and try again.`, {});
-    toast(`💀 Defeated by ${rival.name}. Regroup!`, 'warn');
-  }
-
-  // Grow rivals each turn (slight)
-  const growField = rival.archetype === 'energy' ? 'energy' : rival.archetype === 'influence' ? 'influence' : 'vitality';
-  await sb.from('rival_state').update({ [growField]: (rival[growField]||0) + 3, updated_at: new Date().toISOString() }).eq('id', rivalId);
-  rival[growField] = (rival[growField]||0) + 3;
-  updateRivals();
-  drawMap();
-  closeModal('battle-modal');
-};
-
-// ── Sync from LifeOS ───────────────────────────────────────────────────────
-window.syncFromLifeOS = async function() {
-  const btn = document.getElementById('sync-btn');
-  btn.textContent = '⏳ Syncing...';
-  btn.disabled = true;
-
-  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
-  let gained = {};
-
-  try {
-    // Count tasks completed today
-    const { data: tasks } = await sb.from('tasks').select('id').eq('completed', true).gte('updated_at', today).limit(50);
-    if (tasks?.length) {
-      gained.energy = (gained.energy || 0) + tasks.length * 2;
-      gained.knowledge = (gained.knowledge || 0) + Math.floor(tasks.length / 3);
-    }
-
-    // Count food logs today
-    const { data: food } = await sb.from('food_log').select('id').gte('logged_at', today).limit(10);
-    if (food?.length) { gained.vitality = (gained.vitality || 0) + food.length * 2; }
-
-    // Count vocab reviews today
-    const { data: vocab } = await sb.from('vocab_words').select('id').gte('last_reviewed', today).limit(50);
-    if (vocab?.length) { gained.influence = (gained.influence || 0) + vocab.length * 3; }
-
-    if (Object.keys(gained).length) {
-      const updates = {};
-      const totalUpdates = {};
-      Object.entries(gained).forEach(([k,v]) => {
-        updates[k] = (resources[k]||0) + v;
-        totalUpdates[k+'_total'] = (resources[k+'_total']||0) + v;
-      });
-      await sb.from('empire_resources').update({ ...updates, ...totalUpdates, updated_at: new Date().toISOString() }).eq('id', resources.id);
-      Object.entries(gained).forEach(([k,v]) => { resources[k] = updates[k]; });
-      updateResUI();
-
-      const gainsStr = Object.entries(gained).map(([k,v]) => `+${v} ${k}`).join(', ');
-      await logEvent('sync', '🔄 LifeOS Sync', `Synced real activity: ${gainsStr}`, gained);
-      toast(`🔄 Synced! ${gainsStr}`, 'gain');
-    } else {
-      toast('🔄 Synced — no new activity today', 'warn');
-    }
-  } catch(e) {
-    toast('Sync error — some tables may not exist yet', 'warn');
-  }
-
-  btn.textContent = '🔄 Sync LifeOS';
-  btn.disabled = false;
-};
-
-// ── Event Log ──────────────────────────────────────────────────────────────
-window.showEventLog = async function() {
-  const { data } = await sb.from('game_events').select('*').order('created_at', { ascending: false }).limit(40);
-  const el = document.getElementById('eventlog-body');
-  el.innerHTML = (data || []).map(e => {
-    const ts = new Date(e.created_at).toLocaleString('en-US', { timeZone:'America/Los_Angeles', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
-    const gains = Object.entries(e.resource_changes || {}).filter(([,v])=>v).map(([k,v])=>`+${v} ${k}`).join(' ');
-    return `<div class="feed-item">
-      <div class="feed-title">${e.title || e.event_type}</div>
-      <div>${e.description || ''}</div>
-      ${gains ? `<div class="feed-gain">${gains}</div>` : ''}
-      <div style="font-size:10px;color:var(--text3);margin-top:3px">${ts}</div>
-    </div>`;
-  }).join('');
-  openModal('eventlog-modal');
-};
-
-async function logEvent(type, title, desc, changes) {
-  const { data } = await sb.from('game_events').insert({ event_type:type, title, description:desc, resource_changes:changes }).select().single();
-  if (data) { events.unshift(data); updateFeed(); }
+// ══════════════════════════════════════════════════════════
+// NOTIFICATIONS & LOG
+// ══════════════════════════════════════════════════════════
+function addEvent(text) {
+  const log = document.getElementById('event-log');
+  const line = document.createElement('div');
+  line.textContent = text;
+  log.prepend(line);
+  // Keep max 20
+  while (log.children.length > 20) log.removeChild(log.lastChild);
 }
 
-// ── Modal helpers ──────────────────────────────────────────────────────────
-function openModal(id) { document.getElementById(id).classList.add('open'); }
-window.closeModal = function(id) { document.getElementById(id).classList.remove('open'); };
-document.querySelectorAll('.modal-bg').forEach(m => m.addEventListener('click', function(e) { if(e.target===this) this.classList.remove('open'); }));
-
-// ── Toast ──────────────────────────────────────────────────────────────────
-window.toast = function(msg, type='') {
-  const wrap = document.getElementById('toast-wrap');
+function showNotif(text) {
+  const stack = document.getElementById('notif-stack');
   const el = document.createElement('div');
-  el.className = `toast ${type}`;
-  el.textContent = msg;
-  wrap.appendChild(el);
-  setTimeout(() => el.remove(), 2600);
-};
+  el.className = 'notif';
+  el.textContent = text;
+  stack.prepend(el);
+  setTimeout(() => {
+    el.style.transition = 'opacity 0.5s';
+    el.style.opacity = '0';
+    setTimeout(() => el.remove(), 600);
+  }, 4000);
+}
 
-// ── Init ───────────────────────────────────────────────────────────────────
-window.addEventListener('resize', resizeCanvas);
-loadAll();
+// ══════════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════════
+function init() {
+  resize();
+  generateWorld();
+  updateResourceUI();
+
+  // Animate loading bar
+  const bar = document.getElementById('load-bar');
+  let pct = 0;
+  const iv = setInterval(() => {
+    pct += Math.random() * 15 + 5;
+    bar.style.width = Math.min(pct, 100) + '%';
+    if (pct >= 100) {
+      clearInterval(iv);
+      setTimeout(() => {
+        document.getElementById('loading').style.transition = 'opacity 0.8s';
+        document.getElementById('loading').style.opacity = '0';
+        setTimeout(() => {
+          document.getElementById('loading').style.display = 'none';
+          loop();
+          addEvent('⚔ The Hegelund Republic rises!');
+          addEvent('📜 Year 1, Spring — begin your conquest.');
+          showNotif('🏛 Welcome, Emperor. Your empire awaits.');
+          updateResourceUI();
+        }, 800);
+      }, 300);
+    }
+  }, 80);
+}
+
+init();
 </script>
 </body>
 </html>
