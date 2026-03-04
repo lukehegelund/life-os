@@ -156,9 +156,12 @@ function renderPanelBody(p) {
   try { chatEntries = Array.isArray(p.log) ? p.log : JSON.parse(p.log || '[]'); } catch {}
   const chatMsgs = chatEntries.filter(e => e.text && (
     e.text.startsWith('💬 Luke:') ||
+    e.text.startsWith('📋 Claude asked:') ||
+    e.text.startsWith('✅ Luke replied:') ||
+    e.text.startsWith('💬 Claude:') ||
+    // backwards-compat with older Spanish prefixes
     e.text.startsWith('📋 Claude preguntó:') ||
-    e.text.startsWith('✅ Luke respondió:') ||
-    e.text.startsWith('💬 Claude:')
+    e.text.startsWith('✅ Luke respondió:')
   ));
 
   const chatHtml = `
@@ -168,8 +171,8 @@ function renderPanelBody(p) {
         ${chatMsgs.length === 0
           ? `<div class="proj-chat-empty">No messages yet. Message Claude about this project.</div>`
           : chatMsgs.map(e => {
-              const isLuke = e.text.startsWith('💬 Luke:') || e.text.startsWith('✅ Luke respondió:');
-              const isClaude = e.text.startsWith('📋 Claude preguntó:') || e.text.startsWith('💬 Claude:');
+              const isLuke = e.text.startsWith('💬 Luke:') || e.text.startsWith('✅ Luke replied:') || e.text.startsWith('✅ Luke respondió:');
+              const isClaude = e.text.startsWith('📋 Claude asked:') || e.text.startsWith('💬 Claude:') || e.text.startsWith('📋 Claude preguntó:');
               const ts = e.ts ? new Date(e.ts).toLocaleString('en-US', {timeZone:'America/Los_Angeles', hour:'2-digit', minute:'2-digit', month:'short', day:'numeric'}) : '';
               return `<div class="proj-chat-msg ${isLuke ? 'msg-luke' : 'msg-claude'}">
                 <div class="proj-chat-bubble">${esc(e.text)}</div>
@@ -300,8 +303,8 @@ window.submitProjectReply = async function(id) {
   let log = [];
   try { log = Array.isArray(p.log) ? [...p.log] : JSON.parse(p.log || '[]'); } catch {}
   const now = new Date().toISOString();
-  log.push({ ts: now, text: `📋 Claude preguntó: ${p.action_needed}` });
-  log.push({ ts: now, text: `✅ Luke respondió: ${reply}` });
+  log.push({ ts: now, text: `📋 Claude asked: ${p.action_needed}` });
+  log.push({ ts: now, text: `✅ Luke replied: ${reply}` });
 
   const { error } = await supabase
     .from('claude_projects')
