@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LifeOS Empire — Phaser Edition</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Cinzel+Decorative:wght@700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #0a0a12;
+  overflow: hidden;
+  font-family: 'Cinzel', Georgia, serif;
+  user-select: none;
+}
+#game-container { position: relative; }
+canvas { display: block; }
+
+/* ── MENU (HTML overlay, shown before Phaser starts) ── */
+#menu-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at center, #1a1208 0%, #0a0a12 70%);
+  z-index: 1000;
+}
+#menu-overlay::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(1px 1px at 15% 25%, rgba(255,220,100,0.5) 0%, transparent 100%),
+    radial-gradient(1px 1px at 75% 15%, rgba(255,220,100,0.4) 0%, transparent 100%),
+    radial-gradient(1px 1px at 45% 65%, rgba(255,200,80,0.3) 0%, transparent 100%),
+    radial-gradient(1px 1px at 85% 75%, rgba(255,220,100,0.35) 0%, transparent 100%),
+    radial-gradient(1px 1px at 30% 85%, rgba(255,210,90,0.3) 0%, transparent 100%);
+  pointer-events: none;
+}
+.menu-title { font-family: 'Cinzel Decorative', serif; font-size: clamp(30px,5vw,62px); color: #f0d080; text-shadow: 0 0 40px rgba(240,180,60,0.5), 0 0 80px rgba(240,150,30,0.2); letter-spacing: 4px; text-align: center; line-height: 1.2; }
+.menu-subtitle { font-size: clamp(11px,1.4vw,14px); color: #8a7050; letter-spacing: 6px; text-transform: uppercase; margin-top: 12px; text-align: center; }
+.menu-divider { width: 200px; height: 1px; background: linear-gradient(90deg,transparent,#5a3e1b,transparent); margin: 20px auto; }
+.menu-tag { font-size: 10px; color: #5a4a30; letter-spacing: 3px; text-transform: uppercase; margin-top: 6px; text-align: center; }
+.start-btn {
+  margin-top: 40px;
+  background: linear-gradient(180deg, #8b5e1a 0%, #5a3a08 100%);
+  border: 2px solid #c8841e;
+  border-radius: 4px;
+  color: #f5e0a0;
+  font-family: 'Cinzel', Georgia, serif;
+  font-size: 18px;
+  font-weight: 600;
+  padding: 16px 64px;
+  cursor: pointer;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  box-shadow: 0 4px 20px rgba(200,132,30,0.3), 0 0 40px rgba(200,100,10,0.1), inset 0 1px 0 rgba(255,220,100,0.2);
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+.start-btn:hover { background: linear-gradient(180deg,#aa7520 0%,#7a4e0a 100%); box-shadow: 0 4px 30px rgba(200,132,30,0.5),inset 0 1px 0 rgba(255,220,100,0.25); transform: translateY(-1px); }
+
+/* ── HUD overlays (sit above Phaser canvas) ── */
+#top-bar {
+  position: fixed; top: 0; left: 0; right: 0; height: 52px;
+  background: linear-gradient(180deg, #1a1410 0%, #110e0a 100%);
+  border-bottom: 2px solid #5a3e1b;
+  display: none; align-items: center; padding: 0 16px; gap: 12px;
+  z-index: 100; box-shadow: 0 2px 12px rgba(0,0,0,0.6);
+}
+.empire-name { font-size: 15px; font-weight: 700; color: #f0d080; letter-spacing: 3px; text-transform: uppercase; text-shadow: 0 0 10px rgba(240,180,60,0.4); }
+.resource-pill { display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; padding: 5px 12px; }
+.rp-icon { font-size: 15px; } .rp-val { color: #f0d080; font-weight: 700; font-size: 13px; } .rp-lbl { color: #666; font-size: 10px; font-family: sans-serif; letter-spacing: 1px; }
+.spacer { flex: 1; }
+.turn-btn { background: linear-gradient(180deg,#7a4e10,#4a2e05); border: 1px solid #c8841e; border-radius: 4px; color: #f5e0a0; font-family: 'Cinzel',serif; font-size: 12px; padding: 7px 20px; cursor: pointer; letter-spacing: 2px; transition: all 0.15s; }
+.turn-btn:hover { background: linear-gradient(180deg,#9a6218,#6a4208); }
+#turn-info { font-size: 11px; color: #666; font-family: sans-serif; }
+
+#bottom-panel {
+  position: fixed; bottom: 0; left: 0; right: 0; height: 120px;
+  background: linear-gradient(0deg,#0d0b08,#110e0a);
+  border-top: 2px solid #3a2a12;
+  display: none; align-items: center; padding: 0 20px; gap: 16px;
+  z-index: 100;
+}
+#unit-name { font-size: 16px; font-weight: 700; color: #f0d080; letter-spacing: 2px; margin-bottom: 4px; }
+#unit-desc { font-size: 11px; color: #888; font-family: sans-serif; line-height: 1.5; }
+#action-btns { display: flex; gap: 10px; }
+.action-btn { background: linear-gradient(180deg,#2a3520,#1a2212); border: 1px solid #4a6030; border-radius: 4px; color: #a0d060; font-family: 'Cinzel',serif; font-size: 11px; padding: 10px 20px; cursor: pointer; letter-spacing: 1px; transition: all 0.15s; white-space: nowrap; }
+.action-btn:hover { background: linear-gradient(180deg,#3a4530,#2a3220); border-color: #6a8050; }
+
+#status-msg { position: fixed; top: 70px; left: 50%; transform: translateX(-50%); background: rgba(10,8,5,0.92); border: 1px solid #8a6030; border-radius: 4px; padding: 8px 20px; font-size: 13px; color: #f0d080; letter-spacing: 1px; z-index: 150; opacity: 0; transition: opacity 0.3s; pointer-events: none; white-space: nowrap; }
+
+#tooltip { position: fixed; background: rgba(10,8,5,0.95); border: 1px solid #5a3e1b; border-radius: 4px; padding: 10px 14px; font-size: 12px; color: #c8b890; pointer-events: none; z-index: 200; display: none; max-width: 200px; box-shadow: 0 4px 16px rgba(0,0,0,0.6); }
+#tooltip h4 { color: #f0d080; font-size: 13px; margin-bottom: 4px; }
+#tooltip p { font-family: sans-serif; line-height: 1.4; }
+</style>
+</head>
+<body>
+<div id="game-container"></div>
+
+<!-- MENU OVERLAY -->
+<div id="menu-overlay">
+  <div>
+    <div class="menu-title">LifeOS<br>Empire</div>
+    <div class="menu-divider"></div>
+    <div class="menu-subtitle">Phaser Edition</div>
+    <div class="menu-tag">Powered by Phaser 3 + WebGL</div>
+  </div>
+  <button class="start-btn" onclick="startGame()">Begin</button>
+</div>
+
+<!-- HUD -->
+<div id="top-bar">
+  <span class="empire-name">⚔ Your Empire</span>
+  <div class="resource-pill"><span class="rp-icon">🏙</span><span class="rp-val" id="res-cities">0</span><span class="rp-lbl">CITIES</span></div>
+  <div class="resource-pill"><span class="rp-icon">⚔</span><span class="rp-val" id="res-units">1</span><span class="rp-lbl">UNITS</span></div>
+  <div class="spacer"></div>
+  <span id="turn-info">Turn 1</span>
+  <button class="turn-btn" onclick="endTurn()">End Turn ▶</button>
+</div>
+<div id="bottom-panel">
+  <div id="unit-info">
+    <div id="unit-name">Select a unit</div>
+    <div id="unit-desc">Click on your settler to begin your empire.</div>
+  </div>
+  <div id="action-btns"></div>
+</div>
+<div id="status-msg"></div>
+<div id="tooltip"><h4 id="tt-title"></h4><p id="tt-body"></p></div>
+
+<script>
+// ══════════════════════════════════════════════════════
+// CONSTANTS
+// ══════════════════════════════════════════════════════
+const HEX_SIZE = 54;
+const COLS = 18;
+const ROWS = 11;
+const TOP_H = 52;
+const BOT_H = 120;
+
+// ══════════════════════════════════════════════════════
+// TERRAIN
+// ══════════════════════════════════════════════════════
+const TERRAIN = {
+  ocean:    { label:'Ocean',    passable:false, colors:['#1a3a5c','#0f2540','#2a4a70'] },
+  coast:    { label:'Coast',    passable:false, colors:['#2a5a8c','#1a3a6c','#3a6aa0'] },
+  plains:   { label:'Plains',   passable:true,  colors:['#7a9a50','#5a7a30','#9ab860'] },
+  grassland:{ label:'Grassland',passable:true,  colors:['#5a8a40','#3a6a20','#70a050'] },
+  forest:   { label:'Forest',   passable:true,  colors:['#2a5a25','#1a3a18','#3a6a30'] },
+  hill:     { label:'Hills',    passable:true,  colors:['#8a7a50','#6a5a30','#a89060'] },
+  mountain: { label:'Mountain', passable:false, colors:['#9a9090','#6a6060','#b0a8a0'] },
+  desert:   { label:'Desert',   passable:true,  colors:['#c8a84a','#9a7a30','#e0c060'] },
+  tundra:   { label:'Tundra',   passable:true,  colors:['#8a9898','#6a7878','#a0b0b0'] },
+  river:    { label:'River',    passable:true,  colors:['#3a6a9c','#2a4a7c','#4a80b8'] },
+  snow:     { label:'Snow',     passable:false, colors:['#dce8ec','#b0c8d0','#ecf4f8'] },
+};
+
+const MAP_DATA = [
+  ['ocean','ocean','ocean','coast','coast','plains','plains','forest','forest','hill','hill','mountain','mountain','tundra','tundra','ocean','ocean','ocean'],
+  ['ocean','ocean','coast','coast','plains','plains','grassland','forest','forest','forest','hill','mountain','tundra','tundra','snow','snow','ocean','ocean'],
+  ['ocean','coast','coast','plains','plains','grassland','grassland','river','plains','forest','forest','hill','hill','tundra','snow','snow','tundra','ocean'],
+  ['ocean','coast','plains','plains','grassland','grassland','river','river','plains','plains','forest','forest','hill','hill','tundra','tundra','ocean','ocean'],
+  ['coast','plains','plains','grassland','grassland','plains','plains','river','plains','plains','plains','forest','forest','desert','desert','tundra','ocean','ocean'],
+  ['coast','plains','grassland','grassland','plains','plains','plains','plains','hill','hill','plains','plains','desert','desert','desert','desert','coast','ocean'],
+  ['coast','plains','plains','grassland','plains','plains','hill','hill','hill','mountain','mountain','desert','desert','desert','hill','coast','coast','ocean'],
+  ['ocean','coast','plains','plains','forest','forest','forest','hill','mountain','mountain','desert','desert','hill','hill','coast','coast','ocean','ocean'],
+  ['ocean','coast','coast','plains','plains','forest','forest','forest','hill','hill','desert','desert','coast','coast','ocean','ocean','ocean','ocean'],
+  ['ocean','ocean','coast','coast','plains','plains','forest','forest','grassland','grassland','coast','coast','ocean','ocean','ocean','ocean','ocean','ocean'],
+  ['ocean','ocean','ocean','coast','coast','plains','plains','grassland','coast','coast','ocean','ocean','ocean','ocean','ocean','ocean','ocean','ocean'],
+];
+
+// ══════════════════════════════════════════════════════
+// GAME STATE (shared between Phaser + HTML HUD)
+// ══════════════════════════════════════════════════════
+const GS = {
+  turn: 1,
+  cities: [],
+  units: [],
+  selectedUnit: null,
+  nextCityId: 1,
+  nextUnitId: 1,
+};
+const CITY_NAMES = ['Aurum','Veridian','Solmere','Caelthon','Rivenmoor','Dunhallow','Ironspire','Thornwall','Eastmarch','Goldenveil'];
+
+// ══════════════════════════════════════════════════════
+// HEX MATH
+// ══════════════════════════════════════════════════════
+function hexToWorld(col, row) {
+  const w = HEX_SIZE * Math.sqrt(3);
+  const h = HEX_SIZE * 2;
+  return {
+    x: col * w + (row % 2) * (w / 2) + HEX_SIZE,
+    y: row * (h * 0.75) + HEX_SIZE,
+  };
+}
+
+function hexDist(c1,r1,c2,r2) {
+  const toC = (c,r) => { const x=c-(r-(r&1))/2, z=r; return {x,z,y:-x-z}; };
+  const a=toC(c1,r1), b=toC(c2,r2);
+  return Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y),Math.abs(a.z-b.z));
+}
+
+function getNeighbors(col,row) {
+  const dirs = row%2===0 ? [[-1,-1],[0,-1],[-1,0],[1,0],[-1,1],[0,1]] : [[0,-1],[1,-1],[-1,0],[1,0],[0,1],[1,1]];
+  return dirs.map(([dc,dr])=>({col:col+dc,row:row+dr})).filter(n=>n.col>=0&&n.col<COLS&&n.row>=0&&n.row<ROWS);
+}
+
+function getMovableHexes(unit, radius=2) {
+  const results=[];
+  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) {
+    if(c===unit.col&&r===unit.row) continue;
+    const d=hexDist(unit.col,unit.row,c,r);
+    if(d<=radius&&TERRAIN[MAP_DATA[r][c]].passable) {
+      const occ=GS.units.some(u=>u.col===c&&u.row===r);
+      if(!occ) results.push({col:c,row:r});
+    }
+  }
+  return results;
+}
+
+// ══════════════════════════════════════════════════════
+// SEEDED RNG
+// ══════════════════════════════════════════════════════
+function seededRng(seed) {
+  let s=seed;
+  return ()=>{ s=(s*1664525+1013904223)&0xffffffff; return (s>>>0)/0xffffffff; };
+}
+
+// ══════════════════════════════════════════════════════
+// PHASER TEXTURE GENERATION
+// All textures drawn procedurally onto offscreen canvases
+// then loaded as Phaser textures.
+// ══════════════════════════════════════════════════════
+function generateTextures(scene) {
+  const W = HEX_SIZE * 2;
+  const H = HEX_SIZE * 2;
+
+  function makeHexCanvas(key, drawFn) {
+    const oc = document.createElement('canvas');
+    oc.width = W; oc.height = H;
+    const c = oc.getContext('2d');
+    c.translate(W/2, H/2);
+    drawFn(c);
+    scene.textures.addCanvas(key, oc);
+  }
+
+  function hexPath(c, size) {
+    c.beginPath();
+    for(let i=0;i<6;i++){
+      const a=Math.PI/180*(60*i-30);
+      i===0?c.moveTo(size*Math.cos(a),size*Math.sin(a)):c.lineTo(size*Math.cos(a),size*Math.sin(a));
+    }
+    c.closePath();
+  }
+
+  function baseHex(c, col1, col2, col3) {
+    hexPath(c, HEX_SIZE-1);
+    const g=c.createRadialGradient(-HEX_SIZE*0.2,-HEX_SIZE*0.2,0,0,0,HEX_SIZE);
+    g.addColorStop(0,col1); g.addColorStop(0.6,col2); g.addColorStop(1,col3);
+    c.fillStyle=g; c.fill();
+    // Edge shading
+    hexPath(c, HEX_SIZE-1); c.strokeStyle='rgba(0,0,0,0.35)'; c.lineWidth=1.5; c.stroke();
+    // Top highlight
+    c.save(); hexPath(c, HEX_SIZE-1); c.clip();
+    c.strokeStyle='rgba(255,255,255,0.1)'; c.lineWidth=3;
+    c.beginPath();
+    for(let i=0;i<3;i++){
+      const a1=Math.PI/180*(60*i-30), a2=Math.PI/180*(60*(i+1)-30);
+      c.moveTo((HEX_SIZE-2)*Math.cos(a1),(HEX_SIZE-2)*Math.sin(a1));
+      c.lineTo((HEX_SIZE-2)*Math.cos(a2),(HEX_SIZE-2)*Math.sin(a2));
+    }
+    c.stroke(); c.restore();
+  }
+
+  // ── OCEAN
+  makeHexCanvas('hex_ocean', c => {
+    baseHex(c,'#2a5070','#1a3a5c','#0f2540');
+    c.save(); hexPath(c,HEX_SIZE-2); c.clip();
+    c.strokeStyle='rgba(100,180,255,0.2)'; c.lineWidth=1.5;
+    for(let i=0;i<3;i++){
+      c.beginPath(); c.moveTo(-HEX_SIZE*0.6, -14+i*14); c.bezierCurveTo(-HEX_SIZE*0.2,-14+i*14-5,HEX_SIZE*0.2,-14+i*14+5,HEX_SIZE*0.6,-14+i*14); c.stroke();
+    }
+    c.restore();
+  });
+
+  // ── COAST
+  makeHexCanvas('hex_coast', c => {
+    baseHex(c,'#3a6aa0','#2a5a8c','#1a3a6c');
+    c.save(); hexPath(c,HEX_SIZE-2); c.clip();
+    c.strokeStyle='rgba(150,210,255,0.25)'; c.lineWidth=1.5;
+    for(let i=0;i<3;i++){
+      c.beginPath(); c.moveTo(-HEX_SIZE*0.6,-10+i*12); c.bezierCurveTo(-HEX_SIZE*0.2,-10+i*12-4,HEX_SIZE*0.2,-10+i*12+4,HEX_SIZE*0.6,-10+i*12); c.stroke();
+    }
+    c.restore();
+  });
+
+  // ── PLAINS
+  makeHexCanvas('hex_plains', c => {
+    baseHex(c,'#9ab860','#7a9a50','#5a7a30');
+    c.strokeStyle='rgba(60,100,20,0.4)'; c.lineWidth=1;
+    const rng=seededRng(42);
+    for(let i=0;i<7;i++){
+      const bx=(rng()-0.5)*HEX_SIZE*0.9, by=(rng()-0.5)*HEX_SIZE*0.6;
+      const h=5+rng()*5;
+      c.beginPath(); c.moveTo(bx,by); c.quadraticCurveTo(bx+(rng()-0.5)*6,by-h*0.6,bx+(rng()-0.5)*4,by-h); c.stroke();
+    }
+  });
+
+  // ── GRASSLAND
+  makeHexCanvas('hex_grassland', c => {
+    baseHex(c,'#70a050','#5a8a40','#3a6a20');
+    c.strokeStyle='rgba(40,90,10,0.5)'; c.lineWidth=1;
+    const rng=seededRng(99);
+    for(let i=0;i<9;i++){
+      const bx=(rng()-0.5)*HEX_SIZE*0.9, by=(rng()-0.5)*HEX_SIZE*0.6;
+      const h=6+rng()*6;
+      c.beginPath(); c.moveTo(bx,by); c.quadraticCurveTo(bx+(rng()-0.5)*7,by-h*0.6,bx+(rng()-0.5)*4,by-h); c.stroke();
+    }
+  });
+
+  // ── FOREST
+  makeHexCanvas('hex_forest', c => {
+    baseHex(c,'#3a6a30','#2a5a25','#1a3a18');
+    const rng=seededRng(7);
+    for(let i=0;i<5;i++){
+      const tx=(rng()-0.5)*HEX_SIZE*0.85, ty=(rng()-0.5)*HEX_SIZE*0.5;
+      const h=16+rng()*10, w=10+rng()*5;
+      c.fillStyle='rgba(0,0,0,0.2)'; c.beginPath(); c.ellipse(tx+2,ty+h*0.3+2,w*0.5,h*0.2,0,0,Math.PI*2); c.fill();
+      c.fillStyle='#5a3a20'; c.fillRect(tx-2,ty+h*0.15,4,h*0.3);
+      c.fillStyle='#1a4a18'; c.beginPath(); c.moveTo(tx,ty-h*0.5); c.lineTo(tx-w*0.5,ty); c.lineTo(tx+w*0.5,ty); c.closePath(); c.fill();
+      c.fillStyle='#225a22'; c.beginPath(); c.moveTo(tx,ty-h*0.8); c.lineTo(tx-w*0.4,ty-h*0.15); c.lineTo(tx+w*0.4,ty-h*0.15); c.closePath(); c.fill();
+      c.fillStyle='#2a6a2a'; c.beginPath(); c.moveTo(tx,ty-h); c.lineTo(tx-w*0.25,ty-h*0.5); c.lineTo(tx+w*0.25,ty-h*0.5); c.closePath(); c.fill();
+    }
+  });
+
+  // ── HILL
+  makeHexCanvas('hex_hill', c => {
+    baseHex(c,'#a89060','#8a7a50','#6a5a30');
+    const rng=seededRng(55);
+    for(let i=0;i<3;i++){
+      const ox=(i-1)*16+(rng()-0.5)*8, oy=8+rng()*8;
+      c.fillStyle='#9a8a60'; c.beginPath(); c.ellipse(ox,oy,16+rng()*6,10+rng()*4,0,Math.PI,0); c.fill();
+      c.fillStyle='#7a6a48'; c.beginPath(); c.ellipse(ox,oy,13+rng()*5,5+rng()*3,0,Math.PI,0); c.fill();
+    }
+  });
+
+  // ── MOUNTAIN
+  makeHexCanvas('hex_mountain', c => {
+    baseHex(c,'#b0a8a0','#9a9090','#6a6060');
+    const rng=seededRng(23);
+    for(let i=0;i<2;i++){
+      const ox=(i-0.5)*18+(rng()-0.5)*6, oy=(rng()-0.5)*8;
+      const h=30+rng()*12, w=22+rng()*8;
+      c.fillStyle='rgba(0,0,0,0.25)'; c.beginPath(); c.moveTo(ox,oy-h); c.lineTo(ox-w*0.5,oy+8); c.lineTo(ox+w*0.5,oy+8); c.closePath(); c.fill();
+      c.fillStyle='#7a7068'; c.beginPath(); c.moveTo(ox,oy-h); c.lineTo(ox-w*0.5,oy+6); c.lineTo(ox+w*0.5,oy+6); c.closePath(); c.fill();
+      c.fillStyle='rgba(0,0,0,0.2)'; c.beginPath(); c.moveTo(ox,oy-h); c.lineTo(ox,oy+6); c.lineTo(ox+w*0.5,oy+6); c.closePath(); c.fill();
+      c.fillStyle='#dce8f0'; c.beginPath(); c.moveTo(ox,oy-h); c.lineTo(ox-w*0.22,oy-h+h*0.35); c.lineTo(ox+w*0.22,oy-h+h*0.35); c.closePath(); c.fill();
+    }
+  });
+
+  // ── DESERT
+  makeHexCanvas('hex_desert', c => {
+    baseHex(c,'#e0c060','#c8a84a','#9a7a30');
+    c.fillStyle='rgba(160,120,40,0.35)';
+    const rng=seededRng(77);
+    for(let i=0;i<10;i++){
+      const a=rng()*Math.PI*2, d=rng()*HEX_SIZE*0.45;
+      c.beginPath(); c.ellipse(Math.cos(a)*d,Math.sin(a)*d,3+rng()*3,1.5+rng()*1.5,rng()*Math.PI,0,Math.PI*2); c.fill();
+    }
+  });
+
+  // ── TUNDRA
+  makeHexCanvas('hex_tundra', c => {
+    baseHex(c,'#a0b0b0','#8a9898','#6a7878');
+    c.fillStyle='rgba(200,220,225,0.3)';
+    const rng=seededRng(31);
+    for(let i=0;i<6;i++){
+      const a=rng()*Math.PI*2, d=rng()*HEX_SIZE*0.45;
+      c.beginPath(); c.arc(Math.cos(a)*d,Math.sin(a)*d,3+rng()*4,0,Math.PI*2); c.fill();
+    }
+  });
+
+  // ── RIVER
+  makeHexCanvas('hex_river', c => {
+    baseHex(c,'#70a050','#5a8a40','#3a6a20');
+    c.save(); hexPath(c,HEX_SIZE-2); c.clip();
+    c.strokeStyle='rgba(60,120,200,0.6)'; c.lineWidth=9; c.lineCap='round';
+    c.beginPath(); c.moveTo(-HEX_SIZE*0.8,-2); c.bezierCurveTo(-HEX_SIZE*0.2,-14,HEX_SIZE*0.2,14,HEX_SIZE*0.8,2); c.stroke();
+    c.strokeStyle='rgba(140,200,255,0.4)'; c.lineWidth=3; c.stroke();
+    c.restore();
+  });
+
+  // ── SNOW
+  makeHexCanvas('hex_snow', c => {
+    baseHex(c,'#ecf4f8','#dce8ec','#b0c8d0');
+    c.fillStyle='rgba(255,255,255,0.5)';
+    const rng=seededRng(88);
+    for(let i=0;i<5;i++){
+      const a=rng()*Math.PI*2, d=rng()*HEX_SIZE*0.4;
+      c.beginPath(); c.arc(Math.cos(a)*d,Math.sin(a)*d,4+rng()*6,0,Math.PI*2); c.fill();
+    }
+  });
+
+  // ── SETTLER (drawn to texture)
+  const settlerCanvas = document.createElement('canvas');
+  settlerCanvas.width = 64; settlerCanvas.height = 64;
+  const sc = settlerCanvas.getContext('2d');
+  drawSettlerToCtx(sc, 32, 42, false);
+  scene.textures.addCanvas('settler_normal', settlerCanvas);
+
+  const settlerSelCanvas = document.createElement('canvas');
+  settlerSelCanvas.width = 64; settlerSelCanvas.height = 64;
+  const ssc = settlerSelCanvas.getContext('2d');
+  drawSettlerToCtx(ssc, 32, 42, true);
+  scene.textures.addCanvas('settler_selected', settlerSelCanvas);
+}
+
+function drawSettlerToCtx(c, cx, cy, selected) {
+  // Shadow
+  c.fillStyle = 'rgba(0,0,0,0.3)';
+  c.beginPath(); c.ellipse(cx, cy+2, 12, 5, 0, 0, Math.PI*2); c.fill();
+  // Cloak
+  c.fillStyle = selected ? '#c8e0ff' : '#8080c0';
+  c.beginPath(); c.moveTo(cx,cy-28); c.bezierCurveTo(cx-10,cy-23,cx-14,cy-13,cx-10,cy); c.lineTo(cx+10,cy); c.bezierCurveTo(cx+14,cy-13,cx+10,cy-23,cx,cy-28); c.fill();
+  c.fillStyle='rgba(0,0,0,0.2)'; c.beginPath(); c.moveTo(cx,cy-28); c.bezierCurveTo(cx+2,cy-23,cx+6,cy-13,cx+4,cy); c.lineTo(cx+10,cy); c.bezierCurveTo(cx+14,cy-13,cx+10,cy-23,cx,cy-28); c.fill();
+  // Pack
+  c.fillStyle='#8a6030'; c.fillRect(cx+6,cy-20,9,12);
+  c.fillStyle='#6a4818'; c.fillRect(cx+7,cy-19,7,3);
+  // Head
+  c.fillStyle='#d4a878'; c.beginPath(); c.arc(cx,cy-33,8,0,Math.PI*2); c.fill();
+  // Hood
+  c.fillStyle=selected?'#90b8e8':'#5a5a90';
+  c.beginPath(); c.arc(cx,cy-34,8,Math.PI,0); c.lineTo(cx+10,cy-26); c.lineTo(cx-10,cy-26); c.closePath(); c.fill();
+  // Eyes
+  c.fillStyle='#2a1a0a';
+  c.beginPath(); c.arc(cx-3,cy-33,1.5,0,Math.PI*2); c.fill();
+  c.beginPath(); c.arc(cx+3,cy-33,1.5,0,Math.PI*2); c.fill();
+  // Staff
+  c.strokeStyle='#8a6030'; c.lineWidth=2.5;
+  c.beginPath(); c.moveTo(cx-12,cy); c.lineTo(cx-10,cy-36); c.stroke();
+  c.fillStyle='#c8a850'; c.beginPath(); c.arc(cx-10,cy-37,3,0,Math.PI*2); c.fill();
+}
+
+// ══════════════════════════════════════════════════════
+// PHASER SCENE
+// ══════════════════════════════════════════════════════
+let phaserScene = null;
+
+class GameScene extends Phaser.Scene {
+  constructor() { super({ key: 'GameScene' }); }
+
+  preload() {
+    // All textures generated in create()
+  }
+
+  create() {
+    phaserScene = this;
+    generateTextures(this);
+
+    this.cameras.main.setBackgroundColor('#0a0f18');
+
+    // ── MAP LAYER ──
+    this.hexLayer = this.add.container(0, 0);
+    this.highlightLayer = this.add.container(0, 0);
+    this.cityLayer = this.add.container(0, 0);
+    this.unitLayer = this.add.container(0, 0);
+    this.overlayLayer = this.add.container(0, 0);
+
+    // Draw all hex terrain tiles
+    this.hexSprites = {};
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const { x, y } = hexToWorld(c, r);
+        const type = MAP_DATA[r][c];
+        const key = `hex_${type}`;
+        const sprite = this.add.image(x, y, key).setOrigin(0.5, 0.5);
+        this.hexLayer.add(sprite);
+        this.hexSprites[`${c}_${r}`] = sprite;
+
+        // Terrain label (very subtle)
+        const lbl = this.add.text(x, y + HEX_SIZE * 0.7, TERRAIN[type].label, {
+          font: '8px sans-serif', fill: 'rgba(255,255,255,0.2)'
+        }).setOrigin(0.5, 0.5);
+        this.overlayLayer.add(lbl);
+      }
+    }
+
+    // ── HIGHLIGHT GRAPHICS ──
+    this.highlightGfx = this.add.graphics();
+    this.highlightLayer.add(this.highlightGfx);
+
+    // ── CITY GRAPHICS ──
+    this.cityGfx = this.add.graphics();
+    this.cityLayer.add(this.cityGfx);
+    this.cityLabels = [];
+
+    // ── UNITS ──
+    this.unitSprites = {};
+
+    // ── SETTLER SPAWN ──
+    const startCol = 6, startRow = 5;
+    GS.units.push({
+      id: GS.nextUnitId++,
+      type: 'settler',
+      col: startCol,
+      row: startRow,
+      movesLeft: 2,
+    });
+    this.spawnUnitSprite(GS.units[0]);
+
+    // ── CAMERA ──
+    const { x: sx, y: sy } = hexToWorld(startCol, startRow);
+    const mapW = COLS * HEX_SIZE * Math.sqrt(3) + HEX_SIZE;
+    const mapH = ROWS * HEX_SIZE * 1.5 + HEX_SIZE;
+    this.cameras.main.setBounds(-100, -100, mapW + 200, mapH + 200);
+    this.cameras.main.centerOn(sx, sy);
+
+    // ── CAMERA DRAG ──
+    this.input.on('pointermove', ptr => {
+      if (ptr.isDown && (Math.abs(ptr.velocity.x) > 0.5 || Math.abs(ptr.velocity.y) > 0.5)) {
+        this.cameras.main.scrollX -= ptr.velocity.x / this.cameras.main.zoom;
+        this.cameras.main.scrollY -= ptr.velocity.y / this.cameras.main.zoom;
+        this._dragging = true;
+      }
+    });
+    this.input.on('pointerdown', () => { this._dragging = false; });
+    this.input.on('pointerup', ptr => {
+      if (!this._dragging) this.handleClick(ptr);
+    });
+
+    // ── MOUSE WHEEL ZOOM ──
+    this.input.on('wheel', (ptr, objs, dx, dy) => {
+      const zoom = Phaser.Math.Clamp(this.cameras.main.zoom - dy * 0.001, 0.5, 1.8);
+      this.cameras.main.zoom = zoom;
+    });
+
+    // ── ANIMATIONS ──
+    this.time.addEvent({ delay: 16, loop: true, callback: this.animateTick, callbackScope: this });
+
+    this._animT = 0;
+
+    // HUD
+    updateHUD();
+    showStatus('Your empire awaits. Select your settler to begin.', 4000);
+  }
+
+  spawnUnitSprite(unit) {
+    const { x, y } = hexToWorld(unit.col, unit.row);
+    const sprite = this.add.image(x, y - 10, 'settler_normal').setOrigin(0.5, 1);
+    sprite.setInteractive({ useHandCursor: true });
+    this.unitLayer.add(sprite);
+    this.unitSprites[unit.id] = { sprite, shadowEllipse: null };
+
+    // Shadow
+    const shadow = this.add.ellipse(x, y + 5, 28, 12, 0x000000, 0.35);
+    this.unitLayer.addAt(shadow, 0);
+    this.unitSprites[unit.id].shadow = shadow;
+  }
+
+  animateTick() {
+    this._animT += 0.025;
+    const t = this._animT;
+
+    // Animate unit bobbing
+    for (const unit of GS.units) {
+      const s = this.unitSprites[unit.id];
+      if (!s) continue;
+      const { x, y } = hexToWorld(unit.col, unit.row);
+      const bob = Math.sin(t + unit.id * 1.3) * 2.5;
+      s.sprite.y = y - 10 - bob;
+
+      // Selection pulse ring
+      if (GS.selectedUnit && GS.selectedUnit.id === unit.id) {
+        s.sprite.setTexture('settler_selected');
+        if (!s.selRing) {
+          s.selRing = this.add.circle(x, y - 2, 24, 0xffe060, 0).setStrokeStyle(2.5, 0xffe060, 1);
+          this.unitLayer.add(s.selRing);
+          s.pulseRing = this.add.circle(x, y - 2, 24, 0xffe060, 0).setStrokeStyle(3, 0xffe060, 0);
+          this.unitLayer.add(s.pulseRing);
+        }
+        s.selRing.x = x; s.selRing.y = y - 2 - bob;
+        s.selRing.setStrokeStyle(2.5, 0xffe060, 1);
+        s.selRing.setLineDash ? s.selRing.setLineDash([5,3]) : null;
+        const pulse = (Math.sin(t * 2) + 1) * 0.5;
+        if (s.pulseRing) {
+          s.pulseRing.x = x; s.pulseRing.y = y - 2 - bob;
+          s.pulseRing.setRadius(24 + pulse * 8);
+          s.pulseRing.setStrokeStyle(3, 0xffe060, pulse * 0.4);
+        }
+      } else {
+        s.sprite.setTexture('settler_normal');
+        if (s.selRing) { s.selRing.destroy(); s.selRing = null; }
+        if (s.pulseRing) { s.pulseRing.destroy(); s.pulseRing = null; }
+      }
+    }
+
+    // Animate move highlights
+    if (GS.selectedUnit && GS.moveHighlights.length > 0) {
+      this.highlightGfx.clear();
+      for (const h of GS.moveHighlights) {
+        const { x, y } = hexToWorld(h.col, h.row);
+        const pulse = (Math.sin(t * 1.6 + h.col * 0.5 + h.row * 0.7) + 1) * 0.5;
+        // Fill
+        this.highlightGfx.fillStyle(0x40c840, 0.1 + pulse * 0.12);
+        drawHexOnGfx(this.highlightGfx, x, y, HEX_SIZE - 2);
+        // Border
+        this.highlightGfx.lineStyle(2, 0x60dc60, 0.5 + pulse * 0.4);
+        drawHexOnGfxStroke(this.highlightGfx, x, y, HEX_SIZE - 2);
+      }
+    }
+
+    // Animate water tiles with slight tint oscillation
+    const waterAlpha = 0.85 + Math.sin(t * 0.8) * 0.06;
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const type = MAP_DATA[r][c];
+        if (type === 'ocean' || type === 'coast' || type === 'river') {
+          const s = this.hexSprites[`${c}_${r}`];
+          if (s) s.setAlpha(waterAlpha + Math.sin(t * 0.5 + c * 0.3 + r * 0.2) * 0.04);
+        }
+      }
+    }
+
+    // Animate city flags
+    if (GS.cities.length > 0) {
+      this.drawCities();
+    }
+  }
+
+  drawCities() {
+    this.cityGfx.clear();
+    // Remove old labels
+    for (const lbl of this.cityLabels) lbl.destroy();
+    this.cityLabels = [];
+
+    const t = this._animT;
+    for (const city of GS.cities) {
+      const { x: cx, y: cy } = hexToWorld(city.col, city.row);
+
+      // Territory highlight
+      for (const h of city.territory) {
+        const { x: tx, y: ty } = hexToWorld(h.col, h.row);
+        this.cityGfx.fillStyle(0x4088e0, 0.1);
+        drawHexOnGfx(this.cityGfx, tx, ty, HEX_SIZE - 2);
+        this.cityGfx.lineStyle(2.5, 0x50a0ff, 0.45);
+        drawHexOnGfxStrokeDash(this.cityGfx, tx, ty, HEX_SIZE - 2);
+      }
+
+      // Glow
+      // Phaser doesn't have radial gradients directly in Graphics,
+      // so we use concentric circles with decreasing alpha
+      for (let i = 5; i >= 0; i--) {
+        this.cityGfx.fillStyle(0x4488dd, 0.035 * (6-i));
+        this.cityGfx.fillCircle(cx, cy, HEX_SIZE * (0.5 + i * 0.15));
+      }
+
+      // Wall base
+      this.cityGfx.fillStyle(0x6a5030, 1);
+      this.cityGfx.fillCircle(cx, cy + 6, HEX_SIZE * 0.55);
+      this.cityGfx.fillStyle(0x8a6840, 1);
+      this.cityGfx.fillCircle(cx, cy, HEX_SIZE * 0.55);
+
+      // Battlements
+      const wallR = HEX_SIZE * 0.55;
+      this.cityGfx.fillStyle(0xa07848, 1);
+      for (let i = 0; i < 12; i++) {
+        const a = (Math.PI * 2 / 12) * i;
+        this.cityGfx.fillRect(cx + Math.cos(a)*wallR - 3, cy + Math.sin(a)*wallR - 3, 6, 6);
+      }
+
+      // Buildings
+      const buildings = [
+        { ox:0,   oy:0,  w:16, h:22, col:0xc8a870 },
+        { ox:-14, oy:8,  w:10, h:14, col:0xb09060 },
+        { ox:14,  oy:8,  w:10, h:14, col:0xb09060 },
+        { ox:-6,  oy:12, w:8,  h:10, col:0xa08050 },
+        { ox:6,   oy:12, w:8,  h:10, col:0xa08050 },
+      ];
+      for (const b of buildings) {
+        this.cityGfx.fillStyle(0x000000, 0.25);
+        this.cityGfx.fillRect(cx+b.ox-b.w/2+2, cy-b.h+b.oy+2, b.w, b.h);
+        this.cityGfx.fillStyle(b.col, 1);
+        this.cityGfx.fillRect(cx+b.ox-b.w/2, cy-b.h+b.oy, b.w, b.h);
+        // Lighter top
+        this.cityGfx.fillStyle(0xffffff, 0.12);
+        this.cityGfx.fillRect(cx+b.ox-b.w/2, cy-b.h+b.oy, b.w, 4);
+        // Windows
+        if (b.w >= 12) {
+          this.cityGfx.fillStyle(0xffdd60, 0.7);
+          this.cityGfx.fillRect(cx+b.ox-4, cy-b.h+b.oy+6, 4, 5);
+          this.cityGfx.fillRect(cx+b.ox+2, cy-b.h+b.oy+6, 4, 5);
+        }
+      }
+
+      // Spire
+      this.cityGfx.fillStyle(0xe8c080, 1);
+      this.cityGfx.fillTriangle(cx, cy-38, cx-6, cy-22, cx+6, cy-22);
+
+      // Flag (animated) — drawn as triangle
+      const flagY = cy - 38 + Math.sin(t + 1) * 2;
+      this.cityGfx.fillStyle(0x3060c0, 1);
+      this.cityGfx.fillTriangle(cx, flagY, cx+10, flagY+3+Math.sin(t*1.5)*2, cx, flagY+7);
+
+      // Pop ring
+      this.cityGfx.lineStyle(2, 0x50a0ff, 0.65);
+      this.cityGfx.beginPath();
+      this.cityGfx.arc(cx, cy, wallR+6, -Math.PI/2, -Math.PI/2 + Math.PI*2*(city.pop/10));
+      this.cityGfx.strokePath();
+
+      // Name label (HTML text rendered via Phaser)
+      const nameLbl = this.add.text(cx, cy + HEX_SIZE * 0.85, city.name, {
+        font: 'bold 11px Cinzel, serif', fill: '#f0d080',
+        stroke: '#000', strokeThickness: 3
+      }).setOrigin(0.5, 0.5);
+      this.cityLayer.add(nameLbl);
+      this.cityLabels.push(nameLbl);
+    }
+  }
+
+  handleClick(ptr) {
+    // Convert screen pointer to world coords
+    const worldX = ptr.worldX;
+    const worldY = ptr.worldY;
+
+    // Find which hex was clicked
+    const w = HEX_SIZE * Math.sqrt(3);
+    const h = HEX_SIZE * 2;
+    let row = Math.round((worldY - HEX_SIZE) / (h * 0.75));
+    row = Phaser.Math.Clamp(row, 0, ROWS - 1);
+    let col = Math.round((worldX - HEX_SIZE - (row % 2) * (w / 2)) / w);
+    col = Phaser.Math.Clamp(col, 0, COLS - 1);
+
+    const clickedUnit = GS.units.find(u => u.col === col && u.row === row);
+    const isHighlight = GS.moveHighlights && GS.moveHighlights.some(h => h.col === col && h.row === row);
+
+    if (isHighlight && GS.selectedUnit) {
+      // Move unit
+      const unit = GS.selectedUnit;
+      const { x, y } = hexToWorld(col, row);
+      const s = this.unitSprites[unit.id];
+
+      // Phaser tween for smooth movement!
+      this.tweens.add({
+        targets: [s.sprite, s.shadow],
+        x: x,
+        duration: 320,
+        ease: 'Cubic.easeInOut',
+        onComplete: () => {
+          s.sprite.y = y - 10;
+          s.shadow.y = y + 5;
+          if (s.selRing) { s.selRing.x = x; s.selRing.y = y - 2; }
+          if (s.pulseRing) { s.pulseRing.x = x; s.pulseRing.y = y - 2; }
+        }
+      });
+      this.tweens.add({
+        targets: s.sprite,
+        y: y - 10 - 12,
+        yoyo: true,
+        duration: 160,
+        ease: 'Quad.easeOut',
+      });
+
+      unit.col = col; unit.row = row;
+      unit.movesLeft--;
+      GS.moveHighlights = unit.movesLeft > 0 ? getMovableHexes(unit, unit.movesLeft) : [];
+      if (GS.moveHighlights.length === 0) this.highlightGfx.clear();
+      updateHUD();
+      return;
+    }
+
+    if (clickedUnit) {
+      GS.selectedUnit = clickedUnit;
+      GS.moveHighlights = clickedUnit.movesLeft > 0 ? getMovableHexes(clickedUnit, clickedUnit.movesLeft) : [];
+      updateHUD();
+      return;
+    }
+
+    // Deselect
+    GS.selectedUnit = null;
+    GS.moveHighlights = [];
+    this.highlightGfx.clear();
+    updateHUD();
+  }
+
+  foundCity() {
+    const u = GS.selectedUnit;
+    if (!u) return;
+    const type = MAP_DATA[u.row][u.col];
+    if (!TERRAIN[type].passable) { showStatus('Cannot found a city here!'); return; }
+    const tooClose = GS.cities.some(c => hexDist(c.col,c.row,u.col,u.row) < 3);
+    if (tooClose) { showStatus('Too close to an existing city!'); return; }
+
+    const name = CITY_NAMES[(GS.nextCityId - 1) % CITY_NAMES.length];
+    const territory = getNeighbors(u.col,u.row).filter(n=>TERRAIN[MAP_DATA[n.row][n.col]].passable||MAP_DATA[n.row][n.col]==='coast').map(n=>({col:n.col,row:n.row}));
+    GS.cities.push({ id: GS.nextCityId++, col: u.col, row: u.row, name, pop: 1, territory });
+
+    // Remove settler sprite
+    const s = this.unitSprites[u.id];
+    if (s) {
+      // Phaser tween: scale up & fade out (city founding effect)
+      this.tweens.add({ targets: s.sprite, scaleX: 1.8, scaleY: 1.8, alpha: 0, duration: 600, ease: 'Cubic.easeOut', onComplete: () => { s.sprite.destroy(); if(s.shadow)s.shadow.destroy(); if(s.selRing)s.selRing.destroy(); if(s.pulseRing)s.pulseRing.destroy(); }});
+    }
+
+    GS.units = GS.units.filter(x => x.id !== u.id);
+    GS.selectedUnit = null;
+    GS.moveHighlights = [];
+    this.highlightGfx.clear();
+    this.drawCities();
+    showStatus(`✦ ${name} has been founded!`);
+    updateHUD();
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// PHASER GRAPHICS HELPERS
+// ══════════════════════════════════════════════════════
+function hexPoints(cx, cy, size) {
+  const pts = [];
+  for(let i=0;i<6;i++){ const a=Math.PI/180*(60*i-30); pts.push({x:cx+size*Math.cos(a),y:cy+size*Math.sin(a)}); }
+  return pts;
+}
+function drawHexOnGfx(gfx, cx, cy, size) {
+  const p = hexPoints(cx,cy,size);
+  gfx.fillPoints(p, true);
+}
+function drawHexOnGfxStroke(gfx, cx, cy, size) {
+  const p = hexPoints(cx,cy,size);
+  gfx.strokePoints(p, true);
+}
+function drawHexOnGfxStrokeDash(gfx, cx, cy, size) {
+  // Phaser doesn't natively support dashed lines in Graphics
+  // We approximate with short segments
+  const p = hexPoints(cx,cy,size);
+  for(let i=0;i<p.length;i++){
+    const a=p[i], b=p[(i+1)%p.length];
+    const mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
+    gfx.strokePoints([a,{x:mx,y:my}],false);
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// HUD / HTML UPDATES
+// ══════════════════════════════════════════════════════
+function updateHUD() {
+  const u = GS.selectedUnit;
+  document.getElementById('res-cities').textContent = GS.cities.length;
+  document.getElementById('res-units').textContent = GS.units.length;
+
+  if (!u) {
+    document.getElementById('unit-name').textContent = 'No unit selected';
+    document.getElementById('unit-desc').textContent = 'Click a unit to select it, then click a highlighted hex to move.';
+    document.getElementById('action-btns').innerHTML = '';
+    return;
+  }
+
+  const type = MAP_DATA[u.row][u.col];
+  document.getElementById('unit-name').textContent = '⚑ Settler';
+  const canFound = !GS.cities.some(c => hexDist(c.col,c.row,u.col,u.row) < 3);
+  document.getElementById('unit-desc').textContent = `Standing on: ${TERRAIN[type].label} · Moves left: ${u.movesLeft}/2` + (canFound ? '' : ' · Too close to another city');
+  document.getElementById('action-btns').innerHTML = `
+    <button class="action-btn" onclick="phaserScene.foundCity()">🏙 Found City</button>
+    <button class="action-btn" onclick="GS.selectedUnit=null;GS.moveHighlights=[];phaserScene.highlightGfx.clear();updateHUD()">⏭ Skip</button>
+  `;
+}
+
+GS.moveHighlights = [];
+
+function endTurn() {
+  GS.turn++;
+  for (const u of GS.units) u.movesLeft = 2;
+  document.getElementById('turn-info').textContent = `Turn ${GS.turn}`;
+  showStatus(`Turn ${GS.turn} begins`);
+  if (GS.turn % 5 === 0) for (const c of GS.cities) c.pop = Math.min(10, c.pop+1);
+  updateHUD();
+}
+
+function showStatus(msg, duration=2500) {
+  const el = document.getElementById('status-msg');
+  el.textContent = msg; el.style.opacity = '1';
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.style.opacity='0', duration);
+}
+
+// ══════════════════════════════════════════════════════
+// PHASER INIT
+// ══════════════════════════════════════════════════════
+let phaserGame = null;
+
+function startGame() {
+  document.getElementById('menu-overlay').style.display = 'none';
+  document.getElementById('top-bar').style.display = 'flex';
+  document.getElementById('bottom-panel').style.display = 'flex';
+
+  const mapW = COLS * HEX_SIZE * Math.sqrt(3) + HEX_SIZE * 2;
+  const mapH = ROWS * HEX_SIZE * 1.5 + HEX_SIZE * 2;
+
+  phaserGame = new Phaser.Game({
+    type: Phaser.AUTO,           // WebGL if available, Canvas fallback
+    width: window.innerWidth,
+    height: window.innerHeight - 52 - 120,
+    parent: 'game-container',
+    backgroundColor: '#0a0f18',
+    scene: [GameScene],
+    scale: {
+      mode: Phaser.Scale.RESIZE,
+      autoCenter: Phaser.Scale.CENTER_BOTH,
+    },
+    render: {
+      antialias: true,
+      pixelArt: false,
+    },
+  });
+
+  // Position canvas below top bar
+  setTimeout(() => {
+    const c = document.querySelector('#game-container canvas');
+    if (c) { c.style.position='fixed'; c.style.top='52px'; c.style.left='0'; }
+  }, 200);
+
+  window.addEventListener('resize', () => {
+    if (phaserGame) phaserGame.scale.resize(window.innerWidth, window.innerHeight - 52 - 120);
+  });
+}
+</script>
+</body>
+</html>
