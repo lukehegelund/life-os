@@ -257,39 +257,51 @@ function isoDiamond(ctx, cx, topY, tw, th) {
 }
 
 // ── TERRAIN FEATURE FUNCTIONS ──
-// Called twice: once with aboveTile=false (clip inside top face), once with aboveTile=true (above zone)
+// All features are drawn relative to the tile canvas coordinate system:
+//   tx   = topX = TC_W/2  (horizontal center, same as diamond top vertex x)
+//   topY = ABOVE           (diamond top vertex y — feature roots start here)
+//   midY = ABOVE + TH/2    (tile visual center y — best anchor for "on ground" features)
+//   botY = ABOVE + TH      (diamond bottom vertex y)
+//   mlx/mrx = left/right tips of the diamond
+//
+// "above=true" pass: draw the 3D feature art that rises above the tile surface.
+//   Root the art at topY (the top vertex of the diamond surface).
+// "above=false" pass: draw ground-level texture inside the clipped diamond.
+
 function featForest(ctx, tx, topY, botX, botY, mlx, mrx, midY, above) {
   if (above) {
     const rng = seededRng(7731);
-    const trees = [{ox:-36,s:22},{ox:28,s:18},{ox:-8,s:26},{ox:40,s:16},{ox:-52,s:14}];
+    // 4 trees arranged around tile center, sized for TW=128
+    const trees = [{ox:-20,s:14},{ox:18,s:12},{ox:-4,s:16},{ox:26,s:10}];
     for (const {ox,s} of trees) {
-      drawFlatTree(ctx, tx+ox, topY-4, s, rng);
+      drawFlatTree(ctx, tx+ox, topY+2, s, rng);
     }
   } else {
-    // Ground dapple inside tile
     const rng = seededRng(7731);
-    for (let i=0;i<10;i++) {
-      const x=tx+(rng()-.5)*(mrx-mlx)*.7, y=midY+(rng()-.5)*(botY-midY)*.7;
-      ctx.fillStyle=`rgba(15,50,15,${0.15+rng()*0.15})`;
-      ctx.beginPath(); ctx.ellipse(x,y,8+rng()*6,4+rng()*3,0,0,Math.PI*2); ctx.fill();
+    for (let i=0;i<8;i++) {
+      const x=tx+(rng()-.5)*(mrx-mlx)*.65, y=midY+(rng()-.5)*(botY-midY)*.65;
+      ctx.fillStyle=`rgba(15,50,15,${0.12+rng()*0.12})`;
+      ctx.beginPath(); ctx.ellipse(x,y,6+rng()*4,3+rng()*2,0,0,Math.PI*2); ctx.fill();
     }
   }
 }
 
 function featMountain(ctx, tx, topY, botX, botY, mlx, mrx, midY, above) {
   if (!above) return;
-  drawFlatMountain(ctx, tx-18, topY, 38, 54);
-  drawFlatMountain(ctx, tx+20, topY+8, 28, 40);
+  // Two mountains centered on the tile, sized for TW=128
+  drawFlatMountain(ctx, tx-10, topY+4, 26, 36);
+  drawFlatMountain(ctx, tx+14, topY+10, 18, 26);
 }
 
 function featHill(ctx, tx, topY, botX, botY, mlx, mrx, midY, above) {
   if (!above) {
-    for (let i=0;i<3;i++) {
-      const hx=tx+(i-1)*24, hy=botY-2;
-      ctx.fillStyle=lighten('#988654',20);
-      ctx.beginPath(); ctx.ellipse(hx,hy,18,9,0,Math.PI,0); ctx.fill();
+    // Subtle hill bumps on ground surface
+    for (let i=0;i<2;i++) {
+      const hx=tx+(i===0?-14:14), hy=midY+4;
+      ctx.fillStyle=lighten('#988654',18);
+      ctx.beginPath(); ctx.ellipse(hx,hy,14,7,0,Math.PI,0); ctx.fill();
       ctx.fillStyle='#988654';
-      ctx.beginPath(); ctx.ellipse(hx,hy,11,5,0,Math.PI,0); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(hx,hy,8,4,0,Math.PI,0); ctx.fill();
     }
   }
 }
@@ -297,33 +309,32 @@ function featHill(ctx, tx, topY, botX, botY, mlx, mrx, midY, above) {
 function featDesert(ctx, tx, topY, botX, botY, mlx, mrx, midY, above) {
   if (!above) {
     const rng=seededRng(4421);
-    for (let i=0;i<4;i++) {
-      const dy=midY+6+i*9+(rng()-.5)*3;
+    for (let i=0;i<3;i++) {
+      const dy=midY+2+i*7+(rng()-.5)*2;
       ctx.beginPath();
-      ctx.moveTo(tx-TW*.4, dy);
-      ctx.bezierCurveTo(tx-TW*.1,dy-6, tx+TW*.1,dy-2, tx+TW*.4,dy-4);
-      ctx.strokeStyle=`rgba(190,145,30,${0.2+i*0.05})`; ctx.lineWidth=1.5+i*.3; ctx.stroke();
+      ctx.moveTo(mlx+8, dy);
+      ctx.bezierCurveTo(tx-TW*.08,dy-4, tx+TW*.08,dy-1, mrx-8,dy-3);
+      ctx.strokeStyle=`rgba(190,145,30,${0.18+i*0.06})`; ctx.lineWidth=1+i*.25; ctx.stroke();
     }
   }
 }
 
 function featRiver(ctx, tx, topY, botX, botY, mlx, mrx, midY, above) {
   if (!above) {
-    ctx.strokeStyle='rgba(45,110,200,0.7)'; ctx.lineWidth=12; ctx.lineCap='round';
-    ctx.beginPath(); ctx.moveTo(mlx+10,midY+4); ctx.bezierCurveTo(tx-TW*.1,midY-5,tx+TW*.1,midY+8,mrx-10,midY+2); ctx.stroke();
-    ctx.strokeStyle='rgba(120,190,255,0.45)'; ctx.lineWidth=5;
-    ctx.beginPath(); ctx.moveTo(mlx+12,midY+2); ctx.bezierCurveTo(tx-TW*.1,midY-7,tx+TW*.1,midY+6,mrx-12,midY); ctx.stroke();
+    ctx.strokeStyle='rgba(45,110,200,0.7)'; ctx.lineWidth=8; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(mlx+6,midY+2); ctx.bezierCurveTo(tx-TW*.08,midY-3,tx+TW*.08,midY+5,mrx-6,midY+1); ctx.stroke();
+    ctx.strokeStyle='rgba(120,190,255,0.45)'; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(mlx+8,midY+1); ctx.bezierCurveTo(tx-TW*.08,midY-4,tx+TW*.08,midY+4,mrx-8,midY); ctx.stroke();
   }
 }
 
 function featGrass(ctx, tx, topY, botX, botY, mlx, mrx, midY, above) {
   if (!above) {
     const rng=seededRng(1199);
-    const col = MAP_DATA && MAP_DATA[0] ? '#6ac044' : '#6ac044';
-    for (let i=0;i<14;i++) {
-      const gx=tx+(rng()-.5)*(mrx-mlx)*.72, gy=midY+4+rng()*(botY-midY)*.7;
-      const h=7+rng()*9, lean=(rng()-.5)*6;
-      ctx.strokeStyle=`rgba(60,160,30,${0.55+rng()*.3})`; ctx.lineWidth=1.5;
+    for (let i=0;i<10;i++) {
+      const gx=tx+(rng()-.5)*(mrx-mlx)*.68, gy=midY+3+rng()*(botY-midY)*.65;
+      const h=5+rng()*6, lean=(rng()-.5)*4;
+      ctx.strokeStyle=`rgba(60,160,30,${0.5+rng()*.3})`; ctx.lineWidth=1.2;
       ctx.beginPath(); ctx.moveTo(gx,gy); ctx.quadraticCurveTo(gx+lean,gy-h*.6,gx+lean*.6,gy-h); ctx.stroke();
     }
   }
@@ -332,11 +343,11 @@ function featGrass(ctx, tx, topY, botX, botY, mlx, mrx, midY, above) {
 function featSnow(ctx, tx, topY, botX, botY, mlx, mrx, midY, above) {
   if (!above) {
     const rng=seededRng(9902);
-    for (let i=0;i<5;i++) {
-      const sx=tx+(rng()-.5)*(mrx-mlx)*.65, sy=midY+4+rng()*(botY-midY)*.6;
-      const sg=ctx.createRadialGradient(sx,sy,0,sx,sy,18+rng()*12);
+    for (let i=0;i<4;i++) {
+      const sx=tx+(rng()-.5)*(mrx-mlx)*.6, sy=midY+3+rng()*(botY-midY)*.55;
+      const sg=ctx.createRadialGradient(sx,sy,0,sx,sy,12+rng()*8);
       sg.addColorStop(0,'rgba(255,255,255,0.6)'); sg.addColorStop(1,'rgba(210,235,255,0)');
-      ctx.fillStyle=sg; ctx.beginPath(); ctx.ellipse(sx,sy,22+rng()*10,9+rng()*5,0,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle=sg; ctx.beginPath(); ctx.ellipse(sx,sy,16+rng()*7,6+rng()*4,0,0,Math.PI*2); ctx.fill();
     }
   }
 }
@@ -344,10 +355,10 @@ function featSnow(ctx, tx, topY, botX, botY, mlx, mrx, midY, above) {
 function featTundra(ctx, tx, topY, botX, botY, mlx, mrx, midY, above) {
   if (!above) {
     const rng=seededRng(3318);
-    for (let i=0;i<6;i++) {
-      const px=tx+(rng()-.5)*(mrx-mlx)*.65, py=midY+4+rng()*(botY-midY)*.6;
-      ctx.fillStyle=`rgba(100,130,110,${0.3+rng()*.25})`;
-      ctx.beginPath(); ctx.ellipse(px,py,10+rng()*6,4+rng()*3,rng()*Math.PI,0,Math.PI*2); ctx.fill();
+    for (let i=0;i<5;i++) {
+      const px=tx+(rng()-.5)*(mrx-mlx)*.6, py=midY+3+rng()*(botY-midY)*.55;
+      ctx.fillStyle=`rgba(100,130,110,${0.28+rng()*.22})`;
+      ctx.beginPath(); ctx.ellipse(px,py,7+rng()*4,3+rng()*2,rng()*Math.PI,0,Math.PI*2); ctx.fill();
     }
   }
 }
@@ -355,54 +366,46 @@ function featTundra(ctx, tx, topY, botX, botY, mlx, mrx, midY, above) {
 function featWater(ctx, tx, topY, botX, botY, mlx, mrx, midY, above) {
   if (!above) {
     for (let i=0;i<3;i++) {
-      const wy = midY+4+i*9;
-      ctx.strokeStyle=`rgba(140,210,255,${0.15+i*.06})`; ctx.lineWidth=1.5;
-      ctx.beginPath(); ctx.moveTo(mlx+12,wy); ctx.bezierCurveTo(tx-TW*.08,wy-6,tx+TW*.08,wy+2,mrx-12,wy-3); ctx.stroke();
+      const wy = midY+2+i*7;
+      ctx.strokeStyle=`rgba(140,210,255,${0.14+i*.05})`; ctx.lineWidth=1.2;
+      ctx.beginPath(); ctx.moveTo(mlx+8,wy); ctx.bezierCurveTo(tx-TW*.06,wy-4,tx+TW*.06,wy+1,mrx-8,wy-2); ctx.stroke();
     }
   }
 }
 
 // ── FEATURE PRIMITIVES ──
 function drawFlatTree(ctx, cx, baseY, s, rng) {
-  // Clean flat-design tree: dark trunk, layered cones
-  const trunkH = s*0.4, trunkW = s*0.12;
+  // Trunk
+  const trunkH = s*0.35, trunkW = s*0.11;
   ctx.fillStyle = '#3a2510';
-  ctx.fillRect(cx-trunkW/2, baseY-trunkH, trunkW, trunkH+2);
-
+  ctx.fillRect(cx-trunkW/2, baseY-trunkH, trunkW, trunkH+1);
+  // Three layered cones, sizes tuned for TW=128
   const layers = [
-    {y: baseY-trunkH-s*.35, r: s*.55, col:'#1c5018'},
-    {y: baseY-trunkH-s*.70, r: s*.42, col:'#246622'},
-    {y: baseY-trunkH-s*1.0, r: s*.28, col:'#2e7a2c'},
+    {y: baseY-trunkH-s*.3,  r: s*.50, col:'#1c5018'},
+    {y: baseY-trunkH-s*.62, r: s*.38, col:'#246622'},
+    {y: baseY-trunkH-s*.88, r: s*.24, col:'#2e7a2c'},
   ];
   for (const l of layers) {
-    // Drop shadow
-    ctx.fillStyle='rgba(0,0,0,0.18)';
-    ctx.beginPath(); ctx.ellipse(cx+s*.08, l.y+l.r*.2+3, l.r*.7, l.r*.22, 0, 0, Math.PI*2); ctx.fill();
-    // Main cone
+    ctx.fillStyle='rgba(0,0,0,0.16)';
+    ctx.beginPath(); ctx.ellipse(cx+s*.07, l.y+l.r*.18+2, l.r*.65, l.r*.2, 0, 0, Math.PI*2); ctx.fill();
     ctx.fillStyle = l.col;
-    ctx.beginPath(); ctx.moveTo(cx, l.y); ctx.lineTo(cx-l.r, l.y+l.r*.85); ctx.lineTo(cx+l.r, l.y+l.r*.85); ctx.closePath(); ctx.fill();
-    // Lit left face
-    ctx.fillStyle = lighten(l.col, 22);
-    ctx.beginPath(); ctx.moveTo(cx, l.y); ctx.lineTo(cx-l.r, l.y+l.r*.85); ctx.lineTo(cx-l.r*.15, l.y+l.r*.85); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(cx, l.y); ctx.lineTo(cx-l.r, l.y+l.r*.82); ctx.lineTo(cx+l.r, l.y+l.r*.82); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = lighten(l.col, 20);
+    ctx.beginPath(); ctx.moveTo(cx, l.y); ctx.lineTo(cx-l.r, l.y+l.r*.82); ctx.lineTo(cx-l.r*.14, l.y+l.r*.82); ctx.closePath(); ctx.fill();
   }
 }
 
 function drawFlatMountain(ctx, cx, baseY, w, h) {
-  // Drop shadow
-  ctx.fillStyle='rgba(0,0,0,0.22)';
-  ctx.beginPath(); ctx.moveTo(cx,baseY-h); ctx.lineTo(cx-w*.6,baseY+8); ctx.lineTo(cx+w*.6,baseY+8); ctx.closePath(); ctx.fill();
-  // Main rock
+  ctx.fillStyle='rgba(0,0,0,0.2)';
+  ctx.beginPath(); ctx.moveTo(cx,baseY-h); ctx.lineTo(cx-w*.6,baseY+5); ctx.lineTo(cx+w*.6,baseY+5); ctx.closePath(); ctx.fill();
   ctx.fillStyle='#787070';
-  ctx.beginPath(); ctx.moveTo(cx,baseY-h); ctx.lineTo(cx-w*.55,baseY+6); ctx.lineTo(cx+w*.55,baseY+6); ctx.closePath(); ctx.fill();
-  // Shadow face
-  ctx.fillStyle='rgba(0,0,0,0.20)';
-  ctx.beginPath(); ctx.moveTo(cx,baseY-h); ctx.lineTo(cx,baseY+6); ctx.lineTo(cx+w*.55,baseY+6); ctx.closePath(); ctx.fill();
-  // Snow cap
+  ctx.beginPath(); ctx.moveTo(cx,baseY-h); ctx.lineTo(cx-w*.55,baseY+4); ctx.lineTo(cx+w*.55,baseY+4); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='rgba(0,0,0,0.18)';
+  ctx.beginPath(); ctx.moveTo(cx,baseY-h); ctx.lineTo(cx,baseY+4); ctx.lineTo(cx+w*.55,baseY+4); ctx.closePath(); ctx.fill();
   ctx.fillStyle='#ecf4f8';
-  ctx.beginPath(); ctx.moveTo(cx,baseY-h); ctx.lineTo(cx-w*.2,baseY-h+h*.32); ctx.lineTo(cx+w*.22,baseY-h+h*.32); ctx.closePath(); ctx.fill();
-  // Snow lit edge
-  ctx.fillStyle='rgba(255,255,255,0.5)';
-  ctx.beginPath(); ctx.moveTo(cx,baseY-h); ctx.lineTo(cx-w*.2,baseY-h+h*.32); ctx.lineTo(cx-w*.06,baseY-h+h*.32); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(cx,baseY-h); ctx.lineTo(cx-w*.18,baseY-h+h*.3); ctx.lineTo(cx+w*.2,baseY-h+h*.3); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,0.45)';
+  ctx.beginPath(); ctx.moveTo(cx,baseY-h); ctx.lineTo(cx-w*.18,baseY-h+h*.3); ctx.lineTo(cx-w*.05,baseY-h+h*.3); ctx.closePath(); ctx.fill();
 }
 
 // ── TILE FEATURE MAP ──
@@ -431,13 +434,16 @@ const FEAT_MAP = {
 //  Canvas: 96 × 128.  Anchor: (0.5, 1.0) at foot point.
 // ══════════════════════════════════════════════════════
 function makeSettler(selected) {
-  const W=96, H=128;
+  // Draw internally at 96×128, then scale down to 60×80 via ctx.scale
+  const SCALE = 0.625;
+  const W=60, H=80;
   const oc=document.createElement('canvas'); oc.width=W; oc.height=H;
   const ctx=oc.getContext('2d');
-  const cx=W/2;
+  ctx.scale(SCALE, SCALE);
+  const cx=48; // internal horizontal center (96/2)
 
-  // Ground point (feet)
-  const gY = H - 6;
+  // Ground point (feet) — internal coords
+  const gY = 122;
 
   // ── Shadow ──
   ctx.fillStyle='rgba(0,0,0,0.22)';
