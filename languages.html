@@ -716,9 +716,9 @@
   <details class="vc-settings" id="vc-settings-panel">
     <summary>⚙️ API Keys</summary>
     <div class="vc-settings-inner">
-      <label class="vc-label">Anthropic API Key</label>
-      <input type="password" id="vc-anthropic-key" class="form-input" placeholder="sk-ant-…">
-      <label class="vc-label" style="margin-top:8px">ElevenLabs API Key</label>
+      <label class="vc-label">Anthropic API Key <span style="font-weight:400;color:var(--gray-400)">(for Claude tutor)</span></label>
+      <input type="password" id="vc-anthropic-key" class="form-input" placeholder="sk-ant-api03-…">
+      <label class="vc-label" style="margin-top:8px">ElevenLabs API Key <span style="font-weight:400;color:var(--gray-400)">(for voice — free tier works)</span></label>
       <input type="password" id="vc-eleven-key" class="form-input" placeholder="sk_…">
       <label class="vc-label" style="margin-top:8px">Groq API Key <span style="font-weight:400;color:var(--gray-400)">(free — groq.com)</span></label>
       <input type="password" id="vc-groq-key" class="form-input" placeholder="gsk_…">
@@ -5044,8 +5044,6 @@ let vcMediaStream = null;
 let vcInitDone = false;
 let vcKeys = {}; // cached keys fetched from Supabase
 
-const VC_KEYS_URL = 'https://kxsuzgpnvtepsyhkezin.supabase.co/functions/v1/get-voice-keys';
-
 // ── Init ──────────────────────────────────────────────────────────────────
 async function vcInit() {
   if (vcInitDone) return;
@@ -5061,14 +5059,15 @@ function vcKeysReady() {
 
 async function vcFetchKeys() {
   try {
-    const res = await fetch(VC_KEYS_URL);
-    if (!res.ok) throw new Error(`${res.status}`);
-    const fetched = await res.json();
+    // Fetch via db-proxy (same as all other Supabase reads in LifeOS)
+    const res = await supabase.from('app_secrets').select('key,value');
+    const rows = res.data || [];
 
-    // Merge fetched keys into vcKeys (don't overwrite a key that was just typed in)
-    if (fetched.anthropic_api_key && fetched.anthropic_api_key !== 'ENTER_YOUR_KEY') vcKeys.anthropic_api_key = fetched.anthropic_api_key;
-    if (fetched.elevenlabs_api_key && fetched.elevenlabs_api_key !== 'ENTER_YOUR_KEY') vcKeys.elevenlabs_api_key = fetched.elevenlabs_api_key;
-    if (fetched.groq_api_key && fetched.groq_api_key !== 'ENTER_YOUR_KEY') vcKeys.groq_api_key = fetched.groq_api_key;
+    for (const row of rows) {
+      if (row.value && row.value !== 'ENTER_YOUR_KEY') {
+        vcKeys[row.key] = row.value;
+      }
+    }
 
     // Populate fields (masked) so user can see they're set
     const setField = (id, val) => {
@@ -5112,13 +5111,10 @@ window.vcSaveKeysToSupabase = async () => {
   if (!updates.length) { statusEl.textContent = 'No new keys to save.'; return; }
 
   try {
-    // POST directly to the edge function — bypasses db-proxy, handles its own auth
-    const res = await fetch(VC_KEYS_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updates),
-    });
-    if (!res.ok) throw new Error(`Save failed: ${res.status}`);
+    // Save via db-proxy upsert (app_secrets is now in INSERT_UPDATE allowlist)
+    for (const row of updates) {
+      await supabase.from('app_secrets').upsert(row, { onConflict: 'key' });
+    }
     statusEl.textContent = '✓ Saved! Keys work from any device now.';
     if (vcKeysReady()) vcSetStatus('Ready — hold the button to start');
   } catch(e) {
@@ -5351,43 +5347,27 @@ async function vcTranscribeWhisper(blob) {
   throw new Error('Please add a Groq API key in settings for speech recognition (it\'s free — groq.com)');
 }
 
-// ── Claude LLM ────────────────────────────────────────────────────────────
+// ── Claude LLM (via Supabase claude-proxy — avoids browser CORS) ─────────
+const VC_CLAUDE_PROXY = 'https://kxsuzgpnvtepsyhkezin.supabase.co/functions/v1/claude-proxy';
+
 async function vcAskClaude() {
-  const key = vcKeys.anthropic_api_key;
-  if (!key || key === 'ENTER_YOUR_KEY') throw new Error('No Anthropic API key');
-
-  // Claude can't be called directly from browser due to CORS.
-  // We route through the existing Supabase db-proxy edge function,
-  // OR call Anthropic via a tiny proxy. Use the Supabase edge function approach.
-  // Actually — Anthropic's API does NOT support browser CORS by default.
-  // Solution: call through Supabase edge function "claude-proxy" if it exists,
-  // otherwise fall back to a simple serverless approach.
-  // For now we attempt direct call — works in some environments.
-
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+  const res = await fetch(VC_CLAUDE_PROXY, {
     method: 'POST',
-    headers: {
-      'x-api-key': key,
-      'anthropic-version': '2023-06-01',
-      'content-type': 'application/json',
-      'anthropic-dangerous-allow-browser': 'true', // Required for browser calls
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 300,
-      messages: vcMessages.map(m => ({
-        role: m.role,
-        content: m.content,
-      })),
+      messages: vcMessages.map(m => ({ role: m.role, content: m.content })),
     }),
   });
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error?.message || `Claude API ${res.status}`);
+    throw new Error(err.error?.message || `Claude proxy ${res.status}`);
   }
 
   const j = await res.json();
+  if (j.error) throw new Error(j.error);
   return j.content[0].text;
 }
 
