@@ -5054,11 +5054,21 @@ async function vcInit() {
   await vcFetchKeys();
 }
 
+function vcKeysReady() {
+  const ok = (v) => v && v !== 'ENTER_YOUR_KEY';
+  return ok(vcKeys.anthropic_api_key) && ok(vcKeys.elevenlabs_api_key) && ok(vcKeys.groq_api_key);
+}
+
 async function vcFetchKeys() {
   try {
     const res = await fetch(VC_KEYS_URL);
     if (!res.ok) throw new Error(`${res.status}`);
-    vcKeys = await res.json();
+    const fetched = await res.json();
+
+    // Merge fetched keys into vcKeys (don't overwrite a key that was just typed in)
+    if (fetched.anthropic_api_key && fetched.anthropic_api_key !== 'ENTER_YOUR_KEY') vcKeys.anthropic_api_key = fetched.anthropic_api_key;
+    if (fetched.elevenlabs_api_key && fetched.elevenlabs_api_key !== 'ENTER_YOUR_KEY') vcKeys.elevenlabs_api_key = fetched.elevenlabs_api_key;
+    if (fetched.groq_api_key && fetched.groq_api_key !== 'ENTER_YOUR_KEY') vcKeys.groq_api_key = fetched.groq_api_key;
 
     // Populate fields (masked) so user can see they're set
     const setField = (id, val) => {
@@ -5069,11 +5079,7 @@ async function vcFetchKeys() {
     setField('vc-eleven-key', vcKeys.elevenlabs_api_key);
     setField('vc-groq-key', vcKeys.groq_api_key);
 
-    const allSet = vcKeys.anthropic_api_key && vcKeys.anthropic_api_key !== 'ENTER_YOUR_KEY'
-                && vcKeys.elevenlabs_api_key && vcKeys.elevenlabs_api_key !== 'ENTER_YOUR_KEY'
-                && vcKeys.groq_api_key && vcKeys.groq_api_key !== 'ENTER_YOUR_KEY';
-
-    if (!allSet) {
+    if (!vcKeysReady()) {
       document.getElementById('vc-settings-panel').setAttribute('open', '');
       vcSetStatus('Add your API keys above to get started');
     } else {
@@ -5093,6 +5099,11 @@ window.vcSaveKeysToSupabase = async () => {
   const statusEl = document.getElementById('vc-keys-status');
   statusEl.textContent = 'Saving…';
 
+  // Immediately populate vcKeys from what was typed — no round-trip needed
+  if (ak && !ak.startsWith('•')) vcKeys.anthropic_api_key = ak;
+  if (ek && !ek.startsWith('•')) vcKeys.elevenlabs_api_key = ek;
+  if (gk && !gk.startsWith('•')) vcKeys.groq_api_key = gk;
+
   const updates = [];
   if (ak && !ak.startsWith('•')) updates.push({ key: 'anthropic_api_key', value: ak, updated_at: new Date().toISOString() });
   if (ek && !ek.startsWith('•')) updates.push({ key: 'elevenlabs_api_key', value: ek, updated_at: new Date().toISOString() });
@@ -5101,14 +5112,19 @@ window.vcSaveKeysToSupabase = async () => {
   if (!updates.length) { statusEl.textContent = 'No new keys to save.'; return; }
 
   try {
-    for (const row of updates) {
-      await supabase.from('app_secrets').upsert(row, { onConflict: 'key' });
-    }
+    // POST directly to the edge function — bypasses db-proxy, handles its own auth
+    const res = await fetch(VC_KEYS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    if (!res.ok) throw new Error(`Save failed: ${res.status}`);
     statusEl.textContent = '✓ Saved! Keys work from any device now.';
-    await vcFetchKeys(); // refresh cached keys
-    vcSetStatus('Ready — hold the button to start');
+    if (vcKeysReady()) vcSetStatus('Ready — hold the button to start');
   } catch(e) {
-    statusEl.textContent = 'Error saving: ' + e.message;
+    // vcKeys is already populated from the typed values above — session will still work
+    statusEl.textContent = '⚠️ Saved in memory only (DB error: ' + e.message + ')';
+    if (vcKeysReady()) vcSetStatus('Ready — hold the button to start');
   }
 };
 
