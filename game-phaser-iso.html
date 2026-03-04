@@ -46,12 +46,21 @@ body{background:#1a2430;overflow:hidden;font-family:'Cinzel',Georgia,serif;user-
   <button class="start-btn" onclick="startGame()">Begin</button>
 </div>
 <div id="top-bar">
-  <span class="empire-name">⚔ Your Empire</span>
-  <div class="rpill"><span class="i">🏙</span><span class="v" id="res-cities">0</span><span class="l">CITIES</span></div>
-  <div class="rpill"><span class="i">⚔</span><span class="v" id="res-units">1</span><span class="l">UNITS</span></div>
+  <span class="empire-name">⚔ Empire</span>
+  <div class="rpill"><span class="i">🍎</span><span class="v" id="res-food">0</span><span class="l">FOOD</span></div>
+  <div class="rpill"><span class="i">⚒</span><span class="v" id="res-prod">0</span><span class="l">PROD</span></div>
+  <div class="rpill"><span class="i">💰</span><span class="v" id="res-gold">0</span><span class="l">GOLD</span></div>
+  <div class="rpill"><span class="i">📚</span><span class="v" id="res-sci">0</span><span class="l">SCI</span></div>
+  <div class="rpill"><span class="i">🎭</span><span class="v" id="res-cult">0</span><span class="l">CULT</span></div>
   <div class="spacer"></div>
+  <div class="rpill"><span class="i">🏙</span><span class="v" id="res-cities">0</span><span class="l">CITIES</span></div>
   <span id="turn-info">Turn 1</span>
   <button class="turn-btn" onclick="endTurn()">End Turn ▶</button>
+</div>
+<div id="tile-tooltip" style="position:fixed;display:none;background:rgba(10,18,8,.96);border:1px solid #4a8030;border-radius:6px;padding:8px 14px;font-family:sans-serif;font-size:12px;color:#c8e890;z-index:200;pointer-events:none;min-width:140px;">
+  <div id="tt-title" style="font-weight:700;font-size:13px;margin-bottom:4px;color:#a8d860;"></div>
+  <div id="tt-yields" style="display:flex;gap:8px;font-size:11px;margin-bottom:4px;"></div>
+  <div id="tt-resource" style="font-size:11px;color:#f0d060;"></div>
 </div>
 <div id="bot-panel">
   <div style="flex:1"><div id="unit-name">Select a unit</div><div id="unit-desc">Click your settler to begin.</div></div>
@@ -99,33 +108,193 @@ const COLS = 18, ROWS = 11;
 const TOP_H = 52, BOT_H = 110;
 
 // ── TERRAIN — Forest Kingdom palette ──
+// yields: {f=food, p=production, g=gold, s=science, c=culture}
 const TERRAIN = {
-  ocean:    {label:'Ocean',    passable:false, top:'#1e4060',lt:'#2c5c88',side:'#102838',dark:'#081820',water:true },
-  coast:    {label:'Coast',    passable:false, top:'#246080',lt:'#3880a8',side:'#143850',dark:'#0a2030',water:true },
-  plains:   {label:'Plains',   passable:true,  top:'#7ecf3e',lt:'#98e050',side:'#4a9820',dark:'#2e6010',water:false},
-  grassland:{label:'Grassland',passable:true,  top:'#5cae28',lt:'#78cc3c',side:'#386814',dark:'#20420a',water:false},
-  forest:   {label:'Forest',   passable:true,  top:'#3a8014',lt:'#52a020',side:'#22500a',dark:'#123006',water:false},
-  hill:     {label:'Hills',    passable:true,  top:'#8a7448',lt:'#a89060',side:'#5c4c28',dark:'#3c3018',water:false},
-  mountain: {label:'Mountain', passable:false, top:'#908880',lt:'#b0a898',side:'#585048',dark:'#383028',water:false},
-  desert:   {label:'Desert',   passable:true,  top:'#a8d860',lt:'#c0f070',side:'#688a30',dark:'#405618',water:false},
-  tundra:   {label:'Tundra',   passable:true,  top:'#78a058',lt:'#98c070',side:'#4a6838',dark:'#2e4020',water:false},
-  river:    {label:'River',    passable:true,  top:'#60b830',lt:'#7ad040',side:'#3a7018',dark:'#20480a',water:false},
-  snow:     {label:'Snow',     passable:false, top:'#d8eec8',lt:'#eef8e0',side:'#8ab880',dark:'#609858',water:false},
+  ocean:    {label:'Ocean',    passable:false, top:'#1e4060',lt:'#2c5c88',side:'#102838',dark:'#081820',water:true,  yields:{f:1,p:0,g:1,s:0,c:0}},
+  coast:    {label:'Coast',    passable:false, top:'#246080',lt:'#3880a8',side:'#143850',dark:'#0a2030',water:true,  yields:{f:1,p:0,g:2,s:0,c:0}},
+  plains:   {label:'Plains',   passable:true,  top:'#7ecf3e',lt:'#98e050',side:'#4a9820',dark:'#2e6010',water:false, yields:{f:1,p:1,g:0,s:0,c:0}},
+  grassland:{label:'Grassland',passable:true,  top:'#5cae28',lt:'#78cc3c',side:'#386814',dark:'#20420a',water:false, yields:{f:2,p:0,g:0,s:0,c:0}},
+  forest:   {label:'Forest',   passable:true,  top:'#3a8014',lt:'#52a020',side:'#22500a',dark:'#123006',water:false, yields:{f:1,p:1,g:0,s:0,c:0}},
+  hill:     {label:'Hills',    passable:true,  top:'#8a7448',lt:'#a89060',side:'#5c4c28',dark:'#3c3018',water:false, yields:{f:0,p:2,g:0,s:0,c:0}},
+  mountain: {label:'Mountain', passable:false, top:'#908880',lt:'#b0a898',side:'#585048',dark:'#383028',water:false, yields:{f:0,p:0,g:0,s:0,c:0}},
+  desert:   {label:'Desert',   passable:true,  top:'#a8d860',lt:'#c0f070',side:'#688a30',dark:'#405618',water:false, yields:{f:0,p:0,g:0,s:0,c:0}},
+  tundra:   {label:'Tundra',   passable:true,  top:'#78a058',lt:'#98c070',side:'#4a6838',dark:'#2e4020',water:false, yields:{f:1,p:0,g:0,s:0,c:0}},
+  river:    {label:'River',    passable:true,  top:'#60b830',lt:'#7ad040',side:'#3a7018',dark:'#20480a',water:false, yields:{f:2,p:1,g:1,s:0,c:0}},
+  snow:     {label:'Snow',     passable:false, top:'#d8eec8',lt:'#eef8e0',side:'#8ab880',dark:'#609858',water:false, yields:{f:0,p:0,g:0,s:0,c:0}},
 };
 
-const MAP_DATA=[
-  ['ocean','ocean','ocean','coast','coast','plains','plains','forest','forest','hill','hill','mountain','mountain','tundra','tundra','ocean','ocean','ocean'],
-  ['ocean','ocean','coast','coast','plains','plains','grassland','forest','forest','forest','hill','mountain','tundra','tundra','snow','snow','ocean','ocean'],
-  ['ocean','coast','coast','plains','plains','grassland','grassland','river','plains','forest','forest','hill','hill','tundra','snow','snow','tundra','ocean'],
-  ['ocean','coast','plains','plains','grassland','grassland','river','river','plains','plains','forest','forest','hill','hill','tundra','tundra','ocean','ocean'],
-  ['coast','plains','plains','grassland','grassland','plains','plains','river','plains','plains','plains','forest','forest','desert','desert','tundra','ocean','ocean'],
-  ['coast','plains','grassland','grassland','plains','plains','plains','plains','hill','hill','plains','plains','desert','desert','desert','desert','coast','ocean'],
-  ['coast','plains','plains','grassland','plains','plains','hill','hill','hill','mountain','mountain','desert','desert','desert','hill','coast','coast','ocean'],
-  ['ocean','coast','plains','plains','forest','forest','forest','hill','mountain','mountain','desert','desert','hill','hill','coast','coast','ocean','ocean'],
-  ['ocean','coast','coast','plains','plains','forest','forest','forest','hill','hill','desert','desert','coast','coast','ocean','ocean','ocean','ocean'],
-  ['ocean','ocean','coast','coast','plains','plains','forest','forest','grassland','grassland','coast','coast','ocean','ocean','ocean','ocean','ocean','ocean'],
-  ['ocean','ocean','ocean','coast','coast','plains','plains','grassland','coast','coast','ocean','ocean','ocean','ocean','ocean','ocean','ocean','ocean'],
-];
+// ── RESOURCES ──
+// Each resource: {label, emoji, type (bonus/luxury/strategic), tileBonus {f,p,g,s}, validOn:[terrain types]}
+const RESOURCES = {
+  wheat:   {label:'Wheat',   emoji:'🌾', type:'bonus',    bonus:{f:1,p:0,g:0,s:0}, validOn:['plains','grassland','river']},
+  deer:    {label:'Deer',    emoji:'🦌', type:'bonus',    bonus:{f:1,p:1,g:0,s:0}, validOn:['forest','tundra']},
+  fish:    {label:'Fish',    emoji:'🐟', type:'bonus',    bonus:{f:1,p:0,g:1,s:0}, validOn:['coast','ocean']},
+  stone:   {label:'Stone',   emoji:'🪨', type:'bonus',    bonus:{f:0,p:1,g:1,s:0}, validOn:['grassland','plains','hill']},
+  gems:    {label:'Gems',    emoji:'💎', type:'luxury',   bonus:{f:0,p:0,g:3,s:0}, validOn:['desert','hill']},
+  gold_r:  {label:'Gold',    emoji:'🥇', type:'luxury',   bonus:{f:0,p:0,g:2,s:0}, validOn:['hill','desert','plains']},
+  silk:    {label:'Silk',    emoji:'🧵', type:'luxury',   bonus:{f:0,p:0,g:2,s:0}, validOn:['forest']},
+  spices:  {label:'Spices',  emoji:'🌶', type:'luxury',   bonus:{f:1,p:0,g:1,s:0}, validOn:['forest','grassland']},
+  iron:    {label:'Iron',    emoji:'⚙',  type:'strategic',bonus:{f:0,p:2,g:0,s:0}, validOn:['hill','plains','tundra']},
+  horses:  {label:'Horses',  emoji:'🐎', type:'strategic',bonus:{f:1,p:1,g:0,s:0}, validOn:['plains','grassland','tundra']},
+  coal:    {label:'Coal',    emoji:'⬛', type:'strategic',bonus:{f:0,p:2,g:0,s:0}, validOn:['hill']},
+};
+
+// ── PROCEDURAL MAP GENERATION ──
+function generateMap(seed) {
+  const rng = seededRng(seed || 42);
+  const map = [];
+  // Initialize with ocean
+  for (let r = 0; r < ROWS; r++) {
+    map.push([]);
+    for (let c = 0; c < COLS; c++) map[r].push('ocean');
+  }
+
+  // Place continent seeds (2 main land masses)
+  const seeds = [
+    {c: Math.floor(COLS * 0.25), r: Math.floor(ROWS * 0.5)},
+    {c: Math.floor(COLS * 0.72), r: Math.floor(ROWS * 0.45)},
+  ];
+
+  // Noise-based height map
+  const height = [];
+  for (let r = 0; r < ROWS; r++) {
+    height.push([]);
+    for (let c = 0; c < COLS; c++) {
+      // Distance from nearest continent seed
+      let minD = Infinity;
+      for (const s of seeds) {
+        const d = Math.sqrt((c-s.c)**2 + (r-s.r)**2);
+        minD = Math.min(minD, d);
+      }
+      const maxD = Math.sqrt(COLS**2 + ROWS**2) * 0.5;
+      // Height = inverse distance + noise
+      const base = 1 - (minD / maxD);
+      const noise = (rng() - 0.5) * 0.4;
+      height[r].push(Math.max(0, Math.min(1, base + noise)));
+    }
+  }
+
+  // Terrain from height
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const h = height[r][c];
+      const n = rng();
+      if (h < 0.28) {
+        map[r][c] = 'ocean';
+      } else if (h < 0.38) {
+        map[r][c] = 'coast';
+      } else if (h > 0.82) {
+        // High elevation
+        map[r][c] = n < 0.6 ? 'mountain' : 'hill';
+      } else if (h > 0.68) {
+        // Upper land
+        if (n < 0.35) map[r][c] = 'hill';
+        else if (n < 0.55) map[r][c] = 'forest';
+        else map[r][c] = 'plains';
+      } else {
+        // Mid land
+        const lat = r / ROWS; // 0=top, 1=bottom
+        if (lat < 0.15 || lat > 0.88) {
+          map[r][c] = n < 0.5 ? 'snow' : 'tundra';
+        } else if (lat > 0.55 && lat < 0.80 && n < 0.28) {
+          map[r][c] = 'desert';
+        } else if (n < 0.32) {
+          map[r][c] = 'grassland';
+        } else if (n < 0.55) {
+          map[r][c] = 'plains';
+        } else if (n < 0.70) {
+          map[r][c] = 'forest';
+        } else {
+          map[r][c] = 'tundra';
+        }
+      }
+    }
+  }
+
+  // Add rivers (connect hills to coast)
+  let riverCount = 0;
+  for (let r = 1; r < ROWS-1 && riverCount < 3; r++) {
+    for (let c = 1; c < COLS-1 && riverCount < 3; c++) {
+      if (map[r][c] === 'plains' && rng() < 0.03) {
+        // Carve a short river
+        let cr = r, cc = c;
+        for (let step = 0; step < 4; step++) {
+          if (cr >= 0 && cr < ROWS && cc >= 0 && cc < COLS && map[cr][cc] !== 'ocean' && map[cr][cc] !== 'coast') {
+            map[cr][cc] = 'river';
+          }
+          cr += rng() < 0.5 ? 1 : 0;
+          cc += rng() < 0.5 ? 1 : -1;
+        }
+        riverCount++;
+      }
+    }
+  }
+
+  return map;
+}
+
+// ── RESOURCE PLACEMENT ──
+function generateResources(mapData, seed) {
+  const rng = seededRng((seed || 42) + 7777);
+  const resourceMap = {}; // key: "col_row" → resource key
+
+  for (const [resKey, res] of Object.entries(RESOURCES)) {
+    // Place 2-4 of each resource type
+    const count = 2 + Math.floor(rng() * 3);
+    let placed = 0;
+    let attempts = 0;
+    while (placed < count && attempts < 200) {
+      attempts++;
+      const c = Math.floor(rng() * COLS);
+      const r = Math.floor(rng() * ROWS);
+      const key = `${c}_${r}`;
+      const tType = mapData[r]?.[c];
+      if (tType && res.validOn.includes(tType) && !resourceMap[key]) {
+        resourceMap[key] = resKey;
+        placed++;
+      }
+    }
+  }
+  return resourceMap;
+}
+
+// Compute tile yield including resource bonus
+function getTileYield(col, row, mapData, resourceMap) {
+  const tType = mapData[row]?.[col];
+  if (!tType) return {f:0,p:0,g:0,s:0,c:0};
+  const base = {...TERRAIN[tType].yields};
+  const rKey = resourceMap[`${col}_${row}`];
+  if (rKey && RESOURCES[rKey]) {
+    const rb = RESOURCES[rKey].bonus;
+    base.f += rb.f || 0;
+    base.p += rb.p || 0;
+    base.g += rb.g || 0;
+    base.s += rb.s || 0;
+  }
+  return base;
+}
+
+// Compute empire-wide per-turn income (from all revealed tiles in city ranges)
+function computeIncome(mapData, resourceMap, cities) {
+  const total = {f:0,p:0,g:0,s:0,c:1}; // base 1 culture
+  for (const city of cities) {
+    total.g += 2; // base gold per city
+    total.s += 1; // base science per city
+    total.c += 1; // base culture per city
+    // Work surrounding tiles (pop = 1 for now, just the city tile + 2 neighbors)
+    const worked = [{col:city.col, row:city.row}];
+    for (const n of getNeighbors(city.col, city.row).slice(0, city.pop || 1)) worked.push(n);
+    for (const t of worked) {
+      const y = getTileYield(t.col, t.row, mapData, resourceMap);
+      total.f += y.f; total.p += y.p; total.g += y.g; total.s += y.s; total.c += (y.c||0);
+    }
+  }
+  return total;
+}
+
+const MAP_SEED = 42;
+const MAP_DATA = generateMap(MAP_SEED);
+const RESOURCE_MAP = generateResources(MAP_DATA, MAP_SEED);
 
 // ── ISO POSITION ──
 // Returns the screen coordinate of the diamond TOP VERTEX for tile (col,row)
@@ -149,7 +318,13 @@ function lighten(h,a){const c=hexToRgb(h);return`rgb(${Math.min(255,c.r+a)},${Ma
 function darken(h,a){const c=hexToRgb(h);return`rgb(${Math.max(0,c.r-a)},${Math.max(0,c.g-a)},${Math.max(0,c.b-a)})`;}
 
 // ── GAME STATE ──
-const GS={turn:1,cities:[],units:[],selectedUnit:null,moveHighlights:[],nextCityId:1,nextUnitId:1};
+const GS={
+  turn:1, cities:[], units:[], selectedUnit:null, moveHighlights:[],
+  nextCityId:1, nextUnitId:1,
+  // Fog of war: set of "col_row" strings that have been revealed
+  revealed: new Set(),
+  income:{f:0,p:0,g:0,s:0,c:0},
+};
 const CITY_NAMES=['Aurum','Veridian','Solmere','Caelthon','Rivenmoor','Dunhallow','Ironspire','Thornwall','Eastmarch','Goldenveil'];
 
 // ══════════════════════════════════════════════════════
@@ -778,6 +953,29 @@ function generateTextures(sc) {
   hctx.strokeStyle='rgba(180,255,180,0.35)'; hctx.lineWidth=1; hctx.stroke();
   sc.textures.addCanvas('tile_highlight', hlOC);
 
+  // Fog of war tile
+  const fogOC=document.createElement('canvas'); fogOC.width=TC_W; fogOC.height=TC_H;
+  const fctx=fogOC.getContext('2d');
+  fctx.beginPath(); fctx.moveTo(TC_W/2,ABOVE); fctx.lineTo(TC_W/2+TW/2,ABOVE+TH/2); fctx.lineTo(TC_W/2,ABOVE+TH); fctx.lineTo(TC_W/2-TW/2,ABOVE+TH/2); fctx.closePath();
+  fctx.fillStyle='rgba(10,16,8,0.90)'; fctx.fill();
+  fctx.strokeStyle='rgba(30,50,20,0.6)'; fctx.lineWidth=1; fctx.stroke();
+  sc.textures.addCanvas('tile_fog', fogOC);
+
+  // Resource badge canvas (small, drawn on top of tile)
+  // We'll use a single 32x32 canvas per resource with emoji
+  for(const [rk, res] of Object.entries(RESOURCES)) {
+    const rc=document.createElement('canvas'); rc.width=32; rc.height=32;
+    const rctx=rc.getContext('2d');
+    // Badge background
+    rctx.fillStyle='rgba(10,18,8,0.75)';
+    rctx.beginPath(); rctx.arc(16,16,14,0,Math.PI*2); rctx.fill();
+    rctx.strokeStyle = res.type==='luxury' ? '#f0d060' : res.type==='strategic' ? '#e06030' : '#a0c860';
+    rctx.lineWidth=1.5; rctx.stroke();
+    rctx.font='16px serif'; rctx.textAlign='center'; rctx.textBaseline='middle';
+    rctx.fillText(res.emoji, 16, 17);
+    sc.textures.addCanvas('res_'+rk, rc);
+  }
+
   // City tile
   const {canvas:cityOC, originY:cityOY} = makeCityTile();
   sc.textures.addCanvas('tile_city', cityOC);
@@ -802,9 +1000,11 @@ class GameScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor('#1a2430');
 
     this.terrainLayer   = this.add.container(0,0);
+    this.resourceLayer  = this.add.container(0,0);
     this.highlightLayer = this.add.container(0,0);
     this.unitLayer      = this.add.container(0,0);
     this.labelLayer     = this.add.container(0,0);
+    this.fogLayer       = this.add.container(0,0);
 
     // Build all tiles — back to front (row 0→N, col 0→N)
     this.tileSprites={};
@@ -816,6 +1016,16 @@ class GameScene extends Phaser.Scene {
       this.tileSprites[`${c}_${r}`]=sp;
     }
 
+    // Resource sprites
+    this.resSp={};
+    for(const [key, rk] of Object.entries(RESOURCE_MAP)){
+      const [c,r]=key.split('_').map(Number);
+      const {x,y}=isoPos(c,r);
+      const sp=this.add.image(x+12, y+TH/2-8, 'res_'+rk).setOrigin(0.5,0.5).setScale(0.85).setAlpha(0);
+      this.resourceLayer.add(sp);
+      this.resSp[key]=sp;
+    }
+
     // Highlight overlay sprites (same origin)
     this.hlSprites={};
     for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
@@ -825,30 +1035,52 @@ class GameScene extends Phaser.Scene {
       this.hlSprites[`${c}_${r}`]=sp;
     }
 
-    // Spawn settler
-    const SC=6, SR=5;
+    // Fog of war sprites (start all covered)
+    this.fogSprites={};
+    for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+      const {x,y}=isoPos(c,r);
+      const sp=this.add.image(x, y, 'tile_fog').setOrigin(OX, OY);
+      this.fogLayer.add(sp);
+      this.fogSprites[`${c}_${r}`]=sp;
+    }
+
+    // Spawn settler — find a good passable starting tile
+    let SC=5, SR=5;
+    // Find a passable tile near center
+    for(let attempt=0;attempt<50;attempt++){
+      const tc=5+Math.floor(Math.random()*6), tr=4+Math.floor(Math.random()*4);
+      if(MAP_DATA[tr]&&TERRAIN[MAP_DATA[tr][tc]]&&TERRAIN[MAP_DATA[tr][tc]].passable){
+        SC=tc; SR=tr; break;
+      }
+    }
     GS.units.push({id:GS.nextUnitId++,type:'settler',col:SC,row:SR,movesLeft:2});
     this.unitSprites={};
     this.spawnUnit(GS.units[0]);
 
+    // Reveal area around starting settler
+    this.revealAround(SC, SR, 3);
+
     // Camera center
     const {x:sx,y:sy}=isoPos(SC,SR);
     this.cameras.main.centerOn(sx, sy+TH/2);
-    // True iso bounds: x from (0-ROWS)*STEP_X to (COLS-0)*STEP_X, y from 0 to (COLS+ROWS)*STEP_Y
     this.cameras.main.setBounds(-ROWS*STEP_X - 200, -200, (COLS+ROWS)*STEP_X + 400, (COLS+ROWS)*STEP_Y + 200);
 
     // ── Input ──
     this._dragStartX=0; this._dragStartY=0; this._hasDragged=false;
     this.input.on('pointerdown', p=>{this._dragStartX=p.x;this._dragStartY=p.y;this._hasDragged=false;});
     this.input.on('pointermove', p=>{
-      if(!p.isDown) return;
-      if(Math.abs(p.x-this._dragStartX)>6||Math.abs(p.y-this._dragStartY)>6) this._hasDragged=true;
-      if(this._hasDragged){
-        this.cameras.main.scrollX -= p.velocity.x/this.cameras.main.zoom*.75;
-        this.cameras.main.scrollY -= p.velocity.y/this.cameras.main.zoom*.75;
+      if(p.isDown){
+        if(Math.abs(p.x-this._dragStartX)>6||Math.abs(p.y-this._dragStartY)>6) this._hasDragged=true;
+        if(this._hasDragged){
+          this.cameras.main.scrollX -= p.velocity.x/this.cameras.main.zoom*.75;
+          this.cameras.main.scrollY -= p.velocity.y/this.cameras.main.zoom*.75;
+        }
       }
+      // Tooltip on hover
+      this.showTileTooltip(p);
     });
-    this.input.on('pointerup', p=>{if(!this._hasDragged)this.handleClick(p);});
+    this.input.on('pointerout', ()=>hideTileTooltip());
+    this.input.on('pointerup', p=>{if(!this._hasDragged)this.handleClick(p); hideTileTooltip();});
     this.input.on('wheel',(_p,_o,_dx,dy)=>{
       this.cameras.main.zoom=Phaser.Math.Clamp(this.cameras.main.zoom-dy*.0009,0.3,2.5);
     });
@@ -857,6 +1089,53 @@ class GameScene extends Phaser.Scene {
     this.time.addEvent({delay:16,loop:true,callback:this.tick,callbackScope:this});
     updateHUD();
     showStatus('Your empire awaits. Select your settler to begin.',4000);
+  }
+
+  revealAround(col, row, radius){
+    for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+      if(Math.abs(c-col)<=radius && Math.abs(r-row)<=radius){
+        const key=`${c}_${r}`;
+        GS.revealed.add(key);
+        if(this.fogSprites[key]) this.fogSprites[key].setAlpha(0);
+        if(this.resSp[key]) this.resSp[key].setAlpha(1);
+      }
+    }
+  }
+
+  showTileTooltip(p){
+    const wx=p.worldX, wy=p.worldY;
+    let best=null, bestD=Infinity;
+    for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+      const pos=isoPos(c,r);
+      const cx=pos.x, cy=pos.y+TH/2;
+      const dx=Math.abs(wx-cx)/(TW*.52), dy=Math.abs(wy-cy)/(TH*.52);
+      const d=dx+dy;
+      if(d<bestD){bestD=d;best={col:c,row:r};}
+    }
+    if(!best||bestD>1.5) return hideTileTooltip();
+    const {col,row}=best;
+    const key=`${col}_${row}`;
+    if(!GS.revealed.has(key)) return hideTileTooltip();
+
+    const tType=MAP_DATA[row]?.[col];
+    if(!tType) return hideTileTooltip();
+    const t=TERRAIN[tType];
+    const yields=getTileYield(col,row,MAP_DATA,RESOURCE_MAP);
+    const rKey=RESOURCE_MAP[key];
+
+    const tt=document.getElementById('tile-tooltip');
+    document.getElementById('tt-title').textContent=t.label;
+    const yparts=[];
+    if(yields.f) yparts.push(`🍎 ${yields.f}`);
+    if(yields.p) yparts.push(`⚒ ${yields.p}`);
+    if(yields.g) yparts.push(`💰 ${yields.g}`);
+    if(yields.s) yparts.push(`📚 ${yields.s}`);
+    document.getElementById('tt-yields').textContent=yparts.join('  ') || 'No yield';
+    document.getElementById('tt-resource').textContent=rKey ? `${RESOURCES[rKey].emoji} ${RESOURCES[rKey].label}` : '';
+
+    tt.style.display='block';
+    tt.style.left=(p.x+18)+'px';
+    tt.style.top=(p.y-10)+'px';
   }
 
   spawnUnit(unit){
@@ -946,6 +1225,7 @@ class GameScene extends Phaser.Scene {
 
     unit.col=col; unit.row=row; unit.movesLeft--;
     s.baseX=newFX; s.baseY=newFY;
+    this.revealAround(col, row, 2);
     GS.moveHighlights=unit.movesLeft>0?getMovable(unit,unit.movesLeft):[];
     updateHUD();
   }
@@ -957,7 +1237,8 @@ class GameScene extends Phaser.Scene {
     if(GS.cities.some(c=>hexDist(c.col,c.row,u.col,u.row)<3)){showStatus('Too close to another city!');return;}
     const name=CITY_NAMES[(GS.nextCityId-1)%CITY_NAMES.length];
     const territory=getNeighbors(u.col,u.row).filter(n=>TERRAIN[MAP_DATA[n.row][n.col]].passable).map(n=>({col:n.col,row:n.row}));
-    GS.cities.push({id:GS.nextCityId++,col:u.col,row:u.row,name,pop:1,territory});
+    GS.cities.push({id:GS.nextCityId++,col:u.col,row:u.row,name,pop:1,territory,food:0,foodToGrow:10});
+    this.revealAround(u.col, u.row, 3);
 
     const sp=this.tileSprites[`${u.col}_${u.row}`];
     if(sp){
@@ -986,18 +1267,43 @@ class GameScene extends Phaser.Scene {
 }
 
 // ── HUD ──
+function hideTileTooltip(){const tt=document.getElementById('tile-tooltip');if(tt)tt.style.display='none';}
+
 function updateHUD(){
   const u=GS.selectedUnit;
+  // Recalculate income
+  GS.income=computeIncome(MAP_DATA,RESOURCE_MAP,GS.cities);
+  document.getElementById('res-food').textContent='+'+GS.income.f;
+  document.getElementById('res-prod').textContent='+'+GS.income.p;
+  document.getElementById('res-gold').textContent='+'+GS.income.g;
+  document.getElementById('res-sci').textContent='+'+GS.income.s;
+  document.getElementById('res-cult').textContent='+'+GS.income.c;
   document.getElementById('res-cities').textContent=GS.cities.length;
-  document.getElementById('res-units').textContent=GS.units.length;
+  document.getElementById('turn-info').textContent=`Turn ${GS.turn}`;
+
   if(!u){document.getElementById('unit-name').textContent='No unit selected';document.getElementById('unit-desc').textContent='Click a unit to select it.';document.getElementById('action-btns').innerHTML='';return;}
+  const tType=MAP_DATA[u.row]?.[u.col]||'plains';
+  const yields=getTileYield(u.col,u.row,MAP_DATA,RESOURCE_MAP);
+  const rKey=RESOURCE_MAP[`${u.col}_${u.row}`];
   document.getElementById('unit-name').textContent='⚑ Settler';
-  document.getElementById('unit-desc').textContent=`On: ${TERRAIN[MAP_DATA[u.row][u.col]].label} · Moves: ${u.movesLeft}/2`;
+  document.getElementById('unit-desc').textContent=
+    `${TERRAIN[tType].label}${rKey?' · '+RESOURCES[rKey].label:''} · Moves: ${u.movesLeft}/2 · Tile: 🍎${yields.f} ⚒${yields.p} 💰${yields.g}`;
   document.getElementById('action-btns').innerHTML=
     `<button class="abtn" onclick="scene_ref.foundCity()">🏙 Found City</button>`+
     `<button class="abtn" onclick="GS.selectedUnit=null;GS.moveHighlights=[];updateHUD()">⏭ Skip</button>`;
 }
-function endTurn(){GS.turn++;for(const u of GS.units)u.movesLeft=2;document.getElementById('turn-info').textContent=`Turn ${GS.turn}`;showStatus(`Turn ${GS.turn} begins`);if(GS.turn%5===0)for(const c of GS.cities)c.pop=Math.min(10,c.pop+1);updateHUD();}
+
+function endTurn(){
+  GS.turn++;
+  for(const u of GS.units) u.movesLeft=2;
+  // City growth
+  for(const c of GS.cities){
+    c.food=(c.food||0)+Math.max(0,GS.income.f-c.pop*2);
+    if(c.food>=(c.foodToGrow||10)){c.pop=Math.min(20,c.pop+1);c.food=0;c.foodToGrow=Math.round((c.foodToGrow||10)*1.5);showStatus(`🌱 ${c.name} grew to pop ${c.pop}!`);}
+  }
+  showStatus(`Turn ${GS.turn} begins`);
+  updateHUD();
+}
 function showStatus(msg,d=2500){const el=document.getElementById('status-msg');el.textContent=msg;el.style.opacity='1';clearTimeout(el._t);el._t=setTimeout(()=>el.style.opacity='0',d);}
 
 // ── INIT ──
