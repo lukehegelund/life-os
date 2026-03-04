@@ -8,9 +8,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js"></script>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
-body { background:#0a0a12; overflow:hidden; font-family:'Cinzel',Georgia,serif; user-select:none; }
-#game-container canvas { display:block; }
-
+body { background:#0d1220; overflow:hidden; font-family:'Cinzel',Georgia,serif; user-select:none; }
+#game-container canvas { display:block; image-rendering:auto; }
 #menu-overlay {
   position:fixed; inset:0; display:flex; flex-direction:column;
   align-items:center; justify-content:center;
@@ -22,29 +21,25 @@ body { background:#0a0a12; overflow:hidden; font-family:'Cinzel',Georgia,serif; 
 .menu-div { width:200px; height:1px; background:linear-gradient(90deg,transparent,#5a3e1b,transparent); margin:18px auto; }
 .start-btn { margin-top:36px; background:linear-gradient(180deg,#8b5e1a,#5a3a08); border:2px solid #c8841e; border-radius:4px; color:#f5e0a0; font-family:'Cinzel',serif; font-size:18px; font-weight:600; padding:14px 60px; cursor:pointer; letter-spacing:4px; text-transform:uppercase; box-shadow:0 4px 20px rgba(200,132,30,.3),inset 0 1px 0 rgba(255,220,100,.2); transition:all .2s; }
 .start-btn:hover { background:linear-gradient(180deg,#aa7520,#7a4e0a); transform:translateY(-1px); box-shadow:0 4px 30px rgba(200,132,30,.5); }
-
 #top-bar { position:fixed; top:0; left:0; right:0; height:52px; background:linear-gradient(180deg,#1a1410,#110e0a); border-bottom:2px solid #5a3e1b; display:none; align-items:center; padding:0 16px; gap:12px; z-index:100; box-shadow:0 2px 12px rgba(0,0,0,.6); }
-.empire-name { font-size:14px; font-weight:700; color:#f0d080; letter-spacing:3px; text-transform:uppercase; text-shadow:0 0 10px rgba(240,180,60,.4); }
+.empire-name { font-size:14px; font-weight:700; color:#f0d080; letter-spacing:3px; text-transform:uppercase; }
 .rpill { display:flex; align-items:center; gap:6px; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.1); border-radius:4px; padding:5px 12px; }
 .rpill .i { font-size:14px; } .rpill .v { color:#f0d080; font-weight:700; font-size:13px; } .rpill .l { color:#666; font-size:10px; font-family:sans-serif; letter-spacing:1px; }
 .spacer { flex:1; }
 .turn-btn { background:linear-gradient(180deg,#7a4e10,#4a2e05); border:1px solid #c8841e; border-radius:4px; color:#f5e0a0; font-family:'Cinzel',serif; font-size:12px; padding:7px 18px; cursor:pointer; letter-spacing:2px; transition:all .15s; }
 .turn-btn:hover { background:linear-gradient(180deg,#9a6218,#6a4208); }
 #turn-info { font-size:11px; color:#666; font-family:sans-serif; }
-
 #bot-panel { position:fixed; bottom:0; left:0; right:0; height:110px; background:linear-gradient(0deg,#0d0b08,#110e0a); border-top:2px solid #3a2a12; display:none; align-items:center; padding:0 20px; gap:16px; z-index:100; }
 #unit-name { font-size:15px; font-weight:700; color:#f0d080; letter-spacing:2px; margin-bottom:4px; }
 #unit-desc { font-size:11px; color:#888; font-family:sans-serif; line-height:1.5; }
 #action-btns { display:flex; gap:10px; }
 .abtn { background:linear-gradient(180deg,#2a3520,#1a2212); border:1px solid #4a6030; border-radius:4px; color:#a0d060; font-family:'Cinzel',serif; font-size:11px; padding:10px 18px; cursor:pointer; letter-spacing:1px; transition:all .15s; white-space:nowrap; }
 .abtn:hover { background:linear-gradient(180deg,#3a4530,#2a3220); border-color:#6a8050; }
-
 #status-msg { position:fixed; top:64px; left:50%; transform:translateX(-50%); background:rgba(10,8,5,.92); border:1px solid #8a6030; border-radius:4px; padding:7px 18px; font-size:13px; color:#f0d080; letter-spacing:1px; z-index:150; opacity:0; transition:opacity .3s; pointer-events:none; white-space:nowrap; }
 </style>
 </head>
 <body>
 <div id="game-container"></div>
-
 <div id="menu-overlay">
   <div>
     <div class="menu-title">LifeOS<br>Empire</div>
@@ -54,7 +49,6 @@ body { background:#0a0a12; overflow:hidden; font-family:'Cinzel',Georgia,serif; 
   </div>
   <button class="start-btn" onclick="startGame()">Begin</button>
 </div>
-
 <div id="top-bar">
   <span class="empire-name">⚔ Your Empire</span>
   <div class="rpill"><span class="i">🏙</span><span class="v" id="res-cities">0</span><span class="l">CITIES</span></div>
@@ -74,30 +68,44 @@ body { background:#0a0a12; overflow:hidden; font-family:'Cinzel',Georgia,serif; 
 
 <script>
 // ══════════════════════════════════════════════════════
-// ISOMETRIC HEX CONFIG
-// In isometric, we project the flat hex grid into
-// a tilted diamond view. Each hex tile is drawn as
-// a flat diamond top + depth faces on south/east edges.
+// ISOMETRIC CONFIG
+// Tiles are rendered as proper isometric diamonds.
+// The anchor is top-center of the FULL sprite (top+depth).
+// Render order: row 0→N, col 0→N so far tiles draw first.
+//
+// Key fix: tiles are sized so they tesselate perfectly.
+// For an isometric hex offset grid:
+//   – each tile's visible top diamond is TILE_W × TILE_H
+//   – adjacent tiles in the same row are offset by TILE_W/2
+//   – each new row descends by STEP_Y
+//   – every odd row shifts right by STEP_X/2
 // ══════════════════════════════════════════════════════
-const TILE_W = 96;   // isometric tile width
-const TILE_H = 56;   // isometric tile height (half of width gives ~30° angle)
-const DEPTH  = 22;   // vertical depth of the tile side faces
+
+const TILE_W  = 192;   // full diamond width  (high-res)
+const TILE_H  = 96;    // full diamond height (TILE_W/2 = perfect 2:1 iso)
+const DEPTH   = 40;    // visible side depth in pixels
 const COLS = 18, ROWS = 11;
 const TOP_H = 52, BOT_H = 110;
 
+// Step sizes for grid layout
+// These are derived so tiles interlock with zero gap/overlap on the top face
+const STEP_X = TILE_W * 0.75;   // horizontal step between columns
+const STEP_Y = TILE_H * 0.5;    // vertical step between rows (half diamond height)
+const ROW_OFFSET = TILE_W * 0.375; // odd-row x shift
+
 // ── TERRAIN ──
 const TERRAIN = {
-  ocean:    { label:'Ocean',    passable:false, top:'#1e4a70', side:'#0f2a45', sideB:'#0a1e35', feat:'water' },
-  coast:    { label:'Coast',    passable:false, top:'#2a6090', side:'#1a4070', sideB:'#102850', feat:'water' },
-  plains:   { label:'Plains',   passable:true,  top:'#7ab050', side:'#4a7028', sideB:'#2a4a18', feat:'land'  },
-  grassland:{ label:'Grassland',passable:true,  top:'#5a9040', side:'#386020', sideB:'#204010', feat:'land'  },
-  forest:   { label:'Forest',   passable:true,  top:'#2a6028', side:'#183818', sideB:'#0e2810', feat:'land'  },
-  hill:     { label:'Hills',    passable:true,  top:'#9a8a58', side:'#6a5a30', sideB:'#4a3a18', feat:'land'  },
-  mountain: { label:'Mountain', passable:false, top:'#a8a0a0', side:'#706868', sideB:'#504848', feat:'land'  },
-  desert:   { label:'Desert',   passable:true,  top:'#d0b050', side:'#9a7828', sideB:'#6a5018', feat:'land'  },
-  tundra:   { label:'Tundra',   passable:true,  top:'#90a0a0', side:'#607070', sideB:'#405050', feat:'land'  },
-  river:    { label:'River',    passable:true,  top:'#5a9848', side:'#386220', sideB:'#204010', feat:'land'  },
-  snow:     { label:'Snow',     passable:false, top:'#e0eef4', side:'#a8c8d4', sideB:'#88a8b8', feat:'land'  },
+  ocean:    { label:'Ocean',    passable:false, e:0,   top:'#1e4a78', lt:'#2a6090', side:'#122e52', dark:'#0a1e38', water:true  },
+  coast:    { label:'Coast',    passable:false, e:0,   top:'#2a6898', lt:'#3a80b0', side:'#1a4272', dark:'#0e2a50', water:true  },
+  plains:   { label:'Plains',   passable:true,  e:8,   top:'#78b050', lt:'#98cc68', side:'#4a7828', dark:'#2e4e18', water:false },
+  grassland:{ label:'Grassland',passable:true,  e:10,  top:'#58a040', lt:'#78c060', side:'#386828', dark:'#224010', water:false },
+  forest:   { label:'Forest',   passable:true,  e:12,  top:'#286828', lt:'#3a8838', side:'#183a18', dark:'#0e2810', water:false },
+  hill:     { label:'Hills',    passable:true,  e:22,  top:'#9a8a58', lt:'#b8a870', side:'#6a5a2e', dark:'#463c1a', water:false },
+  mountain: { label:'Mountain', passable:false, e:36,  top:'#a8a0a0', lt:'#c8c0c0', side:'#686060', dark:'#484040', water:false },
+  desert:   { label:'Desert',   passable:true,  e:10,  top:'#d0b050', lt:'#e8cc70', side:'#987828', dark:'#604e18', water:false },
+  tundra:   { label:'Tundra',   passable:true,  e:8,   top:'#8aa0a8', lt:'#a8c0c8', side:'#586870', dark:'#384450', water:false },
+  river:    { label:'River',    passable:true,  e:6,   top:'#5a9848', lt:'#78b860', side:'#386228', dark:'#203e18', water:false },
+  snow:     { label:'Snow',     passable:false, e:14,  top:'#dceef8', lt:'#f0f8ff', side:'#a0c0d0', dark:'#789aaa', water:false },
 };
 
 const MAP_DATA = [
@@ -114,20 +122,13 @@ const MAP_DATA = [
   ['ocean','ocean','ocean','coast','coast','plains','plains','grassland','coast','coast','ocean','ocean','ocean','ocean','ocean','ocean','ocean','ocean'],
 ];
 
-// ══════════════════════════════════════════════════════
-// ISO MATH
-// Convert grid col/row → isometric screen x/y
-// Using offset hex grid converted to isometric projection
-// ══════════════════════════════════════════════════════
+// ── ISO MATH ──
+// Converts grid col/row to isometric screen position.
+// The returned position is the CENTER TOP of the tile diamond.
 function isoPos(col, row) {
-  // First convert offset hex to a flat cartesian position
-  const flatX = col + (row % 2) * 0.5;
-  const flatY = row * 0.75;
-  // Then apply isometric transform: rotate 45° + squish Y
-  return {
-    x: (flatX - flatY * 0.5) * TILE_W * 0.75,
-    y: (flatX * 0.5 + flatY) * TILE_H * 0.6,
-  };
+  const x = col * STEP_X + (row % 2) * ROW_OFFSET;
+  const y = row * STEP_Y;
+  return { x, y };
 }
 
 function hexDist(c1,r1,c2,r2) {
@@ -143,279 +144,562 @@ function getMovable(unit,r=2) {
   const res=[];
   for(let row=0;row<ROWS;row++) for(let col=0;col<COLS;col++) {
     if(col===unit.col&&row===unit.row) continue;
-    if(hexDist(unit.col,unit.row,col,row)<=r&&TERRAIN[MAP_DATA[row][col]].passable) {
-      if(!GS.units.some(u=>u.col===col&&u.row===row)) res.push({col,row});
-    }
+    if(hexDist(unit.col,unit.row,col,row)<=r&&TERRAIN[MAP_DATA[row][col]].passable&&!GS.units.some(u=>u.col===col&&u.row===row))
+      res.push({col,row});
   }
   return res;
 }
 function seededRng(s){let n=s;return()=>{n=(n*1664525+1013904223)&0xffffffff;return(n>>>0)/0xffffffff;};}
 
-// ══════════════════════════════════════════════════════
-// GAME STATE
-// ══════════════════════════════════════════════════════
+// ── COLOR UTILS ──
+function hexToRgb(hex){const n=parseInt(hex.slice(1),16);return{r:(n>>16)&255,g:(n>>8)&255,b:n&255};}
+function lightenHex(hex,a){const c=hexToRgb(hex);return`rgb(${Math.min(255,c.r+a)},${Math.min(255,c.g+a)},${Math.min(255,c.b+a)})`;}
+function darkenHex(hex,a){const c=hexToRgb(hex);return`rgb(${Math.max(0,c.r-a)},${Math.max(0,c.g-a)},${Math.max(0,c.b-a)})`;}
+function mixColor(hex,r2,g2,b2,t){const c=hexToRgb(hex);return`rgb(${Math.round(c.r*(1-t)+r2*t)},${Math.round(c.g*(1-t)+g2*t)},${Math.round(c.b*(1-t)+b2*t)})`;}
+
+// ── GAME STATE ──
 const GS={turn:1,cities:[],units:[],selectedUnit:null,moveHighlights:[],nextCityId:1,nextUnitId:1};
 const CITY_NAMES=['Aurum','Veridian','Solmere','Caelthon','Rivenmoor','Dunhallow','Ironspire','Thornwall','Eastmarch','Goldenveil'];
 
 // ══════════════════════════════════════════════════════
-// TEXTURE GENERATION
-// All tiles drawn to offscreen canvas → Phaser texture key
-// Each iso tile = diamond top face + two depth side faces
+// TILE DRAWING
+//
+// Each tile canvas is: width=TILE_W, height=TILE_H + DEPTH + elevation(e)
+// The anchor origin is (0.5, 0) — the top-center of the canvas.
+// The diamond top-face top vertex sits at (TILE_W/2, 0).
+// This means tiles placed at their iso position with origin (0.5,0)
+// automatically interlock with NO overlap on the visible top faces.
+//
+// Depth faces hang below the bottom vertex — only visible on the
+// south and east edges (the nearest row's tiles cover the far ones).
+// ══════════════════════════════════════════════════════
+
+function makeTileCanvas(type, t, extraW, extraH) {
+  // Canvas is big enough for top diamond + depth faces + terrain features that stick up
+  const W = TILE_W + extraW*2;
+  const H = TILE_H + DEPTH + extraH + 4;
+  const oc = document.createElement('canvas');
+  oc.width = W; oc.height = H;
+  const ctx = oc.getContext('2d');
+
+  // The diamond top-vertex is at (W/2, 0)
+  const cx = W/2;
+  const topY  = 0;
+  const midLY = topY + TILE_H/2;   // left/right mid-points of diamond
+  const midRY = midLY;
+  const botY  = topY + TILE_H;     // bottom vertex of diamond
+  const leftX = cx - TILE_W/2;
+  const rightX= cx + TILE_W/2;
+
+  // ── Draw depth faces FIRST (painted over by top face) ──
+  // South-east face (right)
+  ctx.beginPath();
+  ctx.moveTo(cx,   botY);
+  ctx.lineTo(rightX, midRY);
+  ctx.lineTo(rightX, midRY + DEPTH);
+  ctx.lineTo(cx,   botY + DEPTH);
+  ctx.closePath();
+  const seGrad = ctx.createLinearGradient(cx, botY, cx, botY+DEPTH);
+  seGrad.addColorStop(0, t.side);
+  seGrad.addColorStop(1, t.dark);
+  ctx.fillStyle = seGrad; ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1; ctx.stroke();
+
+  // South-west face (left) — slightly lighter to fake ambient
+  ctx.beginPath();
+  ctx.moveTo(cx,   botY);
+  ctx.lineTo(leftX, midLY);
+  ctx.lineTo(leftX, midLY + DEPTH);
+  ctx.lineTo(cx,   botY + DEPTH);
+  ctx.closePath();
+  const swGrad = ctx.createLinearGradient(cx, botY, cx, botY+DEPTH);
+  swGrad.addColorStop(0, lightenHex(t.side, 12));
+  swGrad.addColorStop(1, lightenHex(t.dark, 8));
+  ctx.fillStyle = swGrad; ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = 1; ctx.stroke();
+
+  // Bottom edge cap (bottom triangle where depth faces meet)
+  ctx.beginPath();
+  ctx.moveTo(cx, botY + DEPTH);
+  ctx.lineTo(leftX, midLY + DEPTH);
+  ctx.lineTo(cx, botY + DEPTH + 2);
+  ctx.lineTo(rightX, midRY + DEPTH);
+  ctx.closePath();
+  ctx.fillStyle = t.dark; ctx.fill();
+
+  // ── Draw top face ──
+  ctx.beginPath();
+  ctx.moveTo(cx,     topY);       // top
+  ctx.lineTo(rightX, midRY);      // right
+  ctx.lineTo(cx,     botY);       // bottom
+  ctx.lineTo(leftX,  midLY);      // left
+  ctx.closePath();
+
+  // Rich gradient: light hits top-left face, shadow bottom-right
+  const topGrad = ctx.createLinearGradient(leftX, topY, rightX, botY);
+  topGrad.addColorStop(0,   t.lt);           // sun-lit top-left
+  topGrad.addColorStop(0.45, t.top);         // base color mid
+  topGrad.addColorStop(1,   darkenHex(t.top, 20)); // shadow bottom-right
+  ctx.fillStyle = topGrad; ctx.fill();
+
+  // Clip to top face for terrain features
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(cx,topY); ctx.lineTo(rightX,midRY); ctx.lineTo(cx,botY); ctx.lineTo(leftX,midLY); ctx.closePath();
+  ctx.clip();
+  drawTileFeatures(ctx, cx, topY, botY, type);
+  ctx.restore();
+
+  // Top-face edge highlights (rim lighting)
+  // Top-left edge: brightest (sun)
+  ctx.beginPath(); ctx.moveTo(cx,topY); ctx.lineTo(leftX,midLY);
+  ctx.strokeStyle='rgba(255,255,255,0.30)'; ctx.lineWidth=2; ctx.stroke();
+  // Top-right edge: medium
+  ctx.beginPath(); ctx.moveTo(cx,topY); ctx.lineTo(rightX,midRY);
+  ctx.strokeStyle='rgba(255,255,255,0.15)'; ctx.lineWidth=1.5; ctx.stroke();
+  // Bottom edges: dark rim
+  ctx.beginPath(); ctx.moveTo(leftX,midLY); ctx.lineTo(cx,botY); ctx.lineTo(rightX,midRY);
+  ctx.strokeStyle='rgba(0,0,0,0.28)'; ctx.lineWidth=1; ctx.stroke();
+
+  return oc;
+}
+
+function drawTileFeatures(ctx, cx, topY, botY, type) {
+  const midY = (topY + botY) / 2;
+  const rng = seededRng(type.charCodeAt(0)*17 + (type.charCodeAt(1)||0)*11);
+
+  if (type === 'forest') {
+    // Multiple layered trees
+    const positions = [
+      {ox:-30,oy:14},{ox:25,oy:8},{ox:-8,oy:22},{ox:35,oy:20},{ox:-40,oy:22},
+    ];
+    for (const p of positions) {
+      drawTree(ctx, cx+p.ox, botY-6+p.oy-(rng()*10), 10+rng()*6);
+    }
+  } else if (type === 'mountain') {
+    drawMountainPeak(ctx, cx-18, botY-8, 36, 42);
+    drawMountainPeak(ctx, cx+16, botY-4, 28, 32);
+  } else if (type === 'hill') {
+    // Rounded hill bumps
+    for (let i=0;i<3;i++) {
+      const hx = cx + (i-1)*22 + (rng()-.5)*8;
+      const hy = botY - 2 + (rng()-.5)*4;
+      ctx.fillStyle = lightenHex('#9a8a58', 16);
+      ctx.beginPath(); ctx.ellipse(hx, hy, 18+rng()*5, 9+rng()*3, 0, Math.PI, 0); ctx.fill();
+      ctx.fillStyle = '#9a8a58';
+      ctx.beginPath(); ctx.ellipse(hx, hy, 12+rng()*4, 5+rng()*2, 0, Math.PI, 0); ctx.fill();
+    }
+  } else if (type === 'desert') {
+    // Dune lines
+    for (let i=0;i<4;i++) {
+      const dy = midY + 4 + i*7 + (rng()-.5)*3;
+      ctx.beginPath();
+      ctx.moveTo(cx - TILE_W*0.4, dy);
+      ctx.bezierCurveTo(cx-TILE_W*0.1, dy-7, cx+TILE_W*0.1, dy-3, cx+TILE_W*0.4, dy-5);
+      ctx.strokeStyle = `rgba(200,160,40,${0.25+rng()*0.2})`; ctx.lineWidth = 2+rng(); ctx.stroke();
+    }
+    // Small rocks
+    for (let i=0;i<5;i++) {
+      const rx=cx+(rng()-.5)*TILE_W*.5, ry=botY-8+rng()*14;
+      ctx.fillStyle='rgba(150,110,30,0.4)';
+      ctx.beginPath(); ctx.ellipse(rx,ry,3+rng()*3,2+rng()*2,rng()*Math.PI,0,Math.PI*2); ctx.fill();
+    }
+  } else if (type === 'plains' || type === 'grassland') {
+    // Grass tufts with directional lighting
+    for (let i=0;i<12;i++) {
+      const gx = cx+(rng()-.5)*TILE_W*0.6, gy = midY+4+rng()*20;
+      const h  = 6+rng()*8, lean = (rng()-.5)*5;
+      const bright = type==='grassland' ? '#5cc04a' : '#80c050';
+      ctx.strokeStyle = bright; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.moveTo(gx,gy); ctx.quadraticCurveTo(gx+lean,gy-h*.5,gx+lean*.7,gy-h); ctx.stroke();
+      ctx.strokeStyle = darkenHex(bright, 20); ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(gx+2,gy); ctx.quadraticCurveTo(gx+lean+1.5,gy-h*.5,gx+lean*.7+1,gy-h); ctx.stroke();
+    }
+  } else if (type === 'snow') {
+    // Snow drifts
+    for (let i=0;i<4;i++) {
+      const sx=cx+(rng()-.5)*TILE_W*.5, sy=botY-4+rng()*10;
+      const sw=18+rng()*18, sh=6+rng()*6;
+      const sg=ctx.createRadialGradient(sx,sy,0,sx,sy,sw*.7);
+      sg.addColorStop(0,'rgba(255,255,255,0.55)'); sg.addColorStop(1,'rgba(200,230,255,0)');
+      ctx.fillStyle=sg; ctx.beginPath(); ctx.ellipse(sx,sy,sw,sh,0,0,Math.PI*2); ctx.fill();
+    }
+    // Sparkles
+    for (let i=0;i<8;i++){ctx.fillStyle='rgba(255,255,255,0.9)';ctx.beginPath();ctx.arc(cx+(rng()-.5)*TILE_W*.55,midY+4+rng()*16,1.5,0,Math.PI*2);ctx.fill();}
+  } else if (type === 'tundra') {
+    // Sparse vegetation patches
+    for (let i=0;i<5;i++){
+      const tx=cx+(rng()-.5)*TILE_W*.55, ty=botY-4+rng()*10;
+      ctx.fillStyle='rgba(110,140,120,0.45)';
+      ctx.beginPath();ctx.ellipse(tx,ty,8+rng()*6,4+rng()*3,rng()*Math.PI,0,Math.PI*2);ctx.fill();
+    }
+  } else if (type === 'river') {
+    // Water ribbon across tile
+    ctx.strokeStyle='rgba(50,120,210,0.65)'; ctx.lineWidth=10; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(cx-TILE_W*.48,midY+4); ctx.bezierCurveTo(cx-TILE_W*.1,midY-6,cx+TILE_W*.1,midY+10,cx+TILE_W*.48,midY+2); ctx.stroke();
+    // Highlight on water
+    ctx.strokeStyle='rgba(140,210,255,0.4)'; ctx.lineWidth=4;
+    ctx.beginPath(); ctx.moveTo(cx-TILE_W*.45,midY+2); ctx.bezierCurveTo(cx-TILE_W*.1,midY-8,cx+TILE_W*.1,midY+8,cx+TILE_W*.45,midY); ctx.stroke();
+  } else if (type === 'ocean' || type === 'coast') {
+    // Wave lines
+    for (let i=0;i<3;i++) {
+      const wy=midY+2+i*8+(rng()-.5)*3;
+      ctx.strokeStyle=`rgba(120,200,255,${0.18+i*0.06})`; ctx.lineWidth=1.5+i*.5;
+      ctx.beginPath(); ctx.moveTo(cx-TILE_W*.42,wy); ctx.bezierCurveTo(cx-TILE_W*.12,wy-8,cx+TILE_W*.12,wy+4,cx+TILE_W*.42,wy-2); ctx.stroke();
+    }
+  }
+}
+
+function drawTree(ctx, x, y, s) {
+  // Shadow
+  ctx.fillStyle='rgba(0,0,0,0.2)'; ctx.beginPath(); ctx.ellipse(x+3, y+4, s*.7, s*.25, 0, 0, Math.PI*2); ctx.fill();
+  // Trunk
+  ctx.fillStyle='#4a3018'; ctx.fillRect(x-s*.12, y-s*.5, s*.24, s*.55);
+  // Three canopy layers bottom→top, each getting narrower and lighter
+  const layers=[['#184818',s*.95],['#246228',s*.75],['#2e7830',s*.55],['#40943a',s*.35]];
+  for(let i=0;i<layers.length;i++){
+    const [col,r]=layers[i];
+    const ly=y-s*.45-i*s*.25;
+    ctx.fillStyle=col;
+    ctx.beginPath();ctx.moveTo(x,ly-s*.45);ctx.lineTo(x-r,ly);ctx.lineTo(x+r,ly);ctx.closePath();ctx.fill();
+    // Lit left edge
+    ctx.fillStyle='rgba(255,255,255,0.10)';
+    ctx.beginPath();ctx.moveTo(x,ly-s*.45);ctx.lineTo(x-r,ly);ctx.lineTo(x-r*.3,ly);ctx.closePath();ctx.fill();
+  }
+}
+
+function drawMountainPeak(ctx, x, y, w, h) {
+  // Shadow
+  ctx.fillStyle='rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.moveTo(x,y-h); ctx.lineTo(x-w*.6,y+8); ctx.lineTo(x+w*.6,y+8); ctx.closePath(); ctx.fill();
+  // Rock body
+  ctx.fillStyle='#787070';
+  ctx.beginPath(); ctx.moveTo(x,y-h); ctx.lineTo(x-w*.55,y+6); ctx.lineTo(x+w*.55,y+6); ctx.closePath(); ctx.fill();
+  // Shadow face (right)
+  ctx.fillStyle='rgba(0,0,0,0.22)'; ctx.beginPath(); ctx.moveTo(x,y-h); ctx.lineTo(x,y+6); ctx.lineTo(x+w*.55,y+6); ctx.closePath(); ctx.fill();
+  // Snow cap
+  ctx.fillStyle='#eaf2f8';
+  ctx.beginPath(); ctx.moveTo(x,y-h); ctx.lineTo(x-w*.2,y-h+h*.3); ctx.lineTo(x+w*.22,y-h+h*.3); ctx.closePath(); ctx.fill();
+  // Snow lit edge
+  ctx.fillStyle='rgba(255,255,255,0.5)'; ctx.beginPath(); ctx.moveTo(x,y-h); ctx.lineTo(x-w*.2,y-h+h*.3); ctx.lineTo(x-w*.05,y-h+h*.3); ctx.closePath(); ctx.fill();
+}
+
+// ══════════════════════════════════════════════════════
+// SETTLER SPRITE  — Polytopia-quality chunky isometric character
+// Canvas: 120w × 160h  |  anchor: (0.5, 1.0) at feet ground point
+// ══════════════════════════════════════════════════════
+function makeSettlerCanvas(selected) {
+  const W=120, H=160;
+  const oc=document.createElement('canvas'); oc.width=W; oc.height=H;
+  const ctx=oc.getContext('2d');
+  const cx=W/2, foot=H-16;
+
+  // ── Shadow ellipse ──
+  ctx.fillStyle='rgba(0,0,0,0.32)';
+  ctx.beginPath(); ctx.ellipse(cx+4, foot-2, 22, 8, 0, 0, Math.PI*2); ctx.fill();
+
+  // ── Boots ──
+  roundRect(ctx, cx-18, foot-18, 16, 14, 4, '#2e1e0e');
+  roundRect(ctx, cx+3,  foot-18, 16, 14, 4, '#2e1e0e');
+  // boot highlights
+  ctx.fillStyle='rgba(255,255,255,0.12)'; ctx.fillRect(cx-17, foot-17, 6, 3);
+  ctx.fillStyle='rgba(255,255,255,0.12)'; ctx.fillRect(cx+4,  foot-17, 6, 3);
+
+  // ── Legs ──
+  ctx.fillStyle='#3a2e5e';
+  ctx.fillRect(cx-15, foot-44, 12, 28);
+  ctx.fillRect(cx+4,  foot-44, 12, 28);
+  // leg shading
+  ctx.fillStyle='rgba(0,0,0,0.18)';
+  ctx.fillRect(cx+2, foot-44, 3, 28);
+
+  // ── Cloak / body ──
+  const bodyColor = selected ? '#7090d8' : '#5a62a8';
+  const bodyLit   = selected ? '#90b0f0' : '#7882c8';
+  const bodyDark  = selected ? '#3a5898' : '#3a4070';
+  // Main cloak shape — wide at shoulders, flared at bottom
+  ctx.fillStyle=bodyDark;
+  ctx.beginPath();
+  ctx.moveTo(cx, foot-100);
+  ctx.bezierCurveTo(cx-34, foot-90, cx-40, foot-55, cx-22, foot-30);
+  ctx.lineTo(cx+22, foot-30);
+  ctx.bezierCurveTo(cx+40, foot-55, cx+34, foot-90, cx, foot-100);
+  ctx.fill();
+  // Lit left face
+  ctx.fillStyle=bodyColor;
+  ctx.beginPath();
+  ctx.moveTo(cx, foot-100);
+  ctx.bezierCurveTo(cx-34, foot-90, cx-40, foot-55, cx-22, foot-30);
+  ctx.lineTo(cx-4, foot-30);
+  ctx.bezierCurveTo(cx-4, foot-55, cx-8, foot-90, cx, foot-100);
+  ctx.fill();
+  // Lit highlight strip
+  ctx.fillStyle=bodyLit;
+  ctx.beginPath();
+  ctx.moveTo(cx-2, foot-100);
+  ctx.bezierCurveTo(cx-18, foot-90, cx-22, foot-70, cx-18, foot-50);
+  ctx.lineTo(cx-12, foot-50);
+  ctx.bezierCurveTo(cx-14, foot-70, cx-10, foot-90, cx-2, foot-100);
+  ctx.fill();
+
+  // ── Belt ──
+  ctx.fillStyle='#7a4e18'; ctx.fillRect(cx-22, foot-42, 44, 7);
+  // Belt buckle
+  ctx.fillStyle='#d0a030'; roundRect(ctx, cx-5, foot-43, 10, 8, 2, '#d0a030');
+  ctx.strokeStyle='#a07020'; ctx.lineWidth=1; ctx.strokeRect(cx-5,foot-43,10,8);
+
+  // ── Backpack ──
+  ctx.fillStyle='#6a4218'; roundRect(ctx, cx+16, foot-78, 18, 22, 3, '#6a4218');
+  ctx.fillStyle='#4a2e10'; ctx.fillRect(cx+17, foot-77, 16, 8);
+  ctx.strokeStyle='#3a2008'; ctx.lineWidth=1; ctx.strokeRect(cx+16, foot-78, 18, 22);
+  // Pack strap
+  ctx.strokeStyle='#8a5a28'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(cx+16, foot-76); ctx.lineTo(cx+10, foot-55); ctx.stroke();
+
+  // ── Neck ──
+  ctx.fillStyle='#c89060'; ctx.fillRect(cx-5, foot-104, 10, 6);
+
+  // ── Head ──
+  const headY = foot-122;
+  // Head shading
+  ctx.fillStyle='#b87840';
+  ctx.beginPath(); ctx.arc(cx, headY, 18, 0, Math.PI*2); ctx.fill();
+  // Lit face
+  ctx.fillStyle='#d4a060';
+  ctx.beginPath(); ctx.arc(cx-2, headY-2, 15, 0, Math.PI*2); ctx.fill();
+  // Face highlight
+  ctx.fillStyle='#e8b878';
+  ctx.beginPath(); ctx.arc(cx-5, headY-5, 8, 0, Math.PI*2); ctx.fill();
+
+  // ── Hood / helmet ──
+  const hoodColor = selected ? '#5078b8' : '#3a3868';
+  const hoodLit   = selected ? '#7098d8' : '#5858a0';
+  // Hood back
+  ctx.fillStyle=hoodColor;
+  ctx.beginPath(); ctx.arc(cx, headY-4, 20, Math.PI, 0); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(cx-20, headY-4); ctx.lineTo(cx-14, headY+12); ctx.lineTo(cx+14, headY+12); ctx.lineTo(cx+20, headY-4); ctx.fill();
+  // Hood rim
+  ctx.fillStyle=hoodLit;
+  ctx.beginPath(); ctx.arc(cx, headY+2, 20, Math.PI+0.3, -0.3); ctx.strokeStyle=hoodLit; ctx.lineWidth=4; ctx.stroke();
+  // Hood point tip
+  ctx.fillStyle=hoodColor;
+  ctx.beginPath(); ctx.moveTo(cx+8, headY-18); ctx.lineTo(cx+18, headY-30); ctx.lineTo(cx+22, headY-18); ctx.closePath(); ctx.fill();
+  ctx.fillStyle=hoodLit;
+  ctx.beginPath(); ctx.moveTo(cx+9, headY-18); ctx.lineTo(cx+18, headY-30); ctx.lineTo(cx+12, headY-18); ctx.closePath(); ctx.fill();
+
+  // ── Eyes ──
+  ctx.fillStyle='#ffffff'; ctx.beginPath(); ctx.ellipse(cx-6, headY-1, 4, 3, -0.1, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle='#ffffff'; ctx.beginPath(); ctx.ellipse(cx+6, headY-1, 4, 3, 0.1, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle='#1a1010'; ctx.beginPath(); ctx.arc(cx-6, headY-1, 2.5, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle='#1a1010'; ctx.beginPath(); ctx.arc(cx+6, headY-1, 2.5, 0, Math.PI*2); ctx.fill();
+  // Eye shine
+  ctx.fillStyle='rgba(255,255,255,0.9)'; ctx.beginPath(); ctx.arc(cx-5, headY-2, 1, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,0.9)'; ctx.beginPath(); ctx.arc(cx+7, headY-2, 1, 0, Math.PI*2); ctx.fill();
+
+  // ── Eyebrows ──
+  ctx.strokeStyle='#6a3e18'; ctx.lineWidth=2; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(cx-10, headY-6); ctx.lineTo(cx-2, headY-7); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx+2, headY-7); ctx.lineTo(cx+10, headY-6); ctx.stroke();
+
+  // ── Staff ──
+  ctx.strokeStyle='#7a4e1e'; ctx.lineWidth=5; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(cx-22, foot-16); ctx.lineTo(cx-26, foot-120); ctx.stroke();
+  // Staff grain
+  ctx.strokeStyle='rgba(200,140,60,0.4)'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(cx-21, foot-20); ctx.lineTo(cx-25, foot-110); ctx.stroke();
+  // Orb
+  const orbG = ctx.createRadialGradient(cx-28, foot-126, 1, cx-26, foot-122, 10);
+  orbG.addColorStop(0,'#fff4b0'); orbG.addColorStop(0.4,'#e0c040'); orbG.addColorStop(1,'#906010');
+  ctx.fillStyle=orbG;
+  ctx.beginPath(); ctx.arc(cx-26, foot-122, 10, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle='rgba(255,220,60,0.5)'; ctx.lineWidth=2; ctx.stroke();
+  // Orb glow ring (selected only)
+  if (selected) {
+    ctx.strokeStyle='rgba(255,240,100,0.4)'; ctx.lineWidth=4;
+    ctx.beginPath(); ctx.arc(cx-26, foot-122, 16, 0, Math.PI*2); ctx.stroke();
+  }
+
+  // ── Selection glow outline ──
+  if (selected) {
+    ctx.strokeStyle='rgba(120,190,255,0.55)'; ctx.lineWidth=3;
+    ctx.beginPath();
+    ctx.moveTo(cx, foot-100);
+    ctx.bezierCurveTo(cx-36, foot-88, cx-42, foot-53, cx-24, foot-28);
+    ctx.lineTo(cx+24, foot-28); ctx.bezierCurveTo(cx+42, foot-53, cx+36, foot-88, cx, foot-100);
+    ctx.closePath(); ctx.stroke();
+  }
+
+  return oc;
+}
+
+function roundRect(ctx, x, y, w, h, r, fill) {
+  ctx.fillStyle=fill;
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.arcTo(x+w,y,x+w,y+r,r);
+  ctx.lineTo(x+w,y+h-r); ctx.arcTo(x+w,y+h,x+w-r,y+h,r);
+  ctx.lineTo(x+r,y+h); ctx.arcTo(x,y+h,x,y+h-r,r);
+  ctx.lineTo(x,y+r); ctx.arcTo(x,y,x+r,y,r);
+  ctx.closePath(); ctx.fill();
+}
+
+// ══════════════════════════════════════════════════════
+// CITY TILE
+// ══════════════════════════════════════════════════════
+function makeCityCanvas() {
+  const t = { top:'#a09080', lt:'#c0b0a0', side:'#706050', dark:'#4a3e30' };
+  // City needs extra height for buildings sticking above tile
+  const EXTRA = 120;
+  const W = TILE_W;
+  const H = TILE_H + DEPTH + EXTRA;
+  const oc = document.createElement('canvas'); oc.width=W; oc.height=H;
+  const ctx = oc.getContext('2d');
+
+  // Tile base (stone)
+  const cx=W/2, topY=EXTRA, botY=EXTRA+TILE_H;
+  const midLY=topY+TILE_H/2, rightX=cx+TILE_W/2, leftX=cx-TILE_W/2;
+
+  // Depth faces
+  ctx.beginPath(); ctx.moveTo(cx,botY); ctx.lineTo(rightX,midLY); ctx.lineTo(rightX,midLY+DEPTH); ctx.lineTo(cx,botY+DEPTH); ctx.closePath();
+  const seG=ctx.createLinearGradient(cx,botY,cx,botY+DEPTH); seG.addColorStop(0,t.side); seG.addColorStop(1,t.dark); ctx.fillStyle=seG; ctx.fill();
+  ctx.beginPath(); ctx.moveTo(cx,botY); ctx.lineTo(leftX,midLY); ctx.lineTo(leftX,midLY+DEPTH); ctx.lineTo(cx,botY+DEPTH); ctx.closePath();
+  const swG=ctx.createLinearGradient(cx,botY,cx,botY+DEPTH); swG.addColorStop(0,lightenHex(t.side,10)); swG.addColorStop(1,lightenHex(t.dark,6)); ctx.fillStyle=swG; ctx.fill();
+
+  // Top face — stone plaza
+  ctx.beginPath(); ctx.moveTo(cx,topY); ctx.lineTo(rightX,midLY); ctx.lineTo(cx,botY); ctx.lineTo(leftX,midLY); ctx.closePath();
+  const tG=ctx.createLinearGradient(leftX,topY,rightX,botY); tG.addColorStop(0,t.lt); tG.addColorStop(0.5,t.top); tG.addColorStop(1,darkenHex(t.top,16)); ctx.fillStyle=tG; ctx.fill();
+
+  // Stone tile grid on plaza
+  ctx.save(); ctx.beginPath(); ctx.moveTo(cx,topY); ctx.lineTo(rightX,midLY); ctx.lineTo(cx,botY); ctx.lineTo(leftX,midLY); ctx.closePath(); ctx.clip();
+  ctx.strokeStyle='rgba(80,60,40,0.2)'; ctx.lineWidth=1;
+  for(let i=0;i<6;i++) for(let j=0;j<4;j++) {
+    ctx.strokeRect(leftX+4+i*(TILE_W/5), topY+j*(TILE_H/3.5), TILE_W/5-2, TILE_H/3.5-1);
+  }
+  ctx.restore();
+
+  // Top rim
+  ctx.beginPath(); ctx.moveTo(cx,topY); ctx.lineTo(leftX,midLY); ctx.strokeStyle='rgba(255,255,255,0.28)'; ctx.lineWidth=2; ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx,topY); ctx.lineTo(rightX,midLY); ctx.strokeStyle='rgba(255,255,255,0.14)'; ctx.lineWidth=1.5; ctx.stroke();
+
+  // ── Buildings (iso boxes) ──
+  const bBase = topY; // baseline for buildings = top vertex of tile
+
+  // Wall arc ring
+  ctx.strokeStyle='rgba(180,150,100,0.7)'; ctx.lineWidth=5;
+  ctx.beginPath(); ctx.arc(cx, bBase+16, 46, Math.PI, 0, false); ctx.stroke();
+  ctx.strokeStyle='rgba(120,90,50,0.5)'; ctx.lineWidth=3;
+  ctx.beginPath(); ctx.arc(cx, bBase+16, 46, Math.PI, 0, false); ctx.stroke();
+
+  // Central keep (tallest)
+  drawIsoBuilding(ctx, cx, bBase-8, 28, 52, 34, '#c8a870','#8a6030','#5a4018');
+  // Left tower
+  drawIsoBuilding(ctx, cx-32, bBase+4, 20, 38, 26, '#b89060','#7a5020','#4a3010');
+  // Right tower
+  drawIsoBuilding(ctx, cx+28, bBase+6, 18, 34, 24, '#b89060','#7a5020','#4a3010');
+  // Small left house
+  drawIsoBuilding(ctx, cx-22, bBase+8, 14, 22, 18, '#a88050','#6a4018','#3a2808');
+  // Small right house
+  drawIsoBuilding(ctx, cx+18, bBase+10, 14, 20, 16, '#a88050','#6a4018','#3a2808');
+
+  // Spire on central keep
+  const spireX=cx+4, spireBaseY=bBase-8-52;
+  ctx.fillStyle='#d0b060';
+  ctx.beginPath(); ctx.moveTo(spireX,spireBaseY-28); ctx.lineTo(spireX-7,spireBaseY); ctx.lineTo(spireX+7,spireBaseY); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,0.25)'; ctx.beginPath(); ctx.moveTo(spireX,spireBaseY-28); ctx.lineTo(spireX-7,spireBaseY); ctx.lineTo(spireX-2,spireBaseY); ctx.closePath(); ctx.fill();
+
+  // Flag
+  ctx.strokeStyle='#8a6020'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(spireX,spireBaseY-28); ctx.lineTo(spireX,spireBaseY-56); ctx.stroke();
+  ctx.fillStyle='#2050b0';
+  ctx.beginPath(); ctx.moveTo(spireX,spireBaseY-56); ctx.lineTo(spireX+18,spireBaseY-50); ctx.lineTo(spireX,spireBaseY-44); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='rgba(80,120,220,0.4)'; ctx.beginPath(); ctx.moveTo(spireX+2,spireBaseY-54); ctx.lineTo(spireX+16,spireBaseY-50); ctx.lineTo(spireX+2,spireBaseY-46); ctx.closePath(); ctx.fill();
+
+  return oc;
+}
+
+function drawIsoBuilding(ctx, cx, baseY, w, h, depth, topCol, sideRCol, sideLCol) {
+  const hw=w/2;
+  // South-east wall
+  ctx.beginPath();
+  ctx.moveTo(cx+hw, baseY);
+  ctx.lineTo(cx+hw, baseY+depth);
+  ctx.lineTo(cx,    baseY+depth+hw*.35);
+  ctx.lineTo(cx,    baseY+hw*.35);
+  ctx.closePath();
+  ctx.fillStyle=sideRCol; ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,0.25)'; ctx.lineWidth=0.5; ctx.stroke();
+
+  // South-west wall
+  ctx.beginPath();
+  ctx.moveTo(cx-hw, baseY);
+  ctx.lineTo(cx-hw, baseY+depth);
+  ctx.lineTo(cx,    baseY+depth+hw*.35);
+  ctx.lineTo(cx,    baseY+hw*.35);
+  ctx.closePath();
+  ctx.fillStyle=sideLCol; ctx.fill(); ctx.stroke();
+
+  // Roof / top face
+  ctx.beginPath();
+  ctx.moveTo(cx,    baseY-h);
+  ctx.lineTo(cx+hw, baseY-h+hw*.35);
+  ctx.lineTo(cx,    baseY-h+hw*.7);
+  ctx.lineTo(cx-hw, baseY-h+hw*.35);
+  ctx.closePath();
+  const rg=ctx.createLinearGradient(cx-hw,baseY-h,cx+hw,baseY);
+  rg.addColorStop(0,lightenHex(topCol,22)); rg.addColorStop(1,darkenHex(topCol,10));
+  ctx.fillStyle=rg; ctx.fill(); ctx.stroke();
+
+  // Front face (the actual wall you see)
+  ctx.beginPath();
+  ctx.moveTo(cx+hw, baseY-h+hw*.35);
+  ctx.lineTo(cx+hw, baseY);
+  ctx.lineTo(cx,    baseY+hw*.35);
+  ctx.lineTo(cx,    baseY-h+hw*.7);
+  ctx.closePath();
+  ctx.fillStyle=darkenHex(topCol, 18); ctx.fill(); ctx.stroke();
+
+  // Windows
+  if(h>22){
+    ctx.fillStyle='rgba(255,220,80,0.75)';
+    ctx.fillRect(cx+hw*.3, baseY-h*.55, 5, 7);
+    ctx.fillRect(cx+hw*.55, baseY-h*.45, 4, 6);
+    ctx.fillStyle='rgba(255,180,40,0.4)';
+    ctx.fillRect(cx+hw*.3-1, baseY-h*.55-1, 7, 9);
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// TEXTURE GENERATION (into Phaser)
 // ══════════════════════════════════════════════════════
 function generateTextures(scene) {
-  for(const [type,t] of Object.entries(TERRAIN)) {
-    const oc=document.createElement('canvas');
-    oc.width=TILE_W; oc.height=TILE_H+DEPTH+30;
-    const c=oc.getContext('2d');
-    const cx=TILE_W/2, cy=TILE_H/2+8;
-    drawIsoTile(c,cx,cy,type,t);
-    scene.textures.addCanvas('tile_'+type,oc);
+  for(const [type, t] of Object.entries(TERRAIN)) {
+    const oc = makeTileCanvas(type, t, 20, 50);
+    scene.textures.addCanvas('tile_'+type, oc);
   }
-  // Highlight tile
+
+  // Highlight overlay
   {
-    const oc=document.createElement('canvas'); oc.width=TILE_W; oc.height=TILE_H+DEPTH+30;
-    const c=oc.getContext('2d'); const cx=TILE_W/2,cy=TILE_H/2+8;
-    isoTopPath(c,cx,cy); c.fillStyle='rgba(80,220,80,0.22)'; c.fill();
-    isoTopPath(c,cx,cy); c.strokeStyle='rgba(80,255,80,0.8)'; c.lineWidth=2; c.stroke();
-    scene.textures.addCanvas('tile_highlight',oc);
+    const W=TILE_W+40, H=TILE_H+DEPTH+54;
+    const oc=document.createElement('canvas'); oc.width=W; oc.height=H;
+    const ctx=oc.getContext('2d');
+    const cx=W/2;
+    // Filled pulse area
+    ctx.beginPath();
+    ctx.moveTo(cx,0); ctx.lineTo(cx+TILE_W/2,TILE_H/2); ctx.lineTo(cx,TILE_H); ctx.lineTo(cx-TILE_W/2,TILE_H/2); ctx.closePath();
+    ctx.fillStyle='rgba(60,220,80,0.20)'; ctx.fill();
+    ctx.strokeStyle='rgba(80,255,100,0.85)'; ctx.lineWidth=2.5; ctx.stroke();
+    // Inner glow
+    ctx.beginPath();
+    ctx.moveTo(cx,4); ctx.lineTo(cx+TILE_W/2-4,TILE_H/2); ctx.lineTo(cx,TILE_H-4); ctx.lineTo(cx-TILE_W/2+4,TILE_H/2); ctx.closePath();
+    ctx.strokeStyle='rgba(160,255,160,0.4)'; ctx.lineWidth=1; ctx.stroke();
+    scene.textures.addCanvas('tile_highlight', oc);
   }
+
+  // City tile
+  scene.textures.addCanvas('tile_city', makeCityCanvas());
+
+  // Settler sprites
+  scene.textures.addCanvas('settler_normal',   makeSettlerCanvas(false));
+  scene.textures.addCanvas('settler_selected', makeSettlerCanvas(true));
 }
-
-function isoTopPath(c,cx,cy) {
-  c.beginPath();
-  c.moveTo(cx, cy-TILE_H/2);
-  c.lineTo(cx+TILE_W/2, cy);
-  c.lineTo(cx, cy+TILE_H/2);
-  c.lineTo(cx-TILE_W/2, cy);
-  c.closePath();
-}
-function isoSouthPath(c,cx,cy) {
-  // South face (bottom-right)
-  c.beginPath();
-  c.moveTo(cx,cy+TILE_H/2);
-  c.lineTo(cx+TILE_W/2,cy);
-  c.lineTo(cx+TILE_W/2,cy+DEPTH);
-  c.lineTo(cx,cy+TILE_H/2+DEPTH);
-  c.closePath();
-}
-function isoWestPath(c,cx,cy) {
-  // West face (bottom-left)
-  c.beginPath();
-  c.moveTo(cx,cy+TILE_H/2);
-  c.lineTo(cx-TILE_W/2,cy);
-  c.lineTo(cx-TILE_W/2,cy+DEPTH);
-  c.lineTo(cx,cy+TILE_H/2+DEPTH);
-  c.closePath();
-}
-
-function drawIsoTile(c,cx,cy,type,t) {
-  // South depth face (darker)
-  isoSouthPath(c,cx,cy);
-  const sgrd=c.createLinearGradient(cx,cy,cx,cy+DEPTH+TILE_H/2);
-  sgrd.addColorStop(0,t.side); sgrd.addColorStop(1,t.sideB);
-  c.fillStyle=sgrd; c.fill();
-  c.strokeStyle='rgba(0,0,0,0.3)'; c.lineWidth=1; c.stroke();
-
-  // West depth face (slightly lighter than south)
-  isoWestPath(c,cx,cy);
-  const wgrd=c.createLinearGradient(cx,cy,cx,cy+DEPTH+TILE_H/2);
-  wgrd.addColorStop(0,lightenHex(t.side,15)); wgrd.addColorStop(1,t.sideB);
-  c.fillStyle=wgrd; c.fill();
-  c.strokeStyle='rgba(0,0,0,0.2)'; c.lineWidth=1; c.stroke();
-
-  // Top face
-  isoTopPath(c,cx,cy);
-  const tgrd=c.createRadialGradient(cx-TILE_W*0.15,cy-TILE_H*0.15,0,cx,cy,TILE_W*0.6);
-  tgrd.addColorStop(0,lightenHex(t.top,28)); tgrd.addColorStop(0.6,t.top); tgrd.addColorStop(1,darkenHex(t.top,18));
-  c.fillStyle=tgrd; c.fill();
-
-  // Top edge highlight
-  c.beginPath(); c.moveTo(cx,cy-TILE_H/2); c.lineTo(cx+TILE_W/2,cy);
-  c.strokeStyle='rgba(255,255,255,0.18)'; c.lineWidth=1.5; c.stroke();
-  c.beginPath(); c.moveTo(cx,cy-TILE_H/2); c.lineTo(cx-TILE_W/2,cy);
-  c.strokeStyle='rgba(255,255,255,0.08)'; c.lineWidth=1; c.stroke();
-
-  // Terrain details on top face
-  c.save(); isoTopPath(c,cx,cy); c.clip();
-  drawIsoFeatures(c,cx,cy,type);
-  c.restore();
-
-  // Top outline
-  isoTopPath(c,cx,cy); c.strokeStyle='rgba(0,0,0,0.25)'; c.lineWidth=1; c.stroke();
-}
-
-function drawIsoFeatures(c,cx,cy,type) {
-  const rng=seededRng(type.charCodeAt(0)*7+type.charCodeAt(1||0)*13);
-  if(type==='forest') {
-    for(let i=0;i<4;i++){
-      const tx=cx+(rng()-0.5)*TILE_W*0.55, ty=cy+(rng()-0.5)*TILE_H*0.4;
-      const h=12+rng()*8, w=8+rng()*4;
-      c.fillStyle='rgba(0,0,0,0.2)'; c.beginPath(); c.ellipse(tx+2,ty+3,w*0.5,3,0,0,Math.PI*2); c.fill();
-      c.fillStyle='#5a3a20'; c.fillRect(tx-1.5,ty,3,h*0.35);
-      c.fillStyle='#1a4818'; c.beginPath(); c.moveTo(tx,ty-h*0.55); c.lineTo(tx-w*0.5,ty); c.lineTo(tx+w*0.5,ty); c.closePath(); c.fill();
-      c.fillStyle='#226022'; c.beginPath(); c.moveTo(tx,ty-h*0.85); c.lineTo(tx-w*0.35,ty-h*0.18); c.lineTo(tx+w*0.35,ty-h*0.18); c.closePath(); c.fill();
-      c.fillStyle='#2a6e2a'; c.beginPath(); c.moveTo(tx,ty-h); c.lineTo(tx-w*0.2,ty-h*0.52); c.lineTo(tx+w*0.2,ty-h*0.52); c.closePath(); c.fill();
-    }
-  } else if(type==='mountain') {
-    for(let i=0;i<2;i++){
-      const ox=(i-0.5)*22+(rng()-0.5)*6, oy=(rng()-0.5)*6;
-      const h=24+rng()*10, w=20+rng()*6;
-      c.fillStyle='rgba(0,0,0,0.22)'; c.beginPath(); c.moveTo(cx+ox,cy+oy-h); c.lineTo(cx+ox-w*.5,cy+oy+6); c.lineTo(cx+ox+w*.5,cy+oy+6); c.closePath(); c.fill();
-      c.fillStyle='#787070'; c.beginPath(); c.moveTo(cx+ox,cy+oy-h); c.lineTo(cx+ox-w*.5,cy+oy+5); c.lineTo(cx+ox+w*.5,cy+oy+5); c.closePath(); c.fill();
-      c.fillStyle='rgba(0,0,0,0.18)'; c.beginPath(); c.moveTo(cx+ox,cy+oy-h); c.lineTo(cx+ox,cy+oy+5); c.lineTo(cx+ox+w*.5,cy+oy+5); c.closePath(); c.fill();
-      c.fillStyle='#e0eaf0'; c.beginPath(); c.moveTo(cx+ox,cy+oy-h); c.lineTo(cx+ox-w*.2,cy+oy-h+h*.32); c.lineTo(cx+ox+w*.2,cy+oy-h+h*.32); c.closePath(); c.fill();
-    }
-  } else if(type==='hill') {
-    for(let i=0;i<3;i++){
-      const ox=(i-1)*14+(rng()-0.5)*6, oy=4+rng()*4;
-      c.fillStyle='#b09a68'; c.beginPath(); c.ellipse(cx+ox,cy+oy,14+rng()*4,8+rng()*3,0,Math.PI,0); c.fill();
-      c.fillStyle='#887848'; c.beginPath(); c.ellipse(cx+ox,cy+oy,11+rng()*3,4+rng()*2,0,Math.PI,0); c.fill();
-    }
-  } else if(type==='ocean'||type==='coast') {
-    c.strokeStyle='rgba(120,200,255,0.22)'; c.lineWidth=1.5;
-    for(let i=0;i<3;i++){
-      c.beginPath(); c.moveTo(cx-TILE_W*.45,cy-6+i*8); c.bezierCurveTo(cx-TILE_W*.15,cy-10+i*8,cx+TILE_W*.15,cy-2+i*8,cx+TILE_W*.45,cy-6+i*8); c.stroke();
-    }
-  } else if(type==='river') {
-    c.strokeStyle='rgba(60,130,220,0.55)'; c.lineWidth=7; c.lineCap='round';
-    c.beginPath(); c.moveTo(cx-TILE_W*.5,cy-2); c.bezierCurveTo(cx-TILE_W*.15,cy-10,cx+TILE_W*.15,cy+10,cx+TILE_W*.5,cy+2); c.stroke();
-    c.strokeStyle='rgba(150,210,255,0.35)'; c.lineWidth=3; c.stroke();
-  } else if(type==='desert') {
-    c.fillStyle='rgba(160,110,30,0.3)';
-    for(let i=0;i<8;i++){ const a=rng()*Math.PI*2,d=rng()*TILE_W*.35; c.beginPath(); c.ellipse(cx+Math.cos(a)*d*0.7,cy+Math.sin(a)*d*0.35,3+rng()*2,1.5+rng(),rng()*Math.PI,0,Math.PI*2); c.fill(); }
-  } else if(type==='snow') {
-    c.fillStyle='rgba(255,255,255,0.45)';
-    for(let i=0;i<5;i++){ const a=rng()*Math.PI*2,d=rng()*TILE_W*.3; c.beginPath(); c.arc(cx+Math.cos(a)*d*0.7,cy+Math.sin(a)*d*0.35,3+rng()*4,0,Math.PI*2); c.fill(); }
-  } else if(type==='tundra') {
-    c.fillStyle='rgba(200,215,215,0.3)';
-    for(let i=0;i<5;i++){ const a=rng()*Math.PI*2,d=rng()*TILE_W*.35; c.beginPath(); c.arc(cx+Math.cos(a)*d*0.7,cy+Math.sin(a)*d*0.35,2+rng()*3,0,Math.PI*2); c.fill(); }
-  } else if(type==='plains'||type==='grassland') {
-    c.strokeStyle='rgba(50,100,20,0.4)'; c.lineWidth=1;
-    for(let i=0;i<7;i++){
-      const bx=cx+(rng()-0.5)*TILE_W*.55, by=cy+(rng()-0.5)*TILE_H*.35, h=4+rng()*4;
-      c.beginPath(); c.moveTo(bx,by); c.quadraticCurveTo(bx+(rng()-.5)*5,by-h*.6,bx+(rng()-.5)*3,by-h); c.stroke();
-    }
-  }
-}
-
-// ══════════════════════════════════════════════════════
-// SETTLER TEXTURE (isometric figure)
-// ══════════════════════════════════════════════════════
-function generateUnitTextures(scene) {
-  ['settler_normal','settler_selected'].forEach(key=>{
-    const sel=key.includes('selected');
-    const oc=document.createElement('canvas'); oc.width=56; oc.height=72;
-    const c=oc.getContext('2d');
-    drawIsoSettler(c,28,58,sel);
-    scene.textures.addCanvas(key,oc);
-  });
-}
-
-function drawIsoSettler(c,cx,cy,sel) {
-  // Ground shadow (isometric ellipse)
-  c.fillStyle='rgba(0,0,0,0.3)'; c.beginPath(); c.ellipse(cx+2,cy,14,5,0,0,Math.PI*2); c.fill();
-  // Legs
-  c.fillStyle='#4a3a70'; c.fillRect(cx-6,cy-14,5,14); c.fillRect(cx+2,cy-14,5,14);
-  // Boots
-  c.fillStyle='#3a2a18'; c.fillRect(cx-7,cy-4,7,5); c.fillRect(cx+1,cy-4,7,5);
-  // Cloak body
-  const bodyCol=sel?'#a0c0f0':'#6868b0';
-  c.fillStyle=bodyCol;
-  c.beginPath(); c.moveTo(cx,cy-38); c.bezierCurveTo(cx-12,cy-30,cx-16,cy-18,cx-10,cy-5); c.lineTo(cx+10,cy-5); c.bezierCurveTo(cx+16,cy-18,cx+12,cy-30,cx,cy-38); c.fill();
-  // Cloak shadow side
-  c.fillStyle='rgba(0,0,0,0.18)'; c.beginPath(); c.moveTo(cx,cy-38); c.bezierCurveTo(cx+3,cy-30,cx+8,cy-18,cx+5,cy-5); c.lineTo(cx+10,cy-5); c.bezierCurveTo(cx+16,cy-18,cx+12,cy-30,cx,cy-38); c.fill();
-  // Belt
-  c.fillStyle='#8a5a20'; c.fillRect(cx-9,cy-13,18,4);
-  // Pack
-  c.fillStyle='#7a5228'; c.fillRect(cx+7,cy-30,10,14);
-  c.fillStyle='#5a3818'; c.fillRect(cx+8,cy-29,8,4);
-  // Neck
-  c.fillStyle='#c09060'; c.fillRect(cx-3,cy-40,6,5);
-  // Head
-  c.fillStyle='#d4a878'; c.beginPath(); c.arc(cx,cy-46,9,0,Math.PI*2); c.fill();
-  // Hood
-  c.fillStyle=sel?'#80a8d8':'#4a4a80';
-  c.beginPath(); c.arc(cx,cy-47,9,Math.PI,0); c.lineTo(cx+12,cy-38); c.lineTo(cx-12,cy-38); c.closePath(); c.fill();
-  // Face features
-  c.fillStyle='#2a1808'; c.beginPath(); c.arc(cx-3,cy-46,1.5,0,Math.PI*2); c.fill();
-  c.beginPath(); c.arc(cx+3,cy-46,1.5,0,Math.PI*2); c.fill();
-  // Staff
-  c.strokeStyle='#8a6030'; c.lineWidth=2.5; c.lineCap='round';
-  c.beginPath(); c.moveTo(cx-13,cy); c.lineTo(cx-11,cy-54); c.stroke();
-  c.fillStyle='#d0a840'; c.beginPath(); c.arc(cx-11,cy-55,3.5,0,Math.PI*2); c.fill();
-}
-
-// ══════════════════════════════════════════════════════
-// CITY TILE TEXTURE
-// ══════════════════════════════════════════════════════
-function generateCityTexture(scene) {
-  const oc=document.createElement('canvas'); oc.width=TILE_W; oc.height=TILE_H+DEPTH+80;
-  const c=oc.getContext('2d');
-  const cx=TILE_W/2, cy=TILE_H/2+8;
-
-  // Base tile — stone/city color
-  const t={top:'#a09080',side:'#706050',sideB:'#504038'};
-  drawIsoTile(c,cx,cy,'_city',t);
-
-  // Clip to top face for buildings
-  c.save(); isoTopPath(c,cx,cy); c.clip();
-
-  // Stone plaza floor texture
-  c.fillStyle='rgba(180,160,130,0.3)';
-  for(let i=0;i<5;i++) for(let j=0;j<3;j++) {
-    c.strokeStyle='rgba(80,60,40,0.2)'; c.lineWidth=0.5;
-    c.strokeRect(cx-TILE_W*.4+i*TILE_W*.18,cy-TILE_H*.3+j*TILE_H*.22,TILE_W*.16,TILE_H*.2);
-  }
-  c.restore();
-
-  // Buildings (drawn above the tile, isometric style)
-  const bx=cx, by=cy-TILE_H/2; // top of tile
-
-  // Main keep — left building (isometric box)
-  drawIsoBox(c,bx-8,by-2,16,22,30,'#c8a870','#8a6840','#6a5030');
-  // Right tower
-  drawIsoBox(c,bx+12,by+4,12,16,26,'#b89860','#7a5830','#5a4020');
-  // Small left house
-  drawIsoBox(c,bx-18,by+5,10,12,20,'#b08858','#6a4828','#4a3018');
-  // Central tall spire base
-  drawIsoBox(c,bx-3,by-8,10,28,36,'#d0b078','#906840','#604828');
-  // Spire triangle
-  c.fillStyle='#e8c888';
-  c.beginPath(); c.moveTo(bx+2,by-8-36-14); c.lineTo(bx-4,by-8-36); c.lineTo(bx+8,by-8-36); c.closePath(); c.fill();
-  // Flag
-  c.fillStyle='#3060c0'; c.beginPath(); c.moveTo(bx+2,by-8-36-14); c.lineTo(bx+12,by-8-36-10); c.lineTo(bx+2,by-8-36-6); c.closePath(); c.fill();
-
-  // Wall arc
-  c.strokeStyle='#907050'; c.lineWidth=4; c.setLineDash([]);
-  c.beginPath(); c.arc(bx,by+8,28,Math.PI,0); c.stroke();
-
-  scene.textures.addCanvas('tile_city',oc);
-}
-
-function drawIsoBox(c,cx,cy,w,h,depth,topCol,sideRCol,sideLCol) {
-  // South face
-  c.fillStyle=sideRCol;
-  c.beginPath(); c.moveTo(cx+w/2,cy); c.lineTo(cx+w/2,cy+depth); c.lineTo(cx,cy+depth+h/4); c.lineTo(cx,cy+h/4); c.closePath(); c.fill();
-  c.strokeStyle='rgba(0,0,0,0.2)'; c.lineWidth=0.5; c.stroke();
-  // West face
-  c.fillStyle=sideLCol;
-  c.beginPath(); c.moveTo(cx-w/2,cy); c.lineTo(cx-w/2,cy+depth); c.lineTo(cx,cy+depth+h/4); c.lineTo(cx,cy+h/4); c.closePath(); c.fill();
-  c.stroke();
-  // Top face
-  const tgrd=c.createLinearGradient(cx,cy-h,cx,cy);
-  tgrd.addColorStop(0,lightenHex(topCol,20)); tgrd.addColorStop(1,topCol);
-  c.fillStyle=tgrd;
-  c.beginPath(); c.moveTo(cx,cy-h); c.lineTo(cx+w/2,cy-h+h/4); c.lineTo(cx,cy+h/4); c.lineTo(cx-w/2,cy-h+h/4); c.closePath(); c.fill();
-  // Windows
-  c.fillStyle='rgba(255,220,80,0.7)';
-  if(h>18) { c.fillRect(cx-3,cy-h+h/4+4,4,5); c.fillRect(cx+1,cy-h+h/4+4,4,5); }
-}
-
-// ══════════════════════════════════════════════════════
-// COLOR UTILS
-// ══════════════════════════════════════════════════════
-function lightenHex(hex,amt){const n=parseInt(hex.slice(1),16);const r=Math.min(255,(n>>16)+amt),g=Math.min(255,((n>>8)&255)+amt),b=Math.min(255,(n&255)+amt);return`rgb(${r},${g},${b})`;}
-function darkenHex(hex,amt){const n=parseInt(hex.slice(1),16);const r=Math.max(0,(n>>16)-amt),g=Math.max(0,((n>>8)&255)-amt),b=Math.max(0,(n&255)-amt);return`rgb(${r},${g},${b})`;}
 
 // ══════════════════════════════════════════════════════
 // PHASER SCENE
@@ -424,159 +708,159 @@ let scene_ref=null;
 class GameScene extends Phaser.Scene {
   constructor(){super({key:'GameScene'});}
 
-  create() {
+  create(){
     scene_ref=this;
     generateTextures(this);
-    generateUnitTextures(this);
-    generateCityTexture(this);
     this.cameras.main.setBackgroundColor('#0d1220');
 
-    // Layers (order matters for iso depth!)
-    this.terrainLayer=this.add.container(0,0);
-    this.highlightLayer=this.add.container(0,0);
-    this.featureLayer=this.add.container(0,0);
-    this.unitLayer=this.add.container(0,0);
+    this.terrainLayer   = this.add.container(0,0);
+    this.highlightLayer = this.add.container(0,0);
+    this.cityLayer      = this.add.container(0,0);
+    this.unitLayer      = this.add.container(0,0);
+    this.labelLayer     = this.add.container(0,0);
 
-    // Build terrain — MUST render back-to-front for iso depth
+    // Build terrain back-to-front (row 0→N, col 0→N)
     this.tileSprites={};
-    const drawOrder=this.buildDrawOrder();
-    for(const {col,row} of drawOrder){
-      const type=MAP_DATA[row][col];
-      const {x,y}=isoPos(col,row);
-      const sp=this.add.image(x,y,'tile_'+type).setOrigin(0.5,0.5);
+    for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+      const type=MAP_DATA[r][c];
+      const {x,y}=isoPos(c,r);
+      // Origin (0.5, 0) = top-center of diamond = the top vertex
+      // This ensures tiles sit exactly on the grid with no overlap
+      const sp=this.add.image(x, y, 'tile_'+type).setOrigin(0.5, 0);
       this.terrainLayer.add(sp);
-      this.tileSprites[`${col}_${row}`]=sp;
+      this.tileSprites[`${c}_${r}`]=sp;
     }
 
-    // Highlight layer sprites (pre-create, toggle visibility)
+    // Highlight sprites (same layout)
     this.hlSprites={};
-    for(const {col,row} of drawOrder){
-      const {x,y}=isoPos(col,row);
-      const sp=this.add.image(x,y,'tile_highlight').setOrigin(0.5,0.5).setAlpha(0);
+    for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+      const {x,y}=isoPos(c,r);
+      const sp=this.add.image(x, y, 'tile_highlight').setOrigin(0.5, 0).setAlpha(0);
       this.highlightLayer.add(sp);
-      this.hlSprites[`${col}_${row}`]=sp;
+      this.hlSprites[`${c}_${r}`]=sp;
     }
 
     // Spawn settler
-    const sc=6,sr=5;
+    const sc=6, sr=5;
     GS.units.push({id:GS.nextUnitId++,type:'settler',col:sc,row:sr,movesLeft:2});
     this.unitSprites={};
     this.spawnUnit(GS.units[0]);
 
-    // Camera
+    // Center camera on settler
     const {x:sx,y:sy}=isoPos(sc,sr);
-    this.cameras.main.centerOn(sx,sy);
-    this.cameras.main.setBounds(-600,-300,4000,2400);
+    this.cameras.main.centerOn(sx, sy+TILE_H/2);
+    this.cameras.main.setBounds(-600,-400,5000,3000);
 
-    // Input
-    this._drag=false;
-    this.input.on('pointerdown',()=>this._drag=false);
-    this.input.on('pointermove',ptr=>{
-      if(ptr.isDown&&(Math.abs(ptr.velocity.x)>1||Math.abs(ptr.velocity.y)>1)){
-        this.cameras.main.scrollX-=ptr.velocity.x/this.cameras.main.zoom;
-        this.cameras.main.scrollY-=ptr.velocity.y/this.cameras.main.zoom;
-        this._drag=true;
+    // ── Input ──
+    this._dragStartX=0; this._dragStartY=0; this._hasDragged=false;
+    this.input.on('pointerdown', ptr=>{
+      this._dragStartX=ptr.x; this._dragStartY=ptr.y; this._hasDragged=false;
+    });
+    this.input.on('pointermove', ptr=>{
+      if(!ptr.isDown) return;
+      const dx=ptr.x-this._dragStartX, dy=ptr.y-this._dragStartY;
+      if(Math.abs(dx)>6||Math.abs(dy)>6) this._hasDragged=true;
+      if(this._hasDragged){
+        this.cameras.main.scrollX -= ptr.velocity.x / this.cameras.main.zoom * 0.8;
+        this.cameras.main.scrollY -= ptr.velocity.y / this.cameras.main.zoom * 0.8;
       }
     });
-    this.input.on('pointerup',ptr=>{ if(!this._drag) this.handleClick(ptr); });
+    this.input.on('pointerup', ptr=>{ if(!this._hasDragged) this.handleClick(ptr); });
     this.input.on('wheel',(ptr,o,dx,dy)=>{
-      this.cameras.main.zoom=Phaser.Math.Clamp(this.cameras.main.zoom-dy*0.001,0.4,2.2);
+      this.cameras.main.zoom=Phaser.Math.Clamp(this.cameras.main.zoom - dy*0.0009, 0.35, 2.5);
     });
 
     this._t=0;
     this.time.addEvent({delay:16,loop:true,callback:this.tick,callbackScope:this});
-
-    updateHUD(); showStatus('Your empire awaits. Select your settler to begin.',4000);
+    updateHUD();
+    showStatus('Your empire awaits. Select your settler to begin.',4000);
   }
 
-  buildDrawOrder() {
-    // Iso rendering: sort by row first, then col, so far tiles render behind near ones
-    const order=[];
-    for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) order.push({col:c,row:r});
-    return order;
-  }
-
-  spawnUnit(unit) {
+  spawnUnit(unit){
     const {x,y}=isoPos(unit.col,unit.row);
-    const sh=this.add.ellipse(x+3,y+8,28,10,0x000000,0.32);
-    const sp=this.add.image(x,y-10,'settler_normal').setOrigin(0.5,1);
-    this.unitLayer.add(sh); this.unitLayer.add(sp);
-    this.unitSprites[unit.id]={sprite:sp,shadow:sh};
+    const unitY = y + TILE_H - 4; // feet at bottom-center of tile top face
+    const shadow=this.add.ellipse(x+6, unitY-4, 36, 13, 0x000000, 0.30);
+    const sp=this.add.image(x, unitY, 'settler_normal').setOrigin(0.5, 1);
+    this.unitLayer.add(shadow);
+    this.unitLayer.add(sp);
+    this.unitSprites[unit.id]={sprite:sp, shadow, baseX:x, baseY:unitY};
   }
 
-  tick() {
-    this._t+=0.025;
+  tick(){
+    this._t+=0.022;
     const t=this._t;
 
-    // Unit animations
     for(const unit of GS.units){
       const s=this.unitSprites[unit.id]; if(!s) continue;
-      const {x,y}=isoPos(unit.col,unit.row);
-      const bob=Math.sin(t+unit.id*1.3)*2.5;
-      s.sprite.y=y-10-bob; s.shadow.y=y+8;
+      const bob=Math.sin(t*2+unit.id*1.2)*3;
+      s.sprite.y=s.baseY-bob;
+      s.shadow.setScale(1-bob*0.015, 1-bob*0.01);
 
       const isSel=GS.selectedUnit&&GS.selectedUnit.id===unit.id;
       s.sprite.setTexture(isSel?'settler_selected':'settler_normal');
 
       if(isSel){
-        if(!s.selRing){ s.selRing=this.add.ellipse(x,y,50,20,0xffe060,0).setStrokeStyle(2.5,0xffe060,1); this.unitLayer.add(s.selRing); }
-        s.selRing.x=x; s.selRing.y=y;
-        if(!s.pulseRing){ s.pulseRing=this.add.ellipse(x,y,50,20,0xffe060,0).setStrokeStyle(3,0xffe060,0); this.unitLayer.add(s.pulseRing); }
-        const pulse=(Math.sin(t*2)+1)*0.5;
-        s.pulseRing.x=x; s.pulseRing.y=y;
-        s.pulseRing.setSize(50+pulse*16,20+pulse*6);
-        s.pulseRing.setStrokeStyle(3,0xffe060,pulse*0.4);
+        // Selection ring
+        if(!s.selRing){
+          s.selRing=this.add.ellipse(s.baseX, s.baseY, 64, 24, 0x000000, 0).setStrokeStyle(3, 0xffe060, 1);
+          this.unitLayer.add(s.selRing);
+        }
+        s.selRing.x=s.baseX; s.selRing.y=s.baseY-bob*.3;
+        // Outer pulse ring
+        if(!s.pulseRing){
+          s.pulseRing=this.add.ellipse(s.baseX, s.baseY, 64, 24, 0x000000, 0).setStrokeStyle(4, 0xffe060, 0);
+          this.unitLayer.add(s.pulseRing);
+        }
+        const pulse=(Math.sin(t*2.5)+1)*0.5;
+        s.pulseRing.x=s.baseX; s.pulseRing.y=s.baseY-bob*.3;
+        s.pulseRing.setSize(64+pulse*22, 24+pulse*8);
+        s.pulseRing.setStrokeStyle(3, 0xffe060, pulse*0.45);
       } else {
         if(s.selRing){s.selRing.destroy();s.selRing=null;}
         if(s.pulseRing){s.pulseRing.destroy();s.pulseRing=null;}
       }
     }
 
-    // Move highlights (pulse alpha)
+    // Highlight pulse
     for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
       const sp=this.hlSprites[`${c}_${r}`]; if(!sp) continue;
       const isHL=GS.moveHighlights.some(h=>h.col===c&&h.row===r);
-      if(isHL){ const pulse=(Math.sin(t*1.6+c*.5+r*.7)+1)*.5; sp.setAlpha(0.5+pulse*0.4); }
+      if(isHL){const pulse=(Math.sin(t*1.8+c*.4+r*.6)+1)*.5; sp.setAlpha(0.45+pulse*0.45);}
       else sp.setAlpha(0);
     }
 
     // Water shimmer
-    const wa=0.88+Math.sin(t*.7)*.06;
     for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
       const type=MAP_DATA[r][c];
-      if(type==='ocean'||type==='coast'||type==='river'){
+      if(TERRAIN[type].water){
         const sp=this.tileSprites[`${c}_${r}`];
-        if(sp) sp.setAlpha(wa+Math.sin(t*.4+c*.3+r*.2)*.04);
+        if(sp) sp.setAlpha(0.82+Math.sin(t*.6+c*.35+r*.25)*.09);
       }
     }
   }
 
-  handleClick(ptr) {
+  handleClick(ptr){
     const wx=ptr.worldX, wy=ptr.worldY;
-    // Find closest hex to click
+    // Find closest tile center
     let best=null, bestD=Infinity;
     for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
       const p=isoPos(c,r);
-      // Use isometric distance (scale Y since tiles are squished)
-      const d=Math.abs(wx-p.x)/(TILE_W*.5)+Math.abs(wy-p.y)/(TILE_H*.5);
+      const tileCenter={ x:p.x, y:p.y+TILE_H/2 };
+      // Scale X by 2 since tiles are wider than tall in iso
+      const dx=(wx-tileCenter.x)/(TILE_W*.52);
+      const dy=(wy-tileCenter.y)/(TILE_H*.52);
+      const d=Math.abs(dx)+Math.abs(dy);
       if(d<bestD){bestD=d;best={col:c,row:r};}
     }
-    if(!best||bestD>2.5) return;
+    if(!best||bestD>1.8) return;
     const {col,row}=best;
 
     const clickedUnit=GS.units.find(u=>u.col===col&&u.row===row);
     const isHL=GS.moveHighlights.some(h=>h.col===col&&h.row===row);
 
     if(isHL&&GS.selectedUnit){
-      const unit=GS.selectedUnit;
-      const {x,y}=isoPos(col,row);
-      const s=this.unitSprites[unit.id];
-      this.tweens.add({targets:s.sprite,x,duration:350,ease:'Cubic.easeInOut'});
-      this.tweens.add({targets:s.shadow,x,duration:350,ease:'Cubic.easeInOut'});
-      this.tweens.add({targets:s.sprite,y:y-10-20,yoyo:true,duration:175,ease:'Quad.easeOut'});
-      unit.col=col; unit.row=row; unit.movesLeft--;
-      GS.moveHighlights=unit.movesLeft>0?getMovable(unit,unit.movesLeft):[];
-      updateHUD(); return;
+      this.moveUnit(GS.selectedUnit, col, row);
+      return;
     }
     if(clickedUnit){
       GS.selectedUnit=clickedUnit;
@@ -584,6 +868,28 @@ class GameScene extends Phaser.Scene {
       updateHUD(); return;
     }
     GS.selectedUnit=null; GS.moveHighlights=[]; updateHUD();
+  }
+
+  moveUnit(unit, col, row){
+    const s=this.unitSprites[unit.id]; if(!s) return;
+    const {x,y}=isoPos(col,row);
+    const newBaseX=x, newBaseY=y+TILE_H-4;
+    const arcPeakY=Math.min(s.baseY, newBaseY)-32;
+
+    // X tween
+    this.tweens.add({targets:s.sprite,   x:newBaseX, duration:400, ease:'Cubic.easeInOut'});
+    this.tweens.add({targets:s.shadow,   x:newBaseX, duration:400, ease:'Cubic.easeInOut'});
+    if(s.selRing)  this.tweens.add({targets:s.selRing,  x:newBaseX, duration:400, ease:'Cubic.easeInOut'});
+    if(s.pulseRing)this.tweens.add({targets:s.pulseRing,x:newBaseX, duration:400, ease:'Cubic.easeInOut'});
+
+    // Arc Y: up then down
+    this.tweens.add({targets:s.sprite, y:arcPeakY, duration:200, ease:'Quad.easeOut',
+      onComplete:()=>this.tweens.add({targets:s.sprite,y:newBaseY,duration:200,ease:'Quad.easeIn'})});
+
+    unit.col=col; unit.row=row; unit.movesLeft--;
+    s.baseX=newBaseX; s.baseY=newBaseY;
+    GS.moveHighlights=unit.movesLeft>0?getMovable(unit,unit.movesLeft):[];
+    updateHUD();
   }
 
   foundCity(){
@@ -595,27 +901,33 @@ class GameScene extends Phaser.Scene {
     const territory=getNeighbors(u.col,u.row).filter(n=>TERRAIN[MAP_DATA[n.row][n.col]].passable).map(n=>({col:n.col,row:n.row}));
     GS.cities.push({id:GS.nextCityId++,col:u.col,row:u.row,name,pop:1,territory});
 
-    // Swap terrain tile to city tile
+    // Swap tile to city
     const sp=this.tileSprites[`${u.col}_${u.row}`];
     if(sp){
-      this.tweens.add({targets:sp,scaleY:1.15,yoyo:true,duration:200,ease:'Quad.easeOut',
+      this.tweens.add({targets:sp,scaleY:1.12,yoyo:true,duration:180,ease:'Quad.easeOut',
         onComplete:()=>sp.setTexture('tile_city')});
     }
 
-    // Territory border rings
+    // Territory tint flash
     for(const h of territory){
       const hs=this.tileSprites[`${h.col}_${h.row}`];
-      if(hs){ this.tweens.add({targets:hs,alpha:0.7,yoyo:true,duration:400,repeat:1}); }
+      if(hs) this.tweens.add({targets:hs,alpha:0.6,yoyo:true,duration:350,repeat:1,ease:'Sine.easeInOut'});
     }
 
-    // Add city name label
+    // City label
     const {x,y}=isoPos(u.col,u.row);
-    const lbl=this.add.text(x,y-TILE_H*.5-55,name,{font:'bold 11px Cinzel,serif',fill:'#f0d080',stroke:'#000',strokeThickness:3}).setOrigin(0.5,0.5);
-    this.featureLayer.add(lbl);
+    const lbl=this.add.text(x, y-16, name, {
+      fontFamily:'Cinzel,serif', fontSize:'13px', fontStyle:'bold',
+      color:'#f0d080', stroke:'#000000', strokeThickness:4, shadow:{blur:8,color:'#000',fill:true}
+    }).setOrigin(0.5,1);
+    this.labelLayer.add(lbl);
 
-    // Remove settler with animation
+    // Dissolve settler
     const s=this.unitSprites[u.id];
-    if(s){this.tweens.add({targets:[s.sprite,s.shadow],alpha:0,scaleX:1.6,scaleY:1.6,duration:500,ease:'Cubic.easeOut',onComplete:()=>{s.sprite.destroy();s.shadow.destroy();if(s.selRing)s.selRing.destroy();if(s.pulseRing)s.pulseRing.destroy();}});}
+    if(s){
+      this.tweens.add({targets:[s.sprite,s.shadow],alpha:0,scaleX:1.5,scaleY:1.5,y:'-=20',duration:550,ease:'Cubic.easeOut',
+        onComplete:()=>{s.sprite.destroy();s.shadow.destroy();if(s.selRing)s.selRing.destroy();if(s.pulseRing)s.pulseRing.destroy();}});
+    }
 
     GS.units=GS.units.filter(x=>x.id!==u.id);
     GS.selectedUnit=null; GS.moveHighlights=[];
@@ -623,9 +935,7 @@ class GameScene extends Phaser.Scene {
   }
 }
 
-// ══════════════════════════════════════════════════════
-// HUD
-// ══════════════════════════════════════════════════════
+// ── HUD ──
 function updateHUD(){
   const u=GS.selectedUnit;
   document.getElementById('res-cities').textContent=GS.cities.length;
@@ -633,29 +943,29 @@ function updateHUD(){
   if(!u){document.getElementById('unit-name').textContent='No unit selected';document.getElementById('unit-desc').textContent='Click a unit to select it.';document.getElementById('action-btns').innerHTML='';return;}
   const type=MAP_DATA[u.row][u.col];
   document.getElementById('unit-name').textContent='⚑ Settler';
-  document.getElementById('unit-desc').textContent=`On: ${TERRAIN[type].label} · Moves: ${u.movesLeft}/2`;
-  document.getElementById('action-btns').innerHTML=`<button class="abtn" onclick="scene_ref.foundCity()">🏙 Found City</button><button class="abtn" onclick="GS.selectedUnit=null;GS.moveHighlights=[];updateHUD()">⏭ Skip</button>`;
+  document.getElementById('unit-desc').textContent=`On: ${TERRAIN[type].label} · Moves remaining: ${u.movesLeft}/2`;
+  document.getElementById('action-btns').innerHTML=
+    `<button class="abtn" onclick="scene_ref.foundCity()">🏙 Found City</button>`+
+    `<button class="abtn" onclick="GS.selectedUnit=null;GS.moveHighlights=[];updateHUD()">⏭ Skip</button>`;
 }
 function endTurn(){GS.turn++;for(const u of GS.units)u.movesLeft=2;document.getElementById('turn-info').textContent=`Turn ${GS.turn}`;showStatus(`Turn ${GS.turn} begins`);if(GS.turn%5===0)for(const c of GS.cities)c.pop=Math.min(10,c.pop+1);updateHUD();}
 function showStatus(msg,d=2500){const el=document.getElementById('status-msg');el.textContent=msg;el.style.opacity='1';clearTimeout(el._t);el._t=setTimeout(()=>el.style.opacity='0',d);}
 
-// ══════════════════════════════════════════════════════
-// INIT
-// ══════════════════════════════════════════════════════
+// ── INIT ──
 let phaserGame=null;
 function startGame(){
   document.getElementById('menu-overlay').style.display='none';
   document.getElementById('top-bar').style.display='flex';
   document.getElementById('bot-panel').style.display='flex';
   phaserGame=new Phaser.Game({
-    type:Phaser.AUTO,
-    width:window.innerWidth,
-    height:window.innerHeight-TOP_H-BOT_H,
-    parent:'game-container',
-    backgroundColor:'#0d1220',
-    scene:[GameScene],
-    scale:{mode:Phaser.Scale.RESIZE,autoCenter:Phaser.Scale.CENTER_BOTH},
-    render:{antialias:true,pixelArt:false},
+    type: Phaser.AUTO,
+    width: window.innerWidth,
+    height: window.innerHeight-TOP_H-BOT_H,
+    parent: 'game-container',
+    backgroundColor: '#0d1220',
+    scene: [GameScene],
+    scale: { mode:Phaser.Scale.RESIZE, autoCenter:Phaser.Scale.CENTER_BOTH },
+    render: { antialias:true, pixelArt:false },
   });
   setTimeout(()=>{
     const cv=document.querySelector('#game-container canvas');
