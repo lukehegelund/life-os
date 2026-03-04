@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LifeOS Empire — Phaser Isometric</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Cinzel+Decorative:wght@700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#0a0a12; overflow:hidden; font-family:'Cinzel',Georgia,serif; user-select:none; }
+#game-container canvas { display:block; }
+
+#menu-overlay {
+  position:fixed; inset:0; display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  background:radial-gradient(ellipse at center,#1a1208 0%,#0a0a12 70%); z-index:1000;
+}
+.menu-title { font-family:'Cinzel Decorative',serif; font-size:clamp(28px,5vw,60px); color:#f0d080; text-shadow:0 0 40px rgba(240,180,60,.5); letter-spacing:4px; text-align:center; line-height:1.2; }
+.menu-sub { font-size:clamp(10px,1.4vw,13px); color:#8a7050; letter-spacing:6px; text-transform:uppercase; margin-top:10px; text-align:center; }
+.menu-tag { font-size:10px; color:#5a4a30; letter-spacing:3px; text-transform:uppercase; margin-top:6px; text-align:center; }
+.menu-div { width:200px; height:1px; background:linear-gradient(90deg,transparent,#5a3e1b,transparent); margin:18px auto; }
+.start-btn { margin-top:36px; background:linear-gradient(180deg,#8b5e1a,#5a3a08); border:2px solid #c8841e; border-radius:4px; color:#f5e0a0; font-family:'Cinzel',serif; font-size:18px; font-weight:600; padding:14px 60px; cursor:pointer; letter-spacing:4px; text-transform:uppercase; box-shadow:0 4px 20px rgba(200,132,30,.3),inset 0 1px 0 rgba(255,220,100,.2); transition:all .2s; }
+.start-btn:hover { background:linear-gradient(180deg,#aa7520,#7a4e0a); transform:translateY(-1px); box-shadow:0 4px 30px rgba(200,132,30,.5); }
+
+#top-bar { position:fixed; top:0; left:0; right:0; height:52px; background:linear-gradient(180deg,#1a1410,#110e0a); border-bottom:2px solid #5a3e1b; display:none; align-items:center; padding:0 16px; gap:12px; z-index:100; box-shadow:0 2px 12px rgba(0,0,0,.6); }
+.empire-name { font-size:14px; font-weight:700; color:#f0d080; letter-spacing:3px; text-transform:uppercase; text-shadow:0 0 10px rgba(240,180,60,.4); }
+.rpill { display:flex; align-items:center; gap:6px; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.1); border-radius:4px; padding:5px 12px; }
+.rpill .i { font-size:14px; } .rpill .v { color:#f0d080; font-weight:700; font-size:13px; } .rpill .l { color:#666; font-size:10px; font-family:sans-serif; letter-spacing:1px; }
+.spacer { flex:1; }
+.turn-btn { background:linear-gradient(180deg,#7a4e10,#4a2e05); border:1px solid #c8841e; border-radius:4px; color:#f5e0a0; font-family:'Cinzel',serif; font-size:12px; padding:7px 18px; cursor:pointer; letter-spacing:2px; transition:all .15s; }
+.turn-btn:hover { background:linear-gradient(180deg,#9a6218,#6a4208); }
+#turn-info { font-size:11px; color:#666; font-family:sans-serif; }
+
+#bot-panel { position:fixed; bottom:0; left:0; right:0; height:110px; background:linear-gradient(0deg,#0d0b08,#110e0a); border-top:2px solid #3a2a12; display:none; align-items:center; padding:0 20px; gap:16px; z-index:100; }
+#unit-name { font-size:15px; font-weight:700; color:#f0d080; letter-spacing:2px; margin-bottom:4px; }
+#unit-desc { font-size:11px; color:#888; font-family:sans-serif; line-height:1.5; }
+#action-btns { display:flex; gap:10px; }
+.abtn { background:linear-gradient(180deg,#2a3520,#1a2212); border:1px solid #4a6030; border-radius:4px; color:#a0d060; font-family:'Cinzel',serif; font-size:11px; padding:10px 18px; cursor:pointer; letter-spacing:1px; transition:all .15s; white-space:nowrap; }
+.abtn:hover { background:linear-gradient(180deg,#3a4530,#2a3220); border-color:#6a8050; }
+
+#status-msg { position:fixed; top:64px; left:50%; transform:translateX(-50%); background:rgba(10,8,5,.92); border:1px solid #8a6030; border-radius:4px; padding:7px 18px; font-size:13px; color:#f0d080; letter-spacing:1px; z-index:150; opacity:0; transition:opacity .3s; pointer-events:none; white-space:nowrap; }
+</style>
+</head>
+<body>
+<div id="game-container"></div>
+
+<div id="menu-overlay">
+  <div>
+    <div class="menu-title">LifeOS<br>Empire</div>
+    <div class="menu-div"></div>
+    <div class="menu-sub">Phaser Isometric</div>
+    <div class="menu-tag">2.5D Polytopia-Style</div>
+  </div>
+  <button class="start-btn" onclick="startGame()">Begin</button>
+</div>
+
+<div id="top-bar">
+  <span class="empire-name">⚔ Your Empire</span>
+  <div class="rpill"><span class="i">🏙</span><span class="v" id="res-cities">0</span><span class="l">CITIES</span></div>
+  <div class="rpill"><span class="i">⚔</span><span class="v" id="res-units">1</span><span class="l">UNITS</span></div>
+  <div class="spacer"></div>
+  <span id="turn-info">Turn 1</span>
+  <button class="turn-btn" onclick="endTurn()">End Turn ▶</button>
+</div>
+<div id="bot-panel">
+  <div style="flex:1">
+    <div id="unit-name">Select a unit</div>
+    <div id="unit-desc">Click your settler to begin.</div>
+  </div>
+  <div id="action-btns"></div>
+</div>
+<div id="status-msg"></div>
+
+<script>
+// ══════════════════════════════════════════════════════
+// ISOMETRIC HEX CONFIG
+// In isometric, we project the flat hex grid into
+// a tilted diamond view. Each hex tile is drawn as
+// a flat diamond top + depth faces on south/east edges.
+// ══════════════════════════════════════════════════════
+const TILE_W = 96;   // isometric tile width
+const TILE_H = 56;   // isometric tile height (half of width gives ~30° angle)
+const DEPTH  = 22;   // vertical depth of the tile side faces
+const COLS = 18, ROWS = 11;
+const TOP_H = 52, BOT_H = 110;
+
+// ── TERRAIN ──
+const TERRAIN = {
+  ocean:    { label:'Ocean',    passable:false, top:'#1e4a70', side:'#0f2a45', sideB:'#0a1e35', feat:'water' },
+  coast:    { label:'Coast',    passable:false, top:'#2a6090', side:'#1a4070', sideB:'#102850', feat:'water' },
+  plains:   { label:'Plains',   passable:true,  top:'#7ab050', side:'#4a7028', sideB:'#2a4a18', feat:'land'  },
+  grassland:{ label:'Grassland',passable:true,  top:'#5a9040', side:'#386020', sideB:'#204010', feat:'land'  },
+  forest:   { label:'Forest',   passable:true,  top:'#2a6028', side:'#183818', sideB:'#0e2810', feat:'land'  },
+  hill:     { label:'Hills',    passable:true,  top:'#9a8a58', side:'#6a5a30', sideB:'#4a3a18', feat:'land'  },
+  mountain: { label:'Mountain', passable:false, top:'#a8a0a0', side:'#706868', sideB:'#504848', feat:'land'  },
+  desert:   { label:'Desert',   passable:true,  top:'#d0b050', side:'#9a7828', sideB:'#6a5018', feat:'land'  },
+  tundra:   { label:'Tundra',   passable:true,  top:'#90a0a0', side:'#607070', sideB:'#405050', feat:'land'  },
+  river:    { label:'River',    passable:true,  top:'#5a9848', side:'#386220', sideB:'#204010', feat:'land'  },
+  snow:     { label:'Snow',     passable:false, top:'#e0eef4', side:'#a8c8d4', sideB:'#88a8b8', feat:'land'  },
+};
+
+const MAP_DATA = [
+  ['ocean','ocean','ocean','coast','coast','plains','plains','forest','forest','hill','hill','mountain','mountain','tundra','tundra','ocean','ocean','ocean'],
+  ['ocean','ocean','coast','coast','plains','plains','grassland','forest','forest','forest','hill','mountain','tundra','tundra','snow','snow','ocean','ocean'],
+  ['ocean','coast','coast','plains','plains','grassland','grassland','river','plains','forest','forest','hill','hill','tundra','snow','snow','tundra','ocean'],
+  ['ocean','coast','plains','plains','grassland','grassland','river','river','plains','plains','forest','forest','hill','hill','tundra','tundra','ocean','ocean'],
+  ['coast','plains','plains','grassland','grassland','plains','plains','river','plains','plains','plains','forest','forest','desert','desert','tundra','ocean','ocean'],
+  ['coast','plains','grassland','grassland','plains','plains','plains','plains','hill','hill','plains','plains','desert','desert','desert','desert','coast','ocean'],
+  ['coast','plains','plains','grassland','plains','plains','hill','hill','hill','mountain','mountain','desert','desert','desert','hill','coast','coast','ocean'],
+  ['ocean','coast','plains','plains','forest','forest','forest','hill','mountain','mountain','desert','desert','hill','hill','coast','coast','ocean','ocean'],
+  ['ocean','coast','coast','plains','plains','forest','forest','forest','hill','hill','desert','desert','coast','coast','ocean','ocean','ocean','ocean'],
+  ['ocean','ocean','coast','coast','plains','plains','forest','forest','grassland','grassland','coast','coast','ocean','ocean','ocean','ocean','ocean','ocean'],
+  ['ocean','ocean','ocean','coast','coast','plains','plains','grassland','coast','coast','ocean','ocean','ocean','ocean','ocean','ocean','ocean','ocean'],
+];
+
+// ══════════════════════════════════════════════════════
+// ISO MATH
+// Convert grid col/row → isometric screen x/y
+// Using offset hex grid converted to isometric projection
+// ══════════════════════════════════════════════════════
+function isoPos(col, row) {
+  // First convert offset hex to a flat cartesian position
+  const flatX = col + (row % 2) * 0.5;
+  const flatY = row * 0.75;
+  // Then apply isometric transform: rotate 45° + squish Y
+  return {
+    x: (flatX - flatY * 0.5) * TILE_W * 0.75,
+    y: (flatX * 0.5 + flatY) * TILE_H * 0.6,
+  };
+}
+
+function hexDist(c1,r1,c2,r2) {
+  const t=(c,r)=>{const x=c-(r-(r&1))/2,z=r;return{x,z,y:-x-z};};
+  const a=t(c1,r1),b=t(c2,r2);
+  return Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y),Math.abs(a.z-b.z));
+}
+function getNeighbors(col,row) {
+  const d=row%2===0?[[-1,-1],[0,-1],[-1,0],[1,0],[-1,1],[0,1]]:[[0,-1],[1,-1],[-1,0],[1,0],[0,1],[1,1]];
+  return d.map(([dc,dr])=>({col:col+dc,row:row+dr})).filter(n=>n.col>=0&&n.col<COLS&&n.row>=0&&n.row<ROWS);
+}
+function getMovable(unit,r=2) {
+  const res=[];
+  for(let row=0;row<ROWS;row++) for(let col=0;col<COLS;col++) {
+    if(col===unit.col&&row===unit.row) continue;
+    if(hexDist(unit.col,unit.row,col,row)<=r&&TERRAIN[MAP_DATA[row][col]].passable) {
+      if(!GS.units.some(u=>u.col===col&&u.row===row)) res.push({col,row});
+    }
+  }
+  return res;
+}
+function seededRng(s){let n=s;return()=>{n=(n*1664525+1013904223)&0xffffffff;return(n>>>0)/0xffffffff;};}
+
+// ══════════════════════════════════════════════════════
+// GAME STATE
+// ══════════════════════════════════════════════════════
+const GS={turn:1,cities:[],units:[],selectedUnit:null,moveHighlights:[],nextCityId:1,nextUnitId:1};
+const CITY_NAMES=['Aurum','Veridian','Solmere','Caelthon','Rivenmoor','Dunhallow','Ironspire','Thornwall','Eastmarch','Goldenveil'];
+
+// ══════════════════════════════════════════════════════
+// TEXTURE GENERATION
+// All tiles drawn to offscreen canvas → Phaser texture key
+// Each iso tile = diamond top face + two depth side faces
+// ══════════════════════════════════════════════════════
+function generateTextures(scene) {
+  for(const [type,t] of Object.entries(TERRAIN)) {
+    const oc=document.createElement('canvas');
+    oc.width=TILE_W; oc.height=TILE_H+DEPTH+30;
+    const c=oc.getContext('2d');
+    const cx=TILE_W/2, cy=TILE_H/2+8;
+    drawIsoTile(c,cx,cy,type,t);
+    scene.textures.addCanvas('tile_'+type,oc);
+  }
+  // Highlight tile
+  {
+    const oc=document.createElement('canvas'); oc.width=TILE_W; oc.height=TILE_H+DEPTH+30;
+    const c=oc.getContext('2d'); const cx=TILE_W/2,cy=TILE_H/2+8;
+    isoTopPath(c,cx,cy); c.fillStyle='rgba(80,220,80,0.22)'; c.fill();
+    isoTopPath(c,cx,cy); c.strokeStyle='rgba(80,255,80,0.8)'; c.lineWidth=2; c.stroke();
+    scene.textures.addCanvas('tile_highlight',oc);
+  }
+}
+
+function isoTopPath(c,cx,cy) {
+  c.beginPath();
+  c.moveTo(cx, cy-TILE_H/2);
+  c.lineTo(cx+TILE_W/2, cy);
+  c.lineTo(cx, cy+TILE_H/2);
+  c.lineTo(cx-TILE_W/2, cy);
+  c.closePath();
+}
+function isoSouthPath(c,cx,cy) {
+  // South face (bottom-right)
+  c.beginPath();
+  c.moveTo(cx,cy+TILE_H/2);
+  c.lineTo(cx+TILE_W/2,cy);
+  c.lineTo(cx+TILE_W/2,cy+DEPTH);
+  c.lineTo(cx,cy+TILE_H/2+DEPTH);
+  c.closePath();
+}
+function isoWestPath(c,cx,cy) {
+  // West face (bottom-left)
+  c.beginPath();
+  c.moveTo(cx,cy+TILE_H/2);
+  c.lineTo(cx-TILE_W/2,cy);
+  c.lineTo(cx-TILE_W/2,cy+DEPTH);
+  c.lineTo(cx,cy+TILE_H/2+DEPTH);
+  c.closePath();
+}
+
+function drawIsoTile(c,cx,cy,type,t) {
+  // South depth face (darker)
+  isoSouthPath(c,cx,cy);
+  const sgrd=c.createLinearGradient(cx,cy,cx,cy+DEPTH+TILE_H/2);
+  sgrd.addColorStop(0,t.side); sgrd.addColorStop(1,t.sideB);
+  c.fillStyle=sgrd; c.fill();
+  c.strokeStyle='rgba(0,0,0,0.3)'; c.lineWidth=1; c.stroke();
+
+  // West depth face (slightly lighter than south)
+  isoWestPath(c,cx,cy);
+  const wgrd=c.createLinearGradient(cx,cy,cx,cy+DEPTH+TILE_H/2);
+  wgrd.addColorStop(0,lightenHex(t.side,15)); wgrd.addColorStop(1,t.sideB);
+  c.fillStyle=wgrd; c.fill();
+  c.strokeStyle='rgba(0,0,0,0.2)'; c.lineWidth=1; c.stroke();
+
+  // Top face
+  isoTopPath(c,cx,cy);
+  const tgrd=c.createRadialGradient(cx-TILE_W*0.15,cy-TILE_H*0.15,0,cx,cy,TILE_W*0.6);
+  tgrd.addColorStop(0,lightenHex(t.top,28)); tgrd.addColorStop(0.6,t.top); tgrd.addColorStop(1,darkenHex(t.top,18));
+  c.fillStyle=tgrd; c.fill();
+
+  // Top edge highlight
+  c.beginPath(); c.moveTo(cx,cy-TILE_H/2); c.lineTo(cx+TILE_W/2,cy);
+  c.strokeStyle='rgba(255,255,255,0.18)'; c.lineWidth=1.5; c.stroke();
+  c.beginPath(); c.moveTo(cx,cy-TILE_H/2); c.lineTo(cx-TILE_W/2,cy);
+  c.strokeStyle='rgba(255,255,255,0.08)'; c.lineWidth=1; c.stroke();
+
+  // Terrain details on top face
+  c.save(); isoTopPath(c,cx,cy); c.clip();
+  drawIsoFeatures(c,cx,cy,type);
+  c.restore();
+
+  // Top outline
+  isoTopPath(c,cx,cy); c.strokeStyle='rgba(0,0,0,0.25)'; c.lineWidth=1; c.stroke();
+}
+
+function drawIsoFeatures(c,cx,cy,type) {
+  const rng=seededRng(type.charCodeAt(0)*7+type.charCodeAt(1||0)*13);
+  if(type==='forest') {
+    for(let i=0;i<4;i++){
+      const tx=cx+(rng()-0.5)*TILE_W*0.55, ty=cy+(rng()-0.5)*TILE_H*0.4;
+      const h=12+rng()*8, w=8+rng()*4;
+      c.fillStyle='rgba(0,0,0,0.2)'; c.beginPath(); c.ellipse(tx+2,ty+3,w*0.5,3,0,0,Math.PI*2); c.fill();
+      c.fillStyle='#5a3a20'; c.fillRect(tx-1.5,ty,3,h*0.35);
+      c.fillStyle='#1a4818'; c.beginPath(); c.moveTo(tx,ty-h*0.55); c.lineTo(tx-w*0.5,ty); c.lineTo(tx+w*0.5,ty); c.closePath(); c.fill();
+      c.fillStyle='#226022'; c.beginPath(); c.moveTo(tx,ty-h*0.85); c.lineTo(tx-w*0.35,ty-h*0.18); c.lineTo(tx+w*0.35,ty-h*0.18); c.closePath(); c.fill();
+      c.fillStyle='#2a6e2a'; c.beginPath(); c.moveTo(tx,ty-h); c.lineTo(tx-w*0.2,ty-h*0.52); c.lineTo(tx+w*0.2,ty-h*0.52); c.closePath(); c.fill();
+    }
+  } else if(type==='mountain') {
+    for(let i=0;i<2;i++){
+      const ox=(i-0.5)*22+(rng()-0.5)*6, oy=(rng()-0.5)*6;
+      const h=24+rng()*10, w=20+rng()*6;
+      c.fillStyle='rgba(0,0,0,0.22)'; c.beginPath(); c.moveTo(cx+ox,cy+oy-h); c.lineTo(cx+ox-w*.5,cy+oy+6); c.lineTo(cx+ox+w*.5,cy+oy+6); c.closePath(); c.fill();
+      c.fillStyle='#787070'; c.beginPath(); c.moveTo(cx+ox,cy+oy-h); c.lineTo(cx+ox-w*.5,cy+oy+5); c.lineTo(cx+ox+w*.5,cy+oy+5); c.closePath(); c.fill();
+      c.fillStyle='rgba(0,0,0,0.18)'; c.beginPath(); c.moveTo(cx+ox,cy+oy-h); c.lineTo(cx+ox,cy+oy+5); c.lineTo(cx+ox+w*.5,cy+oy+5); c.closePath(); c.fill();
+      c.fillStyle='#e0eaf0'; c.beginPath(); c.moveTo(cx+ox,cy+oy-h); c.lineTo(cx+ox-w*.2,cy+oy-h+h*.32); c.lineTo(cx+ox+w*.2,cy+oy-h+h*.32); c.closePath(); c.fill();
+    }
+  } else if(type==='hill') {
+    for(let i=0;i<3;i++){
+      const ox=(i-1)*14+(rng()-0.5)*6, oy=4+rng()*4;
+      c.fillStyle='#b09a68'; c.beginPath(); c.ellipse(cx+ox,cy+oy,14+rng()*4,8+rng()*3,0,Math.PI,0); c.fill();
+      c.fillStyle='#887848'; c.beginPath(); c.ellipse(cx+ox,cy+oy,11+rng()*3,4+rng()*2,0,Math.PI,0); c.fill();
+    }
+  } else if(type==='ocean'||type==='coast') {
+    c.strokeStyle='rgba(120,200,255,0.22)'; c.lineWidth=1.5;
+    for(let i=0;i<3;i++){
+      c.beginPath(); c.moveTo(cx-TILE_W*.45,cy-6+i*8); c.bezierCurveTo(cx-TILE_W*.15,cy-10+i*8,cx+TILE_W*.15,cy-2+i*8,cx+TILE_W*.45,cy-6+i*8); c.stroke();
+    }
+  } else if(type==='river') {
+    c.strokeStyle='rgba(60,130,220,0.55)'; c.lineWidth=7; c.lineCap='round';
+    c.beginPath(); c.moveTo(cx-TILE_W*.5,cy-2); c.bezierCurveTo(cx-TILE_W*.15,cy-10,cx+TILE_W*.15,cy+10,cx+TILE_W*.5,cy+2); c.stroke();
+    c.strokeStyle='rgba(150,210,255,0.35)'; c.lineWidth=3; c.stroke();
+  } else if(type==='desert') {
+    c.fillStyle='rgba(160,110,30,0.3)';
+    for(let i=0;i<8;i++){ const a=rng()*Math.PI*2,d=rng()*TILE_W*.35; c.beginPath(); c.ellipse(cx+Math.cos(a)*d*0.7,cy+Math.sin(a)*d*0.35,3+rng()*2,1.5+rng(),rng()*Math.PI,0,Math.PI*2); c.fill(); }
+  } else if(type==='snow') {
+    c.fillStyle='rgba(255,255,255,0.45)';
+    for(let i=0;i<5;i++){ const a=rng()*Math.PI*2,d=rng()*TILE_W*.3; c.beginPath(); c.arc(cx+Math.cos(a)*d*0.7,cy+Math.sin(a)*d*0.35,3+rng()*4,0,Math.PI*2); c.fill(); }
+  } else if(type==='tundra') {
+    c.fillStyle='rgba(200,215,215,0.3)';
+    for(let i=0;i<5;i++){ const a=rng()*Math.PI*2,d=rng()*TILE_W*.35; c.beginPath(); c.arc(cx+Math.cos(a)*d*0.7,cy+Math.sin(a)*d*0.35,2+rng()*3,0,Math.PI*2); c.fill(); }
+  } else if(type==='plains'||type==='grassland') {
+    c.strokeStyle='rgba(50,100,20,0.4)'; c.lineWidth=1;
+    for(let i=0;i<7;i++){
+      const bx=cx+(rng()-0.5)*TILE_W*.55, by=cy+(rng()-0.5)*TILE_H*.35, h=4+rng()*4;
+      c.beginPath(); c.moveTo(bx,by); c.quadraticCurveTo(bx+(rng()-.5)*5,by-h*.6,bx+(rng()-.5)*3,by-h); c.stroke();
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// SETTLER TEXTURE (isometric figure)
+// ══════════════════════════════════════════════════════
+function generateUnitTextures(scene) {
+  ['settler_normal','settler_selected'].forEach(key=>{
+    const sel=key.includes('selected');
+    const oc=document.createElement('canvas'); oc.width=56; oc.height=72;
+    const c=oc.getContext('2d');
+    drawIsoSettler(c,28,58,sel);
+    scene.textures.addCanvas(key,oc);
+  });
+}
+
+function drawIsoSettler(c,cx,cy,sel) {
+  // Ground shadow (isometric ellipse)
+  c.fillStyle='rgba(0,0,0,0.3)'; c.beginPath(); c.ellipse(cx+2,cy,14,5,0,0,Math.PI*2); c.fill();
+  // Legs
+  c.fillStyle='#4a3a70'; c.fillRect(cx-6,cy-14,5,14); c.fillRect(cx+2,cy-14,5,14);
+  // Boots
+  c.fillStyle='#3a2a18'; c.fillRect(cx-7,cy-4,7,5); c.fillRect(cx+1,cy-4,7,5);
+  // Cloak body
+  const bodyCol=sel?'#a0c0f0':'#6868b0';
+  c.fillStyle=bodyCol;
+  c.beginPath(); c.moveTo(cx,cy-38); c.bezierCurveTo(cx-12,cy-30,cx-16,cy-18,cx-10,cy-5); c.lineTo(cx+10,cy-5); c.bezierCurveTo(cx+16,cy-18,cx+12,cy-30,cx,cy-38); c.fill();
+  // Cloak shadow side
+  c.fillStyle='rgba(0,0,0,0.18)'; c.beginPath(); c.moveTo(cx,cy-38); c.bezierCurveTo(cx+3,cy-30,cx+8,cy-18,cx+5,cy-5); c.lineTo(cx+10,cy-5); c.bezierCurveTo(cx+16,cy-18,cx+12,cy-30,cx,cy-38); c.fill();
+  // Belt
+  c.fillStyle='#8a5a20'; c.fillRect(cx-9,cy-13,18,4);
+  // Pack
+  c.fillStyle='#7a5228'; c.fillRect(cx+7,cy-30,10,14);
+  c.fillStyle='#5a3818'; c.fillRect(cx+8,cy-29,8,4);
+  // Neck
+  c.fillStyle='#c09060'; c.fillRect(cx-3,cy-40,6,5);
+  // Head
+  c.fillStyle='#d4a878'; c.beginPath(); c.arc(cx,cy-46,9,0,Math.PI*2); c.fill();
+  // Hood
+  c.fillStyle=sel?'#80a8d8':'#4a4a80';
+  c.beginPath(); c.arc(cx,cy-47,9,Math.PI,0); c.lineTo(cx+12,cy-38); c.lineTo(cx-12,cy-38); c.closePath(); c.fill();
+  // Face features
+  c.fillStyle='#2a1808'; c.beginPath(); c.arc(cx-3,cy-46,1.5,0,Math.PI*2); c.fill();
+  c.beginPath(); c.arc(cx+3,cy-46,1.5,0,Math.PI*2); c.fill();
+  // Staff
+  c.strokeStyle='#8a6030'; c.lineWidth=2.5; c.lineCap='round';
+  c.beginPath(); c.moveTo(cx-13,cy); c.lineTo(cx-11,cy-54); c.stroke();
+  c.fillStyle='#d0a840'; c.beginPath(); c.arc(cx-11,cy-55,3.5,0,Math.PI*2); c.fill();
+}
+
+// ══════════════════════════════════════════════════════
+// CITY TILE TEXTURE
+// ══════════════════════════════════════════════════════
+function generateCityTexture(scene) {
+  const oc=document.createElement('canvas'); oc.width=TILE_W; oc.height=TILE_H+DEPTH+80;
+  const c=oc.getContext('2d');
+  const cx=TILE_W/2, cy=TILE_H/2+8;
+
+  // Base tile — stone/city color
+  const t={top:'#a09080',side:'#706050',sideB:'#504038'};
+  drawIsoTile(c,cx,cy,'_city',t);
+
+  // Clip to top face for buildings
+  c.save(); isoTopPath(c,cx,cy); c.clip();
+
+  // Stone plaza floor texture
+  c.fillStyle='rgba(180,160,130,0.3)';
+  for(let i=0;i<5;i++) for(let j=0;j<3;j++) {
+    c.strokeStyle='rgba(80,60,40,0.2)'; c.lineWidth=0.5;
+    c.strokeRect(cx-TILE_W*.4+i*TILE_W*.18,cy-TILE_H*.3+j*TILE_H*.22,TILE_W*.16,TILE_H*.2);
+  }
+  c.restore();
+
+  // Buildings (drawn above the tile, isometric style)
+  const bx=cx, by=cy-TILE_H/2; // top of tile
+
+  // Main keep — left building (isometric box)
+  drawIsoBox(c,bx-8,by-2,16,22,30,'#c8a870','#8a6840','#6a5030');
+  // Right tower
+  drawIsoBox(c,bx+12,by+4,12,16,26,'#b89860','#7a5830','#5a4020');
+  // Small left house
+  drawIsoBox(c,bx-18,by+5,10,12,20,'#b08858','#6a4828','#4a3018');
+  // Central tall spire base
+  drawIsoBox(c,bx-3,by-8,10,28,36,'#d0b078','#906840','#604828');
+  // Spire triangle
+  c.fillStyle='#e8c888';
+  c.beginPath(); c.moveTo(bx+2,by-8-36-14); c.lineTo(bx-4,by-8-36); c.lineTo(bx+8,by-8-36); c.closePath(); c.fill();
+  // Flag
+  c.fillStyle='#3060c0'; c.beginPath(); c.moveTo(bx+2,by-8-36-14); c.lineTo(bx+12,by-8-36-10); c.lineTo(bx+2,by-8-36-6); c.closePath(); c.fill();
+
+  // Wall arc
+  c.strokeStyle='#907050'; c.lineWidth=4; c.setLineDash([]);
+  c.beginPath(); c.arc(bx,by+8,28,Math.PI,0); c.stroke();
+
+  scene.textures.addCanvas('tile_city',oc);
+}
+
+function drawIsoBox(c,cx,cy,w,h,depth,topCol,sideRCol,sideLCol) {
+  // South face
+  c.fillStyle=sideRCol;
+  c.beginPath(); c.moveTo(cx+w/2,cy); c.lineTo(cx+w/2,cy+depth); c.lineTo(cx,cy+depth+h/4); c.lineTo(cx,cy+h/4); c.closePath(); c.fill();
+  c.strokeStyle='rgba(0,0,0,0.2)'; c.lineWidth=0.5; c.stroke();
+  // West face
+  c.fillStyle=sideLCol;
+  c.beginPath(); c.moveTo(cx-w/2,cy); c.lineTo(cx-w/2,cy+depth); c.lineTo(cx,cy+depth+h/4); c.lineTo(cx,cy+h/4); c.closePath(); c.fill();
+  c.stroke();
+  // Top face
+  const tgrd=c.createLinearGradient(cx,cy-h,cx,cy);
+  tgrd.addColorStop(0,lightenHex(topCol,20)); tgrd.addColorStop(1,topCol);
+  c.fillStyle=tgrd;
+  c.beginPath(); c.moveTo(cx,cy-h); c.lineTo(cx+w/2,cy-h+h/4); c.lineTo(cx,cy+h/4); c.lineTo(cx-w/2,cy-h+h/4); c.closePath(); c.fill();
+  // Windows
+  c.fillStyle='rgba(255,220,80,0.7)';
+  if(h>18) { c.fillRect(cx-3,cy-h+h/4+4,4,5); c.fillRect(cx+1,cy-h+h/4+4,4,5); }
+}
+
+// ══════════════════════════════════════════════════════
+// COLOR UTILS
+// ══════════════════════════════════════════════════════
+function lightenHex(hex,amt){const n=parseInt(hex.slice(1),16);const r=Math.min(255,(n>>16)+amt),g=Math.min(255,((n>>8)&255)+amt),b=Math.min(255,(n&255)+amt);return`rgb(${r},${g},${b})`;}
+function darkenHex(hex,amt){const n=parseInt(hex.slice(1),16);const r=Math.max(0,(n>>16)-amt),g=Math.max(0,((n>>8)&255)-amt),b=Math.max(0,(n&255)-amt);return`rgb(${r},${g},${b})`;}
+
+// ══════════════════════════════════════════════════════
+// PHASER SCENE
+// ══════════════════════════════════════════════════════
+let scene_ref=null;
+class GameScene extends Phaser.Scene {
+  constructor(){super({key:'GameScene'});}
+
+  create() {
+    scene_ref=this;
+    generateTextures(this);
+    generateUnitTextures(this);
+    generateCityTexture(this);
+    this.cameras.main.setBackgroundColor('#0d1220');
+
+    // Layers (order matters for iso depth!)
+    this.terrainLayer=this.add.container(0,0);
+    this.highlightLayer=this.add.container(0,0);
+    this.featureLayer=this.add.container(0,0);
+    this.unitLayer=this.add.container(0,0);
+
+    // Build terrain — MUST render back-to-front for iso depth
+    this.tileSprites={};
+    const drawOrder=this.buildDrawOrder();
+    for(const {col,row} of drawOrder){
+      const type=MAP_DATA[row][col];
+      const {x,y}=isoPos(col,row);
+      const sp=this.add.image(x,y,'tile_'+type).setOrigin(0.5,0.5);
+      this.terrainLayer.add(sp);
+      this.tileSprites[`${col}_${row}`]=sp;
+    }
+
+    // Highlight layer sprites (pre-create, toggle visibility)
+    this.hlSprites={};
+    for(const {col,row} of drawOrder){
+      const {x,y}=isoPos(col,row);
+      const sp=this.add.image(x,y,'tile_highlight').setOrigin(0.5,0.5).setAlpha(0);
+      this.highlightLayer.add(sp);
+      this.hlSprites[`${col}_${row}`]=sp;
+    }
+
+    // Spawn settler
+    const sc=6,sr=5;
+    GS.units.push({id:GS.nextUnitId++,type:'settler',col:sc,row:sr,movesLeft:2});
+    this.unitSprites={};
+    this.spawnUnit(GS.units[0]);
+
+    // Camera
+    const {x:sx,y:sy}=isoPos(sc,sr);
+    this.cameras.main.centerOn(sx,sy);
+    this.cameras.main.setBounds(-600,-300,4000,2400);
+
+    // Input
+    this._drag=false;
+    this.input.on('pointerdown',()=>this._drag=false);
+    this.input.on('pointermove',ptr=>{
+      if(ptr.isDown&&(Math.abs(ptr.velocity.x)>1||Math.abs(ptr.velocity.y)>1)){
+        this.cameras.main.scrollX-=ptr.velocity.x/this.cameras.main.zoom;
+        this.cameras.main.scrollY-=ptr.velocity.y/this.cameras.main.zoom;
+        this._drag=true;
+      }
+    });
+    this.input.on('pointerup',ptr=>{ if(!this._drag) this.handleClick(ptr); });
+    this.input.on('wheel',(ptr,o,dx,dy)=>{
+      this.cameras.main.zoom=Phaser.Math.Clamp(this.cameras.main.zoom-dy*0.001,0.4,2.2);
+    });
+
+    this._t=0;
+    this.time.addEvent({delay:16,loop:true,callback:this.tick,callbackScope:this});
+
+    updateHUD(); showStatus('Your empire awaits. Select your settler to begin.',4000);
+  }
+
+  buildDrawOrder() {
+    // Iso rendering: sort by row first, then col, so far tiles render behind near ones
+    const order=[];
+    for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) order.push({col:c,row:r});
+    return order;
+  }
+
+  spawnUnit(unit) {
+    const {x,y}=isoPos(unit.col,unit.row);
+    const sh=this.add.ellipse(x+3,y+8,28,10,0x000000,0.32);
+    const sp=this.add.image(x,y-10,'settler_normal').setOrigin(0.5,1);
+    this.unitLayer.add(sh); this.unitLayer.add(sp);
+    this.unitSprites[unit.id]={sprite:sp,shadow:sh};
+  }
+
+  tick() {
+    this._t+=0.025;
+    const t=this._t;
+
+    // Unit animations
+    for(const unit of GS.units){
+      const s=this.unitSprites[unit.id]; if(!s) continue;
+      const {x,y}=isoPos(unit.col,unit.row);
+      const bob=Math.sin(t+unit.id*1.3)*2.5;
+      s.sprite.y=y-10-bob; s.shadow.y=y+8;
+
+      const isSel=GS.selectedUnit&&GS.selectedUnit.id===unit.id;
+      s.sprite.setTexture(isSel?'settler_selected':'settler_normal');
+
+      if(isSel){
+        if(!s.selRing){ s.selRing=this.add.ellipse(x,y,50,20,0xffe060,0).setStrokeStyle(2.5,0xffe060,1); this.unitLayer.add(s.selRing); }
+        s.selRing.x=x; s.selRing.y=y;
+        if(!s.pulseRing){ s.pulseRing=this.add.ellipse(x,y,50,20,0xffe060,0).setStrokeStyle(3,0xffe060,0); this.unitLayer.add(s.pulseRing); }
+        const pulse=(Math.sin(t*2)+1)*0.5;
+        s.pulseRing.x=x; s.pulseRing.y=y;
+        s.pulseRing.setSize(50+pulse*16,20+pulse*6);
+        s.pulseRing.setStrokeStyle(3,0xffe060,pulse*0.4);
+      } else {
+        if(s.selRing){s.selRing.destroy();s.selRing=null;}
+        if(s.pulseRing){s.pulseRing.destroy();s.pulseRing=null;}
+      }
+    }
+
+    // Move highlights (pulse alpha)
+    for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+      const sp=this.hlSprites[`${c}_${r}`]; if(!sp) continue;
+      const isHL=GS.moveHighlights.some(h=>h.col===c&&h.row===r);
+      if(isHL){ const pulse=(Math.sin(t*1.6+c*.5+r*.7)+1)*.5; sp.setAlpha(0.5+pulse*0.4); }
+      else sp.setAlpha(0);
+    }
+
+    // Water shimmer
+    const wa=0.88+Math.sin(t*.7)*.06;
+    for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+      const type=MAP_DATA[r][c];
+      if(type==='ocean'||type==='coast'||type==='river'){
+        const sp=this.tileSprites[`${c}_${r}`];
+        if(sp) sp.setAlpha(wa+Math.sin(t*.4+c*.3+r*.2)*.04);
+      }
+    }
+  }
+
+  handleClick(ptr) {
+    const wx=ptr.worldX, wy=ptr.worldY;
+    // Find closest hex to click
+    let best=null, bestD=Infinity;
+    for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+      const p=isoPos(c,r);
+      // Use isometric distance (scale Y since tiles are squished)
+      const d=Math.abs(wx-p.x)/(TILE_W*.5)+Math.abs(wy-p.y)/(TILE_H*.5);
+      if(d<bestD){bestD=d;best={col:c,row:r};}
+    }
+    if(!best||bestD>2.5) return;
+    const {col,row}=best;
+
+    const clickedUnit=GS.units.find(u=>u.col===col&&u.row===row);
+    const isHL=GS.moveHighlights.some(h=>h.col===col&&h.row===row);
+
+    if(isHL&&GS.selectedUnit){
+      const unit=GS.selectedUnit;
+      const {x,y}=isoPos(col,row);
+      const s=this.unitSprites[unit.id];
+      this.tweens.add({targets:s.sprite,x,duration:350,ease:'Cubic.easeInOut'});
+      this.tweens.add({targets:s.shadow,x,duration:350,ease:'Cubic.easeInOut'});
+      this.tweens.add({targets:s.sprite,y:y-10-20,yoyo:true,duration:175,ease:'Quad.easeOut'});
+      unit.col=col; unit.row=row; unit.movesLeft--;
+      GS.moveHighlights=unit.movesLeft>0?getMovable(unit,unit.movesLeft):[];
+      updateHUD(); return;
+    }
+    if(clickedUnit){
+      GS.selectedUnit=clickedUnit;
+      GS.moveHighlights=clickedUnit.movesLeft>0?getMovable(clickedUnit,clickedUnit.movesLeft):[];
+      updateHUD(); return;
+    }
+    GS.selectedUnit=null; GS.moveHighlights=[]; updateHUD();
+  }
+
+  foundCity(){
+    const u=GS.selectedUnit; if(!u) return;
+    const type=MAP_DATA[u.row][u.col];
+    if(!TERRAIN[type].passable){showStatus('Cannot found here!');return;}
+    if(GS.cities.some(c=>hexDist(c.col,c.row,u.col,u.row)<3)){showStatus('Too close to another city!');return;}
+    const name=CITY_NAMES[(GS.nextCityId-1)%CITY_NAMES.length];
+    const territory=getNeighbors(u.col,u.row).filter(n=>TERRAIN[MAP_DATA[n.row][n.col]].passable).map(n=>({col:n.col,row:n.row}));
+    GS.cities.push({id:GS.nextCityId++,col:u.col,row:u.row,name,pop:1,territory});
+
+    // Swap terrain tile to city tile
+    const sp=this.tileSprites[`${u.col}_${u.row}`];
+    if(sp){
+      this.tweens.add({targets:sp,scaleY:1.15,yoyo:true,duration:200,ease:'Quad.easeOut',
+        onComplete:()=>sp.setTexture('tile_city')});
+    }
+
+    // Territory border rings
+    for(const h of territory){
+      const hs=this.tileSprites[`${h.col}_${h.row}`];
+      if(hs){ this.tweens.add({targets:hs,alpha:0.7,yoyo:true,duration:400,repeat:1}); }
+    }
+
+    // Add city name label
+    const {x,y}=isoPos(u.col,u.row);
+    const lbl=this.add.text(x,y-TILE_H*.5-55,name,{font:'bold 11px Cinzel,serif',fill:'#f0d080',stroke:'#000',strokeThickness:3}).setOrigin(0.5,0.5);
+    this.featureLayer.add(lbl);
+
+    // Remove settler with animation
+    const s=this.unitSprites[u.id];
+    if(s){this.tweens.add({targets:[s.sprite,s.shadow],alpha:0,scaleX:1.6,scaleY:1.6,duration:500,ease:'Cubic.easeOut',onComplete:()=>{s.sprite.destroy();s.shadow.destroy();if(s.selRing)s.selRing.destroy();if(s.pulseRing)s.pulseRing.destroy();}});}
+
+    GS.units=GS.units.filter(x=>x.id!==u.id);
+    GS.selectedUnit=null; GS.moveHighlights=[];
+    showStatus(`✦ ${name} has been founded!`); updateHUD();
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// HUD
+// ══════════════════════════════════════════════════════
+function updateHUD(){
+  const u=GS.selectedUnit;
+  document.getElementById('res-cities').textContent=GS.cities.length;
+  document.getElementById('res-units').textContent=GS.units.length;
+  if(!u){document.getElementById('unit-name').textContent='No unit selected';document.getElementById('unit-desc').textContent='Click a unit to select it.';document.getElementById('action-btns').innerHTML='';return;}
+  const type=MAP_DATA[u.row][u.col];
+  document.getElementById('unit-name').textContent='⚑ Settler';
+  document.getElementById('unit-desc').textContent=`On: ${TERRAIN[type].label} · Moves: ${u.movesLeft}/2`;
+  document.getElementById('action-btns').innerHTML=`<button class="abtn" onclick="scene_ref.foundCity()">🏙 Found City</button><button class="abtn" onclick="GS.selectedUnit=null;GS.moveHighlights=[];updateHUD()">⏭ Skip</button>`;
+}
+function endTurn(){GS.turn++;for(const u of GS.units)u.movesLeft=2;document.getElementById('turn-info').textContent=`Turn ${GS.turn}`;showStatus(`Turn ${GS.turn} begins`);if(GS.turn%5===0)for(const c of GS.cities)c.pop=Math.min(10,c.pop+1);updateHUD();}
+function showStatus(msg,d=2500){const el=document.getElementById('status-msg');el.textContent=msg;el.style.opacity='1';clearTimeout(el._t);el._t=setTimeout(()=>el.style.opacity='0',d);}
+
+// ══════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════
+let phaserGame=null;
+function startGame(){
+  document.getElementById('menu-overlay').style.display='none';
+  document.getElementById('top-bar').style.display='flex';
+  document.getElementById('bot-panel').style.display='flex';
+  phaserGame=new Phaser.Game({
+    type:Phaser.AUTO,
+    width:window.innerWidth,
+    height:window.innerHeight-TOP_H-BOT_H,
+    parent:'game-container',
+    backgroundColor:'#0d1220',
+    scene:[GameScene],
+    scale:{mode:Phaser.Scale.RESIZE,autoCenter:Phaser.Scale.CENTER_BOTH},
+    render:{antialias:true,pixelArt:false},
+  });
+  setTimeout(()=>{
+    const cv=document.querySelector('#game-container canvas');
+    if(cv){cv.style.position='fixed';cv.style.top=TOP_H+'px';cv.style.left='0';}
+  },200);
+  window.addEventListener('resize',()=>{if(phaserGame)phaserGame.scale.resize(window.innerWidth,window.innerHeight-TOP_H-BOT_H);});
+}
+</script>
+</body>
+</html>
