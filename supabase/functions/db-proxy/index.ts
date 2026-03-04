@@ -186,6 +186,11 @@ Deno.serve(async (req) => {
         if (method === 'or' && typeof args === 'string') {
           // .or() takes a raw query string, not a col/val pair
           query = query.or(args)
+        } else if (method === 'not' && Array.isArray(args)) {
+          // .not(col, operator, value) — stored as array of {col, op, val}
+          for (const { col, op: notOp, val } of args as { col: string; op: string; val: any }[]) {
+            query = query.not(col, notOp, val)
+          }
         } else if (typeof args === 'object' && !Array.isArray(args)) {
           for (const [col, val] of Object.entries(args as Record<string, any>)) {
             query = query[method](col, val)
