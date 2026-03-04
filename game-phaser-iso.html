@@ -299,6 +299,16 @@ const RESOURCE_MAP = generateResources(MAP_DATA, MAP_SEED);
 // ── ISO POSITION ──
 // Returns the screen coordinate of the diamond TOP VERTEX for tile (col,row)
 // Using true isometric: x=(col-row)*TW/2,  y=(col+row)*TH/2
+// ── WRAP HELPERS ──
+// Toroidal world: east wraps to west, north wraps to south
+function wrapC(c){return((c%COLS)+COLS)%COLS;}
+function wrapR(r){return((r%ROWS)+ROWS)%ROWS;}
+// Terrain/resource lookup with wrapping
+function terrainAt(c,r){return MAP_DATA[wrapR(r)][wrapC(c)];}
+function resourceAt(c,r){return RESOURCE_MAP[`${wrapC(c)}_${wrapR(r)}`]||null;}
+// Canonical key (always in 0..COLS-1, 0..ROWS-1)
+function tileKey(c,r){return `${wrapC(c)}_${wrapR(r)}`;}
+
 function isoPos(col, row) {
   return {
     x: (col - row) * STEP_X,
@@ -307,9 +317,18 @@ function isoPos(col, row) {
 }
 
 // ── HEX UTILS ──
-function hexDist(c1,r1,c2,r2){const t=(c,r)=>{const x=c-(r-(r&1))/2,z=r;return{x,z,y:-x-z};};const a=t(c1,r1),b=t(c2,r2);return Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y),Math.abs(a.z-b.z));}
-function getNeighbors(col,row){const d=row%2===0?[[-1,-1],[0,-1],[-1,0],[1,0],[-1,1],[0,1]]:[[0,-1],[1,-1],[-1,0],[1,0],[0,1],[1,1]];return d.map(([dc,dr])=>({col:col+dc,row:row+dr})).filter(n=>n.col>=0&&n.col<COLS&&n.row>=0&&n.row<ROWS);}
-function getMovable(unit,r=2){const res=[];for(let row=0;row<ROWS;row++)for(let col=0;col<COLS;col++){if(col===unit.col&&row===unit.row)continue;if(hexDist(unit.col,unit.row,col,row)<=r&&TERRAIN[MAP_DATA[row][col]].passable&&!GS.units.some(u=>u.col===col&&u.row===row))res.push({col,row});}return res;}
+function hexDist(c1,r1,c2,r2){
+  // Use toroidal-aware distance: take shortest path on wrapped grid
+  let dc=Math.abs(c1-c2), dr=Math.abs(r1-r2);
+  if(dc>COLS/2) dc=COLS-dc;
+  if(dr>ROWS/2) dr=ROWS-dr;
+  return Math.max(dc,dr);
+}
+function getNeighbors(col,row){
+  // 4 cardinal neighbors, all wrapped
+  return [[-1,0],[1,0],[0,-1],[0,1]].map(([dc,dr])=>({col:wrapC(col+dc),row:wrapR(row+dr)}));
+}
+function getMovable(unit,r=2){const res=[];for(let row=0;row<ROWS;row++)for(let col=0;col<COLS;col++){if(col===unit.col&&row===unit.row)continue;if(hexDist(unit.col,unit.row,col,row)<=r&&TERRAIN[terrainAt(col,row)].passable&&!GS.units.some(u=>u.col===col&&u.row===row))res.push({col,row});}return res;}
 function seededRng(s){let n=s;return()=>{n=(n*1664525+1013904223)&0xffffffff;return(n>>>0)/0xffffffff;};}
 
 // ── COLOR UTILS ──
@@ -446,10 +465,10 @@ function isoDiamond(ctx, cx, topY, tw, th) {
 function featForest(ctx, tx, topY, botX, botY, mlx, mrx, midY, above) {
   if (above) {
     const rng = seededRng(7731);
-    // 4 trees arranged around tile center, sized for TW=128
+    // 4 trees rooted at midY (visual ground surface of tile), not topY
     const trees = [{ox:-20,s:14},{ox:18,s:12},{ox:-4,s:16},{ox:26,s:10}];
     for (const {ox,s} of trees) {
-      drawFlatTree(ctx, tx+ox, topY+2, s, rng);
+      drawFlatTree(ctx, tx+ox, midY, s, rng);
     }
   } else {
     const rng = seededRng(7731);
@@ -463,9 +482,9 @@ function featForest(ctx, tx, topY, botX, botY, mlx, mrx, midY, above) {
 
 function featMountain(ctx, tx, topY, botX, botY, mlx, mrx, midY, above) {
   if (!above) return;
-  // Two mountains centered on the tile, sized for TW=128
-  drawFlatMountain(ctx, tx-10, topY+4, 26, 36);
-  drawFlatMountain(ctx, tx+14, topY+10, 18, 26);
+  // Two mountains rooted at midY (visual ground), not topY
+  drawFlatMountain(ctx, tx-10, midY, 26, 36);
+  drawFlatMountain(ctx, tx+14, midY+4, 18, 26);
 }
 
 function featHill(ctx, tx, topY, botX, botY, mlx, mrx, midY, above) {
@@ -953,13 +972,32 @@ function generateTextures(sc) {
   hctx.strokeStyle='rgba(180,255,180,0.35)'; hctx.lineWidth=1; hctx.stroke();
   sc.textures.addCanvas('tile_highlight', hlOC);
 
-  // Fog of war tile
-  const fogOC=document.createElement('canvas'); fogOC.width=TC_W; fogOC.height=TC_H;
-  const fctx=fogOC.getContext('2d');
-  fctx.beginPath(); fctx.moveTo(TC_W/2,ABOVE); fctx.lineTo(TC_W/2+TW/2,ABOVE+TH/2); fctx.lineTo(TC_W/2,ABOVE+TH); fctx.lineTo(TC_W/2-TW/2,ABOVE+TH/2); fctx.closePath();
-  fctx.fillStyle='rgba(10,16,8,0.90)'; fctx.fill();
-  fctx.strokeStyle='rgba(30,50,20,0.6)'; fctx.lineWidth=1; fctx.stroke();
-  sc.textures.addCanvas('tile_fog', fogOC);
+  // ── Fog of war textures ──
+  // Helper to draw a Civ/Polytopia-style fog diamond
+  function makeFogCanvas(fillAlpha, edgeSoftness) {
+    const fc=document.createElement('canvas'); fc.width=TC_W; fc.height=TC_H;
+    const fx=fc.getContext('2d');
+    const cx=TC_W/2, ty=ABOVE, my=ABOVE+TH/2, by=ABOVE+TH;
+    // Radial gradient from center → edges makes a soft Civ-style fog
+    const grad=fx.createRadialGradient(cx, my, 0, cx, my, TW*.62);
+    grad.addColorStop(0,   `rgba(8,14,6,${fillAlpha})`);
+    grad.addColorStop(0.6, `rgba(8,14,6,${fillAlpha})`);
+    grad.addColorStop(1,   `rgba(8,14,6,${fillAlpha*edgeSoftness})`);
+    // Clip to diamond shape
+    fx.save();
+    fx.beginPath(); fx.moveTo(cx,ty); fx.lineTo(cx+TW/2,my); fx.lineTo(cx,by); fx.lineTo(cx-TW/2,my); fx.closePath();
+    fx.clip();
+    fx.fillStyle=grad; fx.fillRect(0,0,TC_W,TC_H);
+    fx.restore();
+    // Subtle border so tiles don't bleed into each other
+    fx.beginPath(); fx.moveTo(cx,ty); fx.lineTo(cx+TW/2,my); fx.lineTo(cx,by); fx.lineTo(cx-TW/2,my); fx.closePath();
+    fx.strokeStyle=`rgba(20,40,15,${fillAlpha*.5})`; fx.lineWidth=1; fx.stroke();
+    return fc;
+  }
+  // tile_fog = completely unexplored (very dark, nearly opaque)
+  sc.textures.addCanvas('tile_fog', makeFogCanvas(0.92, 0.25));
+  // tile_fog_seen = explored but not currently in sight range (darker tint, still shows terrain)
+  sc.textures.addCanvas('tile_fog_seen', makeFogCanvas(0.48, 0.1));
 
   // Resource badge canvas (small, drawn on top of tile)
   // We'll use a single 32x32 canvas per resource with emoji
@@ -1006,17 +1044,38 @@ class GameScene extends Phaser.Scene {
     this.labelLayer     = this.add.container(0,0);
     this.fogLayer       = this.add.container(0,0);
 
-    // Build all tiles — back to front (row 0→N, col 0→N)
-    this.tileSprites={};
-    for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
-      const type=MAP_DATA[r][c];
-      const {x,y}=isoPos(c,r);
-      const sp=this.add.image(x, y, 'tile_'+type).setOrigin(OX, OY);
-      this.terrainLayer.add(sp);
-      this.tileSprites[`${c}_${r}`]=sp;
+    // ── Toroidal world: render 3×3 copies of the map for seamless wrapping ──
+    // The canonical (dc=0, dr=0) copy holds game-state sprites.
+    // Ghost copies (dc=±1, dr=±1) mirror textures for visual continuity.
+    // World offsets in isometric screen space for each copy:
+    //   col offset +COLS → isoPos shift of (+COLS*STEP_X - COLS*STEP_X, (COLS)*STEP_Y) = wait, correct:
+    //   isoPos(c+COLS, r) = ((c+COLS-r)*STEP_X, (c+COLS+r)*STEP_Y) = isoPos(c,r) + (COLS*STEP_X, COLS*STEP_Y)
+    //   isoPos(c, r+ROWS) = isoPos(c,r) + (-ROWS*STEP_X, ROWS*STEP_Y)
+    const WORLD_OX = COLS * STEP_X;   // x shift per col-copy
+    const WORLD_OY = COLS * STEP_Y;   // y shift per col-copy (east wrap)
+    const WORLD_RX = -ROWS * STEP_X;  // x shift per row-copy
+    const WORLD_RY = ROWS * STEP_Y;   // y shift per row-copy (south wrap)
+
+    this.tileSprites={};  // canonical only: key='c_r'
+    this.ghostSprites={}; // ghost copies: key='dc_dr_c_r'
+
+    for(let dr=-1; dr<=1; dr++) for(let dc=-1; dc<=1; dc++){
+      const offX = dc*WORLD_OX + dr*WORLD_RX;
+      const offY = dc*WORLD_OY + dr*WORLD_RY;
+      for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+        const type=MAP_DATA[r][c];
+        const {x,y}=isoPos(c,r);
+        const sp=this.add.image(x+offX, y+offY, 'tile_'+type).setOrigin(OX, OY);
+        this.terrainLayer.add(sp);
+        if(dc===0 && dr===0){
+          this.tileSprites[`${c}_${r}`]=sp;
+        } else {
+          this.ghostSprites[`${dc}_${dr}_${c}_${r}`]=sp;
+        }
+      }
     }
 
-    // Resource sprites
+    // Resource sprites (canonical copy only)
     this.resSp={};
     for(const [key, rk] of Object.entries(RESOURCE_MAP)){
       const [c,r]=key.split('_').map(Number);
@@ -1026,7 +1085,7 @@ class GameScene extends Phaser.Scene {
       this.resSp[key]=sp;
     }
 
-    // Highlight overlay sprites (same origin)
+    // Highlight overlay sprites (canonical only)
     this.hlSprites={};
     for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
       const {x,y}=isoPos(c,r);
@@ -1035,13 +1094,26 @@ class GameScene extends Phaser.Scene {
       this.hlSprites[`${c}_${r}`]=sp;
     }
 
-    // Fog of war sprites (start all covered)
+    // Fog of war sprites — 3×3 copies for seamless wrapping appearance
     this.fogSprites={};
-    for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
-      const {x,y}=isoPos(c,r);
-      const sp=this.add.image(x, y, 'tile_fog').setOrigin(OX, OY);
-      this.fogLayer.add(sp);
-      this.fogSprites[`${c}_${r}`]=sp;
+    for(let dr=-1; dr<=1; dr++) for(let dc=-1; dc<=1; dc++){
+      const offX = dc*WORLD_OX + dr*WORLD_RX;
+      const offY = dc*WORLD_OY + dr*WORLD_RY;
+      for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+        const {x,y}=isoPos(c,r);
+        const sp=this.add.image(x+offX, y+offY, 'tile_fog').setOrigin(OX, OY);
+        this.fogLayer.add(sp);
+        if(dc===0 && dr===0) this.fogSprites[`${c}_${r}`]=sp;
+        else this.ghostSprites[`fog_${dc}_${dr}_${c}_${r}`]=sp;
+      }
+    }
+    // Store ghost fog sprites separately for sync
+    this.ghostFogSprites={};
+    for(let dr=-1; dr<=1; dr++) for(let dc=-1; dc<=1; dc++){
+      if(dc===0 && dr===0) continue;
+      for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+        this.ghostFogSprites[`${dc}_${dr}_${c}_${r}`]=this.ghostSprites[`fog_${dc}_${dr}_${c}_${r}`];
+      }
     }
 
     // Spawn settler — find a good passable starting tile
@@ -1063,18 +1135,26 @@ class GameScene extends Phaser.Scene {
     // Camera center
     const {x:sx,y:sy}=isoPos(SC,SR);
     this.cameras.main.centerOn(sx, sy+TH/2);
-    this.cameras.main.setBounds(-ROWS*STEP_X - 200, -200, (COLS+ROWS)*STEP_X + 400, (COLS+ROWS)*STEP_Y + 200);
+    // No bounds — toroidal infinite world, camera can scroll forever
 
     // ── Input ──
     this._dragStartX=0; this._dragStartY=0; this._hasDragged=false;
-    this.input.on('pointerdown', p=>{this._dragStartX=p.x;this._dragStartY=p.y;this._hasDragged=false;});
+    this._prevPtrX=0; this._prevPtrY=0;
+    this.input.on('pointerdown', p=>{
+      this._dragStartX=p.x; this._dragStartY=p.y;
+      this._prevPtrX=p.x; this._prevPtrY=p.y;
+      this._hasDragged=false;
+    });
     this.input.on('pointermove', p=>{
       if(p.isDown){
+        const dx=p.x-this._prevPtrX, dy=p.y-this._prevPtrY;
         if(Math.abs(p.x-this._dragStartX)>6||Math.abs(p.y-this._dragStartY)>6) this._hasDragged=true;
         if(this._hasDragged){
-          this.cameras.main.scrollX -= p.velocity.x/this.cameras.main.zoom*.75;
-          this.cameras.main.scrollY -= p.velocity.y/this.cameras.main.zoom*.75;
+          // Delta-based: move camera exactly as far as finger moved, no extrapolation
+          this.cameras.main.scrollX -= dx/this.cameras.main.zoom;
+          this.cameras.main.scrollY -= dy/this.cameras.main.zoom;
         }
+        this._prevPtrX=p.x; this._prevPtrY=p.y;
       }
       // Tooltip on hover
       this.showTileTooltip(p);
@@ -1092,12 +1172,36 @@ class GameScene extends Phaser.Scene {
   }
 
   revealAround(col, row, radius){
+    const wc=wrapC(col), wr=wrapR(row);
     for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
-      if(Math.abs(c-col)<=radius && Math.abs(r-row)<=radius){
-        const key=`${c}_${r}`;
+      const key=`${c}_${r}`;
+      // Toroidal sight distance
+      let dc=Math.abs(c-wc), dr=Math.abs(r-wr);
+      if(dc>COLS/2) dc=COLS-dc;
+      if(dr>ROWS/2) dr=ROWS-dr;
+      const inSight = dc<=radius && dr<=radius;
+
+      const applyFog=(sp, tex, alpha)=>{
+        if(!sp) return;
+        if(tex && sp.texture.key!==tex) sp.setTexture(tex);
+        sp.setAlpha(alpha);
+      };
+
+      if(inSight){
         GS.revealed.add(key);
-        if(this.fogSprites[key]) this.fogSprites[key].setAlpha(0);
+        applyFog(this.fogSprites[key], null, 0);
+        // Also clear all ghost copies
+        for(let gdr=-1;gdr<=1;gdr++) for(let gdc=-1;gdc<=1;gdc++){
+          if(gdc===0&&gdr===0) continue;
+          applyFog(this.ghostFogSprites[`${gdc}_${gdr}_${c}_${r}`], null, 0);
+        }
         if(this.resSp[key]) this.resSp[key].setAlpha(1);
+      } else if(GS.revealed.has(key)){
+        applyFog(this.fogSprites[key], 'tile_fog_seen', 1);
+        for(let gdr=-1;gdr<=1;gdr++) for(let gdc=-1;gdc<=1;gdc++){
+          if(gdc===0&&gdr===0) continue;
+          applyFog(this.ghostFogSprites[`${gdc}_${gdr}_${c}_${r}`], 'tile_fog_seen', 1);
+        }
       }
     }
   }
@@ -1105,23 +1209,29 @@ class GameScene extends Phaser.Scene {
   showTileTooltip(p){
     const wx=p.worldX, wy=p.worldY;
     let best=null, bestD=Infinity;
-    for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
-      const pos=isoPos(c,r);
-      const cx=pos.x, cy=pos.y+TH/2;
-      const dx=Math.abs(wx-cx)/(TW*.52), dy=Math.abs(wy-cy)/(TH*.52);
-      const d=dx+dy;
-      if(d<bestD){bestD=d;best={col:c,row:r};}
+    // Search across 3×3 world copies
+    const WORLD_OX = COLS * STEP_X; const WORLD_OY = COLS * STEP_Y;
+    const WORLD_RX = -ROWS * STEP_X; const WORLD_RY = ROWS * STEP_Y;
+    for(let dr=-1;dr<=1;dr++) for(let dc=-1;dc<=1;dc++){
+      const offX=dc*WORLD_OX+dr*WORLD_RX, offY=dc*WORLD_OY+dr*WORLD_RY;
+      for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+        const pos=isoPos(c,r);
+        const cx=pos.x+offX, cy=pos.y+offY+TH/2;
+        const dx=Math.abs(wx-cx)/(TW*.52), dy=Math.abs(wy-cy)/(TH*.52);
+        const d=dx+dy;
+        if(d<bestD){bestD=d;best={col:c,row:r};}
+      }
     }
     if(!best||bestD>1.5) return hideTileTooltip();
     const {col,row}=best;
-    const key=`${col}_${row}`;
+    const key=`${wrapC(col)}_${wrapR(row)}`;
     if(!GS.revealed.has(key)) return hideTileTooltip();
 
-    const tType=MAP_DATA[row]?.[col];
+    const tType=terrainAt(col,row);
     if(!tType) return hideTileTooltip();
     const t=TERRAIN[tType];
-    const yields=getTileYield(col,row,MAP_DATA,RESOURCE_MAP);
-    const rKey=RESOURCE_MAP[key];
+    const yields=getTileYield(wrapC(col),wrapR(row),MAP_DATA,RESOURCE_MAP);
+    const rKey=resourceAt(col,row);
 
     const tt=document.getElementById('tile-tooltip');
     document.getElementById('tt-title').textContent=t.label;
@@ -1180,9 +1290,16 @@ class GameScene extends Phaser.Scene {
     }
 
     for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
-      if(TERRAIN[MAP_DATA[r][c]].water){
+      if(TERRAIN[terrainAt(c,r)].water){
+        const alpha=.80+Math.sin(t*.6+c*.35+r*.25)*.1;
         const sp=this.tileSprites[`${c}_${r}`];
-        if(sp) sp.setAlpha(.80+Math.sin(t*.6+c*.35+r*.25)*.1);
+        if(sp) sp.setAlpha(alpha);
+        // Sync ghost copies
+        for(let gdr=-1;gdr<=1;gdr++) for(let gdc=-1;gdc<=1;gdc++){
+          if(gdc===0&&gdr===0) continue;
+          const gs=this.ghostSprites[`${gdc}_${gdr}_${c}_${r}`];
+          if(gs) gs.setAlpha(alpha);
+        }
       }
     }
   }
@@ -1190,14 +1307,18 @@ class GameScene extends Phaser.Scene {
   handleClick(ptr){
     const wx=ptr.worldX, wy=ptr.worldY;
     let best=null, bestD=Infinity;
-    for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
-      const p=isoPos(c,r);
-      // Center of tile top face = (p.x, p.y + TH/2)
-      const cx=p.x, cy=p.y+TH/2;
-      // Manhattan distance in iso space
-      const dx=Math.abs(wx-cx)/(TW*.52), dy=Math.abs(wy-cy)/(TH*.52);
-      const d=dx+dy;
-      if(d<bestD){bestD=d;best={col:c,row:r};}
+    // Search across 3×3 world copies to handle wrapping
+    const WORLD_OX = COLS * STEP_X; const WORLD_OY = COLS * STEP_Y;
+    const WORLD_RX = -ROWS * STEP_X; const WORLD_RY = ROWS * STEP_Y;
+    for(let dr=-1;dr<=1;dr++) for(let dc=-1;dc<=1;dc++){
+      const offX=dc*WORLD_OX+dr*WORLD_RX, offY=dc*WORLD_OY+dr*WORLD_RY;
+      for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+        const p=isoPos(c,r);
+        const cx=p.x+offX, cy=p.y+offY+TH/2;
+        const dx=Math.abs(wx-cx)/(TW*.52), dy=Math.abs(wy-cy)/(TH*.52);
+        const d=dx+dy;
+        if(d<bestD){bestD=d;best={col:c,row:r};}
+      }
     }
     if(!best||bestD>1.8) return;
     const {col,row}=best;
@@ -1232,18 +1353,26 @@ class GameScene extends Phaser.Scene {
 
   foundCity(){
     const u=GS.selectedUnit; if(!u) return;
-    const type=MAP_DATA[u.row][u.col];
+    const type=terrainAt(u.col,u.row);
     if(!TERRAIN[type].passable){showStatus('Cannot found here!');return;}
     if(GS.cities.some(c=>hexDist(c.col,c.row,u.col,u.row)<3)){showStatus('Too close to another city!');return;}
     const name=CITY_NAMES[(GS.nextCityId-1)%CITY_NAMES.length];
-    const territory=getNeighbors(u.col,u.row).filter(n=>TERRAIN[MAP_DATA[n.row][n.col]].passable).map(n=>({col:n.col,row:n.row}));
+    const territory=getNeighbors(u.col,u.row).filter(n=>TERRAIN[terrainAt(n.col,n.row)].passable).map(n=>({col:n.col,row:n.row}));
     GS.cities.push({id:GS.nextCityId++,col:u.col,row:u.row,name,pop:1,territory,food:0,foodToGrow:10});
     this.revealAround(u.col, u.row, 3);
 
-    const sp=this.tileSprites[`${u.col}_${u.row}`];
+    const sp=this.tileSprites[`${wrapC(u.col)}_${wrapR(u.row)}`];
     if(sp){
       this.tweens.add({targets:sp,scaleY:1.1,yoyo:true,duration:180,ease:'Quad.easeOut',
-        onComplete:()=>{sp.setTexture('tile_city');sp.setOrigin(OX, this._cityOriginY);}});
+        onComplete:()=>{
+          sp.setTexture('tile_city');sp.setOrigin(OX, this._cityOriginY);
+          // Sync ghost copies
+          for(let dr=-1;dr<=1;dr++) for(let dc=-1;dc<=1;dc++){
+            if(dc===0&&dr===0) continue;
+            const gs=this.ghostSprites[`${dc}_${dr}_${wrapC(u.col)}_${wrapR(u.row)}`];
+            if(gs){gs.setTexture('tile_city');gs.setOrigin(OX, this._cityOriginY);}
+          }
+        }});
     }
 
     for(const h of territory){
@@ -1282,9 +1411,9 @@ function updateHUD(){
   document.getElementById('turn-info').textContent=`Turn ${GS.turn}`;
 
   if(!u){document.getElementById('unit-name').textContent='No unit selected';document.getElementById('unit-desc').textContent='Click a unit to select it.';document.getElementById('action-btns').innerHTML='';return;}
-  const tType=MAP_DATA[u.row]?.[u.col]||'plains';
-  const yields=getTileYield(u.col,u.row,MAP_DATA,RESOURCE_MAP);
-  const rKey=RESOURCE_MAP[`${u.col}_${u.row}`];
+  const tType=terrainAt(u.col,u.row)||'plains';
+  const yields=getTileYield(wrapC(u.col),wrapR(u.row),MAP_DATA,RESOURCE_MAP);
+  const rKey=resourceAt(u.col,u.row);
   document.getElementById('unit-name').textContent='⚑ Settler';
   document.getElementById('unit-desc').textContent=
     `${TERRAIN[tType].label}${rKey?' · '+RESOURCES[rKey].label:''} · Moves: ${u.movesLeft}/2 · Tile: 🍎${yields.f} ⚒${yields.p} 💰${yields.g}`;
