@@ -576,14 +576,15 @@ function attachWeekInteractions() {
       evEl.addEventListener('mousedown', startMove);
       evEl.addEventListener('touchstart', startMove, { passive: false });
 
-      // Click (no drag) → open detail popup (only for gcal events)
+      // Click (no drag) → open detail popup
       evEl.addEventListener('click', (e) => {
         if (Date.now() - lastDragEnd < 400) return; // was a drag, not a click
         e.stopPropagation();
         if (evType === 'gcal') {
           openEventPopup(evId, evStart, evEnd, evEl.title.replace(` ${evStart}–${evEnd}`, '').trim(), evDate, evEl);
         } else if (evType === 'class' && classId) {
-          window.location.href = `class.html?id=${classId}`;
+          const className = evEl.title.replace(` ${evStart}–${evEnd}`, '').trim();
+          openClassEditModal(classId, className, evStart, evEnd);
         }
       });
     });
@@ -761,6 +762,64 @@ async function saveClassTime(classId, startTime, endTime) {
     toast('Class time updated ✅ (all recurring days updated)', 'success');
     render();
   }
+}
+
+// ── Class edit modal (edit time; navigate to class page) ──────────────────────
+function openClassEditModal(classId, className, startTime, endTime) {
+  removeModal();
+  const modal = document.createElement('div');
+  modal.id = 'cal-ev-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:500;display:flex;align-items:center;justify-content:center';
+  modal.innerHTML = `
+    <div style="background:var(--white);border-radius:12px;padding:20px;width:90%;max-width:360px;box-shadow:0 8px 32px rgba(0,0,0,0.2)" onclick="event.stopPropagation()">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <div style="width:10px;height:10px;border-radius:50%;background:#2563EB;flex-shrink:0"></div>
+        <div style="font-size:16px;font-weight:700">${className}</div>
+      </div>
+      <div style="font-size:12px;color:var(--gray-400);margin-bottom:16px">Recurring class · changes apply to all days</div>
+      <div style="display:flex;gap:8px;margin-bottom:16px">
+        <div style="flex:1">
+          <label style="font-size:11px;color:var(--gray-400);margin-bottom:3px;display:block">Start</label>
+          <input id="cem-start" type="time" value="${startTime || ''}"
+            style="width:100%;border:1.5px solid var(--gray-200);border-radius:8px;padding:8px 10px;font-size:14px;outline:none;box-sizing:border-box"
+            onfocus="this.style.borderColor='var(--blue)'" onblur="this.style.borderColor='var(--gray-200)'" />
+        </div>
+        <div style="flex:1">
+          <label style="font-size:11px;color:var(--gray-400);margin-bottom:3px;display:block">End</label>
+          <input id="cem-end" type="time" value="${endTime || ''}"
+            style="width:100%;border:1.5px solid var(--gray-200);border-radius:8px;padding:8px 10px;font-size:14px;outline:none;box-sizing:border-box"
+            onfocus="this.style.borderColor='var(--blue)'" onblur="this.style.borderColor='var(--gray-200)'" />
+        </div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button id="cem-goto-btn"
+          style="flex:1;padding:10px;border:1.5px solid var(--gray-200);border-radius:8px;background:var(--white);font-size:13px;font-weight:600;color:var(--gray-700);cursor:pointer">
+          📋 Open Class
+        </button>
+        <button id="cem-save-btn"
+          style="flex:2;padding:10px;border:none;border-radius:8px;background:var(--blue);color:white;font-size:14px;font-weight:700;cursor:pointer">
+          Save Time
+        </button>
+      </div>
+    </div>
+  `;
+  modal.addEventListener('click', () => modal.remove());
+  document.body.appendChild(modal);
+
+  document.getElementById('cem-goto-btn').addEventListener('click', () => {
+    modal.remove();
+    window.location.href = `class.html?id=${classId}`;
+  });
+
+  document.getElementById('cem-save-btn').addEventListener('click', async () => {
+    const start = document.getElementById('cem-start').value;
+    const end   = document.getElementById('cem-end').value;
+    if (!start) { document.getElementById('cem-start').focus(); return; }
+    const btn = document.getElementById('cem-save-btn');
+    if (btn) btn.disabled = true;
+    await saveClassTime(classId, start, end);
+    modal.remove();
+  });
 }
 
 // ── Create event modal (with recurrence) ──────────────────────────────────────
