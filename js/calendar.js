@@ -6,10 +6,11 @@ import { today, toast } from './utils.js';
 const T = today();
 const TODAY = new Date(T + 'T00:00:00');
 
-let viewMode = 'week'; // 'month' | 'week'
+let viewMode = 'week'; // 'month' | 'week' | 'day'
 let viewYear = TODAY.getFullYear();
 let viewMonth = TODAY.getMonth(); // 0-based
 let viewWeekStart = getWeekStart(TODAY); // Date object = Sunday of current week
+let viewDay = new Date(TODAY); // Current day for day view
 let selectedDate = T;
 
 // Event cache keyed by 'YYYY-MM-DD'
@@ -19,12 +20,20 @@ const MONTHS = ['January','February','March','April','May','June','July','August
 const DAYS_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
 // ── View switching ────────────────────────────────────────────────────────────
-window.setView = (mode) => {
+window.setView = (mode, dateStr) => {
   viewMode = mode;
   document.getElementById('btn-month').classList.toggle('active', mode === 'month');
   document.getElementById('btn-week').classList.toggle('active', mode === 'week');
+  document.getElementById('btn-day').classList.toggle('active', mode === 'day');
   // Show/hide the day-label row
   document.getElementById('cal-day-labels').style.display = mode === 'month' ? 'grid' : 'none';
+  if (mode === 'day') {
+    if (dateStr) {
+      viewDay = new Date(dateStr + 'T00:00:00');
+      selectedDate = dateStr;
+    }
+    // Otherwise keep current viewDay
+  }
   render();
 };
 
@@ -32,6 +41,9 @@ window.prev = () => {
   if (viewMode === 'month') {
     viewMonth--;
     if (viewMonth < 0) { viewMonth = 11; viewYear--; }
+  } else if (viewMode === 'day') {
+    viewDay = addDays(viewDay, -1);
+    selectedDate = dateStr(viewDay);
   } else {
     viewWeekStart = addDays(viewWeekStart, -7);
   }
@@ -42,6 +54,9 @@ window.next = () => {
   if (viewMode === 'month') {
     viewMonth++;
     if (viewMonth > 11) { viewMonth = 0; viewYear++; }
+  } else if (viewMode === 'day') {
+    viewDay = addDays(viewDay, 1);
+    selectedDate = dateStr(viewDay);
   } else {
     viewWeekStart = addDays(viewWeekStart, 7);
   }
@@ -52,6 +67,7 @@ window.goToday = () => {
   viewYear = TODAY.getFullYear();
   viewMonth = TODAY.getMonth();
   viewWeekStart = getWeekStart(TODAY);
+  viewDay = new Date(TODAY);
   selectedDate = T;
   render();
 };
@@ -62,15 +78,32 @@ window.selectDay = (dateStr) => {
   renderDayPanel(dateStr);
 };
 
+// Switch to day view when clicking a day number in week view header
+window.drillToDay = (ds) => {
+  viewDay = new Date(ds + 'T00:00:00');
+  selectedDate = ds;
+  setView('day');
+};
+
 // ── Main render ───────────────────────────────────────────────────────────────
 async function render() {
   await fetchEvents();
   if (viewMode === 'month') {
     renderMonthGrid();
+  } else if (viewMode === 'day') {
+    renderDayGrid();
   } else {
     renderWeekGrid();
   }
-  renderDayPanel(selectedDate);
+  if (viewMode !== 'day') {
+    renderDayPanel(selectedDate);
+  } else {
+    // Clear the day panel below when in day view (events shown in timeline)
+    const hEl = document.getElementById('selected-day-header');
+    const eEl = document.getElementById('day-events');
+    if (hEl) hEl.textContent = '';
+    if (eEl) eEl.innerHTML = '';
+  }
 }
 
 // ── Fetch events for visible range ────────────────────────────────────────────
@@ -84,6 +117,9 @@ async function fetchEvents() {
     rangeStart.setDate(rangeStart.getDate() - firstDay.getDay());
     rangeEnd = new Date(lastDay);
     rangeEnd.setDate(rangeEnd.getDate() + (6 - lastDay.getDay()));
+  } else if (viewMode === 'day') {
+    rangeStart = new Date(viewDay);
+    rangeEnd = new Date(viewDay);
   } else {
     rangeStart = new Date(viewWeekStart);
     rangeEnd = addDays(rangeStart, 6);
@@ -349,7 +385,8 @@ function renderWeekGrid() {
     const isToday = str === T;
     const dayName = DAYS_SHORT[date.getDay()];
     const dayNum = date.getDate();
-    html += `<div class="wgcal-day-hdr${isToday ? ' today-col' : ''}" onclick="selectDay('${str}')" style="flex:1;text-align:center;padding:6px 2px;cursor:pointer;font-size:12px;font-weight:600;color:${isToday ? 'var(--blue)' : 'var(--gray-500)'}">
+    html += `<div class="wgcal-day-hdr${isToday ? ' today-col' : ''}" onclick="drillToDay('${str}')" style="flex:1;text-align:center;padding:6px 2px;cursor:pointer;font-size:12px;font-weight:600;color:${isToday ? 'var(--blue)' : 'var(--gray-500)'}"
+      title="See day view">
       <div>${dayName}</div>
       <span style="font-size:18px;font-weight:700;display:block;${isToday ? 'background:var(--blue);color:white;border-radius:50%;width:28px;height:28px;line-height:28px;margin:2px auto 0' : 'color:var(--gray-800)'}">${dayNum}</span>
     </div>`;
