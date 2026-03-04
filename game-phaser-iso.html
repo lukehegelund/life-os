@@ -428,149 +428,191 @@ const FEAT_MAP = {
 // ══════════════════════════════════════════════════════
 //  SETTLER SPRITE
 //
-//  Design philosophy: Polytopia style = SIMPLE + CHUNKY + FLAT.
-//  Big round head, solid block body, minimal detail.
-//  3 colors per element max: base, highlight, shadow.
-//  No bezier mess. Everything is rects, circles, triangles.
+//  Design: Polytopia-style.
+//  Body = isometric CUBE: top face + left wall + right wall.
+//  Head = big circle. Hat = clean centered triangle.
+//  Flat colors, minimal detail. No fussy curves.
 //
-//  Canvas: 96 × 120.  Anchor: (0.5, 1.0) at foot point.
+//  Canvas: 96 × 128.  Anchor: (0.5, 1.0) at foot point.
 // ══════════════════════════════════════════════════════
 function makeSettler(selected) {
-  const W=96, H=120;
+  const W=96, H=128;
   const oc=document.createElement('canvas'); oc.width=W; oc.height=H;
   const ctx=oc.getContext('2d');
   const cx=W/2;
 
-  // foot ground point = (cx, H-8)
-  const gY = H-8;
+  // Ground point (feet)
+  const gY = H - 6;
 
   // ── Shadow ──
-  ctx.fillStyle='rgba(0,0,0,0.28)';
-  ctx.beginPath(); ctx.ellipse(cx+3, gY, 18, 6, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle='rgba(0,0,0,0.22)';
+  ctx.beginPath(); ctx.ellipse(cx+2, gY, 16, 5, 0, 0, Math.PI*2); ctx.fill();
 
-  // ── Boots: two solid rounded rectangles ──
-  const bootCol='#2a1c0e', bootHL='#3e2a14';
-  fillRR(ctx, cx-14, gY-14, 12, 10, 3, bootCol);
-  fillRR(ctx, cx+3,  gY-14, 12, 10, 3, bootCol);
-  ctx.fillStyle=bootHL; ctx.fillRect(cx-13,gY-14,5,3);
-  ctx.fillStyle=bootHL; ctx.fillRect(cx+4, gY-14,5,3);
+  // ── Legs / boots ──
+  const bootCol='#2a1a0a';
+  // Left boot (lit side)
+  fillRR(ctx, cx-13, gY-18, 11, 14, 3, '#3e2a12');
+  // Right boot (shadow side)
+  fillRR(ctx, cx+2,  gY-18, 11, 14, 3, bootCol);
+  // Toe highlights
+  ctx.fillStyle='rgba(255,255,255,0.12)';
+  ctx.fillRect(cx-12, gY-18, 5, 3);
 
-  // ── Legs ──
-  ctx.fillStyle='#3a3060'; ctx.fillRect(cx-12,gY-38,10,26);
-  ctx.fillStyle='#3a3060'; ctx.fillRect(cx+2, gY-38,10,26);
-  ctx.fillStyle='rgba(0,0,0,0.2)'; ctx.fillRect(cx+2,gY-38,3,26);
-
-  // ── Cloak body: simple trapezoid, 3 flat color zones ──
-  const cBase = selected ? '#5870c0' : '#4a5898';
-  const cLit  = selected ? '#7898e0' : '#6070b8';
+  // ── ISOMETRIC CUBE BODY ──
+  //  Viewed from the front-right in isometric:
+  //    top face  : horizontal parallelogram at the top
+  //    left face : lit vertical rectangle (viewer left)
+  //    right face: dark vertical rectangle (viewer right)
+  //
+  //  Cube is 30 wide, 22 tall (each half-face = 15 wide).
+  //  Top face is a flat diamond/parallelogram 4px tall.
+  //
+  const cTop  = selected ? '#7898e0' : '#6070b8';
+  const cLit  = selected ? '#5870c0' : '#4a5898';
   const cDark = selected ? '#3050a0' : '#2e3878';
 
-  // Dark right half
-  ctx.fillStyle=cDark;
-  ctx.beginPath();
-  ctx.moveTo(cx, gY-92);
-  ctx.lineTo(cx+26, gY-66);
-  ctx.lineTo(cx+20, gY-32);
-  ctx.lineTo(cx, gY-32);
-  ctx.closePath(); ctx.fill();
+  const bTop  = gY - 72;   // top of the body cube
+  const bBot  = gY - 20;   // bottom of cube (sits on legs)
+  const bH    = bBot - bTop;   // height of side faces
+  const bHalf = 22;            // half-width of cube at its widest
+  const tSkew = 6;             // how many px the top face parallelogram is offset
 
-  // Lit left half
-  ctx.fillStyle=cBase;
-  ctx.beginPath();
-  ctx.moveTo(cx, gY-92);
-  ctx.lineTo(cx-26, gY-66);
-  ctx.lineTo(cx-20, gY-32);
-  ctx.lineTo(cx, gY-32);
-  ctx.closePath(); ctx.fill();
-
-  // Highlight strip on far-left edge
+  // Left face (lit) — simple rectangle
   ctx.fillStyle=cLit;
   ctx.beginPath();
-  ctx.moveTo(cx-2, gY-92);
-  ctx.lineTo(cx-26, gY-66);
-  ctx.lineTo(cx-18, gY-32);
-  ctx.lineTo(cx-8, gY-32);
-  ctx.lineTo(cx-4, gY-66);
-  ctx.lineTo(cx-2, gY-92);
+  ctx.moveTo(cx - bHalf, bTop + tSkew);
+  ctx.lineTo(cx,          bTop);
+  ctx.lineTo(cx,          bBot);
+  ctx.lineTo(cx - bHalf,  bBot + tSkew);
   ctx.closePath(); ctx.fill();
 
-  // ── Belt: single horizontal band ──
-  ctx.fillStyle='#7a4e18'; ctx.fillRect(cx-22, gY-44, 44, 8);
-  // Buckle
-  ctx.fillStyle='#d4a830';
-  fillRR(ctx, cx-5, gY-45, 10, 9, 2, '#d4a830');
-  ctx.strokeStyle='#9a7010'; ctx.lineWidth=1.5; ctx.strokeRect(cx-5,gY-45,10,9);
+  // Right face (dark)
+  ctx.fillStyle=cDark;
+  ctx.beginPath();
+  ctx.moveTo(cx,          bTop);
+  ctx.lineTo(cx + bHalf,  bTop + tSkew);
+  ctx.lineTo(cx + bHalf,  bBot + tSkew);
+  ctx.lineTo(cx,          bBot);
+  ctx.closePath(); ctx.fill();
 
-  // ── Pack (back right): simple box ──
-  fillRR(ctx, cx+18, gY-72, 16, 20, 3, '#6a4018');
-  ctx.fillStyle='#4a2c0c'; ctx.fillRect(cx+19, gY-72, 14, 7);
-  ctx.strokeStyle='#3a1e08'; ctx.lineWidth=1; ctx.strokeRect(cx+18,gY-72,16,20);
+  // Top face (slightly lighter, flat parallelogram)
+  ctx.fillStyle=cTop;
+  ctx.beginPath();
+  ctx.moveTo(cx - bHalf, bTop + tSkew);
+  ctx.lineTo(cx,          bTop);
+  ctx.lineTo(cx + bHalf,  bTop + tSkew);
+  ctx.lineTo(cx,          bTop + tSkew * 2);
+  ctx.closePath(); ctx.fill();
+
+  // Edge lines to sharpen the cube
+  ctx.strokeStyle='rgba(0,0,0,0.18)'; ctx.lineWidth=1;
+  // Vertical center edge
+  ctx.beginPath(); ctx.moveTo(cx, bTop); ctx.lineTo(cx, bBot); ctx.stroke();
+  // Top ridge
+  ctx.beginPath();
+  ctx.moveTo(cx - bHalf, bTop + tSkew);
+  ctx.lineTo(cx, bTop);
+  ctx.lineTo(cx + bHalf, bTop + tSkew);
+  ctx.stroke();
+
+  // ── Belt: thin band at cube midpoint ──
+  const beltY = bTop + bH * 0.55;
+  ctx.fillStyle='#7a4e18'; ctx.fillRect(cx - bHalf, beltY, bHalf * 2, 5);
+  // Belt seam on the right (darker)
+  ctx.fillStyle='rgba(0,0,0,0.2)'; ctx.fillRect(cx, beltY, bHalf, 5);
+  // Buckle
+  fillRR(ctx, cx - 5, beltY - 1, 10, 7, 2, '#d4a830');
+  ctx.strokeStyle='#9a7010'; ctx.lineWidth=1; ctx.strokeRect(cx-5, beltY-1, 10, 7);
 
   // ── Neck ──
-  ctx.fillStyle='#c08050'; ctx.fillRect(cx-4, gY-96, 8, 6);
+  ctx.fillStyle='#c08050'; ctx.fillRect(cx - 4, bTop - 8, 8, 10);
 
   // ── Head: big clean circle ──
-  // Shadow behind head
-  ctx.fillStyle='rgba(0,0,0,0.15)';
-  ctx.beginPath(); ctx.arc(cx+3, gY-106, 17, 0, Math.PI*2); ctx.fill();
-  // Main face
+  const headY = bTop - 20;   // center of head
+  const headR = 16;
+  // Drop shadow
+  ctx.fillStyle='rgba(0,0,0,0.12)';
+  ctx.beginPath(); ctx.arc(cx + 2, headY + 2, headR, 0, Math.PI*2); ctx.fill();
+  // Face base
   ctx.fillStyle='#d4a060';
-  ctx.beginPath(); ctx.arc(cx, gY-108, 16, 0, Math.PI*2); ctx.fill();
-  // Face highlight (lit top-left quadrant)
+  ctx.beginPath(); ctx.arc(cx, headY, headR, 0, Math.PI*2); ctx.fill();
+  // Lit top-left highlight
   ctx.fillStyle='#e8b870';
-  ctx.beginPath(); ctx.arc(cx-4, gY-113, 10, 0, Math.PI*2); ctx.fill();
-  ctx.fillStyle='rgba(255,255,255,0.15)';
-  ctx.beginPath(); ctx.arc(cx-6, gY-115, 5, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx - 4, headY - 4, 10, 0, Math.PI*2); ctx.fill();
+  // Soft specular
+  ctx.fillStyle='rgba(255,255,255,0.12)';
+  ctx.beginPath(); ctx.arc(cx - 6, headY - 7, 5, 0, Math.PI*2); ctx.fill();
 
-  // ── Hood: flat triangle cap ──
+  // ── HAT: clean centered triangle (wizard/pointed cap) ──
+  //  Base sits across the top of the head; tip points straight up.
   const hoodCol = selected ? '#4870b0' : '#303060';
   const hoodLit = selected ? '#6090d0' : '#484888';
-  // Hood body (covers back of head)
-  ctx.fillStyle=hoodCol;
-  ctx.beginPath();
-  ctx.arc(cx, gY-108, 17, Math.PI, 0); ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(cx-17, gY-108); ctx.lineTo(cx-12, gY-90); ctx.lineTo(cx+12, gY-90); ctx.lineTo(cx+17, gY-108);
-  ctx.fill();
-  // Hood peak (triangle tip on top-right)
-  ctx.fillStyle=hoodCol;
-  ctx.beginPath(); ctx.moveTo(cx+6,gY-122); ctx.lineTo(cx+20,gY-132); ctx.lineTo(cx+26,gY-116); ctx.closePath(); ctx.fill();
-  ctx.fillStyle=hoodLit;
-  ctx.beginPath(); ctx.moveTo(cx+6,gY-122); ctx.lineTo(cx+20,gY-132); ctx.lineTo(cx+16,gY-120); ctx.closePath(); ctx.fill();
-  // Hood rim brow
-  ctx.fillStyle=hoodLit;
-  ctx.beginPath(); ctx.arc(cx, gY-108+2, 17, Math.PI+0.35, -0.35); ctx.lineWidth=4; ctx.strokeStyle=hoodLit; ctx.stroke();
+  const hoodDrk = selected ? '#2850a0' : '#202050';
 
-  // ── Eyes: two simple white ovals with pupils ──
-  ctx.fillStyle='#ffffff'; ctx.beginPath(); ctx.ellipse(cx-6,gY-109,3.5,2.5, -0.1,0,Math.PI*2); ctx.fill();
-  ctx.fillStyle='#ffffff'; ctx.beginPath(); ctx.ellipse(cx+5,gY-109,3.5,2.5,  0.1,0,Math.PI*2); ctx.fill();
-  ctx.fillStyle='#1a1010'; ctx.beginPath(); ctx.arc(cx-6,gY-109,2,0,Math.PI*2); ctx.fill();
-  ctx.fillStyle='#1a1010'; ctx.beginPath(); ctx.arc(cx+5,gY-109,2,0,Math.PI*2); ctx.fill();
-  // Eye shine
-  ctx.fillStyle='rgba(255,255,255,0.9)'; ctx.beginPath(); ctx.arc(cx-5,gY-110,1,0,Math.PI*2); ctx.fill();
-  ctx.fillStyle='rgba(255,255,255,0.9)'; ctx.beginPath(); ctx.arc(cx+6,gY-110,1,0,Math.PI*2); ctx.fill();
+  const hatBaseY  = headY - headR + 4;  // where hat meets head
+  const hatTipX   = cx;                 // tip is centered
+  const hatTipY   = hatBaseY - 32;      // height of the point
+  const hatBaseL  = cx - 16;
+  const hatBaseR  = cx + 16;
 
-  // ── Staff: thick line + orb ──
-  ctx.strokeStyle='#6a3e14'; ctx.lineWidth=5; ctx.lineCap='round';
-  ctx.beginPath(); ctx.moveTo(cx-18, gY-8); ctx.lineTo(cx-20, gY-106); ctx.stroke();
-  // Orb glow
+  // Hat left face (lit)
+  ctx.fillStyle=hoodLit;
+  ctx.beginPath();
+  ctx.moveTo(hatTipX, hatTipY);
+  ctx.lineTo(hatBaseL, hatBaseY);
+  ctx.lineTo(cx, hatBaseY);
+  ctx.closePath(); ctx.fill();
+
+  // Hat right face (shadow)
+  ctx.fillStyle=hoodDrk;
+  ctx.beginPath();
+  ctx.moveTo(hatTipX, hatTipY);
+  ctx.lineTo(cx, hatBaseY);
+  ctx.lineTo(hatBaseR, hatBaseY);
+  ctx.closePath(); ctx.fill();
+
+  // Hat brim: thin ellipse strip at base of hat
+  ctx.fillStyle=hoodCol;
+  ctx.beginPath(); ctx.ellipse(cx, hatBaseY, 18, 4, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle=hoodLit;
+  ctx.beginPath(); ctx.ellipse(cx - 3, hatBaseY - 1, 10, 2.5, 0, 0, Math.PI*2); ctx.fill();
+
+  // ── Eyes: simple ovals with pupils ──
+  ctx.fillStyle='#ffffff'; ctx.beginPath(); ctx.ellipse(cx-6, headY+1, 3.5, 2.5, -0.1, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle='#ffffff'; ctx.beginPath(); ctx.ellipse(cx+5, headY+1, 3.5, 2.5,  0.1, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle='#1a0e0e'; ctx.beginPath(); ctx.arc(cx-6, headY+1, 2, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle='#1a0e0e'; ctx.beginPath(); ctx.arc(cx+5, headY+1, 2, 0, Math.PI*2); ctx.fill();
+  // Shine
+  ctx.fillStyle='rgba(255,255,255,0.9)'; ctx.beginPath(); ctx.arc(cx-5, headY, 1, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,0.9)'; ctx.beginPath(); ctx.arc(cx+6, headY, 1, 0, Math.PI*2); ctx.fill();
+
+  // ── Staff: simple pole left side + orb ──
+  const staffX = cx - bHalf - 4;
+  ctx.strokeStyle='#7a4820'; ctx.lineWidth=4; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(staffX, gY - 4); ctx.lineTo(staffX, headY - headR - 8); ctx.stroke();
+  // Orb glow (selection)
   if (selected) {
-    ctx.fillStyle='rgba(255,220,60,0.25)';
-    ctx.beginPath(); ctx.arc(cx-20,gY-110,14,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(255,220,60,0.2)';
+    ctx.beginPath(); ctx.arc(staffX, headY - headR - 12, 13, 0, Math.PI*2); ctx.fill();
   }
   // Orb
-  const og=ctx.createRadialGradient(cx-22,gY-114,1,cx-20,gY-111,9);
+  const orbY = headY - headR - 12;
+  const og = ctx.createRadialGradient(staffX - 2, orbY - 2, 1, staffX, orbY, 8);
   og.addColorStop(0,'#fff8c0'); og.addColorStop(0.5,'#e8c030'); og.addColorStop(1,'#886010');
-  ctx.fillStyle=og; ctx.beginPath(); ctx.arc(cx-20,gY-111,9,0,Math.PI*2); ctx.fill();
-  ctx.strokeStyle='rgba(255,210,40,0.6)'; ctx.lineWidth=1.5; ctx.stroke();
+  ctx.fillStyle=og; ctx.beginPath(); ctx.arc(staffX, orbY, 8, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle='rgba(200,160,20,0.6)'; ctx.lineWidth=1.5; ctx.stroke();
 
-  // ── Selection outline glow ──
+  // ── Selection glow: outline the cube ──
   if (selected) {
-    ctx.strokeStyle='rgba(100,180,255,0.6)'; ctx.lineWidth=3;
-    // Outline the cloak silhouette
+    ctx.strokeStyle='rgba(120,200,255,0.55)'; ctx.lineWidth=2.5;
     ctx.beginPath();
-    ctx.moveTo(cx, gY-92); ctx.lineTo(cx-26,gY-66); ctx.lineTo(cx-20,gY-32);
-    ctx.lineTo(cx+20,gY-32); ctx.lineTo(cx+26,gY-66); ctx.closePath(); ctx.stroke();
+    ctx.moveTo(cx - bHalf, bTop + tSkew);
+    ctx.lineTo(cx, bTop);
+    ctx.lineTo(cx + bHalf, bTop + tSkew);
+    ctx.lineTo(cx + bHalf, bBot + tSkew);
+    ctx.lineTo(cx, bBot);
+    ctx.lineTo(cx - bHalf, bBot + tSkew);
+    ctx.closePath(); ctx.stroke();
   }
 
   return oc;
