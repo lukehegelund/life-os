@@ -5034,6 +5034,7 @@ const VC_LANGS = {
     code: 'es-ES',
     flag: '🇪🇸',
     voiceId: 'EXAVITQu4vr4xnSDxMaL', // Sarah — warm, clear, multilingual
+    languageCode: 'es', // enforce native Spanish accent in ElevenLabs
     systemLang: 'Spanish',
     greeting: '¡Hola! Estoy aquí para practicar contigo. ¿De qué quieres hablar hoy?',
   },
@@ -5041,6 +5042,7 @@ const VC_LANGS = {
     code: 'da-DK',
     flag: '🇩🇰',
     voiceId: 'XrExE9yKIg1WjnnlVkGX', // Matilda — professional, multilingual
+    languageCode: 'da', // enforce native Danish accent in ElevenLabs
     systemLang: 'Danish',
     greeting: 'Hej! Jeg er her for at øve med dig. Hvad vil du tale om i dag?',
   },
@@ -5057,6 +5059,9 @@ let vcTurnCount = 0;
 let vcMediaStream = null;
 let vcInitDone = false;
 let vcKeys = {}; // cached keys fetched from Supabase
+let vcCurrentAudioSource = null;  // active TTS playback source (for interruption)
+let vcCurrentAudioCtx = null;     // active AudioContext (for interruption)
+let vcIsSpeaking = false;         // true while TTS is playing
 
 // ── Init ──────────────────────────────────────────────────────────────────
 async function vcInit() {
@@ -5210,30 +5215,49 @@ async function vcStartSession() {
 // ── Build system prompt with real Supabase vocab data ────────────────────
 async function vcBuildSystemPrompt() {
   let vocabSummary = '';
+  let phraseSummary = '';
   try {
     const { data: words } = await supabase.from('vocab_words')
-      .select('english, translation, srs_stage, next_review, language')
+      .select('english, translation, srs_stage, next_review, language, example_sentence')
       .eq('language', vcLang)
       .order('srs_stage', { ascending: false });
 
     if (words && words.length) {
       const today = todayPST();
-      const mastered = words.filter(w => w.srs_stage >= 5).length;
-      const learning = words.filter(w => w.srs_stage >= 1 && w.srs_stage < 5).length;
-      const brandNew = words.filter(w => w.srs_stage === 0).length;
-      const due = words.filter(w => w.srs_stage === 0 || w.next_review <= today).length;
+
+      // Separate vocab words from phrases (phrases have example_sentence = '__phrase__')
+      const vocabWords = words.filter(w => w.example_sentence !== '__phrase__');
+      const phrases = words.filter(w => w.example_sentence === '__phrase__');
+
+      const mastered = vocabWords.filter(w => w.srs_stage >= 5).length;
+      const learning = vocabWords.filter(w => w.srs_stage >= 1 && w.srs_stage < 5).length;
+      const brandNew = vocabWords.filter(w => w.srs_stage === 0).length;
+      const due = vocabWords.filter(w => w.srs_stage === 0 || w.next_review <= today).length;
 
       // Sample up to 40 known words to weave in
-      const knownWords = words.filter(w => w.srs_stage >= 2).slice(0, 40)
+      const knownWords = vocabWords.filter(w => w.srs_stage >= 2).slice(0, 40)
         .map(w => `${w.english} = ${w.translation} (stage ${w.srs_stage})`).join(', ');
-      const newWords = words.filter(w => w.srs_stage <= 1).slice(0, 20)
+      const newWords = vocabWords.filter(w => w.srs_stage <= 1).slice(0, 20)
         .map(w => `${w.english} = ${w.translation}`).join(', ');
 
       vocabSummary = `
 ## Learner's Vocabulary Profile (${vcLang})
-- Total words: ${words.length} | Mastered (stage 5+): ${mastered} | Learning: ${learning} | New: ${brandNew} | Due for review today: ${due}
+- Total words: ${vocabWords.length} | Mastered (stage 5+): ${mastered} | Learning: ${learning} | New: ${brandNew} | Due for review today: ${due}
 - Known words to weave naturally into conversation: ${knownWords || 'none yet'}
 - Newer/weaker words to gently reinforce: ${newWords || 'none yet'}`;
+
+      // Phrases: split into active (srs_stage < 99) and mastered (99)
+      if (phrases.length) {
+        const activePhrases = phrases.filter(p => p.srs_stage !== 99).slice(0, 20)
+          .map(p => `"${p.translation}" (${p.english})`).join('\n  ');
+        const masteredPhrases = phrases.filter(p => p.srs_stage === 99).slice(0, 10)
+          .map(p => `"${p.translation}"`).join(', ');
+        phraseSummary = `
+## Learner's Phrases (${vcLang})
+These are the real phrases Luke is currently studying — weave them naturally into conversation when relevant:
+${activePhrases ? `- Active phrases:\n  ${activePhrases}` : ''}
+${masteredPhrases ? `- Mastered phrases (use freely): ${masteredPhrases}` : ''}`;
+      }
     }
   } catch(e) {
     console.warn('vcBuildSystemPrompt vocab fetch failed', e);
@@ -5261,6 +5285,7 @@ When Luke makes a mistake, do NOT lecture. Just use the correct form naturally i
 - Vary topics naturally
 
 ${vocabSummary}
+${phraseSummary}
 
 IMPORTANT: Luke will speak first. Wait for his first message before responding. When he does, respond naturally in ${vcLang} and keep the conversation going.`;
 }
@@ -5269,6 +5294,12 @@ IMPORTANT: Luke will speak first. Wait for his first message before responding. 
 window.vcPTTStart = async (e) => {
   e.preventDefault();
   if (vcIsLoading) return;
+
+  // Interrupt AI if it's currently speaking
+  if (vcIsSpeaking) {
+    vcStopSpeaking();
+    vcSetStatus('Your turn — hold the button to speak');
+  }
 
   if (!vcSessionActive) {
     await vcStartSession();
@@ -5413,28 +5444,44 @@ async function vcAskClaude() {
   return j.content[0].text;
 }
 
+// ── Stop any currently playing TTS ───────────────────────────────────────
+function vcStopSpeaking() {
+  if (vcCurrentAudioSource) {
+    try { vcCurrentAudioSource.stop(); } catch(e) {}
+    vcCurrentAudioSource = null;
+  }
+  if (vcCurrentAudioCtx) {
+    try { vcCurrentAudioCtx.close(); } catch(e) {}
+    vcCurrentAudioCtx = null;
+  }
+  vcIsSpeaking = false;
+}
+
 // ── ElevenLabs TTS ────────────────────────────────────────────────────────
 async function vcSpeak(text) {
   const key = vcKeys.elevenlabs_api_key;
   if (!key || key === 'ENTER_YOUR_KEY') return; // Fail silently — text still shown
 
+  vcStopSpeaking(); // Stop any previous audio before starting new
+
   const voiceId = VC_LANGS[vcLang].voiceId;
+  const langCode = VC_LANGS[vcLang].languageCode;
+
+  const body = {
+    text,
+    model_id: 'eleven_turbo_v2_5', // ultra-low latency
+    voice_settings: {
+      stability: 0.5,
+      similarity_boost: 0.8,
+      speed: parseFloat(vcKeys[`vc_speed_${vcLang}`] || '1.0'),
+    },
+  };
+  if (langCode) body.language_code = langCode; // enforce native accent
 
   const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream`, {
     method: 'POST',
-    headers: {
-      'xi-api-key': key,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      text,
-      model_id: 'eleven_turbo_v2_5', // ultra-low latency
-      voice_settings: {
-        stability: 0.5,
-        similarity_boost: 0.8,
-        speed: parseFloat(vcKeys[`vc_speed_${vcLang}`] || '1.0'),
-      },
-    }),
+    headers: { 'xi-api-key': key, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {
@@ -5448,8 +5495,20 @@ async function vcSpeak(text) {
   const source = audioCtx.createBufferSource();
   source.buffer = decoded;
   source.connect(audioCtx.destination);
+
+  // Store refs so we can interrupt
+  vcCurrentAudioCtx = audioCtx;
+  vcCurrentAudioSource = source;
+  vcIsSpeaking = true;
+
   source.start();
-  await new Promise(res => source.onended = res);
+  await new Promise(resolve => {
+    source.onended = () => {
+      vcIsSpeaking = false;
+      vcCurrentAudioSource = null;
+      resolve();
+    };
+  });
 }
 
 // ── UI helpers ────────────────────────────────────────────────────────────
@@ -5487,6 +5546,7 @@ function vcSetStatus(msg) {
 }
 
 window.vcEndSession = () => {
+  vcStopSpeaking(); // stop any playing audio immediately
   vcSessionActive = false;
   vcMessages = [];
   vcTurnCount = 0;
