@@ -31,6 +31,11 @@ body{background:#1a2430;overflow:hidden;font-family:'Cinzel',Georgia,serif;user-
 #action-btns{display:flex;gap:10px;}
 .abtn{background:linear-gradient(180deg,#2a3520,#1a2212);border:1px solid #4a6830;border-radius:4px;color:#90c850;font-family:'Cinzel',serif;font-size:11px;padding:10px 18px;cursor:pointer;letter-spacing:1px;transition:all .15s;white-space:nowrap;}
 .abtn:hover{background:linear-gradient(180deg,#3a4530,#2a3220);border-color:#6aac50;}
+.bbtn{background:linear-gradient(180deg,#1e2c14,#141e0c);border:1px solid #3a5820;border-radius:3px;color:#90c850;font-size:10px;padding:5px 10px;cursor:pointer;letter-spacing:.5px;white-space:nowrap;}
+.bbtn:hover{border-color:#5a8830;color:#b0e870;}
+.bbtn:disabled{opacity:.4;cursor:default;}
+.cpill{background:rgba(255,255,255,.05);border:1px solid rgba(100,180,50,.15);border-radius:3px;padding:3px 8px;font-size:11px;color:#a8d860;display:flex;align-items:center;gap:4px;}
+.bldg-badge{background:rgba(60,100,30,.3);border:1px solid #3a6020;border-radius:3px;padding:3px 8px;font-size:10px;color:#90c850;}
 #status-msg{position:fixed;top:64px;left:50%;transform:translateX(-50%);background:rgba(8,14,5,.94);border:1px solid #5a9030;border-radius:4px;padding:7px 18px;font-size:13px;color:#a8d860;letter-spacing:1px;z-index:150;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;}
 </style>
 </head>
@@ -68,6 +73,51 @@ body{background:#1a2430;overflow:hidden;font-family:'Cinzel',Georgia,serif;user-
 </div>
 <div id="status-msg"></div>
 
+<!-- City Panel (Chunk 2) -->
+<div id="city-panel" style="display:none;position:fixed;top:52px;right:0;width:300px;height:calc(100vh - 162px);background:linear-gradient(180deg,#0d180a,#091008);border-left:2px solid #3a6820;z-index:120;overflow-y:auto;font-family:sans-serif;font-size:12px;color:#c8e890;">
+  <div style="background:linear-gradient(180deg,#1a2e10,#0e1a08);padding:12px 16px;border-bottom:1px solid #2a4818;display:flex;align-items:center;justify-content:space-between;">
+    <div>
+      <div id="cp-name" style="font-family:'Cinzel',serif;font-size:16px;font-weight:700;color:#a8d860;letter-spacing:2px;"></div>
+      <div id="cp-pop" style="font-size:11px;color:#6a8a50;margin-top:2px;"></div>
+    </div>
+    <button onclick="closeCity()" style="background:none;border:1px solid #4a6830;border-radius:3px;color:#6a8a50;padding:4px 10px;cursor:pointer;font-size:11px;">✕</button>
+  </div>
+  <!-- Yields row -->
+  <div id="cp-yields" style="display:flex;gap:6px;padding:10px 16px;border-bottom:1px solid #1a2e10;flex-wrap:wrap;"></div>
+  <!-- Food bar -->
+  <div style="padding:8px 16px;border-bottom:1px solid #1a2e10;">
+    <div style="font-size:10px;color:#6a8a50;margin-bottom:4px;letter-spacing:1px;">GROWTH</div>
+    <div style="background:#0c140a;border-radius:3px;height:8px;overflow:hidden;">
+      <div id="cp-food-bar" style="height:100%;background:linear-gradient(90deg,#4a9820,#78c840);width:0%;transition:width .3s;"></div>
+    </div>
+    <div id="cp-food-label" style="font-size:10px;color:#5a7840;margin-top:3px;"></div>
+  </div>
+  <!-- Production queue -->
+  <div style="padding:10px 16px;border-bottom:1px solid #1a2e10;">
+    <div style="font-size:10px;color:#6a8a50;letter-spacing:1px;margin-bottom:8px;">PRODUCTION</div>
+    <div id="cp-prod-queue" style="margin-bottom:8px;"></div>
+    <div style="font-size:10px;color:#4a6838;margin-bottom:6px;">Build:</div>
+    <div id="cp-build-options" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+  </div>
+  <!-- Buildings -->
+  <div style="padding:10px 16px;border-bottom:1px solid #1a2e10;">
+    <div style="font-size:10px;color:#6a8a50;letter-spacing:1px;margin-bottom:8px;">BUILDINGS</div>
+    <div id="cp-buildings" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+  </div>
+  <!-- Worked tiles -->
+  <div style="padding:10px 16px;">
+    <div style="font-size:10px;color:#6a8a50;letter-spacing:1px;margin-bottom:8px;">WORKED TILES</div>
+    <div id="cp-worked" style="line-height:1.8;"></div>
+  </div>
+</div>
+
+<!-- Worker improvement picker -->
+<div id="improve-panel" style="display:none;position:fixed;bottom:120px;left:50%;transform:translateX(-50%);background:rgba(10,18,8,.98);border:1px solid #4a8030;border-radius:6px;padding:14px 20px;z-index:250;font-family:sans-serif;font-size:12px;color:#c8e890;min-width:260px;">
+  <div style="font-size:13px;font-weight:700;color:#a8d860;margin-bottom:10px;">Build Improvement</div>
+  <div id="imp-options" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;"></div>
+  <button onclick="document.getElementById('improve-panel').style.display='none'" style="background:none;border:1px solid #3a5820;border-radius:3px;color:#5a7840;padding:4px 12px;cursor:pointer;font-size:11px;">Cancel</button>
+</div>
+
 <script>
 // ══════════════════════════════════════════════════════
 //  ISOMETRIC TILE MATH — true isometric projection
@@ -88,10 +138,10 @@ body{background:#1a2430;overflow:hidden;font-family:'Cinzel',Georgia,serif;user-
 //  → placing sprite at isoPos(col,row) pins the top vertex there.
 // ══════════════════════════════════════════════════════
 
-const TW     = 128;   // tile diamond width
-const TH     = 64;    // tile diamond height  (TW/2 for 2:1 iso)
-const DEPTH  = 10;    // side-face depth — thin bottom edge only
-const ABOVE  = 48;    // canvas pixels above the diamond top vertex (for features)
+const TW     = 192;   // tile diamond width (increased for sharper resolution)
+const TH     = 96;    // tile diamond height  (TW/2 for 2:1 iso)
+const DEPTH  = 14;    // side-face depth — thin bottom edge only
+const ABOVE  = 72;    // canvas pixels above the diamond top vertex (for features)
 
 // Canvas dimensions for a standard terrain tile
 const TC_W   = TW;
@@ -299,16 +349,6 @@ const RESOURCE_MAP = generateResources(MAP_DATA, MAP_SEED);
 // ── ISO POSITION ──
 // Returns the screen coordinate of the diamond TOP VERTEX for tile (col,row)
 // Using true isometric: x=(col-row)*TW/2,  y=(col+row)*TH/2
-// ── WRAP HELPERS ──
-// Toroidal world: east wraps to west, north wraps to south
-function wrapC(c){return((c%COLS)+COLS)%COLS;}
-function wrapR(r){return((r%ROWS)+ROWS)%ROWS;}
-// Terrain/resource lookup with wrapping
-function terrainAt(c,r){return MAP_DATA[wrapR(r)][wrapC(c)];}
-function resourceAt(c,r){return RESOURCE_MAP[`${wrapC(c)}_${wrapR(r)}`]||null;}
-// Canonical key (always in 0..COLS-1, 0..ROWS-1)
-function tileKey(c,r){return `${wrapC(c)}_${wrapR(r)}`;}
-
 function isoPos(col, row) {
   return {
     x: (col - row) * STEP_X,
@@ -317,18 +357,9 @@ function isoPos(col, row) {
 }
 
 // ── HEX UTILS ──
-function hexDist(c1,r1,c2,r2){
-  // Use toroidal-aware distance: take shortest path on wrapped grid
-  let dc=Math.abs(c1-c2), dr=Math.abs(r1-r2);
-  if(dc>COLS/2) dc=COLS-dc;
-  if(dr>ROWS/2) dr=ROWS-dr;
-  return Math.max(dc,dr);
-}
-function getNeighbors(col,row){
-  // 4 cardinal neighbors, all wrapped
-  return [[-1,0],[1,0],[0,-1],[0,1]].map(([dc,dr])=>({col:wrapC(col+dc),row:wrapR(row+dr)}));
-}
-function getMovable(unit,r=2){const res=[];for(let row=0;row<ROWS;row++)for(let col=0;col<COLS;col++){if(col===unit.col&&row===unit.row)continue;if(hexDist(unit.col,unit.row,col,row)<=r&&TERRAIN[terrainAt(col,row)].passable&&!GS.units.some(u=>u.col===col&&u.row===row))res.push({col,row});}return res;}
+function hexDist(c1,r1,c2,r2){const t=(c,r)=>{const x=c-(r-(r&1))/2,z=r;return{x,z,y:-x-z};};const a=t(c1,r1),b=t(c2,r2);return Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y),Math.abs(a.z-b.z));}
+function getNeighbors(col,row){const d=row%2===0?[[-1,-1],[0,-1],[-1,0],[1,0],[-1,1],[0,1]]:[[0,-1],[1,-1],[-1,0],[1,0],[0,1],[1,1]];return d.map(([dc,dr])=>({col:col+dc,row:row+dr})).filter(n=>n.col>=0&&n.col<COLS&&n.row>=0&&n.row<ROWS);}
+function getMovable(unit,r=2){const res=[];for(let row=0;row<ROWS;row++)for(let col=0;col<COLS;col++){if(col===unit.col&&row===unit.row)continue;if(hexDist(unit.col,unit.row,col,row)<=r&&TERRAIN[MAP_DATA[row][col]].passable&&!GS.units.some(u=>u.col===col&&u.row===row))res.push({col,row});}return res;}
 function seededRng(s){let n=s;return()=>{n=(n*1664525+1013904223)&0xffffffff;return(n>>>0)/0xffffffff;};}
 
 // ── COLOR UTILS ──
@@ -340,11 +371,85 @@ function darken(h,a){const c=hexToRgb(h);return`rgb(${Math.max(0,c.r-a)},${Math.
 const GS={
   turn:1, cities:[], units:[], selectedUnit:null, moveHighlights:[],
   nextCityId:1, nextUnitId:1,
-  // Fog of war: set of "col_row" strings that have been revealed
   revealed: new Set(),
   income:{f:0,p:0,g:0,s:0,c:0},
+  science:0, culture:0, selectedCity:null,
+  improvements:{}, // key='col_row', value='farm'|'mine'|'lumbermill'|'tradingpost'
 };
 const CITY_NAMES=['Aurum','Veridian','Solmere','Caelthon','Rivenmoor','Dunhallow','Ironspire','Thornwall','Eastmarch','Goldenveil'];
+
+// ── CHUNK 2: BUILDINGS ──
+const BUILDINGS = {
+  monument:    {label:'Monument',    cost:60,  desc:'+2 🎭 Culture',             effect:{c:2}},
+  granary:     {label:'Granary',     cost:80,  desc:'+2 🍎 Food storage, +1 🍎', effect:{f:1}},
+  library:     {label:'Library',     cost:90,  desc:'+2 📚 Science',             effect:{s:2}},
+  barracks:    {label:'Barracks',    cost:100, desc:'+15 XP to units, +1 ⚒',    effect:{p:1}},
+  market:      {label:'Market',      cost:120, desc:'+25% gold, +2 💰',          effect:{g:2}},
+  walls:       {label:'Walls',       cost:130, desc:'+5 city defense, +1 ⚒',    effect:{p:1}},
+};
+
+// ── CHUNK 2: TILE IMPROVEMENTS ──
+const IMPROVEMENTS = {
+  farm:        {label:'Farm',         turns:4, validOn:['plains','grassland','river'], bonus:{f:1}},
+  mine:        {label:'Mine',         turns:4, validOn:['hill','mountain','desert'],   bonus:{p:1}},
+  lumbermill:  {label:'Lumber Mill',  turns:5, validOn:['forest'],                    bonus:{p:1,g:1}},
+  tradingpost: {label:'Trading Post', turns:3, validOn:['plains','grassland','forest','tundra','desert'], bonus:{g:1}},
+};
+
+// ── CHUNK 2: UNIT CATALOG ──
+const UNIT_TYPES = {
+  settler: {label:'Settler', moves:2, strength:0, cost:0},
+  worker:  {label:'Worker',  moves:3, strength:0, cost:80, buildTurns:0},
+  warrior: {label:'Warrior', moves:2, strength:8, cost:60},
+};
+
+// ── CHUNK 2: Compute worked tiles for a city (auto-assign best N tiles) ──
+function getCityWorkedTiles(city){
+  const candidates=[{col:city.col,row:city.row}]; // city tile always worked
+  const neighbors=getNeighbors(city.col,city.row);
+  // Score each neighbor by total yield
+  const scored=neighbors.map(n=>{
+    const y=getTileYield(n.col,n.row,MAP_DATA,RESOURCE_MAP);
+    const imp=GS.improvements[`${n.col}_${n.row}`];
+    const ib=imp?IMPROVEMENTS[imp].bonus:{};
+    return {col:n.col,row:n.row,score:(y.f+y.p+y.g+y.s)+(ib.f||0)+(ib.p||0)+(ib.g||0)};
+  }).sort((a,b)=>b.score-a.score);
+  // Work best pop-1 neighbor tiles (city tile uses 1 pop slot)
+  for(let i=0;i<Math.min(city.pop-1, scored.length);i++) candidates.push(scored[i]);
+  return candidates;
+}
+
+// ── CHUNK 2: Compute yields for a single city ──
+function getCityYields(city){
+  const worked=getCityWorkedTiles(city);
+  const y={f:0,p:0,g:2,s:1,c:1}; // base: 2 gold, 1 sci, 1 culture per city
+  for(const t of worked){
+    const ty=getTileYield(t.col,t.row,MAP_DATA,RESOURCE_MAP);
+    y.f+=ty.f; y.p+=ty.p; y.g+=ty.g; y.s+=ty.s; y.c+=(ty.c||0);
+    // Add improvement bonuses
+    const imp=GS.improvements[`${t.col}_${t.row}`];
+    if(imp){const ib=IMPROVEMENTS[imp].bonus;y.f+=(ib.f||0);y.p+=(ib.p||0);y.g+=(ib.g||0);}
+  }
+  // Building bonuses
+  for(const bk of (city.buildings||[])){
+    const b=BUILDINGS[bk]; if(!b) continue;
+    y.f+=(b.effect.f||0); y.p+=(b.effect.p||0);
+    y.g+=(b.effect.g||0); y.s+=(b.effect.s||0); y.c+=(b.effect.c||0);
+  }
+  // Market bonus: +25% gold (rounded)
+  if(city.buildings?.includes('market')) y.g=Math.round(y.g*1.25);
+  return y;
+}
+
+// ── CHUNK 2: Recompute empire-wide income from all cities ──
+function computeIncome(mapData, resourceMap, cities) {
+  const total = {f:0,p:0,g:0,s:0,c:1};
+  for (const city of cities) {
+    const y=getCityYields(city);
+    total.f+=y.f; total.p+=y.p; total.g+=y.g; total.s+=y.s; total.c+=y.c;
+  }
+  return total;
+}
 
 // ══════════════════════════════════════════════════════
 //  TILE CANVAS BUILDER
@@ -1044,38 +1149,17 @@ class GameScene extends Phaser.Scene {
     this.labelLayer     = this.add.container(0,0);
     this.fogLayer       = this.add.container(0,0);
 
-    // ── Toroidal world: render 3×3 copies of the map for seamless wrapping ──
-    // The canonical (dc=0, dr=0) copy holds game-state sprites.
-    // Ghost copies (dc=±1, dr=±1) mirror textures for visual continuity.
-    // World offsets in isometric screen space for each copy:
-    //   col offset +COLS → isoPos shift of (+COLS*STEP_X - COLS*STEP_X, (COLS)*STEP_Y) = wait, correct:
-    //   isoPos(c+COLS, r) = ((c+COLS-r)*STEP_X, (c+COLS+r)*STEP_Y) = isoPos(c,r) + (COLS*STEP_X, COLS*STEP_Y)
-    //   isoPos(c, r+ROWS) = isoPos(c,r) + (-ROWS*STEP_X, ROWS*STEP_Y)
-    const WORLD_OX = COLS * STEP_X;   // x shift per col-copy
-    const WORLD_OY = COLS * STEP_Y;   // y shift per col-copy (east wrap)
-    const WORLD_RX = -ROWS * STEP_X;  // x shift per row-copy
-    const WORLD_RY = ROWS * STEP_Y;   // y shift per row-copy (south wrap)
-
-    this.tileSprites={};  // canonical only: key='c_r'
-    this.ghostSprites={}; // ghost copies: key='dc_dr_c_r'
-
-    for(let dr=-1; dr<=1; dr++) for(let dc=-1; dc<=1; dc++){
-      const offX = dc*WORLD_OX + dr*WORLD_RX;
-      const offY = dc*WORLD_OY + dr*WORLD_RY;
-      for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
-        const type=MAP_DATA[r][c];
-        const {x,y}=isoPos(c,r);
-        const sp=this.add.image(x+offX, y+offY, 'tile_'+type).setOrigin(OX, OY);
-        this.terrainLayer.add(sp);
-        if(dc===0 && dr===0){
-          this.tileSprites[`${c}_${r}`]=sp;
-        } else {
-          this.ghostSprites[`${dc}_${dr}_${c}_${r}`]=sp;
-        }
-      }
+    // Build all tiles — back to front (row 0→N, col 0→N)
+    this.tileSprites={};
+    for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+      const type=MAP_DATA[r][c];
+      const {x,y}=isoPos(c,r);
+      const sp=this.add.image(x, y, 'tile_'+type).setOrigin(OX, OY);
+      this.terrainLayer.add(sp);
+      this.tileSprites[`${c}_${r}`]=sp;
     }
 
-    // Resource sprites (canonical copy only)
+    // Resource sprites
     this.resSp={};
     for(const [key, rk] of Object.entries(RESOURCE_MAP)){
       const [c,r]=key.split('_').map(Number);
@@ -1085,7 +1169,7 @@ class GameScene extends Phaser.Scene {
       this.resSp[key]=sp;
     }
 
-    // Highlight overlay sprites (canonical only)
+    // Highlight overlay sprites (same origin)
     this.hlSprites={};
     for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
       const {x,y}=isoPos(c,r);
@@ -1094,26 +1178,13 @@ class GameScene extends Phaser.Scene {
       this.hlSprites[`${c}_${r}`]=sp;
     }
 
-    // Fog of war sprites — 3×3 copies for seamless wrapping appearance
+    // Fog of war sprites (start all covered)
     this.fogSprites={};
-    for(let dr=-1; dr<=1; dr++) for(let dc=-1; dc<=1; dc++){
-      const offX = dc*WORLD_OX + dr*WORLD_RX;
-      const offY = dc*WORLD_OY + dr*WORLD_RY;
-      for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
-        const {x,y}=isoPos(c,r);
-        const sp=this.add.image(x+offX, y+offY, 'tile_fog').setOrigin(OX, OY);
-        this.fogLayer.add(sp);
-        if(dc===0 && dr===0) this.fogSprites[`${c}_${r}`]=sp;
-        else this.ghostSprites[`fog_${dc}_${dr}_${c}_${r}`]=sp;
-      }
-    }
-    // Store ghost fog sprites separately for sync
-    this.ghostFogSprites={};
-    for(let dr=-1; dr<=1; dr++) for(let dc=-1; dc<=1; dc++){
-      if(dc===0 && dr===0) continue;
-      for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
-        this.ghostFogSprites[`${dc}_${dr}_${c}_${r}`]=this.ghostSprites[`fog_${dc}_${dr}_${c}_${r}`];
-      }
+    for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+      const {x,y}=isoPos(c,r);
+      const sp=this.add.image(x, y, 'tile_fog').setOrigin(OX, OY);
+      this.fogLayer.add(sp);
+      this.fogSprites[`${c}_${r}`]=sp;
     }
 
     // Spawn settler — find a good passable starting tile
@@ -1132,37 +1203,63 @@ class GameScene extends Phaser.Scene {
     // Reveal area around starting settler
     this.revealAround(SC, SR, 3);
 
-    // Camera center
+    // Camera center — start zoomed out to fit larger tiles on screen
     const {x:sx,y:sy}=isoPos(SC,SR);
+    this.cameras.main.setZoom(0.55);
     this.cameras.main.centerOn(sx, sy+TH/2);
-    // No bounds — toroidal infinite world, camera can scroll forever
+    this.cameras.main.setBounds(-ROWS*STEP_X - 300, -300, (COLS+ROWS)*STEP_X + 600, (COLS+ROWS)*STEP_Y + 300);
 
-    // ── Input ──
+    // ── Input: drag + pinch-to-zoom ──
     this._dragStartX=0; this._dragStartY=0; this._hasDragged=false;
     this._prevPtrX=0; this._prevPtrY=0;
+    this._pinchDist=0; this._isPinching=false;
+
     this.input.on('pointerdown', p=>{
+      // Only start drag on single-pointer down
+      if(this.input.pointer2 && this.input.pointer2.isDown) return;
       this._dragStartX=p.x; this._dragStartY=p.y;
       this._prevPtrX=p.x; this._prevPtrY=p.y;
-      this._hasDragged=false;
+      this._hasDragged=false; this._isPinching=false;
     });
+
     this.input.on('pointermove', p=>{
-      if(p.isDown){
+      const p2=this.input.pointer2;
+      // ── Two-finger pinch zoom ──
+      if(p2 && p2.isDown && p.isDown){
+        this._isPinching=true; this._hasDragged=true;
+        const dist=Phaser.Math.Distance.Between(p.x,p.y,p2.x,p2.y);
+        if(this._pinchDist>0){
+          const scale=dist/this._pinchDist;
+          const z=Phaser.Math.Clamp(this.cameras.main.zoom*scale,0.2,2.5);
+          this.cameras.main.zoom=z;
+        }
+        this._pinchDist=dist;
+        return;
+      }
+      this._pinchDist=0;
+      // ── Single-finger drag (delta-based, no extrapolation) ──
+      if(p.isDown && !this._isPinching){
         const dx=p.x-this._prevPtrX, dy=p.y-this._prevPtrY;
         if(Math.abs(p.x-this._dragStartX)>6||Math.abs(p.y-this._dragStartY)>6) this._hasDragged=true;
         if(this._hasDragged){
-          // Delta-based: move camera exactly as far as finger moved, no extrapolation
           this.cameras.main.scrollX -= dx/this.cameras.main.zoom;
           this.cameras.main.scrollY -= dy/this.cameras.main.zoom;
         }
         this._prevPtrX=p.x; this._prevPtrY=p.y;
       }
-      // Tooltip on hover
-      this.showTileTooltip(p);
+      // Tooltip on hover (desktop only)
+      if(!p.isDown) this.showTileTooltip(p);
+    });
+
+    this.input.on('pointerup', p=>{
+      this._pinchDist=0; this._isPinching=false;
+      if(!this._hasDragged) this.handleClick(p);
+      hideTileTooltip();
     });
     this.input.on('pointerout', ()=>hideTileTooltip());
-    this.input.on('pointerup', p=>{if(!this._hasDragged)this.handleClick(p); hideTileTooltip();});
+    // Mouse wheel zoom
     this.input.on('wheel',(_p,_o,_dx,dy)=>{
-      this.cameras.main.zoom=Phaser.Math.Clamp(this.cameras.main.zoom-dy*.0009,0.3,2.5);
+      this.cameras.main.zoom=Phaser.Math.Clamp(this.cameras.main.zoom-dy*.001,0.2,2.5);
     });
 
     this._t=0;
@@ -1172,36 +1269,20 @@ class GameScene extends Phaser.Scene {
   }
 
   revealAround(col, row, radius){
-    const wc=wrapC(col), wr=wrapR(row);
     for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
       const key=`${c}_${r}`;
-      // Toroidal sight distance
-      let dc=Math.abs(c-wc), dr=Math.abs(r-wr);
-      if(dc>COLS/2) dc=COLS-dc;
-      if(dr>ROWS/2) dr=ROWS-dr;
-      const inSight = dc<=radius && dr<=radius;
-
+      const inSight = Math.abs(c-col)<=radius && Math.abs(r-row)<=radius;
       const applyFog=(sp, tex, alpha)=>{
         if(!sp) return;
         if(tex && sp.texture.key!==tex) sp.setTexture(tex);
         sp.setAlpha(alpha);
       };
-
       if(inSight){
         GS.revealed.add(key);
         applyFog(this.fogSprites[key], null, 0);
-        // Also clear all ghost copies
-        for(let gdr=-1;gdr<=1;gdr++) for(let gdc=-1;gdc<=1;gdc++){
-          if(gdc===0&&gdr===0) continue;
-          applyFog(this.ghostFogSprites[`${gdc}_${gdr}_${c}_${r}`], null, 0);
-        }
         if(this.resSp[key]) this.resSp[key].setAlpha(1);
       } else if(GS.revealed.has(key)){
         applyFog(this.fogSprites[key], 'tile_fog_seen', 1);
-        for(let gdr=-1;gdr<=1;gdr++) for(let gdc=-1;gdc<=1;gdc++){
-          if(gdc===0&&gdr===0) continue;
-          applyFog(this.ghostFogSprites[`${gdc}_${gdr}_${c}_${r}`], 'tile_fog_seen', 1);
-        }
       }
     }
   }
@@ -1209,29 +1290,23 @@ class GameScene extends Phaser.Scene {
   showTileTooltip(p){
     const wx=p.worldX, wy=p.worldY;
     let best=null, bestD=Infinity;
-    // Search across 3×3 world copies
-    const WORLD_OX = COLS * STEP_X; const WORLD_OY = COLS * STEP_Y;
-    const WORLD_RX = -ROWS * STEP_X; const WORLD_RY = ROWS * STEP_Y;
-    for(let dr=-1;dr<=1;dr++) for(let dc=-1;dc<=1;dc++){
-      const offX=dc*WORLD_OX+dr*WORLD_RX, offY=dc*WORLD_OY+dr*WORLD_RY;
-      for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
-        const pos=isoPos(c,r);
-        const cx=pos.x+offX, cy=pos.y+offY+TH/2;
-        const dx=Math.abs(wx-cx)/(TW*.52), dy=Math.abs(wy-cy)/(TH*.52);
-        const d=dx+dy;
-        if(d<bestD){bestD=d;best={col:c,row:r};}
-      }
+    for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+      const pos=isoPos(c,r);
+      const cx=pos.x, cy=pos.y+TH/2;
+      const dx=Math.abs(wx-cx)/(TW*.52), dy=Math.abs(wy-cy)/(TH*.52);
+      const d=dx+dy;
+      if(d<bestD){bestD=d;best={col:c,row:r};}
     }
     if(!best||bestD>1.5) return hideTileTooltip();
     const {col,row}=best;
-    const key=`${wrapC(col)}_${wrapR(row)}`;
+    const key=`${col}_${row}`;
     if(!GS.revealed.has(key)) return hideTileTooltip();
 
-    const tType=terrainAt(col,row);
+    const tType=MAP_DATA[row]?.[col];
     if(!tType) return hideTileTooltip();
     const t=TERRAIN[tType];
-    const yields=getTileYield(wrapC(col),wrapR(row),MAP_DATA,RESOURCE_MAP);
-    const rKey=resourceAt(col,row);
+    const yields=getTileYield(col,row,MAP_DATA,RESOURCE_MAP);
+    const rKey=RESOURCE_MAP[key];
 
     const tt=document.getElementById('tile-tooltip');
     document.getElementById('tt-title').textContent=t.label;
@@ -1250,12 +1325,27 @@ class GameScene extends Phaser.Scene {
 
   spawnUnit(unit){
     const {x,y}=isoPos(unit.col,unit.row);
-    // Place feet at the tile's visual center (midpoint of diamond, not bottom tip)
     const footX=x, footY=y+TH/2;
     const shadow=this.add.ellipse(footX, footY+2, 22, 8, 0x000000, 0.30);
     const sp=this.add.image(footX, footY, 'settler_normal').setOrigin(0.5,1.0);
     this.unitLayer.add(shadow); this.unitLayer.add(sp);
     this.unitSprites[unit.id]={sprite:sp, shadow, baseX:footX, baseY:footY};
+  }
+
+  // Spawn worker or warrior using settler sprite as fallback (Chunk 3 will add unique sprites)
+  spawnWorker(unit){
+    const {x,y}=isoPos(unit.col,unit.row);
+    const footX=x, footY=y+TH/2;
+    const col=unit.type==='warrior'?0xd04020:0x3080d0;
+    const shadow=this.add.ellipse(footX, footY+2, 20, 7, 0x000000, 0.28);
+    // Draw a simple colored circle as placeholder sprite
+    const g=this.add.graphics();
+    g.fillStyle(col,1); g.fillCircle(0,-18,10);
+    g.fillStyle(0x000000,0.3); g.fillCircle(2,-16,10);
+    g.fillStyle(col,1); g.fillRect(-6,-30,12,20);
+    g.x=footX; g.y=footY;
+    this.unitLayer.add(shadow); this.unitLayer.add(g);
+    this.unitSprites[unit.id]={sprite:g, shadow, baseX:footX, baseY:footY, isGraphics:true};
   }
 
   tick(){
@@ -1266,8 +1356,8 @@ class GameScene extends Phaser.Scene {
       const s=this.unitSprites[unit.id]; if(!s) continue;
 
       const isSel=GS.selectedUnit&&GS.selectedUnit.id===unit.id;
-      s.sprite.setTexture(isSel?'settler_selected':'settler_normal');
-      s.sprite.y=s.baseY; // no floating
+      if(!s.isGraphics) s.sprite.setTexture(isSel?'settler_selected':'settler_normal');
+      s.sprite.y=s.baseY;
 
       if(isSel){
         if(!s.selRing){s.selRing=this.add.ellipse(s.baseX,s.baseY,44,16,0,0).setStrokeStyle(2.5,0x78e040,1);this.unitLayer.add(s.selRing);}
@@ -1290,16 +1380,9 @@ class GameScene extends Phaser.Scene {
     }
 
     for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
-      if(TERRAIN[terrainAt(c,r)].water){
-        const alpha=.80+Math.sin(t*.6+c*.35+r*.25)*.1;
+      if(TERRAIN[MAP_DATA[r][c]].water){
         const sp=this.tileSprites[`${c}_${r}`];
-        if(sp) sp.setAlpha(alpha);
-        // Sync ghost copies
-        for(let gdr=-1;gdr<=1;gdr++) for(let gdc=-1;gdc<=1;gdc++){
-          if(gdc===0&&gdr===0) continue;
-          const gs=this.ghostSprites[`${gdc}_${gdr}_${c}_${r}`];
-          if(gs) gs.setAlpha(alpha);
-        }
+        if(sp) sp.setAlpha(.80+Math.sin(t*.6+c*.35+r*.25)*.1);
       }
     }
   }
@@ -1307,18 +1390,12 @@ class GameScene extends Phaser.Scene {
   handleClick(ptr){
     const wx=ptr.worldX, wy=ptr.worldY;
     let best=null, bestD=Infinity;
-    // Search across 3×3 world copies to handle wrapping
-    const WORLD_OX = COLS * STEP_X; const WORLD_OY = COLS * STEP_Y;
-    const WORLD_RX = -ROWS * STEP_X; const WORLD_RY = ROWS * STEP_Y;
-    for(let dr=-1;dr<=1;dr++) for(let dc=-1;dc<=1;dc++){
-      const offX=dc*WORLD_OX+dr*WORLD_RX, offY=dc*WORLD_OY+dr*WORLD_RY;
-      for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
-        const p=isoPos(c,r);
-        const cx=p.x+offX, cy=p.y+offY+TH/2;
-        const dx=Math.abs(wx-cx)/(TW*.52), dy=Math.abs(wy-cy)/(TH*.52);
-        const d=dx+dy;
-        if(d<bestD){bestD=d;best={col:c,row:r};}
-      }
+    for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+      const p=isoPos(c,r);
+      const cx=p.x, cy=p.y+TH/2;
+      const dx=Math.abs(wx-cx)/(TW*.52), dy=Math.abs(wy-cy)/(TH*.52);
+      const d=dx+dy;
+      if(d<bestD){bestD=d;best={col:c,row:r};}
     }
     if(!best||bestD>1.8) return;
     const {col,row}=best;
@@ -1327,8 +1404,15 @@ class GameScene extends Phaser.Scene {
     const isHL=GS.moveHighlights.some(h=>h.col===col&&h.row===row);
 
     if(isHL&&GS.selectedUnit){this.moveUnit(GS.selectedUnit,col,row);return;}
-    if(clickedUnit){GS.selectedUnit=clickedUnit;GS.moveHighlights=clickedUnit.movesLeft>0?getMovable(clickedUnit,clickedUnit.movesLeft):[];updateHUD();return;}
-    GS.selectedUnit=null;GS.moveHighlights=[];updateHUD();
+    if(clickedUnit){
+      GS.selectedUnit=clickedUnit;
+      GS.moveHighlights=clickedUnit.movesLeft>0?getMovable(clickedUnit,clickedUnit.movesLeft):[];
+      closeCity(); updateHUD(); return;
+    }
+    // Click on city tile → open city panel
+    const clickedCity=GS.cities.find(c=>c.col===col&&c.row===row);
+    if(clickedCity){openCity(clickedCity); return;}
+    GS.selectedUnit=null; GS.moveHighlights=[]; updateHUD();
   }
 
   moveUnit(unit,col,row){
@@ -1352,27 +1436,19 @@ class GameScene extends Phaser.Scene {
   }
 
   foundCity(){
-    const u=GS.selectedUnit; if(!u) return;
-    const type=terrainAt(u.col,u.row);
+    const u=GS.selectedUnit; if(!u||u.type!=='settler') return;
+    const type=MAP_DATA[u.row][u.col];
     if(!TERRAIN[type].passable){showStatus('Cannot found here!');return;}
     if(GS.cities.some(c=>hexDist(c.col,c.row,u.col,u.row)<3)){showStatus('Too close to another city!');return;}
     const name=CITY_NAMES[(GS.nextCityId-1)%CITY_NAMES.length];
-    const territory=getNeighbors(u.col,u.row).filter(n=>TERRAIN[terrainAt(n.col,n.row)].passable).map(n=>({col:n.col,row:n.row}));
-    GS.cities.push({id:GS.nextCityId++,col:u.col,row:u.row,name,pop:1,territory,food:0,foodToGrow:10});
+    const territory=getNeighbors(u.col,u.row).filter(n=>TERRAIN[MAP_DATA[n.row][n.col]].passable).map(n=>({col:n.col,row:n.row}));
+    GS.cities.push({id:GS.nextCityId++,col:u.col,row:u.row,name,pop:1,territory,food:0,foodToGrow:10,prod:0,prodQueue:[],buildings:[],workedTiles:[]});
     this.revealAround(u.col, u.row, 3);
 
-    const sp=this.tileSprites[`${wrapC(u.col)}_${wrapR(u.row)}`];
+    const sp=this.tileSprites[`${u.col}_${u.row}`];
     if(sp){
       this.tweens.add({targets:sp,scaleY:1.1,yoyo:true,duration:180,ease:'Quad.easeOut',
-        onComplete:()=>{
-          sp.setTexture('tile_city');sp.setOrigin(OX, this._cityOriginY);
-          // Sync ghost copies
-          for(let dr=-1;dr<=1;dr++) for(let dc=-1;dc<=1;dc++){
-            if(dc===0&&dr===0) continue;
-            const gs=this.ghostSprites[`${dc}_${dr}_${wrapC(u.col)}_${wrapR(u.row)}`];
-            if(gs){gs.setTexture('tile_city');gs.setOrigin(OX, this._cityOriginY);}
-          }
-        }});
+        onComplete:()=>{sp.setTexture('tile_city');sp.setOrigin(OX, this._cityOriginY);}});
     }
 
     for(const h of territory){
@@ -1400,7 +1476,6 @@ function hideTileTooltip(){const tt=document.getElementById('tile-tooltip');if(t
 
 function updateHUD(){
   const u=GS.selectedUnit;
-  // Recalculate income
   GS.income=computeIncome(MAP_DATA,RESOURCE_MAP,GS.cities);
   document.getElementById('res-food').textContent='+'+GS.income.f;
   document.getElementById('res-prod').textContent='+'+GS.income.p;
@@ -1410,26 +1485,221 @@ function updateHUD(){
   document.getElementById('res-cities').textContent=GS.cities.length;
   document.getElementById('turn-info').textContent=`Turn ${GS.turn}`;
 
-  if(!u){document.getElementById('unit-name').textContent='No unit selected';document.getElementById('unit-desc').textContent='Click a unit to select it.';document.getElementById('action-btns').innerHTML='';return;}
-  const tType=terrainAt(u.col,u.row)||'plains';
-  const yields=getTileYield(wrapC(u.col),wrapR(u.row),MAP_DATA,RESOURCE_MAP);
-  const rKey=resourceAt(u.col,u.row);
-  document.getElementById('unit-name').textContent='⚑ Settler';
+  // Refresh city panel if open
+  if(GS.selectedCity) renderCityPanel(GS.selectedCity);
+
+  if(!u){
+    document.getElementById('unit-name').textContent='No unit selected';
+    document.getElementById('unit-desc').textContent='Click a unit or city to manage it.';
+    document.getElementById('action-btns').innerHTML='';
+    return;
+  }
+  const tType=MAP_DATA[u.row]?.[u.col]||'plains';
+  const yields=getTileYield(u.col,u.row,MAP_DATA,RESOURCE_MAP);
+  const rKey=RESOURCE_MAP[`${u.col}_${u.row}`];
+  const uType=UNIT_TYPES[u.type]||UNIT_TYPES.settler;
+  const maxMoves=uType.moves;
+
+  document.getElementById('unit-name').textContent=`⚑ ${uType.label}`;
   document.getElementById('unit-desc').textContent=
-    `${TERRAIN[tType].label}${rKey?' · '+RESOURCES[rKey].label:''} · Moves: ${u.movesLeft}/2 · Tile: 🍎${yields.f} ⚒${yields.p} 💰${yields.g}`;
-  document.getElementById('action-btns').innerHTML=
-    `<button class="abtn" onclick="scene_ref.foundCity()">🏙 Found City</button>`+
-    `<button class="abtn" onclick="GS.selectedUnit=null;GS.moveHighlights=[];updateHUD()">⏭ Skip</button>`;
+    `${TERRAIN[tType].label}${rKey?' · '+RESOURCES[rKey].label:''} · Moves: ${u.movesLeft}/${maxMoves} · 🍎${yields.f} ⚒${yields.p} 💰${yields.g}`;
+
+  let btns='';
+  if(u.type==='settler'){
+    btns+=`<button class="abtn" onclick="scene_ref.foundCity()">🏙 Found City</button>`;
+  }
+  if(u.type==='worker'){
+    btns+=`<button class="abtn" onclick="openImprovePanel()">🔨 Build</button>`;
+    // Show build progress if active
+    if(u.buildTarget){
+      btns+=`<span style="font-size:10px;color:#6a8a50;margin-left:8px;">Building ${IMPROVEMENTS[u.buildType]?.label} (${u.buildLeft} turns)</span>`;
+    }
+  }
+  btns+=`<button class="abtn" onclick="GS.selectedUnit=null;GS.moveHighlights=[];updateHUD()">⏭ Skip</button>`;
+  document.getElementById('action-btns').innerHTML=btns;
+}
+
+// ── CHUNK 2: City Panel ──
+function openCity(city){
+  GS.selectedCity=city;
+  GS.selectedUnit=null; GS.moveHighlights=[];
+  document.getElementById('city-panel').style.display='block';
+  renderCityPanel(city);
+  updateHUD();
+}
+function closeCity(){
+  GS.selectedCity=null;
+  document.getElementById('city-panel').style.display='none';
+  updateHUD();
+}
+function renderCityPanel(city){
+  const y=getCityYields(city);
+  document.getElementById('cp-name').textContent=`🏙 ${city.name}`;
+  document.getElementById('cp-pop').textContent=`Population ${city.pop} · Turn ${GS.turn}`;
+
+  // Yields row
+  document.getElementById('cp-yields').innerHTML=
+    `<div class="cpill">🍎 ${y.f}</div><div class="cpill">⚒ ${y.p}</div><div class="cpill">💰 ${y.g}</div><div class="cpill">📚 ${y.s}</div><div class="cpill">🎭 ${y.c}</div>`;
+
+  // Food bar
+  const foodNeeded=city.foodToGrow||10;
+  const foodPct=Math.min(100,Math.round((city.food||0)/foodNeeded*100));
+  const foodSurplus=y.f - city.pop*2;
+  document.getElementById('cp-food-bar').style.width=foodPct+'%';
+  document.getElementById('cp-food-label').textContent=
+    `${city.food||0}/${foodNeeded} (${foodSurplus>=0?'+':''}${foodSurplus} per turn)`;
+
+  // Production queue
+  const qEl=document.getElementById('cp-prod-queue');
+  if(city.prodQueue&&city.prodQueue.length>0){
+    const item=city.prodQueue[0];
+    const def=BUILDINGS[item]||UNIT_TYPES[item];
+    const cost=BUILDINGS[item]?.cost||UNIT_TYPES[item]?.cost||0;
+    const turnsLeft=cost>0?Math.ceil((cost-(city.prod||0))/Math.max(1,y.p)):1;
+    qEl.innerHTML=`<div style="background:rgba(60,100,30,.2);border:1px solid #3a6020;border-radius:3px;padding:6px 10px;">
+      <div style="color:#a8d860;font-size:11px;font-weight:700;">${def?.label||item}</div>
+      <div style="font-size:10px;color:#5a7840;margin-top:2px;">${city.prod||0}/${cost} · ~${turnsLeft} turn${turnsLeft!==1?'s':''}</div>
+      <div style="background:#0c140a;border-radius:2px;height:5px;margin-top:4px;overflow:hidden;">
+        <div style="height:100%;background:#5a9830;width:${Math.min(100,Math.round((city.prod||0)/Math.max(1,cost)*100))}%"></div>
+      </div>
+    </div>`;
+  } else {
+    qEl.innerHTML=`<div style="color:#3a5828;font-size:11px;font-style:italic;">Nothing queued</div>`;
+  }
+
+  // Build options
+  const bOpts=document.getElementById('cp-build-options');
+  let bHTML='';
+  // Buildings
+  for(const [bk,b] of Object.entries(BUILDINGS)){
+    const has=(city.buildings||[]).includes(bk);
+    const queued=(city.prodQueue||[]).includes(bk);
+    const turnsEst=Math.ceil(b.cost/Math.max(1,y.p));
+    bHTML+=`<button class="bbtn" onclick="queueBuild('${city.id}','${bk}')" ${has||queued?'disabled':''}>
+      ${b.label} (${turnsEst}t)<br><span style="font-size:9px;color:#4a6838;">${b.desc}</span>
+    </button>`;
+  }
+  // Worker unit
+  const wCost=UNIT_TYPES.worker.cost;
+  const wTurns=Math.ceil(wCost/Math.max(1,y.p));
+  bHTML+=`<button class="bbtn" onclick="queueBuild('${city.id}','worker')">
+    Worker (${wTurns}t)<br><span style="font-size:9px;color:#4a6838;">Builds tile improvements</span>
+  </button>`;
+  // Warrior
+  const wrCost=UNIT_TYPES.warrior.cost;
+  const wrTurns=Math.ceil(wrCost/Math.max(1,y.p));
+  bHTML+=`<button class="bbtn" onclick="queueBuild('${city.id}','warrior')">
+    Warrior (${wrTurns}t)<br><span style="font-size:9px;color:#4a6838;">Melee combat unit</span>
+  </button>`;
+  bOpts.innerHTML=bHTML;
+
+  // Buildings list
+  const bEl=document.getElementById('cp-buildings');
+  if(city.buildings&&city.buildings.length>0){
+    bEl.innerHTML=city.buildings.map(bk=>`<div class="bldg-badge">${BUILDINGS[bk]?.label||bk}</div>`).join('');
+  } else {
+    bEl.innerHTML=`<div style="color:#3a5828;font-size:11px;font-style:italic;">None yet</div>`;
+  }
+
+  // Worked tiles
+  const worked=getCityWorkedTiles(city);
+  const wEl=document.getElementById('cp-worked');
+  wEl.innerHTML=worked.map(t=>{
+    const ty=getTileYield(t.col,t.row,MAP_DATA,RESOURCE_MAP);
+    const imp=GS.improvements[`${t.col}_${t.row}`];
+    const tt=TERRAIN[MAP_DATA[t.row][t.col]];
+    return `<div style="color:#7a9860;">${tt.label}${imp?' + '+IMPROVEMENTS[imp].label:''} · 🍎${ty.f} ⚒${ty.p} 💰${ty.g}</div>`;
+  }).join('');
+}
+
+function queueBuild(cityId, itemKey){
+  const city=GS.cities.find(c=>c.id==cityId); if(!city) return;
+  if(!city.prodQueue) city.prodQueue=[];
+  if(!city.prodQueue.includes(itemKey)) city.prodQueue.push(itemKey);
+  renderCityPanel(city);
+}
+
+// ── CHUNK 2: Worker improvement panel ──
+function openImprovePanel(){
+  const u=GS.selectedUnit; if(!u||u.type!=='worker') return;
+  const tType=MAP_DATA[u.row]?.[u.col];
+  const panel=document.getElementById('improve-panel');
+  const opts=document.getElementById('imp-options');
+  let html='';
+  for(const [ik,imp] of Object.entries(IMPROVEMENTS)){
+    const valid=imp.validOn.includes(tType);
+    const exists=GS.improvements[`${u.col}_${u.row}`]===ik;
+    html+=`<button class="bbtn" onclick="startImprovement('${ik}')" ${!valid||exists?'disabled':''}>
+      ${imp.label} (${imp.turns}t)<br><span style="font-size:9px;color:#4a6838;">🍎${imp.bonus.f||0} ⚒${imp.bonus.p||0} 💰${imp.bonus.g||0}</span>
+    </button>`;
+  }
+  opts.innerHTML=html;
+  panel.style.display='block';
+}
+function startImprovement(impKey){
+  const u=GS.selectedUnit; if(!u) return;
+  u.buildType=impKey; u.buildLeft=IMPROVEMENTS[impKey].turns;
+  u.buildTarget={col:u.col,row:u.row};
+  document.getElementById('improve-panel').style.display='none';
+  showStatus(`🔨 Worker building ${IMPROVEMENTS[impKey].label} (${IMPROVEMENTS[impKey].turns} turns)…`);
+  updateHUD();
 }
 
 function endTurn(){
   GS.turn++;
-  for(const u of GS.units) u.movesLeft=2;
-  // City growth
-  for(const c of GS.cities){
-    c.food=(c.food||0)+Math.max(0,GS.income.f-c.pop*2);
-    if(c.food>=(c.foodToGrow||10)){c.pop=Math.min(20,c.pop+1);c.food=0;c.foodToGrow=Math.round((c.foodToGrow||10)*1.5);showStatus(`🌱 ${c.name} grew to pop ${c.pop}!`);}
+  for(const u of GS.units){
+    u.movesLeft=UNIT_TYPES[u.type]?.moves||2;
+    // Worker build progress
+    if(u.buildLeft>0){
+      u.buildLeft--;
+      if(u.buildLeft===0&&u.buildTarget){
+        GS.improvements[`${u.buildTarget.col}_${u.buildTarget.row}`]=u.buildType;
+        showStatus(`✅ ${IMPROVEMENTS[u.buildType].label} complete!`);
+        u.buildTarget=null; u.buildType=null;
+      }
+    }
   }
+  // City production + growth
+  for(const c of GS.cities){
+    const y=getCityYields(c);
+    // Production
+    if(c.prodQueue&&c.prodQueue.length>0){
+      const item=c.prodQueue[0];
+      const isBuilding=!!BUILDINGS[item];
+      const isUnit=!!UNIT_TYPES[item];
+      const cost=isBuilding?BUILDINGS[item].cost:UNIT_TYPES[item]?.cost||0;
+      c.prod=(c.prod||0)+y.p;
+      if(c.prod>=cost){
+        c.prod=0; c.prodQueue.shift();
+        if(isBuilding){
+          if(!(c.buildings||[]).includes(item)){c.buildings=c.buildings||[];c.buildings.push(item);}
+          showStatus(`🏛 ${c.name} built ${BUILDINGS[item].label}!`);
+        } else if(isUnit&&item==='worker'){
+          // Spawn worker at city tile
+          const wid=GS.nextUnitId++;
+          GS.units.push({id:wid,type:'worker',col:c.col,row:c.row,movesLeft:3,buildLeft:0,buildTarget:null,buildType:null});
+          if(scene_ref) scene_ref.spawnWorker(GS.units.find(u=>u.id===wid));
+          showStatus(`👷 ${c.name} trained a Worker!`);
+        } else if(isUnit&&item==='warrior'){
+          const wid=GS.nextUnitId++;
+          GS.units.push({id:wid,type:'warrior',col:c.col,row:c.row,movesLeft:2});
+          if(scene_ref) scene_ref.spawnWorker(GS.units.find(u=>u.id===wid)); // reuse spawn fn
+          showStatus(`⚔️ ${c.name} trained a Warrior!`);
+        }
+      }
+    }
+    // Food growth
+    const foodSurplus=y.f - c.pop*2;
+    c.food=(c.food||0)+foodSurplus;
+    if(c.food<0) c.food=0; // no starvation for now
+    if(c.food>=(c.foodToGrow||10)){
+      c.pop=Math.min(20,c.pop+1); c.food=0;
+      c.foodToGrow=Math.round((c.foodToGrow||10)*1.5);
+      showStatus(`🌱 ${c.name} grew to pop ${c.pop}!`);
+    }
+  }
+  GS.science+=(GS.income.s||0);
+  GS.culture+=(GS.income.c||0);
   showStatus(`Turn ${GS.turn} begins`);
   updateHUD();
 }
