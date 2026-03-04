@@ -252,6 +252,7 @@
       <button class="cal-nav-btn" onclick="prev()">‹</button>
       <button class="cal-today-btn" onclick="goToday()">Hoy</button>
       <button class="cal-nav-btn" onclick="next()">›</button>
+      <button class="cal-nav-btn" id="cal-undo-btn" onclick="calUndo()" title="Undo (⌘Z)" style="opacity:0.35;font-size:13px" disabled>↩</button>
     </div>
     <div class="cal-month-label" id="period-label">Loading…</div>
     <div class="cal-view-toggle">
@@ -346,7 +347,7 @@
   </a>
 </nav>
 
-<script type="module" src="js/calendar.js?v=6"></script>
+<script type="module" src="js/calendar.js?v=7"></script>
 <script type="module" src="js/error-reporter.js?v=1"></script>
 <script type="module" src="js/topbar.js?v=7"></script>
 </body>

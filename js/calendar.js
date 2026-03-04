@@ -205,7 +205,7 @@ async function fetchEvents() {
         if (!eventCache[key]) eventCache[key] = [];
         eventCache[key].push({
           type: 'class', title: cls.name,
-          meta: cls.time_start ? cls.time_start.slice(0,5) : cls.subject || '',
+          meta: cls.time_start ? fmt12(cls.time_start.slice(0,5)) : cls.subject || '',
           color: '#2563EB',
           link: `class.html?id=${cls.id}`,
           timeStart: cls.time_start ? cls.time_start.slice(0,5) : null,
@@ -334,9 +334,26 @@ function minutesToPct(mins) {
 }
 
 function minsToTimeStr(mins) {
+  // Returns 24hr HH:MM — used for <input type="time"> values and Supabase saves
   const h = Math.floor(mins / 60);
   const m = mins % 60;
   return `${pad(h)}:${pad(m)}`;
+}
+
+function fmt12(timeStr) {
+  // Convert HH:MM to 12-hour display (e.g. "14:30" → "2:30pm", "08:00" → "8am")
+  if (!timeStr) return '';
+  const [hStr, mStr] = timeStr.split(':');
+  const h = parseInt(hStr, 10);
+  const m = parseInt(mStr || '0', 10);
+  const suffix = h >= 12 ? 'pm' : 'am';
+  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return m === 0 ? `${h12}${suffix}` : `${h12}:${pad(m)}${suffix}`;
+}
+
+function fmt12Range(start, end) {
+  if (!start) return '';
+  return end ? `${fmt12(start)}–${fmt12(end)}` : fmt12(start);
 }
 
 function snapMins(mins) {
@@ -351,6 +368,61 @@ function pxToMins(px) {
 // ── Drag state ────────────────────────────────────────────────────────────────
 let dragState = null;
 let lastDragEnd = 0; // timestamp of last completed drag, to suppress click // { type: 'create'|'move'|'resize', ... }
+
+// ── Undo stack ────────────────────────────────────────────────────────────────
+const undoStack = []; // each entry: { type, data } — max 20 entries
+const MAX_UNDO = 20;
+
+function pushUndo(entry) {
+  undoStack.push(entry);
+  if (undoStack.length > MAX_UNDO) undoStack.shift();
+  updateUndoBtn();
+}
+
+function updateUndoBtn() {
+  const btn = document.getElementById('cal-undo-btn');
+  if (btn) {
+    btn.style.opacity = undoStack.length > 0 ? '1' : '0.35';
+    btn.disabled = undoStack.length === 0;
+  }
+}
+
+window.calUndo = async () => {
+  if (!undoStack.length) return;
+  const entry = undoStack.pop();
+  updateUndoBtn();
+
+  if (entry.type === 'create') {
+    // Undo: delete the created event(s)
+    for (const id of entry.ids) {
+      await supabase.from('calendar_events').delete().eq('id', id);
+    }
+    toast('Undo: event deleted ↩', 'success');
+    render();
+  } else if (entry.type === 'move' || entry.type === 'resize') {
+    // Undo: restore old time
+    const startISO = `${entry.oldDate}T${entry.oldStart}:00+00:00`;
+    const endISO   = entry.oldEnd ? `${entry.oldDate}T${entry.oldEnd}:00+00:00` : null;
+    await supabase.from('calendar_events').update({
+      start_time: startISO, end_time: endISO,
+    }).eq('id', entry.id);
+    toast('Undo: time restored ↩', 'success');
+    render();
+  } else if (entry.type === 'delete') {
+    // Undo: re-insert the deleted event
+    await supabase.from('calendar_events').insert(entry.row);
+    toast('Undo: event restored ↩', 'success');
+    render();
+  }
+};
+
+// Cmd+Z / Ctrl+Z keyboard shortcut
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
+    e.preventDefault();
+    calUndo();
+  }
+});
 
 function renderWeekGrid() {
   document.getElementById('cal-day-labels').style.display = 'none';
@@ -448,7 +520,7 @@ function renderWeekGrid() {
       const endMins = Math.max(rawEnd, startMins + 30);
       const topPct = minutesToPct(startMins);
       const heightPx = Math.max(20, (endMins - startMins) / 60 * HOUR_HEIGHT_PX);
-      const timeLabel = `${e.timeStart}${e.timeEnd ? '–' + e.timeEnd : ''}`;
+      const timeLabel = fmt12Range(e.timeStart, e.timeEnd);
       const isEditable = (e.type === 'gcal' && e.id) || (e.type === 'class' && e.classId);
       const cursor = isEditable ? 'grab' : 'pointer';
       const evId = e.id ? `data-ev-id="${e.id}"` : '';
@@ -581,6 +653,8 @@ function attachWeekInteractions() {
           startM: timeToMinutes(evStart),
           endM:   timeToMinutes(evEnd) || timeToMinutes(evStart) + 60,
           col,
+          // Store originals for undo
+          origDate: evDate, origStart: evStart, origEnd: evEnd,
         };
       }
 
@@ -605,6 +679,8 @@ function attachWeekInteractions() {
           duration: eMins - sMins,
           offsetM: clickMins - sMins,
           col,
+          // Store originals for undo
+          origDate: colDateStr, origStart: evStart, origEnd: evEnd,
         };
         evEl.style.opacity = '0.6';
         evEl.style.cursor = 'grabbing';
@@ -618,9 +694,9 @@ function attachWeekInteractions() {
         if (Date.now() - lastDragEnd < 400) return; // was a drag, not a click
         e.stopPropagation();
         if (evType === 'gcal') {
-          openEventPopup(evId, evStart, evEnd, evEl.title.replace(` ${evStart}–${evEnd}`, '').trim(), evDate, evEl);
+          openEventPopup(evId, evStart, evEnd, evEl.dataset.title || evEl.title, evDate, evEl);
         } else if (evType === 'class' && classId) {
-          const className = evEl.title.replace(` ${evStart}–${evEnd}`, '').trim();
+          const className = evEl.dataset.title || evEl.title;
           openClassEditModal(classId, className, evStart, evEnd);
         }
       });
@@ -661,7 +737,7 @@ function attachWeekInteractions() {
       dragState.evEl.style.minHeight = heightPx + 'px';
       // Update time label
       const tl = dragState.evEl.querySelector('div:nth-child(2)');
-      if (tl) tl.textContent = `${minsToTimeStr(dragState.startM)}–${minsToTimeStr(dragState.endM)}`;
+      if (tl) tl.textContent = `${fmt12(minsToTimeStr(dragState.startM))}–${fmt12(minsToTimeStr(dragState.endM))}`;
     }
 
     if (dragState.type === 'move') {
@@ -697,7 +773,8 @@ function attachWeekInteractions() {
       if (ds.evType === 'class' && ds.classId) {
         saveClassTime(ds.classId, minsToTimeStr(ds.startM), minsToTimeStr(ds.endM));
       } else {
-        saveEventTime(ds.evId, ds.evDate, minsToTimeStr(ds.startM), minsToTimeStr(ds.endM));
+        saveEventTime(ds.evId, ds.evDate, minsToTimeStr(ds.startM), minsToTimeStr(ds.endM),
+          ds.origDate, ds.origStart, ds.origEnd, 'resize');
       }
     }
 
@@ -708,7 +785,8 @@ function attachWeekInteractions() {
       if (ds.evType === 'class' && ds.classId) {
         saveClassTime(ds.classId, minsToTimeStr(ds.startM), minsToTimeStr(ds.endM));
       } else {
-        saveEventTime(ds.evId, ds.evDate, minsToTimeStr(ds.startM), minsToTimeStr(ds.endM));
+        saveEventTime(ds.evId, ds.evDate, minsToTimeStr(ds.startM), minsToTimeStr(ds.endM),
+          ds.origDate, ds.origStart, ds.origEnd, 'move');
       }
     }
 
@@ -771,12 +849,16 @@ function updateGhostBlock(ghost, startM, endM) {
   const heightPx = Math.max(20, (endM - startM) / 60 * HOUR_HEIGHT_PX);
   ghost.style.top = topPct + '%';
   ghost.style.minHeight = heightPx + 'px';
-  ghost.textContent = `${minsToTimeStr(startM)}–${minsToTimeStr(endM)}`;
+  ghost.textContent = `${fmt12(minsToTimeStr(startM))}–${fmt12(minsToTimeStr(endM))}`;
 }
 
 // ── Save event time to Supabase ───────────────────────────────────────────────
-async function saveEventTime(id, dateStr, startTime, endTime) {
+async function saveEventTime(id, dateStr, startTime, endTime, oldDate, oldStart, oldEnd, undoType) {
   if (!id) return;
+  // Push undo entry before saving
+  if (oldStart) {
+    pushUndo({ type: undoType || 'move', id, oldDate: oldDate || dateStr, oldStart, oldEnd });
+  }
   const startISO = `${dateStr}T${startTime}:00+00:00`;
   const endISO   = `${dateStr}T${endTime}:00+00:00`;
   const { error } = await supabase.from('calendar_events').update({
@@ -945,9 +1027,13 @@ function openCreateModal(dateStr, startTime, endTime) {
       is_busy: true,
     }));
 
-    const { error } = await supabase.from('calendar_events').insert(rows);
+    const { data: insertedRows, error } = await supabase.from('calendar_events').insert(rows).select('id');
     if (error) { toast('Error: ' + error.message, 'error'); if (btn) btn.disabled = false; return; }
 
+    // Push undo entry
+    if (insertedRows && insertedRows.length) {
+      pushUndo({ type: 'create', ids: insertedRows.map(r => r.id) });
+    }
     const countMsg = dates.length > 1 ? `${dates.length} events added ✅` : 'Event added ✅';
     toast(countMsg, 'success');
     modal.remove();
@@ -1024,7 +1110,7 @@ function openEventPopup(id, startTime, endTime, title, evDate, anchorEl) {
     border:1px solid var(--gray-200)`;
   popup.innerHTML = `
     <div style="font-size:14px;font-weight:700;color:var(--gray-800);margin-bottom:4px">${title}</div>
-    <div style="font-size:12px;color:var(--gray-400);margin-bottom:12px">${evDate} · ${startTime}–${endTime}</div>
+    <div style="font-size:12px;color:var(--gray-400);margin-bottom:12px">${evDate} · ${fmt12Range(startTime, endTime)}</div>
     <div style="display:flex;gap:6px">
       <button id="ev-edit-btn" style="flex:1;padding:8px;border:1.5px solid var(--gray-200);border-radius:7px;background:var(--white);font-size:13px;font-weight:600;color:var(--gray-700);cursor:pointer">✏️ Edit</button>
       <button id="ev-del-btn" style="flex:1;padding:8px;border:none;border-radius:7px;background:#FEF2F2;font-size:13px;font-weight:600;color:var(--red);cursor:pointer">🗑 Delete</button>
@@ -1038,9 +1124,16 @@ function openEventPopup(id, startTime, endTime, title, evDate, anchorEl) {
 
   document.getElementById('ev-del-btn').addEventListener('click', async () => {
     popup.remove();
+    // Fetch the row before deleting (for undo)
+    const { data: rows } = await supabase.from('calendar_events').select('*').eq('id', id);
+    const row = rows && rows[0];
     const { error } = await supabase.from('calendar_events').delete().eq('id', id);
     if (error) { toast('Delete failed: ' + error.message, 'error'); return; }
-    toast('Event deleted', 'success');
+    if (row) {
+      const { id: _, created_at, ...rowData } = row;
+      pushUndo({ type: 'delete', row: rowData });
+    }
+    toast('Event deleted — Cmd+Z to undo', 'success');
     render();
   });
 
@@ -1131,8 +1224,8 @@ function renderDayPanel(ds) {
   }
 
   eventsEl.innerHTML = events.map(e => {
-    const timeRange = (e.timeStart && e.timeEnd) ? `<div class="cal-event-time">${e.timeStart}–${e.timeEnd}</div>` :
-                      e.timeStart ? `<div class="cal-event-time">${e.timeStart}</div>` : '';
+    const timeRange = (e.timeStart && e.timeEnd) ? `<div class="cal-event-time">${fmt12Range(e.timeStart, e.timeEnd)}</div>` :
+                      e.timeStart ? `<div class="cal-event-time">${fmt12(e.timeStart)}</div>` : '';
     let taskHtml = '';
     if (e.type === 'timeblock' && e.taskList && e.taskList.length > 0) {
       taskHtml = `<ul class="cal-tb-tasks">${e.taskList.map(t =>
