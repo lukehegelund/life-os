@@ -87,6 +87,8 @@ class ProxyQueryBuilder {
   in(col, vals)    { this._filters.in     = { ...(this._filters.in     || {}), [col]: vals }; return this; }
   contains(col, val) { this._filters.contains = { ...(this._filters.contains || {}), [col]: val }; return this; }
   overlaps(col, val) { this._filters.overlaps = { ...(this._filters.overlaps || {}), [col]: val }; return this; }
+  // .not(col, operator, value) — e.g. .not('notes', 'like', '%claude_schedule%')
+  not(col, op, val)  { this._filters.not = [...(this._filters.not || []), { col, op, val }]; return this; }
   or(query) { this._filters.or = query; return this; }
 
   // --- Modifiers ---
