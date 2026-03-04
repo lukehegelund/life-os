@@ -8,30 +8,30 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
-body{background:#0d1220;overflow:hidden;font-family:'Cinzel',Georgia,serif;user-select:none;}
+body{background:#1a2430;overflow:hidden;font-family:'Cinzel',Georgia,serif;user-select:none;}
 #game-container canvas{display:block;}
-#menu-overlay{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,#1a1208 0%,#0a0a12 70%);z-index:1000;}
-.menu-title{font-family:'Cinzel Decorative',serif;font-size:clamp(28px,5vw,60px);color:#f0d080;text-shadow:0 0 40px rgba(240,180,60,.5);letter-spacing:4px;text-align:center;line-height:1.2;}
-.menu-sub{font-size:clamp(10px,1.4vw,13px);color:#8a7050;letter-spacing:6px;text-transform:uppercase;margin-top:10px;text-align:center;}
-.menu-tag{font-size:10px;color:#5a4a30;letter-spacing:3px;text-transform:uppercase;margin-top:6px;text-align:center;}
-.menu-div{width:200px;height:1px;background:linear-gradient(90deg,transparent,#5a3e1b,transparent);margin:18px auto;}
-.start-btn{margin-top:36px;background:linear-gradient(180deg,#8b5e1a,#5a3a08);border:2px solid #c8841e;border-radius:4px;color:#f5e0a0;font-family:'Cinzel',serif;font-size:18px;font-weight:600;padding:14px 60px;cursor:pointer;letter-spacing:4px;text-transform:uppercase;box-shadow:0 4px 20px rgba(200,132,30,.3),inset 0 1px 0 rgba(255,220,100,.2);transition:all .2s;}
-.start-btn:hover{background:linear-gradient(180deg,#aa7520,#7a4e0a);transform:translateY(-1px);box-shadow:0 4px 30px rgba(200,132,30,.5);}
-#top-bar{position:fixed;top:0;left:0;right:0;height:52px;background:linear-gradient(180deg,#1a1410,#110e0a);border-bottom:2px solid #5a3e1b;display:none;align-items:center;padding:0 16px;gap:12px;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,.6);}
-.empire-name{font-size:14px;font-weight:700;color:#f0d080;letter-spacing:3px;text-transform:uppercase;}
-.rpill{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:5px 12px;}
-.rpill .i{font-size:14px;}.rpill .v{color:#f0d080;font-weight:700;font-size:13px;}.rpill .l{color:#666;font-size:10px;font-family:sans-serif;letter-spacing:1px;}
+#menu-overlay{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,#1e2e1a 0%,#0e1810 70%);z-index:1000;}
+.menu-title{font-family:'Cinzel Decorative',serif;font-size:clamp(28px,5vw,60px);color:#a8d860;text-shadow:0 0 40px rgba(100,200,50,.5);letter-spacing:4px;text-align:center;line-height:1.2;}
+.menu-sub{font-size:clamp(10px,1.4vw,13px);color:#7a9860;letter-spacing:6px;text-transform:uppercase;margin-top:10px;text-align:center;}
+.menu-tag{font-size:10px;color:#4a6838;letter-spacing:3px;text-transform:uppercase;margin-top:6px;text-align:center;}
+.menu-div{width:200px;height:1px;background:linear-gradient(90deg,transparent,#3a6820,transparent);margin:18px auto;}
+.start-btn{margin-top:36px;background:linear-gradient(180deg,#3a6818,#1e4008);border:2px solid #6aac30;border-radius:4px;color:#c8f080;font-family:'Cinzel',serif;font-size:18px;font-weight:600;padding:14px 60px;cursor:pointer;letter-spacing:4px;text-transform:uppercase;box-shadow:0 4px 20px rgba(80,160,40,.3),inset 0 1px 0 rgba(160,255,80,.2);transition:all .2s;}
+.start-btn:hover{background:linear-gradient(180deg,#4a8020,#2a5010);transform:translateY(-1px);box-shadow:0 4px 30px rgba(80,160,40,.5);}
+#top-bar{position:fixed;top:0;left:0;right:0;height:52px;background:linear-gradient(180deg,#111e0e,#0e180a);border-bottom:2px solid #3a6820;display:none;align-items:center;padding:0 16px;gap:12px;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,.6);}
+.empire-name{font-size:14px;font-weight:700;color:#a8d860;letter-spacing:3px;text-transform:uppercase;}
+.rpill{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.04);border:1px solid rgba(100,180,50,.2);border-radius:4px;padding:5px 12px;}
+.rpill .i{font-size:14px;}.rpill .v{color:#a8d860;font-weight:700;font-size:13px;}.rpill .l{color:#5a7840;font-size:10px;font-family:sans-serif;letter-spacing:1px;}
 .spacer{flex:1;}
-.turn-btn{background:linear-gradient(180deg,#7a4e10,#4a2e05);border:1px solid #c8841e;border-radius:4px;color:#f5e0a0;font-family:'Cinzel',serif;font-size:12px;padding:7px 18px;cursor:pointer;letter-spacing:2px;transition:all .15s;}
-.turn-btn:hover{background:linear-gradient(180deg,#9a6218,#6a4208);}
-#turn-info{font-size:11px;color:#666;font-family:sans-serif;}
-#bot-panel{position:fixed;bottom:0;left:0;right:0;height:110px;background:linear-gradient(0deg,#0d0b08,#110e0a);border-top:2px solid #3a2a12;display:none;align-items:center;padding:0 20px;gap:16px;z-index:100;}
-#unit-name{font-size:15px;font-weight:700;color:#f0d080;letter-spacing:2px;margin-bottom:4px;}
-#unit-desc{font-size:11px;color:#888;font-family:sans-serif;line-height:1.5;}
+.turn-btn{background:linear-gradient(180deg,#3a6818,#1e4008);border:1px solid #6aac30;border-radius:4px;color:#c8f080;font-family:'Cinzel',serif;font-size:12px;padding:7px 18px;cursor:pointer;letter-spacing:2px;transition:all .15s;}
+.turn-btn:hover{background:linear-gradient(180deg,#4a8020,#2a5010);}
+#turn-info{font-size:11px;color:#5a7840;font-family:sans-serif;}
+#bot-panel{position:fixed;bottom:0;left:0;right:0;height:110px;background:linear-gradient(0deg,#0c1408,#0e180a);border-top:2px solid #2a4818;display:none;align-items:center;padding:0 20px;gap:16px;z-index:100;}
+#unit-name{font-size:15px;font-weight:700;color:#a8d860;letter-spacing:2px;margin-bottom:4px;}
+#unit-desc{font-size:11px;color:#6a8a50;font-family:sans-serif;line-height:1.5;}
 #action-btns{display:flex;gap:10px;}
-.abtn{background:linear-gradient(180deg,#2a3520,#1a2212);border:1px solid #4a6030;border-radius:4px;color:#a0d060;font-family:'Cinzel',serif;font-size:11px;padding:10px 18px;cursor:pointer;letter-spacing:1px;transition:all .15s;white-space:nowrap;}
-.abtn:hover{background:linear-gradient(180deg,#3a4530,#2a3220);border-color:#6a8050;}
-#status-msg{position:fixed;top:64px;left:50%;transform:translateX(-50%);background:rgba(10,8,5,.92);border:1px solid #8a6030;border-radius:4px;padding:7px 18px;font-size:13px;color:#f0d080;letter-spacing:1px;z-index:150;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;}
+.abtn{background:linear-gradient(180deg,#2a3520,#1a2212);border:1px solid #4a6830;border-radius:4px;color:#90c850;font-family:'Cinzel',serif;font-size:11px;padding:10px 18px;cursor:pointer;letter-spacing:1px;transition:all .15s;white-space:nowrap;}
+.abtn:hover{background:linear-gradient(180deg,#3a4530,#2a3220);border-color:#6aac50;}
+#status-msg{position:fixed;top:64px;left:50%;transform:translateX(-50%);background:rgba(8,14,5,.94);border:1px solid #5a9030;border-radius:4px;padding:7px 18px;font-size:13px;color:#a8d860;letter-spacing:1px;z-index:150;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;}
 </style>
 </head>
 <body>
@@ -98,19 +98,19 @@ const STEP_Y  = TH / 2;   // (col+row) multiplier
 const COLS = 18, ROWS = 11;
 const TOP_H = 52, BOT_H = 110;
 
-// ── TERRAIN ──
+// ── TERRAIN — Forest Kingdom palette ──
 const TERRAIN = {
-  ocean:    {label:'Ocean',    passable:false, top:'#1e4a78',lt:'#3a6a9a',side:'#122e50',dark:'#091e36',water:true },
-  coast:    {label:'Coast',    passable:false, top:'#2a6898',lt:'#4080b0',side:'#1a4070',dark:'#0e2a50',water:true },
-  plains:   {label:'Plains',   passable:true,  top:'#74ae4a',lt:'#90c868',side:'#487228',dark:'#2c4818',water:false},
-  grassland:{label:'Grassland',passable:true,  top:'#509c3c',lt:'#70bc58',side:'#346422',dark:'#1e3e12',water:false},
-  forest:   {label:'Forest',   passable:true,  top:'#266424',lt:'#388438',side:'#163816',dark:'#0c260c',water:false},
-  hill:     {label:'Hills',    passable:true,  top:'#988654',lt:'#b8a470',side:'#685c2e',dark:'#443c1a',water:false},
-  mountain: {label:'Mountain', passable:false, top:'#a49e9e',lt:'#c4bebe',side:'#646060',dark:'#423e3e',water:false},
-  desert:   {label:'Desert',   passable:true,  top:'#ceb04e',lt:'#e8ca6a',side:'#947426',dark:'#5c4816',water:false},
-  tundra:   {label:'Tundra',   passable:true,  top:'#88a0a6',lt:'#a6bec4',side:'#566870',dark:'#364248',water:false},
-  river:    {label:'River',    passable:true,  top:'#56963e',lt:'#74b658',side:'#365e26',dark:'#1e3c14',water:false},
-  snow:     {label:'Snow',     passable:false, top:'#daeef6',lt:'#f0f8ff',side:'#9ec0d0',dark:'#7098a8',water:false},
+  ocean:    {label:'Ocean',    passable:false, top:'#1e4060',lt:'#2c5c88',side:'#102838',dark:'#081820',water:true },
+  coast:    {label:'Coast',    passable:false, top:'#246080',lt:'#3880a8',side:'#143850',dark:'#0a2030',water:true },
+  plains:   {label:'Plains',   passable:true,  top:'#7ecf3e',lt:'#98e050',side:'#4a9820',dark:'#2e6010',water:false},
+  grassland:{label:'Grassland',passable:true,  top:'#5cae28',lt:'#78cc3c',side:'#386814',dark:'#20420a',water:false},
+  forest:   {label:'Forest',   passable:true,  top:'#3a8014',lt:'#52a020',side:'#22500a',dark:'#123006',water:false},
+  hill:     {label:'Hills',    passable:true,  top:'#8a7448',lt:'#a89060',side:'#5c4c28',dark:'#3c3018',water:false},
+  mountain: {label:'Mountain', passable:false, top:'#908880',lt:'#b0a898',side:'#585048',dark:'#383028',water:false},
+  desert:   {label:'Desert',   passable:true,  top:'#a8d860',lt:'#c0f070',side:'#688a30',dark:'#405618',water:false},
+  tundra:   {label:'Tundra',   passable:true,  top:'#78a058',lt:'#98c070',side:'#4a6838',dark:'#2e4020',water:false},
+  river:    {label:'River',    passable:true,  top:'#60b830',lt:'#7ad040',side:'#3a7018',dark:'#20480a',water:false},
+  snow:     {label:'Snow',     passable:false, top:'#d8eec8',lt:'#eef8e0',side:'#8ab880',dark:'#609858',water:false},
 };
 
 const MAP_DATA=[
@@ -334,7 +334,7 @@ function featGrass(ctx, tx, topY, botX, botY, mlx, mrx, midY, above) {
     for (let i=0;i<10;i++) {
       const gx=tx+(rng()-.5)*(mrx-mlx)*.68, gy=midY+3+rng()*(botY-midY)*.65;
       const h=5+rng()*6, lean=(rng()-.5)*4;
-      ctx.strokeStyle=`rgba(60,160,30,${0.5+rng()*.3})`; ctx.lineWidth=1.2;
+      ctx.strokeStyle=`rgba(50,140,20,${0.55+rng()*.3})`; ctx.lineWidth=1.2;
       ctx.beginPath(); ctx.moveTo(gx,gy); ctx.quadraticCurveTo(gx+lean,gy-h*.6,gx+lean*.6,gy-h); ctx.stroke();
     }
   }
@@ -375,37 +375,62 @@ function featWater(ctx, tx, topY, botX, botY, mlx, mrx, midY, above) {
 
 // ── FEATURE PRIMITIVES ──
 function drawFlatTree(ctx, cx, baseY, s, rng) {
-  // Trunk
-  const trunkH = s*0.35, trunkW = s*0.11;
-  ctx.fillStyle = '#3a2510';
-  ctx.fillRect(cx-trunkW/2, baseY-trunkH, trunkW, trunkH+1);
-  // Three layered cones, sizes tuned for TW=128
+  // Forest Kingdom pine — darker, richer greens, warm brown trunk
+  const trunkH = s*0.38, trunkW = s*0.13;
+  ctx.fillStyle = '#5a3010';
+  ctx.fillRect(cx-trunkW/2, baseY-trunkH, trunkW, trunkH+2);
+  // Highlight one side of trunk
+  ctx.fillStyle = 'rgba(255,255,255,0.10)';
+  ctx.fillRect(cx-trunkW/2, baseY-trunkH, trunkW*0.4, trunkH);
+  // Three layered pine cones — earthy forest greens
   const layers = [
-    {y: baseY-trunkH-s*.3,  r: s*.50, col:'#1c5018'},
-    {y: baseY-trunkH-s*.62, r: s*.38, col:'#246622'},
-    {y: baseY-trunkH-s*.88, r: s*.24, col:'#2e7a2c'},
+    {y: baseY-trunkH-s*.28, r: s*.52, col:'#2a6812'},
+    {y: baseY-trunkH-s*.60, r: s*.38, col:'#3a8018'},
+    {y: baseY-trunkH-s*.86, r: s*.24, col:'#4a9a20'},
   ];
   for (const l of layers) {
-    ctx.fillStyle='rgba(0,0,0,0.16)';
-    ctx.beginPath(); ctx.ellipse(cx+s*.07, l.y+l.r*.18+2, l.r*.65, l.r*.2, 0, 0, Math.PI*2); ctx.fill();
+    // Drop shadow under each layer
+    ctx.fillStyle='rgba(0,0,0,0.20)';
+    ctx.beginPath(); ctx.ellipse(cx+s*.08, l.y+l.r*.20+2, l.r*.62, l.r*.18, 0, 0, Math.PI*2); ctx.fill();
+    // Main triangle
     ctx.fillStyle = l.col;
-    ctx.beginPath(); ctx.moveTo(cx, l.y); ctx.lineTo(cx-l.r, l.y+l.r*.82); ctx.lineTo(cx+l.r, l.y+l.r*.82); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = lighten(l.col, 20);
-    ctx.beginPath(); ctx.moveTo(cx, l.y); ctx.lineTo(cx-l.r, l.y+l.r*.82); ctx.lineTo(cx-l.r*.14, l.y+l.r*.82); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(cx, l.y); ctx.lineTo(cx-l.r, l.y+l.r*.84); ctx.lineTo(cx+l.r, l.y+l.r*.84); ctx.closePath(); ctx.fill();
+    // Lit left face
+    ctx.fillStyle = lighten(l.col, 22);
+    ctx.beginPath(); ctx.moveTo(cx, l.y); ctx.lineTo(cx-l.r, l.y+l.r*.84); ctx.lineTo(cx-l.r*.12, l.y+l.r*.84); ctx.closePath(); ctx.fill();
+    // Dark right face
+    ctx.fillStyle = darken(l.col, 16);
+    ctx.beginPath(); ctx.moveTo(cx, l.y); ctx.lineTo(cx+l.r*.12, l.y+l.r*.84); ctx.lineTo(cx+l.r, l.y+l.r*.84); ctx.closePath(); ctx.fill();
   }
 }
 
 function drawFlatMountain(ctx, cx, baseY, w, h) {
-  ctx.fillStyle='rgba(0,0,0,0.2)';
-  ctx.beginPath(); ctx.moveTo(cx,baseY-h); ctx.lineTo(cx-w*.6,baseY+5); ctx.lineTo(cx+w*.6,baseY+5); ctx.closePath(); ctx.fill();
-  ctx.fillStyle='#787070';
+  // Forest Kingdom mountain — warm gray stone, deep shadow, snow cap + pine
+  // Drop shadow
+  ctx.fillStyle='rgba(0,0,0,0.22)';
+  ctx.beginPath(); ctx.moveTo(cx,baseY-h); ctx.lineTo(cx-w*.62,baseY+5); ctx.lineTo(cx+w*.62,baseY+5); ctx.closePath(); ctx.fill();
+  // Lit left face
+  ctx.fillStyle='#948c88';
   ctx.beginPath(); ctx.moveTo(cx,baseY-h); ctx.lineTo(cx-w*.55,baseY+4); ctx.lineTo(cx+w*.55,baseY+4); ctx.closePath(); ctx.fill();
-  ctx.fillStyle='rgba(0,0,0,0.18)';
+  // Dark right face
+  ctx.fillStyle='rgba(0,0,0,0.20)';
   ctx.beginPath(); ctx.moveTo(cx,baseY-h); ctx.lineTo(cx,baseY+4); ctx.lineTo(cx+w*.55,baseY+4); ctx.closePath(); ctx.fill();
-  ctx.fillStyle='#ecf4f8';
-  ctx.beginPath(); ctx.moveTo(cx,baseY-h); ctx.lineTo(cx-w*.18,baseY-h+h*.3); ctx.lineTo(cx+w*.2,baseY-h+h*.3); ctx.closePath(); ctx.fill();
-  ctx.fillStyle='rgba(255,255,255,0.45)';
-  ctx.beginPath(); ctx.moveTo(cx,baseY-h); ctx.lineTo(cx-w*.18,baseY-h+h*.3); ctx.lineTo(cx-w*.05,baseY-h+h*.3); ctx.closePath(); ctx.fill();
+  // Snow cap
+  ctx.fillStyle='#eef4f0';
+  ctx.beginPath(); ctx.moveTo(cx,baseY-h); ctx.lineTo(cx-w*.20,baseY-h+h*.32); ctx.lineTo(cx+w*.22,baseY-h+h*.32); ctx.closePath(); ctx.fill();
+  // Snow highlight
+  ctx.fillStyle='rgba(255,255,255,0.5)';
+  ctx.beginPath(); ctx.moveTo(cx,baseY-h); ctx.lineTo(cx-w*.18,baseY-h+h*.28); ctx.lineTo(cx-w*.04,baseY-h+h*.28); ctx.closePath(); ctx.fill();
+  // Small pine tree on slope (Forest Kingdom signature detail)
+  if(w > 16) {
+    const px = cx - w*.40, py = baseY + 2;
+    ctx.fillStyle='#2a6812';
+    ctx.beginPath(); ctx.moveTo(px,py-9); ctx.lineTo(px-5,py+2); ctx.lineTo(px+5,py+2); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,0.12)';
+    ctx.beginPath(); ctx.moveTo(px,py-9); ctx.lineTo(px-5,py+2); ctx.lineTo(px-1,py+2); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#5a3010';
+    ctx.fillRect(px-1, py+2, 2, 3);
+  }
 }
 
 // ── TILE FEATURE MAP ──
@@ -459,7 +484,7 @@ function makeSettler(selected) {
   ctx.fillStyle='rgba(255,255,255,0.12)';
   ctx.fillRect(cx-12, gY-18, 5, 3);
 
-  // ── ISOMETRIC CUBE BODY ──
+  // ── ISOMETRIC CUBE BODY ── Forest Kingdom tunic: warm earthy browns
   //  Viewed from the front-right in isometric:
   //    top face  : horizontal parallelogram at the top
   //    left face : lit vertical rectangle (viewer left)
@@ -468,9 +493,9 @@ function makeSettler(selected) {
   //  Cube is 30 wide, 22 tall (each half-face = 15 wide).
   //  Top face is a flat diamond/parallelogram 4px tall.
   //
-  const cTop  = selected ? '#7898e0' : '#6070b8';
-  const cLit  = selected ? '#5870c0' : '#4a5898';
-  const cDark = selected ? '#3050a0' : '#2e3878';
+  const cTop  = selected ? '#d09040' : '#a86c2c';
+  const cLit  = selected ? '#e0a850' : '#c08038';
+  const cDark = selected ? '#a87020' : '#7a4c1a';
 
   const bTop  = gY - 72;   // top of the body cube
   const bBot  = gY - 20;   // bottom of cube (sits on legs)
@@ -516,39 +541,39 @@ function makeSettler(selected) {
   ctx.lineTo(cx + bHalf, bTop + tSkew);
   ctx.stroke();
 
-  // ── Belt: thin band at cube midpoint ──
+  // ── Belt: thin band at cube midpoint ── Forest: dark leather + gold buckle
   const beltY = bTop + bH * 0.55;
-  ctx.fillStyle='#7a4e18'; ctx.fillRect(cx - bHalf, beltY, bHalf * 2, 5);
+  ctx.fillStyle='#4a2c0e'; ctx.fillRect(cx - bHalf, beltY, bHalf * 2, 5);
   // Belt seam on the right (darker)
-  ctx.fillStyle='rgba(0,0,0,0.2)'; ctx.fillRect(cx, beltY, bHalf, 5);
-  // Buckle
-  fillRR(ctx, cx - 5, beltY - 1, 10, 7, 2, '#d4a830');
-  ctx.strokeStyle='#9a7010'; ctx.lineWidth=1; ctx.strokeRect(cx-5, beltY-1, 10, 7);
+  ctx.fillStyle='rgba(0,0,0,0.25)'; ctx.fillRect(cx, beltY, bHalf, 5);
+  // Buckle — gold
+  fillRR(ctx, cx - 5, beltY - 1, 10, 7, 2, '#c89020');
+  ctx.strokeStyle='#8a6010'; ctx.lineWidth=1; ctx.strokeRect(cx-5, beltY-1, 10, 7);
 
-  // ── Neck ──
-  ctx.fillStyle='#c08050'; ctx.fillRect(cx - 4, bTop - 8, 8, 10);
+  // ── Neck — Forest settler skin tone ──
+  ctx.fillStyle='#d4a262'; ctx.fillRect(cx - 4, bTop - 8, 8, 10);
 
   // ── Head: big clean circle ──
   const headY = bTop - 20;   // center of head
   const headR = 16;
   // Drop shadow
-  ctx.fillStyle='rgba(0,0,0,0.12)';
+  ctx.fillStyle='rgba(0,0,0,0.14)';
   ctx.beginPath(); ctx.arc(cx + 2, headY + 2, headR, 0, Math.PI*2); ctx.fill();
-  // Face base
-  ctx.fillStyle='#d4a060';
+  // Face base — warm skin
+  ctx.fillStyle='#d4a262';
   ctx.beginPath(); ctx.arc(cx, headY, headR, 0, Math.PI*2); ctx.fill();
   // Lit top-left highlight
-  ctx.fillStyle='#e8b870';
+  ctx.fillStyle='#e8b87a';
   ctx.beginPath(); ctx.arc(cx - 4, headY - 4, 10, 0, Math.PI*2); ctx.fill();
   // Soft specular
   ctx.fillStyle='rgba(255,255,255,0.12)';
   ctx.beginPath(); ctx.arc(cx - 6, headY - 7, 5, 0, Math.PI*2); ctx.fill();
 
-  // ── HAT: clean centered triangle (wizard/pointed cap) ──
+  // ── HAT: clean centered triangle — Forest Kingdom hood (earthy brown) ──
   //  Base sits across the top of the head; tip points straight up.
-  const hoodCol = selected ? '#4870b0' : '#303060';
-  const hoodLit = selected ? '#6090d0' : '#484888';
-  const hoodDrk = selected ? '#2850a0' : '#202050';
+  const hoodCol = selected ? '#8a5a2a' : '#6a3e18';
+  const hoodLit = selected ? '#aa7038' : '#8a5228';
+  const hoodDrk = selected ? '#6a3a10' : '#4e2c0e';
 
   const hatBaseY  = headY - headR + 4;  // where hat meets head
   const hatTipX   = cx;                 // tip is centered
@@ -587,25 +612,28 @@ function makeSettler(selected) {
   ctx.fillStyle='rgba(255,255,255,0.9)'; ctx.beginPath(); ctx.arc(cx-5, headY, 1, 0, Math.PI*2); ctx.fill();
   ctx.fillStyle='rgba(255,255,255,0.9)'; ctx.beginPath(); ctx.arc(cx+6, headY, 1, 0, Math.PI*2); ctx.fill();
 
-  // ── Staff: simple pole left side + orb ──
+  // ── Staff: wooden pole + natural tip (Forest Kingdom — no magic orb, earthy) ──
   const staffX = cx - bHalf - 4;
   ctx.strokeStyle='#7a4820'; ctx.lineWidth=4; ctx.lineCap='round';
   ctx.beginPath(); ctx.moveTo(staffX, gY - 4); ctx.lineTo(staffX, headY - headR - 8); ctx.stroke();
-  // Orb glow (selection)
+  // Inner lighter grain
+  ctx.strokeStyle='rgba(180,110,50,0.35)'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(staffX+1, gY - 6); ctx.lineTo(staffX+1, headY - headR - 6); ctx.stroke();
+  // Selection aura (green glow for forest)
   if (selected) {
-    ctx.fillStyle='rgba(255,220,60,0.2)';
-    ctx.beginPath(); ctx.arc(staffX, headY - headR - 12, 13, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(80,200,60,0.18)';
+    ctx.beginPath(); ctx.arc(staffX, headY - headR - 10, 13, 0, Math.PI*2); ctx.fill();
   }
-  // Orb
-  const orbY = headY - headR - 12;
-  const og = ctx.createRadialGradient(staffX - 2, orbY - 2, 1, staffX, orbY, 8);
-  og.addColorStop(0,'#fff8c0'); og.addColorStop(0.5,'#e8c030'); og.addColorStop(1,'#886010');
-  ctx.fillStyle=og; ctx.beginPath(); ctx.arc(staffX, orbY, 8, 0, Math.PI*2); ctx.fill();
-  ctx.strokeStyle='rgba(200,160,20,0.6)'; ctx.lineWidth=1.5; ctx.stroke();
+  // Staff tip — polished wood knot
+  const orbY = headY - headR - 10;
+  const og = ctx.createRadialGradient(staffX - 1, orbY - 1, 1, staffX, orbY, 6);
+  og.addColorStop(0,'#d08840'); og.addColorStop(0.6,'#8a5020'); og.addColorStop(1,'#5a3010');
+  ctx.fillStyle=og; ctx.beginPath(); ctx.arc(staffX, orbY, 6, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle='rgba(160,100,30,0.5)'; ctx.lineWidth=1; ctx.stroke();
 
-  // ── Selection glow: outline the cube ──
+  // ── Selection glow: outline the cube (green for forest) ──
   if (selected) {
-    ctx.strokeStyle='rgba(120,200,255,0.55)'; ctx.lineWidth=2.5;
+    ctx.strokeStyle='rgba(100,220,80,0.55)'; ctx.lineWidth=2.5;
     ctx.beginPath();
     ctx.moveTo(cx - bHalf, bTop + tSkew);
     ctx.lineTo(cx, bTop);
@@ -643,57 +671,66 @@ function makeCityTile() {
   const midLX=W/2-TW/2, midRX=W/2+TW/2, midY=CITY_ABOVE+TH/2;
   const botX=W/2, botY=CITY_ABOVE+TH;
 
-  // Depth faces
+  // Depth faces — Forest Kingdom stone base (warm gray)
   ctx.beginPath(); ctx.moveTo(botX,botY); ctx.lineTo(midRX,midY); ctx.lineTo(midRX,midY+DEPTH); ctx.lineTo(botX,botY+DEPTH); ctx.closePath();
-  const seG=ctx.createLinearGradient(0,botY,0,botY+DEPTH); seG.addColorStop(0,'#706050'); seG.addColorStop(1,'#4a3e30'); ctx.fillStyle=seG; ctx.fill();
+  const seG=ctx.createLinearGradient(0,botY,0,botY+DEPTH); seG.addColorStop(0,'#6a605a'); seG.addColorStop(1,'#48403a'); ctx.fillStyle=seG; ctx.fill();
   ctx.strokeStyle='rgba(0,0,0,0.4)'; ctx.lineWidth=1; ctx.stroke();
   ctx.beginPath(); ctx.moveTo(botX,botY); ctx.lineTo(midLX,midY); ctx.lineTo(midLX,midY+DEPTH); ctx.lineTo(botX,botY+DEPTH); ctx.closePath();
-  const swG=ctx.createLinearGradient(0,botY,0,botY+DEPTH); swG.addColorStop(0,'#887060'); swG.addColorStop(1,'#5a4838'); ctx.fillStyle=swG; ctx.fill();
+  const swG=ctx.createLinearGradient(0,botY,0,botY+DEPTH); swG.addColorStop(0,'#807870'); swG.addColorStop(1,'#585048'); ctx.fillStyle=swG; ctx.fill();
   ctx.strokeStyle='rgba(0,0,0,0.3)'; ctx.lineWidth=1; ctx.stroke();
 
-  // Top face
+  // Top face — stone courtyard, green-tinged
   ctx.beginPath(); ctx.moveTo(topX,topY); ctx.lineTo(midRX,midY); ctx.lineTo(botX,botY); ctx.lineTo(midLX,midY); ctx.closePath();
-  const tG=ctx.createLinearGradient(midLX,topY,midRX,botY); tG.addColorStop(0,'#c0b0a0'); tG.addColorStop(0.5,'#a09080'); tG.addColorStop(1,'#7a6858'); ctx.fillStyle=tG; ctx.fill();
+  const tG=ctx.createLinearGradient(midLX,topY,midRX,botY); tG.addColorStop(0,'#9aac88'); tG.addColorStop(0.5,'#7a9068'); tG.addColorStop(1,'#587048'); ctx.fillStyle=tG; ctx.fill();
 
-  // Stone grid
+  // Stone grid — mossy cracks
   ctx.save(); ctx.beginPath(); ctx.moveTo(topX,topY); ctx.lineTo(midRX,midY); ctx.lineTo(botX,botY); ctx.lineTo(midLX,midY); ctx.closePath(); ctx.clip();
-  ctx.strokeStyle='rgba(70,50,30,0.22)'; ctx.lineWidth=1;
+  ctx.strokeStyle='rgba(40,50,30,0.28)'; ctx.lineWidth=1;
   for(let i=0;i<5;i++) for(let j=0;j<4;j++) ctx.strokeRect(midLX+6+i*(TW/4.5), topY+j*(TH/3.2), TW/4.5-2, TH/3.2-1);
   ctx.restore();
 
   // Rim
-  ctx.beginPath(); ctx.moveTo(topX,topY); ctx.lineTo(midLX,midY); ctx.strokeStyle='rgba(255,255,255,0.26)'; ctx.lineWidth=2; ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(topX,topY); ctx.lineTo(midLX,midY); ctx.strokeStyle='rgba(255,255,255,0.28)'; ctx.lineWidth=2; ctx.stroke();
   ctx.beginPath(); ctx.moveTo(topX,topY); ctx.lineTo(midRX,midY); ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.lineWidth=1.5; ctx.stroke();
 
-  // ── Buildings (flat isometric boxes) ──
+  // ── Buildings — Forest Kingdom stone keep ──
   const bY=topY; // buildings grow upward from tile top vertex
 
-  // Wall ring (partial arc above tile)
-  ctx.strokeStyle='rgba(160,130,90,0.75)'; ctx.lineWidth=6;
+  // Wall ring (partial arc above tile) — stone gray
+  ctx.strokeStyle='rgba(150,140,120,0.80)'; ctx.lineWidth=6;
   ctx.beginPath(); ctx.arc(topX, bY+14, 50, Math.PI, 0); ctx.stroke();
-  ctx.strokeStyle='rgba(100,75,40,0.5)'; ctx.lineWidth=3;
+  ctx.strokeStyle='rgba(80,70,55,0.55)'; ctx.lineWidth=3;
   ctx.beginPath(); ctx.arc(topX, bY+14, 50, Math.PI, 0); ctx.stroke();
 
-  // Buildings: central keep, two side towers, two small houses
-  drawIsoBox(ctx, topX,    bY-10, 30, 50, 28, '#c8a870','#886030','#584018');
-  drawIsoBox(ctx, topX-34, bY+2,  22, 36, 24, '#b89060','#7a5020','#4a3010');
-  drawIsoBox(ctx, topX+30, bY+4,  20, 32, 22, '#b89060','#7a5020','#4a3010');
-  drawIsoBox(ctx, topX-20, bY+8,  16, 22, 18, '#a88050','#6a4018','#3a2808');
-  drawIsoBox(ctx, topX+16, bY+10, 16, 20, 16, '#a88050','#6a4018','#3a2808');
+  // Buildings: central keep + towers — warm gray stone
+  drawIsoBox(ctx, topX,    bY-10, 30, 50, 28, '#bcb0a2','#ccc0b2','#7a706a');
+  drawIsoBox(ctx, topX-34, bY+2,  22, 36, 24, '#b0a496','#c0b4a6','#706860');
+  drawIsoBox(ctx, topX+30, bY+4,  20, 32, 22, '#b0a496','#c0b4a6','#706860');
+  drawIsoBox(ctx, topX-20, bY+8,  16, 22, 18, '#a89e90','#b8ac9e','#686058');
+  drawIsoBox(ctx, topX+16, bY+10, 16, 20, 16, '#a89e90','#b8ac9e','#686058');
 
-  // Spire on keep
+  // Battlements on main keep — row of stone merlons
+  for(let bi=-2; bi<=2; bi++) {
+    if(Math.abs(bi)===1) continue;
+    const mbx = topX+4 + bi*7, mby = bY-10-50;
+    ctx.fillStyle='#ccc0b2';
+    ctx.fillRect(mbx-4, mby-8, 7, 9);
+    ctx.fillStyle='rgba(0,0,0,0.15)'; ctx.fillRect(mbx+1, mby-8, 2, 9);
+  }
+
+  // Spire on keep — dark iron cap
   const spX=topX+4, spBaseY=bY-10-50;
-  ctx.fillStyle='#d0b060';
-  ctx.beginPath(); ctx.moveTo(spX,spBaseY-32); ctx.lineTo(spX-8,spBaseY); ctx.lineTo(spX+8,spBaseY); ctx.closePath(); ctx.fill();
-  ctx.fillStyle='rgba(255,255,255,0.28)'; ctx.beginPath(); ctx.moveTo(spX,spBaseY-32); ctx.lineTo(spX-8,spBaseY); ctx.lineTo(spX-3,spBaseY); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#787268';
+  ctx.beginPath(); ctx.moveTo(spX,spBaseY-28); ctx.lineTo(spX-7,spBaseY); ctx.lineTo(spX+7,spBaseY); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,0.22)'; ctx.beginPath(); ctx.moveTo(spX,spBaseY-28); ctx.lineTo(spX-7,spBaseY); ctx.lineTo(spX-2,spBaseY); ctx.closePath(); ctx.fill();
 
-  // Flag pole
-  ctx.strokeStyle='#8a6020'; ctx.lineWidth=2;
-  ctx.beginPath(); ctx.moveTo(spX,spBaseY-32); ctx.lineTo(spX,spBaseY-58); ctx.stroke();
-  // Flag
-  ctx.fillStyle='#1e50b0';
-  ctx.beginPath(); ctx.moveTo(spX,spBaseY-58); ctx.lineTo(spX+18,spBaseY-52); ctx.lineTo(spX,spBaseY-46); ctx.closePath(); ctx.fill();
-  ctx.fillStyle='rgba(80,130,220,0.4)'; ctx.beginPath(); ctx.moveTo(spX+1,spBaseY-56); ctx.lineTo(spX+16,spBaseY-52); ctx.lineTo(spX+1,spBaseY-48); ctx.closePath(); ctx.fill();
+  // Flag pole — dark wood
+  ctx.strokeStyle='#5a3010'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(spX,spBaseY-28); ctx.lineTo(spX,spBaseY-56); ctx.stroke();
+  // Flag — Forest Kingdom red banner
+  ctx.fillStyle='#c03818';
+  ctx.beginPath(); ctx.moveTo(spX,spBaseY-56); ctx.lineTo(spX+18,spBaseY-50); ctx.lineTo(spX,spBaseY-44); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='rgba(220,80,40,0.45)'; ctx.beginPath(); ctx.moveTo(spX+1,spBaseY-54); ctx.lineTo(spX+16,spBaseY-50); ctx.lineTo(spX+1,spBaseY-46); ctx.closePath(); ctx.fill();
 
   return {canvas:oc, originY: CITY_ABOVE / H};
 }
@@ -762,7 +799,7 @@ class GameScene extends Phaser.Scene {
   create(){
     scene_ref=this;
     generateTextures(this);
-    this.cameras.main.setBackgroundColor('#0d1220');
+    this.cameras.main.setBackgroundColor('#1a2430');
 
     this.terrainLayer   = this.add.container(0,0);
     this.highlightLayer = this.add.container(0,0);
@@ -844,12 +881,12 @@ class GameScene extends Phaser.Scene {
       s.sprite.y=s.baseY; // no floating
 
       if(isSel){
-        if(!s.selRing){s.selRing=this.add.ellipse(s.baseX,s.baseY,44,16,0,0).setStrokeStyle(2.5,0xffe060,1);this.unitLayer.add(s.selRing);}
+        if(!s.selRing){s.selRing=this.add.ellipse(s.baseX,s.baseY,44,16,0,0).setStrokeStyle(2.5,0x78e040,1);this.unitLayer.add(s.selRing);}
         s.selRing.x=s.baseX; s.selRing.y=s.baseY+2;
-        if(!s.pulseRing){s.pulseRing=this.add.ellipse(s.baseX,s.baseY,44,16,0,0).setStrokeStyle(2.5,0xffe060,0);this.unitLayer.add(s.pulseRing);}
+        if(!s.pulseRing){s.pulseRing=this.add.ellipse(s.baseX,s.baseY,44,16,0,0).setStrokeStyle(2.5,0x78e040,0);this.unitLayer.add(s.pulseRing);}
         const pulse=(Math.sin(t*2.5)+1)*.5;
         s.pulseRing.x=s.baseX; s.pulseRing.y=s.baseY+2;
-        s.pulseRing.setSize(44+pulse*16,16+pulse*6); s.pulseRing.setStrokeStyle(2.5,0xffe060,pulse*.45);
+        s.pulseRing.setSize(44+pulse*16,16+pulse*6); s.pulseRing.setStrokeStyle(2.5,0x78e040,pulse*.45);
       } else {
         if(s.selRing){s.selRing.destroy();s.selRing=null;}
         if(s.pulseRing){s.pulseRing.destroy();s.pulseRing=null;}
@@ -971,7 +1008,7 @@ function startGame(){
   document.getElementById('bot-panel').style.display='flex';
   phaserGame=new Phaser.Game({
     type:Phaser.AUTO, width:window.innerWidth, height:window.innerHeight-TOP_H-BOT_H,
-    parent:'game-container', backgroundColor:'#0d1220', scene:[GameScene],
+    parent:'game-container', backgroundColor:'#1a2430', scene:[GameScene],
     scale:{mode:Phaser.Scale.RESIZE, autoCenter:Phaser.Scale.CENTER_BOTH},
     render:{antialias:true, pixelArt:false},
   });
