@@ -735,9 +735,18 @@ function attachWeekInteractions() {
       dragState.endM = Math.max(dragState.startM + SNAP_MINS, m);
       const heightPx = Math.max(20, (dragState.endM - dragState.startM) / 60 * HOUR_HEIGHT_PX);
       dragState.evEl.style.minHeight = heightPx + 'px';
-      // Update time label
+      dragState.evEl.style.height = heightPx + 'px';
+      // Live time label update
+      const liveTimeStr = `${fmt12(minsToTimeStr(dragState.startM))}–${fmt12(minsToTimeStr(dragState.endM))}`;
       const tl = dragState.evEl.querySelector('div:nth-child(2)');
-      if (tl) tl.textContent = `${fmt12(minsToTimeStr(dragState.startM))}–${fmt12(minsToTimeStr(dragState.endM))}`;
+      if (tl) tl.textContent = liveTimeStr;
+      else {
+        // Add time div if not present
+        const newTl = document.createElement('div');
+        newTl.style.cssText = 'font-size:9px;opacity:0.85';
+        newTl.textContent = liveTimeStr;
+        dragState.evEl.appendChild(newTl);
+      }
     }
 
     if (dragState.type === 'move') {
@@ -753,6 +762,12 @@ function attachWeekInteractions() {
       dragState.evDate = targetDate;
 
       dragState.evEl.style.top = minutesToPct(dragState.startM) + '%';
+
+      // Live time label update
+      const liveTimeLabel = `${fmt12(minsToTimeStr(dragState.startM))}–${fmt12(minsToTimeStr(dragState.endM))}`;
+      const timeLbl = dragState.evEl.querySelector('div:nth-child(2)');
+      if (timeLbl) timeLbl.textContent = liveTimeLabel;
+      dragState.evEl.title = (dragState.evEl.dataset.title || '') + ' — ' + liveTimeLabel;
     }
   }
 
