@@ -20,7 +20,8 @@ const READABLE_TABLES = new Set([
   'reminders', 'smart_reports', 'spelling_tests', 'srs_reviews', 'student_notes',
   'student_pages', 'students', 'tasks', 'time_blocks', 'tov_clients',
   'tov_contracts', 'tov_expenses', 'tov_inquiries', 'tov_payments',
-  'tov_transfers', 'vocab_words'
+  'tov_transfers', 'vocab_words',
+  'language_placement_results', 'language_lesson_progress'
 ])
 
 // Tables the browser is allowed to INSERT or UPDATE
@@ -32,7 +33,8 @@ const INSERT_UPDATE_TABLES = new Set([
   'participation_scores', 'reminders', 'smart_reports', 'spelling_tests',
   'srs_reviews', 'student_notes', 'student_pages', 'tasks', 'time_blocks',
   'tov_clients', 'tov_contracts', 'tov_expenses', 'tov_inquiries', 'tov_payments',
-  'tov_transfers', 'vocab_words'
+  'tov_transfers', 'vocab_words',
+  'language_placement_results', 'language_lesson_progress'
 ])
 
 // ── Fase 2: Granular DELETE allow-list ────────────────────────────────────────

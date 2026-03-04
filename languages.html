@@ -484,6 +484,291 @@
 .vc-ptt-btn.loading { background: var(--gray-400); cursor: not-allowed; }
 .vc-mic-icon { width: 28px; height: 28px; }
 .vc-ptt-label { font-size: 10px; font-weight: 700; letter-spacing: 0.3px; }
+
+/* ─── PLACEMENT TEST ─────────────────────────────────────────────────────── */
+.pt-body { padding: 0 0 100px; }
+
+.pt-hero {
+  padding: 24px 16px 20px;
+  text-align: center;
+  border-bottom: 1px solid var(--gray-100);
+}
+.pt-hero-icon { font-size: 2.8rem; margin-bottom: 8px; }
+.pt-hero-title { font-size: 1.2rem; font-weight: 800; color: var(--gray-800); margin-bottom: 4px; }
+.pt-hero-sub { font-size: 0.82rem; color: var(--gray-400); margin-bottom: 16px; }
+
+.pt-lang-row { display: flex; gap: 8px; justify-content: center; margin-bottom: 16px; }
+.pt-lang-btn {
+  padding: 8px 16px; border-radius: 20px; border: 2px solid var(--gray-200);
+  font-size: 13px; font-weight: 600; cursor: pointer; background: var(--white);
+  color: var(--gray-500); transition: all 0.2s;
+}
+.pt-lang-btn.active { border-color: #7C3AED; background: #7C3AED; color: white; }
+
+.pt-prior {
+  margin: 0 0 14px;
+  background: #f5f3ff;
+  border: 1px solid #ddd6fe;
+  border-radius: 12px;
+  padding: 12px 14px;
+  text-align: left;
+}
+.pt-prior-label { font-size: 11px; font-weight: 700; color: #7C3AED; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+.pt-prior-content { font-size: 13px; color: var(--gray-700); line-height: 1.5; }
+
+.pt-start-btn {
+  display: block; width: 100%; max-width: 280px; margin: 0 auto 10px;
+  padding: 14px; background: #7C3AED; color: white;
+  border: none; border-radius: 14px; font-size: 1rem; font-weight: 700;
+  cursor: pointer; transition: all 0.2s;
+}
+.pt-start-btn:active { transform: scale(0.97); background: #6d28d9; }
+.pt-hint { font-size: 11px; color: var(--gray-400); margin: 0; }
+
+/* Test area */
+.pt-test-area { padding: 0 0 20px; }
+
+.pt-progress-bar { padding: 12px 16px 8px; }
+.pt-progress-track { background: var(--gray-100); border-radius: 6px; height: 6px; margin-bottom: 6px; }
+.pt-progress-fill { background: #7C3AED; height: 100%; border-radius: 6px; transition: width 0.4s ease; }
+.pt-progress-label { font-size: 11px; color: var(--gray-400); text-align: right; }
+
+.pt-skill-badges { display: flex; gap: 6px; padding: 0 16px 10px; flex-wrap: wrap; }
+.pt-badge {
+  padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600;
+  background: var(--gray-100); color: var(--gray-500); transition: all 0.3s;
+}
+.pt-badge.active { background: #7C3AED; color: white; }
+.pt-badge.done { background: #d1fae5; color: #065f46; }
+
+.pt-chat {
+  min-height: 200px; max-height: 380px; overflow-y: auto;
+  padding: 10px 16px; display: flex; flex-direction: column; gap: 12px;
+}
+.pt-msg { display: flex; gap: 10px; align-items: flex-start; }
+.pt-msg.user { flex-direction: row-reverse; }
+.pt-msg-avatar {
+  width: 30px; height: 30px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; flex-shrink: 0;
+  background: #ede9fe;
+}
+.pt-msg.user .pt-msg-avatar { background: var(--blue); color: white; font-size: 12px; }
+.pt-msg-bubble {
+  max-width: 80%; padding: 10px 13px; border-radius: 14px;
+  font-size: 13.5px; line-height: 1.5; color: var(--gray-800);
+  background: var(--gray-50); border: 1px solid var(--gray-100);
+}
+.pt-msg.user .pt-msg-bubble { background: #ede9fe; border-color: #ddd6fe; }
+.pt-typing { display: flex; gap: 5px; align-items: center; padding: 12px 14px; }
+.pt-dot { width: 7px; height: 7px; border-radius: 50%; background: #7C3AED; opacity: 0.4; animation: ptBounce 1.2s infinite; }
+.pt-dot:nth-child(2) { animation-delay: 0.2s; }
+.pt-dot:nth-child(3) { animation-delay: 0.4s; }
+@keyframes ptBounce { 0%,80%,100% { transform: translateY(0); } 40% { transform: translateY(-6px); opacity: 1; } }
+
+.pt-input-area { padding: 10px 16px 0; }
+.pt-input {
+  width: 100%; border: 1.5px solid var(--gray-200); border-radius: 12px;
+  padding: 10px 12px; font-size: 14px; resize: none; font-family: inherit;
+  box-sizing: border-box; color: var(--gray-800); background: var(--white);
+}
+.pt-input:focus { outline: none; border-color: #7C3AED; }
+.pt-input-row { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
+.pt-voice-btn {
+  width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid var(--gray-200);
+  background: var(--white); font-size: 18px; cursor: pointer; display: flex;
+  align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.2s;
+}
+.pt-voice-btn.recording { background: #fef2f2; border-color: #fca5a5; animation: ptPulse 1s infinite; }
+@keyframes ptPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); } 50% { box-shadow: 0 0 0 8px rgba(239,68,68,0); } }
+.pt-send-btn {
+  flex: 1; padding: 10px; background: #7C3AED; color: white; border: none;
+  border-radius: 12px; font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.2s;
+}
+.pt-send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.pt-mc-area { padding: 0 16px 10px; display: flex; flex-direction: column; gap: 8px; }
+.pt-mc-btn {
+  width: 100%; padding: 12px 16px; background: var(--white); border: 1.5px solid var(--gray-200);
+  border-radius: 12px; font-size: 13.5px; text-align: left; cursor: pointer;
+  transition: all 0.2s; color: var(--gray-800);
+}
+.pt-mc-btn:hover { border-color: #7C3AED; background: #faf5ff; }
+.pt-mc-btn.correct { background: #d1fae5; border-color: #34d399; color: #065f46; }
+.pt-mc-btn.wrong { background: #fee2e2; border-color: #fca5a5; color: #991b1b; }
+
+.pt-end-row { padding: 14px 16px 0; text-align: center; }
+.pt-end-btn {
+  background: none; border: 1px solid var(--gray-300); color: var(--gray-500);
+  padding: 8px 20px; border-radius: 10px; font-size: 12px; cursor: pointer;
+}
+
+/* Results */
+.pt-results { padding: 20px 16px 80px; }
+.pt-results-header { text-align: center; margin-bottom: 20px; }
+.pt-results-icon { font-size: 2.5rem; margin-bottom: 8px; }
+.pt-results-title { font-size: 1.15rem; font-weight: 800; color: var(--gray-800); }
+.pt-results-level {
+  display: inline-block; margin: 8px auto 0;
+  background: #7C3AED; color: white;
+  padding: 4px 16px; border-radius: 20px; font-size: 1rem; font-weight: 700;
+}
+
+.pt-score-ring-wrap {
+  position: relative; width: 120px; height: 120px; margin: 0 auto 24px;
+}
+.pt-score-ring { width: 100%; height: 100%; }
+.pt-score-center {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+  text-align: center;
+}
+.pt-score-num { font-size: 1.6rem; font-weight: 800; color: #7C3AED; }
+.pt-score-lab { font-size: 10px; color: var(--gray-400); font-weight: 600; }
+
+.pt-breakdown { margin-bottom: 20px; }
+.pt-bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.pt-bar-label { width: 80px; font-size: 12px; font-weight: 600; color: var(--gray-600); flex-shrink: 0; }
+.pt-bar-track { flex: 1; background: var(--gray-100); border-radius: 6px; height: 10px; }
+.pt-bar-fill { height: 100%; border-radius: 6px; background: #7C3AED; transition: width 1s ease; }
+.pt-bar-level { width: 32px; font-size: 11px; font-weight: 700; color: #7C3AED; text-align: right; flex-shrink: 0; }
+
+.pt-sw { background: var(--gray-50); border-radius: 14px; padding: 14px 16px; margin-bottom: 16px; }
+.pt-sw-title { font-size: 13px; font-weight: 700; color: var(--gray-700); margin-bottom: 8px; }
+.pt-sw-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.pt-sw-tag {
+  padding: 4px 10px; border-radius: 10px; font-size: 12px; font-weight: 600;
+}
+.pt-sw-tag.strength { background: #d1fae5; color: #065f46; }
+.pt-sw-tag.weakness { background: #fee2e2; color: #991b1b; }
+
+.pt-focus { background: #faf5ff; border: 1px solid #ede9fe; border-radius: 14px; padding: 14px 16px; margin-bottom: 20px; }
+.pt-focus-title { font-size: 13px; font-weight: 700; color: #7C3AED; margin-bottom: 8px; }
+.pt-focus-item { font-size: 13px; color: var(--gray-700); margin-bottom: 4px; }
+.pt-focus-item::before { content: "→ "; color: #7C3AED; font-weight: 700; }
+
+.pt-results-actions { display: flex; gap: 10px; }
+.pt-retake-btn {
+  flex: 1; padding: 12px; background: var(--white); border: 1.5px solid var(--gray-200);
+  border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; color: var(--gray-700);
+}
+.pt-lessons-btn {
+  flex: 2; padding: 12px; background: #7C3AED; color: white;
+  border: none; border-radius: 12px; font-size: 14px; font-weight: 700; cursor: pointer;
+}
+
+/* ─── GUIDED LESSONS ─────────────────────────────────────────────────────── */
+.gl-body { padding: 0 0 100px; }
+
+.gl-header { padding: 20px 16px 12px; border-bottom: 1px solid var(--gray-100); }
+.gl-title { font-size: 1.1rem; font-weight: 800; color: var(--gray-800); margin-bottom: 4px; }
+.gl-sub { font-size: 12px; color: var(--gray-400); }
+
+.gl-lang-row { display: flex; gap: 8px; padding: 14px 16px 10px; }
+.gl-lang-btn {
+  padding: 7px 14px; border-radius: 20px; border: 2px solid var(--gray-200);
+  font-size: 13px; font-weight: 600; cursor: pointer; background: var(--white);
+  color: var(--gray-500); transition: all 0.2s;
+}
+.gl-lang-btn.active { border-color: #7C3AED; background: #7C3AED; color: white; }
+
+.gl-no-test {
+  margin: 20px 16px; background: #faf5ff; border: 1px solid #ede9fe;
+  border-radius: 16px; padding: 28px 20px; text-align: center;
+}
+.gl-no-test-icon { font-size: 2.5rem; margin-bottom: 10px; }
+.gl-no-test-msg { font-size: 13.5px; color: var(--gray-600); margin-bottom: 16px; line-height: 1.5; }
+.gl-goto-test-btn {
+  background: #7C3AED; color: white; border: none; border-radius: 12px;
+  padding: 12px 24px; font-size: 14px; font-weight: 700; cursor: pointer;
+}
+
+.gl-lesson-grid { padding: 0 16px; }
+.gl-section-label { font-size: 11px; font-weight: 700; color: var(--gray-400); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+
+.gl-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 0; }
+.gl-card {
+  background: var(--white); border: 1.5px solid var(--gray-200); border-radius: 14px;
+  padding: 14px 12px; cursor: pointer; transition: all 0.2s;
+}
+.gl-card:hover { border-color: #7C3AED; background: #faf5ff; transform: translateY(-1px); }
+.gl-card-icon { font-size: 1.6rem; margin-bottom: 6px; }
+.gl-card-title { font-size: 13px; font-weight: 700; color: var(--gray-800); margin-bottom: 3px; }
+.gl-card-desc { font-size: 11px; color: var(--gray-400); line-height: 1.4; margin-bottom: 6px; }
+.gl-card-level { font-size: 10px; font-weight: 700; color: #7C3AED; background: #ede9fe; display: inline-block; padding: 2px 8px; border-radius: 8px; }
+
+.gl-history { margin-top: 4px; }
+.gl-history-empty { font-size: 13px; color: var(--gray-400); padding: 10px 0; }
+.gl-history-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 0; border-bottom: 1px solid var(--gray-100);
+}
+.gl-history-icon { font-size: 1.3rem; }
+.gl-history-info { flex: 1; min-width: 0; }
+.gl-history-title { font-size: 13px; font-weight: 600; color: var(--gray-800); }
+.gl-history-meta { font-size: 11px; color: var(--gray-400); }
+.gl-history-score { font-size: 13px; font-weight: 700; color: #7C3AED; }
+
+/* Active lesson */
+.gl-lesson-area { padding: 0 0 10px; }
+.gl-lesson-topbar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px; border-bottom: 1px solid var(--gray-100);
+}
+.gl-back-btn {
+  background: none; border: none; color: #7C3AED; font-size: 13px; font-weight: 600;
+  cursor: pointer; padding: 0; flex-shrink: 0;
+}
+.gl-lesson-type-label { font-size: 13px; font-weight: 700; color: var(--gray-700); flex: 1; }
+.gl-lesson-score-label { font-size: 12px; color: var(--gray-400); }
+
+.gl-chat {
+  min-height: 250px; max-height: 400px; overflow-y: auto;
+  padding: 10px 16px; display: flex; flex-direction: column; gap: 12px;
+}
+.gl-msg { display: flex; gap: 10px; align-items: flex-start; }
+.gl-msg.user { flex-direction: row-reverse; }
+.gl-msg-avatar {
+  width: 28px; height: 28px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; flex-shrink: 0; background: #ede9fe;
+}
+.gl-msg.user .gl-msg-avatar { background: var(--blue); color: white; font-size: 12px; }
+.gl-msg-bubble {
+  max-width: 82%; padding: 10px 13px; border-radius: 14px;
+  font-size: 13.5px; line-height: 1.5; color: var(--gray-800);
+  background: var(--gray-50); border: 1px solid var(--gray-100);
+}
+.gl-msg.user .gl-msg-bubble { background: #ede9fe; border-color: #ddd6fe; }
+
+.gl-input-area { padding: 10px 16px 0; }
+.gl-input {
+  width: 100%; border: 1.5px solid var(--gray-200); border-radius: 12px;
+  padding: 10px 12px; font-size: 14px; resize: none; font-family: inherit;
+  box-sizing: border-box; color: var(--gray-800); background: var(--white);
+}
+.gl-input:focus { outline: none; border-color: #7C3AED; }
+.gl-input-row { display: flex; gap: 8px; margin-top: 8px; }
+.gl-voice-btn {
+  width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid var(--gray-200);
+  background: var(--white); font-size: 18px; cursor: pointer; display: flex;
+  align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.2s;
+}
+.gl-voice-btn.recording { background: #fef2f2; border-color: #fca5a5; animation: ptPulse 1s infinite; }
+.gl-send-btn {
+  flex: 1; padding: 10px; background: #7C3AED; color: white; border: none;
+  border-radius: 12px; font-size: 14px; font-weight: 700; cursor: pointer;
+}
+.gl-send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.gl-mc-area { padding: 0 16px 10px; display: flex; flex-direction: column; gap: 8px; }
+.gl-mc-btn {
+  width: 100%; padding: 12px 16px; background: var(--white); border: 1.5px solid var(--gray-200);
+  border-radius: 12px; font-size: 13.5px; text-align: left; cursor: pointer;
+  transition: all 0.2s; color: var(--gray-800);
+}
+.gl-mc-btn:hover { border-color: #7C3AED; background: #faf5ff; }
+.gl-mc-btn.correct { background: #d1fae5; border-color: #34d399; color: #065f46; }
+.gl-mc-btn.wrong { background: #fee2e2; border-color: #fca5a5; color: #991b1b; }
 </style>
 </head>
 <body>
@@ -502,6 +787,8 @@
     <div class="lang-tab" id="ltab-vocab" onclick="switchLangTab('vocab')">📖 Vocab</div>
     <div class="lang-tab" id="ltab-phrases" onclick="switchLangTab('phrases')">💬 Phrases</div>
     <div class="lang-tab" id="ltab-voice" onclick="switchLangTab('voice')">🎙️ Speak</div>
+    <div class="lang-tab" id="ltab-placement" onclick="switchLangTab('placement')">🎯 Test</div>
+    <div class="lang-tab" id="ltab-lessons" onclick="switchLangTab('lessons')">📚 Lessons</div>
   </div>
 </header>
 
@@ -777,6 +1064,218 @@
 </div><!-- /vc-body -->
 </div><!-- /panel-voice -->
 
+<!-- ══════════════════════════════════════════════ PLACEMENT TEST ══════════ -->
+<div class="lang-panel" id="panel-placement">
+<div class="pt-body">
+
+  <!-- Header card -->
+  <div class="pt-hero" id="pt-hero">
+    <div class="pt-hero-icon">🎯</div>
+    <div class="pt-hero-title">Language Placement Test</div>
+    <div class="pt-hero-sub">AI-guided. Adapts to your level. Tests every skill.</div>
+
+    <!-- Language picker -->
+    <div class="pt-lang-row" id="pt-lang-row">
+      <button class="pt-lang-btn active" data-lang="Spanish" onclick="ptSetLang('Spanish')">🇪🇸 Spanish</button>
+      <button class="pt-lang-btn" data-lang="Danish" onclick="ptSetLang('Danish')">🇩🇰 Danish</button>
+      <button class="pt-lang-btn" data-lang="Russian" onclick="ptSetLang('Russian')">🇷🇺 Russian</button>
+    </div>
+
+    <!-- Prior results summary (shown if exists) -->
+    <div class="pt-prior" id="pt-prior" style="display:none">
+      <div class="pt-prior-label">Last test result</div>
+      <div class="pt-prior-content" id="pt-prior-content"></div>
+    </div>
+
+    <!-- Start button -->
+    <button class="pt-start-btn" id="pt-start-btn" onclick="ptStart()">
+      Start Test
+    </button>
+    <p class="pt-hint" id="pt-hint">Takes 15–30 min · Covers all 6 skill areas · Gets more precise every time</p>
+  </div>
+
+  <!-- Active test area (hidden until started) -->
+  <div class="pt-test-area" id="pt-test-area" style="display:none">
+
+    <!-- Progress bar -->
+    <div class="pt-progress-bar">
+      <div class="pt-progress-track">
+        <div class="pt-progress-fill" id="pt-progress-fill" style="width:0%"></div>
+      </div>
+      <div class="pt-progress-label" id="pt-progress-label">Question 1 of ~30</div>
+    </div>
+
+    <!-- Skill badges -->
+    <div class="pt-skill-badges" id="pt-skill-badges">
+      <span class="pt-badge" id="pb-vocabulary">📝 Vocab</span>
+      <span class="pt-badge" id="pb-grammar">🔤 Grammar</span>
+      <span class="pt-badge" id="pb-reading">📖 Reading</span>
+      <span class="pt-badge" id="pb-listening">👂 Listening</span>
+      <span class="pt-badge" id="pb-writing">✍️ Writing</span>
+      <span class="pt-badge" id="pb-speaking">🗣️ Speaking</span>
+    </div>
+
+    <!-- Conversation / question display -->
+    <div class="pt-chat" id="pt-chat"></div>
+
+    <!-- Input area -->
+    <div class="pt-input-area" id="pt-input-area">
+      <textarea class="pt-input" id="pt-input" placeholder="Type your answer here…" rows="3"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();ptSend();}"></textarea>
+      <div class="pt-input-row">
+        <button class="pt-voice-btn" id="pt-voice-btn" onclick="ptToggleVoice()" title="Record audio answer">🎙️</button>
+        <button class="pt-send-btn" id="pt-send-btn" onclick="ptSend()">Send →</button>
+      </div>
+    </div>
+
+    <!-- Multiple choice area (shown for MC questions) -->
+    <div class="pt-mc-area" id="pt-mc-area" style="display:none"></div>
+
+    <!-- End test button -->
+    <div class="pt-end-row">
+      <button class="pt-end-btn" onclick="ptEndEarly()">End Test & Get Results</button>
+    </div>
+  </div>
+
+  <!-- Results area (shown after test completes) -->
+  <div class="pt-results" id="pt-results" style="display:none">
+    <div class="pt-results-header">
+      <div class="pt-results-icon">✅</div>
+      <div class="pt-results-title" id="pt-results-title">Test Complete</div>
+      <div class="pt-results-level" id="pt-results-level"></div>
+    </div>
+
+    <!-- Overall score ring -->
+    <div class="pt-score-ring-wrap">
+      <svg class="pt-score-ring" viewBox="0 0 120 120">
+        <circle cx="60" cy="60" r="52" fill="none" stroke="#f3f4f6" stroke-width="10"/>
+        <circle cx="60" cy="60" r="52" fill="none" stroke="#7C3AED" stroke-width="10"
+          stroke-linecap="round" stroke-dasharray="326.7" stroke-dashoffset="326.7"
+          id="pt-ring-fill" style="transform:rotate(-90deg);transform-origin:center;transition:stroke-dashoffset 1.5s ease"/>
+      </svg>
+      <div class="pt-score-center">
+        <div class="pt-score-num" id="pt-score-num">—</div>
+        <div class="pt-score-lab">overall</div>
+      </div>
+    </div>
+
+    <!-- Skill breakdown bars -->
+    <div class="pt-breakdown" id="pt-breakdown"></div>
+
+    <!-- Strengths & Weaknesses -->
+    <div class="pt-sw" id="pt-sw"></div>
+
+    <!-- Focus areas -->
+    <div class="pt-focus" id="pt-focus"></div>
+
+    <!-- Retake / go to lessons -->
+    <div class="pt-results-actions">
+      <button class="pt-retake-btn" onclick="ptRetake()">Retake Test</button>
+      <button class="pt-lessons-btn" onclick="switchLangTab('lessons')">📚 Start Guided Lessons →</button>
+    </div>
+  </div>
+
+</div><!-- /pt-body -->
+</div><!-- /panel-placement -->
+
+<!-- ══════════════════════════════════════════════ GUIDED LESSONS ══════════ -->
+<div class="lang-panel" id="panel-lessons">
+<div class="gl-body">
+
+  <!-- Lesson header -->
+  <div class="gl-header">
+    <div class="gl-title">📚 Guided Lessons</div>
+    <div class="gl-sub" id="gl-sub">AI-tailored lessons based on your placement results</div>
+  </div>
+
+  <!-- Language selector -->
+  <div class="gl-lang-row">
+    <button class="gl-lang-btn active" data-lang="Spanish" onclick="glSetLang('Spanish')">🇪🇸 Spanish</button>
+    <button class="gl-lang-btn" data-lang="Danish" onclick="glSetLang('Danish')">🇩🇰 Danish</button>
+    <button class="gl-lang-btn" data-lang="Russian" onclick="glSetLang('Russian')">🇷🇺 Russian</button>
+  </div>
+
+  <!-- No placement test warning -->
+  <div class="gl-no-test" id="gl-no-test" style="display:none">
+    <div class="gl-no-test-icon">🎯</div>
+    <div class="gl-no-test-msg">Take the placement test first so lessons are tailored to your exact level.</div>
+    <button class="gl-goto-test-btn" onclick="switchLangTab('placement')">Take Placement Test →</button>
+  </div>
+
+  <!-- Lesson type grid (shown after placement test exists) -->
+  <div class="gl-lesson-grid" id="gl-lesson-grid" style="display:none">
+    <div class="gl-section-label">Choose a lesson type</div>
+    <div class="gl-cards" id="gl-cards">
+      <div class="gl-card" onclick="glStartLesson('vocabulary')">
+        <div class="gl-card-icon">📝</div>
+        <div class="gl-card-title">Vocabulary</div>
+        <div class="gl-card-desc">Learn and drill words at your level</div>
+        <div class="gl-card-level" id="gl-level-vocab"></div>
+      </div>
+      <div class="gl-card" onclick="glStartLesson('grammar')">
+        <div class="gl-card-icon">🔤</div>
+        <div class="gl-card-title">Grammar</div>
+        <div class="gl-card-desc">Explanations + exercises targeting your gaps</div>
+        <div class="gl-card-level" id="gl-level-grammar"></div>
+      </div>
+      <div class="gl-card" onclick="glStartLesson('reading')">
+        <div class="gl-card-icon">📖</div>
+        <div class="gl-card-title">Reading</div>
+        <div class="gl-card-desc">Texts with comprehension questions</div>
+        <div class="gl-card-level" id="gl-level-reading"></div>
+      </div>
+      <div class="gl-card" onclick="glStartLesson('listening')">
+        <div class="gl-card-icon">👂</div>
+        <div class="gl-card-title">Listening</div>
+        <div class="gl-card-desc">Audio + transcription exercises</div>
+        <div class="gl-card-level" id="gl-level-listening"></div>
+      </div>
+      <div class="gl-card" onclick="glStartLesson('writing')">
+        <div class="gl-card-icon">✍️</div>
+        <div class="gl-card-title">Writing</div>
+        <div class="gl-card-desc">Prompts with detailed feedback</div>
+        <div class="gl-card-level" id="gl-level-writing"></div>
+      </div>
+      <div class="gl-card" onclick="glStartLesson('conversation')">
+        <div class="gl-card-icon">💬</div>
+        <div class="gl-card-title">Conversation</div>
+        <div class="gl-card-desc">Free-form practice with corrections</div>
+        <div class="gl-card-level" id="gl-level-speaking"></div>
+      </div>
+    </div>
+
+    <!-- Recent lessons -->
+    <div class="gl-section-label" style="margin-top:20px">Recent lessons</div>
+    <div class="gl-history" id="gl-history">
+      <div class="gl-history-empty">No lessons yet — start one above!</div>
+    </div>
+  </div>
+
+  <!-- Active lesson area -->
+  <div class="gl-lesson-area" id="gl-lesson-area" style="display:none">
+    <div class="gl-lesson-topbar">
+      <button class="gl-back-btn" onclick="glBackToMenu()">← Back</button>
+      <div class="gl-lesson-type-label" id="gl-lesson-type-label"></div>
+      <div class="gl-lesson-score-label" id="gl-lesson-score-label"></div>
+    </div>
+
+    <div class="gl-chat" id="gl-chat"></div>
+
+    <div class="gl-input-area" id="gl-input-area">
+      <textarea class="gl-input" id="gl-input" placeholder="Type your answer…" rows="3"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();glSend();}"></textarea>
+      <div class="gl-input-row">
+        <button class="gl-voice-btn" id="gl-voice-btn" onclick="glToggleVoice()" title="Speak your answer">🎙️</button>
+        <button class="gl-send-btn" id="gl-send-btn" onclick="glSend()">Send →</button>
+      </div>
+    </div>
+
+    <div class="gl-mc-area" id="gl-mc-area" style="display:none"></div>
+  </div>
+
+</div><!-- /gl-body -->
+</div><!-- /panel-lessons -->
+
 </main>
 
 <nav class="bottom-nav">
@@ -837,6 +1336,8 @@ window.switchLangTab = (tab) => {
   if (tab === 'vocab') vocabLoad();
   if (tab === 'phrases') phInit();
   if (tab === 'voice') vcInit();
+  if (tab === 'placement') ptInit();
+  if (tab === 'lessons') glInit();
 };
 
 // ══════════════════════════════════════════════════════════ STATS ════════
@@ -5564,6 +6065,788 @@ window.vcEndSession = () => {
 
 // ══════════════════════════════════════════ AUTO-INIT on load ═══════════
 fcInit();
+
+// ════════════════════════════════════════ PLACEMENT TEST ══════════════════
+
+const PT_CLAUDE_PROXY = 'https://kxsuzgpnvtepsyhkezin.supabase.co/functions/v1/claude-proxy';
+
+let ptLang = 'Spanish';
+let ptMessages = [];        // full conversation history for Claude
+let ptScores = {};          // running skill scores {vocabulary:[], grammar:[], ...}
+let ptCurrentSkill = null;
+let ptQuestionCount = 0;
+let ptMaxQuestions = 35;
+let ptActive = false;
+let ptPriorData = null;     // prior test result from Supabase
+let ptRecording = false;
+let ptMediaRecorder = null;
+let ptAudioChunks = [];
+let ptCurrentTestId = null; // Supabase row id while saving incrementally
+
+const PT_SKILLS = ['vocabulary','grammar','reading','listening','writing','speaking'];
+const PT_SKILL_LABELS = {
+  vocabulary:'📝 Vocab', grammar:'🔤 Grammar', reading:'📖 Reading',
+  listening:'👂 Listening', writing:'✍️ Writing', speaking:'🗣️ Speaking'
+};
+const PT_SKILL_WEIGHT = { vocabulary:0.2, grammar:0.2, reading:0.15, listening:0.15, writing:0.15, speaking:0.15 };
+
+// ── Init ────────────────────────────────────────────────────────────────────
+async function ptInit() {
+  const lang = ptLang;
+  // Load prior result from Supabase
+  const { data: prior } = await supabase
+    .from('language_placement_results')
+    .select('*')
+    .eq('language', lang)
+    .order('test_date', { ascending: false })
+    .limit(1);
+
+  ptPriorData = prior?.[0] || null;
+
+  const priorDiv = document.getElementById('pt-prior');
+  const startBtn = document.getElementById('pt-start-btn');
+  const hintEl   = document.getElementById('pt-hint');
+
+  if (ptPriorData) {
+    priorDiv.style.display = '';
+    document.getElementById('pt-prior-content').innerHTML = `
+      <b>${lang} — ${ptPriorData.overall_level || 'No level yet'}</b><br>
+      Overall: <b>${ptPriorData.overall_score ? Math.round(ptPriorData.overall_score) + '/100' : '—'}</b>
+      · Vocab: ${ptPriorData.vocabulary_level || '—'}
+      · Grammar: ${ptPriorData.grammar_level || '—'}
+      · Reading: ${ptPriorData.reading_level || '—'}<br>
+      <span style="color:var(--gray-400);font-size:11px">${new Date(ptPriorData.test_date).toLocaleDateString()}</span>
+    `;
+    startBtn.textContent = 'Continue Test (from last result)';
+    hintEl.textContent = 'Picks up where you left off — skips skills you already mastered';
+  } else {
+    priorDiv.style.display = 'none';
+    startBtn.textContent = 'Start Placement Test';
+    hintEl.textContent = 'Takes 15–30 min · Covers all 6 skill areas · Gets more precise every time';
+  }
+}
+
+window.ptSetLang = (lang) => {
+  ptLang = lang;
+  document.querySelectorAll('.pt-lang-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.lang === lang);
+  });
+  ptInit();
+};
+
+// ── Start test ───────────────────────────────────────────────────────────────
+window.ptStart = async () => {
+  ptActive = true;
+  ptMessages = [];
+  ptScores = { vocabulary:[], grammar:[], reading:[], listening:[], writing:[], speaking:[] };
+  ptQuestionCount = 0;
+  ptCurrentSkill = null;
+
+  document.getElementById('pt-hero').style.display = 'none';
+  document.getElementById('pt-test-area').style.display = '';
+  document.getElementById('pt-results').style.display = 'none';
+
+  // Build system prompt with prior knowledge if exists
+  const priorContext = ptPriorData ? `
+PRIOR TEST DATA (from ${new Date(ptPriorData.test_date).toLocaleDateString()}):
+- Overall level: ${ptPriorData.overall_level}
+- Vocabulary: ${ptPriorData.vocabulary_level} (${ptPriorData.vocabulary_score}/100) — ${ptPriorData.vocabulary_notes || 'no notes'}
+- Grammar: ${ptPriorData.grammar_level} (${ptPriorData.grammar_score}/100) — ${ptPriorData.grammar_notes || 'no notes'}
+- Reading: ${ptPriorData.reading_level} (${ptPriorData.reading_score}/100) — ${ptPriorData.reading_notes || 'no notes'}
+- Listening: ${ptPriorData.listening_level} (${ptPriorData.listening_score}/100) — ${ptPriorData.listening_notes || 'no notes'}
+- Speaking: ${ptPriorData.speaking_level} (${ptPriorData.speaking_score}/100) — ${ptPriorData.speaking_notes || 'no notes'}
+- Writing: ${ptPriorData.writing_level} (${ptPriorData.writing_score}/100) — ${ptPriorData.writing_notes || 'no notes'}
+- Strengths: ${(ptPriorData.strengths || []).join(', ')}
+- Weaknesses: ${(ptPriorData.weaknesses || []).join(', ')}
+
+Since we already have this data, BEGIN the test from around the identified weakness areas and levels. Do not re-test skills that already tested as strong (B2+) unless the user wants to confirm them. Focus testing on the areas with the most uncertainty or the lowest scores. You may skip beginner-level questions for skills already at B1+.
+` : 'No prior test data — this is the student\'s first test. Start with beginner/intermediate questions and calibrate quickly.';
+
+  const systemPrompt = `You are an expert language assessment AI conducting a comprehensive ${ptLang} placement test. Your job is to precisely determine the student's level (from absolute beginner to fluent/native-like) across ALL six language skills:
+
+1. **Vocabulary** — breadth, depth, register, collocations
+2. **Grammar** — accuracy, complexity, range of structures
+3. **Reading** — comprehension, inference, speed-reading of texts
+4. **Listening** — you'll describe audio scenarios or give written "audio transcripts" and test comprehension
+5. **Writing** — ability to produce coherent, accurate, idiomatic text
+6. **Speaking** — for writing-based tests, assess from written descriptions of speech; for voice input, assess actual speech samples
+
+PRIOR KNOWLEDGE:
+${priorContext}
+
+TESTING PROTOCOL:
+- Ask questions one or two at a time — never overwhelm the student
+- Adapt difficulty INSTANTLY based on each response (binary search approach)
+- Use CEFR levels: A1 → A2 → B1 → B2 → C1 → C2 (and sub-levels like A2+ or B1-)
+- Vary question types: multiple choice, fill-in-the-blank, translation, reading passages, writing prompts, listening simulation
+- For LISTENING: describe an audio clip in text form (e.g. "In this audio clip, a person says: [text in ${ptLang}]. What is the main topic?") — this simulates listening comprehension
+- For SPEAKING: ask the student to describe something or respond to a scenario — evaluate their written response as a speech sample
+- After each answer, silently note your assessment but keep moving — don't give scores aloud until the END
+- Mix skills fluidly — don't spend 10 questions on one skill in a row
+- If a skill is clearly at a certain level (3+ correct or 3+ wrong in a row), lock it in and move on
+- Aim to complete all 6 skill areas in 25–35 exchanges total
+- At the end (when you've tested everything sufficiently OR student says "end test"), provide a FINAL ASSESSMENT in this EXACT JSON format inside <RESULTS> tags:
+
+<RESULTS>
+{
+  "overall_level": "B1",
+  "overall_score": 58,
+  "overall_description": "Solid intermediate speaker...",
+  "vocabulary_score": 62, "vocabulary_level": "B1", "vocabulary_notes": "...",
+  "grammar_score": 55, "grammar_level": "B1-", "grammar_notes": "...",
+  "reading_score": 70, "reading_level": "B2-", "reading_notes": "...",
+  "listening_score": 48, "listening_level": "A2+", "listening_notes": "...",
+  "speaking_score": 52, "speaking_level": "B1-", "speaking_notes": "...",
+  "writing_score": 65, "writing_level": "B1+", "writing_notes": "...",
+  "pronunciation_score": 50, "fluency_score": 55, "accuracy_score": 58, "comprehension_score": 65,
+  "strengths": ["reading comprehension", "written vocabulary"],
+  "weaknesses": ["listening comprehension", "verb conjugations"],
+  "focus_areas": ["Practice listening with native audio daily", "Drill irregular verbs", "Expand formal register vocabulary"]
+}
+</RESULTS>
+
+IMPORTANT: Scores are 0-100 where: 0-20=A1, 21-35=A2, 36-50=B1, 51-65=B2, 66-80=C1, 81-100=C2.
+Start the test now with a friendly greeting and your first question for ${ptLang}.`;
+
+  ptMessages.push({ role: 'user', content: `Please start my ${ptLang} placement test.` });
+
+  const systemMsg = { role: 'user', content: systemPrompt };
+  ptMessages = [systemMsg, { role: 'user', content: `Please start my ${ptLang} placement test now.` }];
+
+  ptSetSkillBadge(null);
+  ptUpdateProgress();
+  ptAppendMsg('assistant', ''); // placeholder — will fill after Claude responds
+
+  // Remove placeholder, get real response
+  document.getElementById('pt-chat').lastChild?.remove();
+  await ptAsk();
+};
+
+// ── Send user answer ────────────────────────────────────────────────────────
+window.ptSend = async () => {
+  const input = document.getElementById('pt-input');
+  const text = input.value.trim();
+  if (!text || !ptActive) return;
+  input.value = '';
+  ptQuestionCount++;
+  ptAppendMsg('user', text);
+  ptMessages.push({ role: 'user', content: text });
+  ptUpdateProgress();
+  document.getElementById('pt-send-btn').disabled = true;
+  await ptAsk();
+  document.getElementById('pt-send-btn').disabled = false;
+};
+
+// ── Multiple choice selection ────────────────────────────────────────────────
+window.ptChoose = async (btn, option, correct) => {
+  const btns = document.querySelectorAll('.pt-mc-btn');
+  btns.forEach(b => b.disabled = true);
+  btn.classList.add(correct ? 'correct' : 'wrong');
+  if (!correct) {
+    btns.forEach(b => { if (b.dataset.correct === 'true') b.classList.add('correct'); });
+  }
+  const answer = option;
+  ptMessages.push({ role: 'user', content: answer });
+  ptQuestionCount++;
+  ptUpdateProgress();
+  document.getElementById('pt-mc-area').style.display = 'none';
+  await ptAsk();
+};
+
+// ── Call Claude for next question / final results ────────────────────────────
+async function ptAsk() {
+  ptShowTyping('pt');
+  try {
+    // Build messages for Claude (system-like via first user turn)
+    const msgs = ptMessages.map(m => ({ role: m.role, content: m.content }));
+
+    const res = await fetch(PT_CLAUDE_PROXY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1200,
+        messages: msgs,
+      }),
+    });
+
+    ptRemoveTyping('pt');
+
+    if (!res.ok) throw new Error(`Claude proxy ${res.status}`);
+    const j = await res.json();
+    if (j.error) throw new Error(j.error.message || j.error);
+    const reply = j.content[0].text;
+
+    ptMessages.push({ role: 'assistant', content: reply });
+
+    // Check if results are included
+    if (reply.includes('<RESULTS>')) {
+      await ptHandleResults(reply);
+    } else {
+      // Parse for multiple choice options [A] [B] [C] [D] pattern
+      const mcMatch = reply.match(/\[([A-D])\]\s+(.+)/g);
+      const displayText = reply.replace(/<RESULTS>[\s\S]*<\/RESULTS>/g, '').trim();
+      ptAppendMsg('assistant', displayText);
+
+      if (mcMatch && mcMatch.length >= 2) {
+        ptShowMC(mcMatch);
+        document.getElementById('pt-input-area').style.display = 'none';
+      } else {
+        document.getElementById('pt-input-area').style.display = '';
+        document.getElementById('pt-mc-area').style.display = 'none';
+        document.getElementById('pt-input').focus();
+      }
+
+      // Auto-end if we've hit max questions
+      if (ptQuestionCount >= ptMaxQuestions) {
+        ptMessages.push({ role: 'user', content: 'Please finalize the assessment and provide my complete results now.' });
+        await ptAsk();
+      }
+    }
+  } catch(e) {
+    ptRemoveTyping('pt');
+    ptAppendMsg('assistant', `⚠️ Error: ${e.message}. Please try again.`);
+  }
+}
+
+function ptShowMC(matches) {
+  const area = document.getElementById('pt-mc-area');
+  area.style.display = 'flex';
+  area.innerHTML = '';
+  // Detect which is correct based on answer key hint (Claude sometimes marks with *)
+  matches.forEach((m) => {
+    const letter = m.match(/\[([A-D])\]/)[1];
+    const text = m.replace(/\[[A-D]\]\s*/, '').replace(/\*$/, '').trim();
+    const isCorrect = m.endsWith('*');
+    const btn = document.createElement('button');
+    btn.className = 'pt-mc-btn';
+    btn.dataset.correct = isCorrect ? 'true' : 'false';
+    btn.textContent = `${letter}. ${text}`;
+    btn.onclick = () => ptChoose(btn, `${letter}. ${text}`, isCorrect);
+    area.appendChild(btn);
+  });
+}
+
+async function ptHandleResults(reply) {
+  // Extract JSON from <RESULTS> block
+  const match = reply.match(/<RESULTS>([\s\S]*?)<\/RESULTS>/);
+  if (!match) return;
+  let result;
+  try { result = JSON.parse(match[1].trim()); }
+  catch(e) { ptAppendMsg('assistant', reply); return; }
+
+  // Show any text before the results block
+  const beforeResults = reply.replace(/<RESULTS>[\s\S]*<\/RESULTS>/g, '').trim();
+  if (beforeResults) ptAppendMsg('assistant', beforeResults);
+
+  // Save to Supabase
+  const payload = {
+    language: ptLang,
+    test_date: new Date().toISOString(),
+    overall_level: result.overall_level,
+    overall_score: result.overall_score,
+    overall_description: result.overall_description,
+    vocabulary_score: result.vocabulary_score,
+    vocabulary_level: result.vocabulary_level,
+    vocabulary_notes: result.vocabulary_notes,
+    grammar_score: result.grammar_score,
+    grammar_level: result.grammar_level,
+    grammar_notes: result.grammar_notes,
+    reading_score: result.reading_score,
+    reading_level: result.reading_level,
+    reading_notes: result.reading_notes,
+    listening_score: result.listening_score,
+    listening_level: result.listening_level,
+    listening_notes: result.listening_notes,
+    speaking_score: result.speaking_score,
+    speaking_level: result.speaking_level,
+    speaking_notes: result.speaking_notes,
+    writing_score: result.writing_score,
+    writing_level: result.writing_level,
+    writing_notes: result.writing_notes,
+    pronunciation_score: result.pronunciation_score,
+    fluency_score: result.fluency_score,
+    accuracy_score: result.accuracy_score,
+    comprehension_score: result.comprehension_score,
+    strengths: result.strengths,
+    weaknesses: result.weaknesses,
+    focus_areas: result.focus_areas,
+    conversation_log: ptMessages,
+    questions_asked: ptQuestionCount,
+    is_continuation: !!ptPriorData,
+    prior_test_id: ptPriorData?.id || null,
+  };
+
+  const { data: saved } = await supabase.from('language_placement_results').insert(payload);
+  ptActive = false;
+
+  // Show results UI
+  document.getElementById('pt-test-area').style.display = 'none';
+  ptShowResults(result);
+}
+
+function ptShowResults(r) {
+  document.getElementById('pt-results').style.display = '';
+  document.getElementById('pt-results-title').textContent = `${ptLang} Placement Complete`;
+  document.getElementById('pt-results-level').textContent = r.overall_level || '—';
+  document.getElementById('pt-score-num').textContent = Math.round(r.overall_score || 0);
+
+  // Animate score ring
+  const circ = 326.7;
+  const pct = (r.overall_score || 0) / 100;
+  setTimeout(() => {
+    document.getElementById('pt-ring-fill').style.strokeDashoffset = circ * (1 - pct);
+  }, 100);
+
+  // Skill breakdown bars
+  const breakdown = document.getElementById('pt-breakdown');
+  breakdown.innerHTML = '';
+  PT_SKILLS.forEach(skill => {
+    const score = r[`${skill}_score`] || 0;
+    const level = r[`${skill}_level`] || '—';
+    const pct = score;
+    const row = document.createElement('div');
+    row.className = 'pt-bar-row';
+    row.innerHTML = `
+      <div class="pt-bar-label">${PT_SKILL_LABELS[skill].split(' ')[1]}</div>
+      <div class="pt-bar-track"><div class="pt-bar-fill" style="width:0%" data-pct="${pct}"></div></div>
+      <div class="pt-bar-level">${level}</div>
+    `;
+    breakdown.appendChild(row);
+  });
+  setTimeout(() => {
+    breakdown.querySelectorAll('.pt-bar-fill').forEach(el => {
+      el.style.width = el.dataset.pct + '%';
+    });
+  }, 200);
+
+  // Strengths & Weaknesses
+  const sw = document.getElementById('pt-sw');
+  const strengths = r.strengths || [];
+  const weaknesses = r.weaknesses || [];
+  sw.innerHTML = `
+    <div class="pt-sw-title">💪 Strengths</div>
+    <div class="pt-sw-tags">${strengths.map(s => `<span class="pt-sw-tag strength">${s}</span>`).join('') || '<span style="color:var(--gray-400);font-size:12px">None identified yet</span>'}</div>
+    <div class="pt-sw-title" style="margin-top:10px">⚠️ Areas to Improve</div>
+    <div class="pt-sw-tags">${weaknesses.map(w => `<span class="pt-sw-tag weakness">${w}</span>`).join('') || '<span style="color:var(--gray-400);font-size:12px">None identified yet</span>'}</div>
+  `;
+
+  // Focus areas
+  const focusAreas = r.focus_areas || [];
+  document.getElementById('pt-focus').innerHTML = `
+    <div class="pt-focus-title">🎯 Recommended Focus</div>
+    ${focusAreas.map(f => `<div class="pt-focus-item">${f}</div>`).join('')}
+  `;
+}
+
+window.ptEndEarly = async () => {
+  if (!ptActive) return;
+  ptMessages.push({ role: 'user', content: 'Please finalize the assessment now and provide my complete results based on what you have tested so far.' });
+  await ptAsk();
+};
+
+window.ptRetake = () => {
+  document.getElementById('pt-results').style.display = 'none';
+  document.getElementById('pt-hero').style.display = '';
+  ptInit();
+};
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function ptAppendMsg(role, text) {
+  const chat = document.getElementById('pt-chat');
+  const div = document.createElement('div');
+  div.className = `pt-msg ${role}`;
+  div.innerHTML = `
+    <div class="pt-msg-avatar">${role === 'assistant' ? '🎯' : '👤'}</div>
+    <div class="pt-msg-bubble">${text.replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')}</div>
+  `;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function ptShowTyping(prefix) {
+  const chat = document.getElementById(`${prefix}-chat`);
+  const div = document.createElement('div');
+  div.className = `${prefix}-msg assistant`;
+  div.id = `${prefix}-typing`;
+  div.innerHTML = `
+    <div class="${prefix}-msg-avatar">🎯</div>
+    <div class="${prefix}-msg-bubble ${prefix}-typing">
+      <div class="${prefix}-dot"></div><div class="${prefix}-dot"></div><div class="${prefix}-dot"></div>
+    </div>`;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function ptRemoveTyping(prefix) {
+  document.getElementById(`${prefix}-typing`)?.remove();
+}
+
+function ptSetSkillBadge(skill) {
+  document.querySelectorAll('.pt-badge').forEach(b => b.classList.remove('active'));
+  if (skill) document.getElementById(`pb-${skill}`)?.classList.add('active');
+}
+
+function ptUpdateProgress() {
+  const pct = Math.min((ptQuestionCount / ptMaxQuestions) * 100, 95);
+  document.getElementById('pt-progress-fill').style.width = pct + '%';
+  document.getElementById('pt-progress-label').textContent = `Question ${ptQuestionCount + 1} of ~${ptMaxQuestions}`;
+}
+
+// ── Voice input for placement test ──────────────────────────────────────────
+window.ptToggleVoice = async () => {
+  if (ptRecording) {
+    ptMediaRecorder?.stop();
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    ptMediaRecorder = new MediaRecorder(stream);
+    ptAudioChunks = [];
+    ptMediaRecorder.ondataavailable = e => ptAudioChunks.push(e.data);
+    ptMediaRecorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      const blob = new Blob(ptAudioChunks, { type: 'audio/webm' });
+      const base64 = await ptBlobToBase64(blob);
+      document.getElementById('pt-input').value = '[Voice message recorded — transcribing…]';
+      // Use Groq or Claude to transcribe
+      try {
+        const { data: keys } = await supabase.from('user_settings').select('key,value').in('key',['groq_api_key']).maybeSingle();
+        const groqKey = keys?.value || '';
+        if (groqKey) {
+          const fd = new FormData();
+          fd.append('file', blob, 'audio.webm');
+          fd.append('model', 'whisper-large-v3');
+          const tr = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+            method:'POST', headers:{'Authorization':`Bearer ${groqKey}`}, body: fd
+          });
+          const tj = await tr.json();
+          document.getElementById('pt-input').value = tj.text || '';
+        } else {
+          document.getElementById('pt-input').value = '[Voice input requires a Groq API key — set it in the Speak tab settings]';
+        }
+      } catch(e) {
+        document.getElementById('pt-input').value = '';
+      }
+    };
+    ptMediaRecorder.start();
+    ptRecording = true;
+    document.getElementById('pt-voice-btn').classList.add('recording');
+    document.getElementById('pt-voice-btn').textContent = '⏹️';
+  } catch(e) {
+    alert('Microphone access denied. Please allow microphone to use voice input.');
+  }
+};
+
+async function ptBlobToBase64(blob) {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result.split(',')[1]);
+    reader.readAsDataURL(blob);
+  });
+}
+
+// ════════════════════════════════════════ GUIDED LESSONS ═════════════════════
+
+let glLang = 'Spanish';
+let glPlacementData = null;
+let glCurrentLesson = null;
+let glMessages = [];
+let glCorrect = 0;
+let glTotal = 0;
+let glRecording = false;
+let glMediaRecorder = null;
+let glAudioChunks = [];
+
+const GL_LESSON_ICONS = {
+  vocabulary:'📝', grammar:'🔤', reading:'📖',
+  listening:'👂', writing:'✍️', conversation:'💬'
+};
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+async function glInit() {
+  // Load latest placement result
+  const { data: prior } = await supabase
+    .from('language_placement_results')
+    .select('*')
+    .eq('language', glLang)
+    .order('test_date', { ascending: false })
+    .limit(1);
+
+  glPlacementData = prior?.[0] || null;
+
+  const noTest = document.getElementById('gl-no-test');
+  const grid = document.getElementById('gl-lesson-grid');
+
+  if (!glPlacementData) {
+    noTest.style.display = '';
+    grid.style.display = 'none';
+    document.getElementById('gl-sub').textContent = 'Take the placement test first';
+    return;
+  }
+
+  noTest.style.display = 'none';
+  grid.style.display = '';
+  document.getElementById('gl-lesson-area').style.display = 'none';
+  document.getElementById('gl-sub').textContent = `${glLang} · ${glPlacementData.overall_level || 'Level unknown'} · Lessons tailored to your results`;
+
+  // Fill level badges on cards
+  const levelMap = {
+    vocabulary: glPlacementData.vocabulary_level,
+    grammar: glPlacementData.grammar_level,
+    reading: glPlacementData.reading_level,
+    listening: glPlacementData.listening_level,
+    writing: glPlacementData.writing_level,
+    speaking: glPlacementData.speaking_level,
+  };
+  Object.entries(levelMap).forEach(([skill, level]) => {
+    const el = document.getElementById(`gl-level-${skill}`);
+    if (el) el.textContent = level || '';
+  });
+
+  // Load recent lessons
+  const { data: history } = await supabase
+    .from('language_lesson_progress')
+    .select('*')
+    .eq('language', glLang)
+    .order('lesson_date', { ascending: false })
+    .limit(8);
+
+  const histDiv = document.getElementById('gl-history');
+  if (!history || !history.length) {
+    histDiv.innerHTML = '<div class="gl-history-empty">No lessons yet — start one above!</div>';
+  } else {
+    histDiv.innerHTML = history.map(h => `
+      <div class="gl-history-item">
+        <div class="gl-history-icon">${GL_LESSON_ICONS[h.lesson_type] || '📚'}</div>
+        <div class="gl-history-info">
+          <div class="gl-history-title">${h.topic || h.lesson_type}</div>
+          <div class="gl-history-meta">${new Date(h.lesson_date).toLocaleDateString()} · ${h.items_practiced || 0} items</div>
+        </div>
+        <div class="gl-history-score">${h.score ? Math.round(h.score) + '%' : '—'}</div>
+      </div>
+    `).join('');
+  }
+}
+
+window.glSetLang = (lang) => {
+  glLang = lang;
+  document.querySelectorAll('.gl-lang-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.lang === lang);
+  });
+  glInit();
+};
+
+// ── Start a lesson ────────────────────────────────────────────────────────────
+window.glStartLesson = async (type) => {
+  glCurrentLesson = type;
+  glMessages = [];
+  glCorrect = 0;
+  glTotal = 0;
+
+  document.getElementById('gl-lesson-grid').style.display = 'none';
+  document.getElementById('gl-lesson-area').style.display = '';
+  document.getElementById('gl-lesson-type-label').textContent = `${GL_LESSON_ICONS[type]} ${type.charAt(0).toUpperCase() + type.slice(1)} Lesson`;
+  document.getElementById('gl-lesson-score-label').textContent = '';
+  document.getElementById('gl-chat').innerHTML = '';
+  document.getElementById('gl-input-area').style.display = '';
+  document.getElementById('gl-mc-area').style.display = 'none';
+
+  const levelInfo = glPlacementData ? `
+Student's placement data:
+- Overall level: ${glPlacementData.overall_level}
+- ${type.charAt(0).toUpperCase()+type.slice(1)} level: ${glPlacementData[`${type}_level`] || glPlacementData.speaking_level || 'unknown'}
+- Weaknesses: ${(glPlacementData.weaknesses || []).join(', ')}
+- Focus areas: ${(glPlacementData.focus_areas || []).join(', ')}
+` : 'No placement data available — assume intermediate level.';
+
+  const lessonPrompts = {
+    vocabulary: `You are a ${glLang} vocabulary tutor. Teach and drill vocabulary words PRECISELY at the student's level. Introduce words with context sentences, then quiz the student (translation, fill-in-the-blank, usage). Provide corrections with explanations. Keep each turn focused: introduce → example → quiz → correct → next word. Aim for 10-15 vocabulary items per session.`,
+    grammar: `You are a ${glLang} grammar tutor. Explain ONE grammar concept at a time targeted at the student's specific gap areas. Use clear examples, then give practice exercises. After exercises, provide detailed correction and explanation. Move to the next concept when the student demonstrates understanding.`,
+    reading: `You are a ${glLang} reading comprehension tutor. Present a reading passage AT the student's level (not above, not below). After presenting the text, ask comprehension questions of varying complexity (literal → inferential → critical). Then discuss vocabulary and grammar points from the text.`,
+    listening: `You are a ${glLang} listening comprehension tutor. Simulate listening exercises by presenting TEXT that represents what a native speaker would say (as if the student is hearing it). Make it authentic — use natural speech patterns, contractions, fillers. Then ask comprehension questions. Gradually increase speed and complexity.`,
+    writing: `You are a ${glLang} writing tutor. Give the student a writing prompt appropriate to their level. Read their response, then provide LINE-BY-LINE corrections with explanations. Rewrite problematic sentences showing the correct version. Focus on the most impactful errors. Be encouraging but precise.`,
+    conversation: `You are a ${glLang} conversation partner and tutor. Have a natural conversation on an interesting topic at the student's level. After each exchange, subtly correct any errors by repeating the corrected version naturally in your response. Introduce new vocabulary organically. Keep the conversation flowing — make it enjoyable, not a grammar drill.`,
+  };
+
+  const systemPrompt = `${lessonPrompts[type]}
+
+Language: ${glLang}
+${levelInfo}
+
+Keep responses concise and mobile-friendly. Use formatting sparingly.
+For multiple choice questions, format options as [A] option [B] option [C] option [D] option on separate lines.
+When a student makes an error, ALWAYS provide a correction.
+Start the lesson now with a brief introduction and your first exercise or question.`;
+
+  glMessages.push({ role: 'user', content: systemPrompt });
+  glMessages.push({ role: 'user', content: `Let's start the ${type} lesson in ${glLang}.` });
+
+  await glAsk();
+
+  // Save lesson start
+  glLessonId = null;
+  const { data: saved } = await supabase.from('language_lesson_progress').insert({
+    language: glLang,
+    lesson_type: type,
+    topic: `${type.charAt(0).toUpperCase() + type.slice(1)} lesson`,
+    target_level: glPlacementData?.[`${type}_level`] || glPlacementData?.overall_level || 'B1',
+  });
+  if (saved?.[0]) glLessonId = saved[0].id;
+};
+
+// ── Send lesson answer ────────────────────────────────────────────────────────
+window.glSend = async () => {
+  const input = document.getElementById('gl-input');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  glTotal++;
+  glAppendMsg('user', text);
+  glMessages.push({ role: 'user', content: text });
+  glUpdateScore();
+  document.getElementById('gl-send-btn').disabled = true;
+  await glAsk();
+  document.getElementById('gl-send-btn').disabled = false;
+};
+
+window.glChoose = async (btn, option, correct) => {
+  const btns = document.querySelectorAll('.gl-mc-btn');
+  btns.forEach(b => b.disabled = true);
+  btn.classList.add(correct ? 'correct' : 'wrong');
+  if (!correct) btns.forEach(b => { if (b.dataset.correct==='true') b.classList.add('correct'); });
+  else glCorrect++;
+  glTotal++;
+  glUpdateScore();
+  glMessages.push({ role: 'user', content: option });
+  document.getElementById('gl-mc-area').style.display = 'none';
+  await glAsk();
+};
+
+async function glAsk() {
+  ptShowTyping('gl');
+  try {
+    const msgs = glMessages.map(m => ({ role: m.role, content: m.content }));
+    const res = await fetch(PT_CLAUDE_PROXY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 800, messages: msgs }),
+    });
+    ptRemoveTyping('gl');
+    if (!res.ok) throw new Error(`Claude error ${res.status}`);
+    const j = await res.json();
+    if (j.error) throw new Error(j.error.message || j.error);
+    const reply = j.content[0].text;
+    glMessages.push({ role: 'assistant', content: reply });
+
+    const mcMatch = reply.match(/\[([A-D])\]\s+(.+)/g);
+    glAppendMsg('assistant', reply);
+
+    if (mcMatch && mcMatch.length >= 2) {
+      glShowMC(mcMatch);
+      document.getElementById('gl-input-area').style.display = 'none';
+    } else {
+      document.getElementById('gl-input-area').style.display = '';
+      document.getElementById('gl-mc-area').style.display = 'none';
+      document.getElementById('gl-input').focus();
+    }
+  } catch(e) {
+    ptRemoveTyping('gl');
+    glAppendMsg('assistant', `⚠️ ${e.message}`);
+  }
+}
+
+function glShowMC(matches) {
+  const area = document.getElementById('gl-mc-area');
+  area.style.display = 'flex';
+  area.innerHTML = '';
+  matches.forEach(m => {
+    const letter = m.match(/\[([A-D])\]/)[1];
+    const text = m.replace(/\[[A-D]\]\s*/,'').replace(/\*$/,'').trim();
+    const isCorrect = m.endsWith('*');
+    const btn = document.createElement('button');
+    btn.className = 'gl-mc-btn';
+    btn.dataset.correct = isCorrect ? 'true' : 'false';
+    btn.textContent = `${letter}. ${text}`;
+    btn.onclick = () => glChoose(btn, `${letter}. ${text}`, isCorrect);
+    area.appendChild(btn);
+  });
+}
+
+function glAppendMsg(role, text) {
+  const chat = document.getElementById('gl-chat');
+  const div = document.createElement('div');
+  div.className = `gl-msg ${role}`;
+  div.innerHTML = `
+    <div class="gl-msg-avatar">${role === 'assistant' ? '📚' : '👤'}</div>
+    <div class="gl-msg-bubble">${text.replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')}</div>
+  `;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function glUpdateScore() {
+  if (!glTotal) return;
+  const pct = Math.round((glCorrect / glTotal) * 100);
+  document.getElementById('gl-lesson-score-label').textContent = `${pct}% · ${glTotal} items`;
+}
+
+window.glBackToMenu = async () => {
+  // Save lesson progress
+  if (typeof glLessonId !== 'undefined' && glLessonId) {
+    const score = glTotal > 0 ? (glCorrect / glTotal) * 100 : null;
+    await supabase.from('language_lesson_progress').update({
+      score,
+      items_practiced: glTotal,
+      items_correct: glCorrect,
+      lesson_log: glMessages,
+    }).eq('id', glLessonId);
+  }
+  document.getElementById('gl-lesson-area').style.display = 'none';
+  document.getElementById('gl-lesson-grid').style.display = '';
+  glInit();
+};
+
+// ── Voice input for lessons ──────────────────────────────────────────────────
+window.glToggleVoice = async () => {
+  if (glRecording) { glMediaRecorder?.stop(); return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    glMediaRecorder = new MediaRecorder(stream);
+    glAudioChunks = [];
+    glMediaRecorder.ondataavailable = e => glAudioChunks.push(e.data);
+    glMediaRecorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      glRecording = false;
+      document.getElementById('gl-voice-btn').classList.remove('recording');
+      document.getElementById('gl-voice-btn').textContent = '🎙️';
+      // transcribe via Groq if available
+      const blob = new Blob(glAudioChunks, { type: 'audio/webm' });
+      document.getElementById('gl-input').value = '[Transcribing…]';
+      try {
+        const { data: settings } = await supabase.from('user_settings').select('key,value').in('key',['groq_api_key']);
+        const groqRow = (settings || []).find(s => s.key === 'groq_api_key');
+        if (groqRow?.value) {
+          const fd = new FormData();
+          fd.append('file', blob, 'audio.webm');
+          fd.append('model', 'whisper-large-v3');
+          const tr = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+            method:'POST', headers:{'Authorization':`Bearer ${groqRow.value}`}, body: fd
+          });
+          const tj = await tr.json();
+          document.getElementById('gl-input').value = tj.text || '';
+        } else {
+          document.getElementById('gl-input').value = '';
+          alert('Voice input requires a Groq API key — set it in the Speak tab settings.');
+        }
+      } catch(e) { document.getElementById('gl-input').value = ''; }
+    };
+    glMediaRecorder.start();
+    glRecording = true;
+    document.getElementById('gl-voice-btn').classList.add('recording');
+    document.getElementById('gl-voice-btn').textContent = '⏹️';
+  } catch(e) { alert('Microphone access denied.'); }
+};
 
 </script>
 <script type="module" src="js/error-reporter.js?v=1"></script>
