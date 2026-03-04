@@ -712,17 +712,18 @@
     <button class="vc-lang-btn" data-lang="Danish" onclick="vcSetLang('Danish')">🇩🇰 Danish</button>
   </div>
 
-  <!-- API Key setup (collapsible) -->
+  <!-- API Key setup (collapsible, Supabase-backed) -->
   <details class="vc-settings" id="vc-settings-panel">
     <summary>⚙️ API Keys</summary>
     <div class="vc-settings-inner">
       <label class="vc-label">Anthropic API Key</label>
-      <input type="password" id="vc-anthropic-key" class="form-input" placeholder="sk-ant-…" oninput="vcSaveKeys()">
+      <input type="password" id="vc-anthropic-key" class="form-input" placeholder="sk-ant-…">
       <label class="vc-label" style="margin-top:8px">ElevenLabs API Key</label>
-      <input type="password" id="vc-eleven-key" class="form-input" placeholder="sk_…" oninput="vcSaveKeys()">
-      <label class="vc-label" style="margin-top:8px">Groq API Key <span style="font-weight:400;color:var(--gray-400)">(free — for speech-to-text)</span></label>
-      <input type="password" id="vc-groq-key" class="form-input" placeholder="gsk_…" oninput="vcSaveKeys()">
-      <p class="vc-hint">Keys are saved locally in your browser only — never sent anywhere except the respective APIs.</p>
+      <input type="password" id="vc-eleven-key" class="form-input" placeholder="sk_…">
+      <label class="vc-label" style="margin-top:8px">Groq API Key <span style="font-weight:400;color:var(--gray-400)">(free — groq.com)</span></label>
+      <input type="password" id="vc-groq-key" class="form-input" placeholder="gsk_…">
+      <button class="btn btn-primary btn-full" style="margin-top:10px" onclick="vcSaveKeysToSupabase()">Save Keys to Database</button>
+      <p class="vc-hint" id="vc-keys-status">Keys are saved securely in your database — works from any device.</p>
     </div>
   </details>
 
@@ -5041,33 +5042,74 @@ let vcSessionActive = false;
 let vcTurnCount = 0;
 let vcMediaStream = null;
 let vcInitDone = false;
+let vcKeys = {}; // cached keys fetched from Supabase
+
+const VC_KEYS_URL = 'https://kxsuzgpnvtepsyhkezin.supabase.co/functions/v1/get-voice-keys';
 
 // ── Init ──────────────────────────────────────────────────────────────────
 async function vcInit() {
   if (vcInitDone) return;
   vcInitDone = true;
+  vcSetStatus('Loading keys…');
+  await vcFetchKeys();
+}
 
-  // Restore saved keys
-  document.getElementById('vc-anthropic-key').value = localStorage.getItem('vc_anthropic_key') || '';
-  document.getElementById('vc-eleven-key').value = localStorage.getItem('vc_eleven_key') || '';
-  document.getElementById('vc-groq-key').value = localStorage.getItem('vc_groq_key') || '';
+async function vcFetchKeys() {
+  try {
+    const res = await fetch(VC_KEYS_URL);
+    if (!res.ok) throw new Error(`${res.status}`);
+    vcKeys = await res.json();
 
-  // Show settings if keys missing
-  const hasKeys = localStorage.getItem('vc_anthropic_key') && localStorage.getItem('vc_eleven_key') && localStorage.getItem('vc_groq_key');
-  if (!hasKeys) {
-    document.getElementById('vc-settings-panel').setAttribute('open', '');
-    vcSetStatus('Add your API keys above to get started');
+    // Populate fields (masked) so user can see they're set
+    const setField = (id, val) => {
+      const el = document.getElementById(id);
+      if (el && val && val !== 'ENTER_YOUR_KEY') el.value = '••••••••••••••••';
+    };
+    setField('vc-anthropic-key', vcKeys.anthropic_api_key);
+    setField('vc-eleven-key', vcKeys.elevenlabs_api_key);
+    setField('vc-groq-key', vcKeys.groq_api_key);
+
+    const allSet = vcKeys.anthropic_api_key && vcKeys.anthropic_api_key !== 'ENTER_YOUR_KEY'
+                && vcKeys.elevenlabs_api_key && vcKeys.elevenlabs_api_key !== 'ENTER_YOUR_KEY'
+                && vcKeys.groq_api_key && vcKeys.groq_api_key !== 'ENTER_YOUR_KEY';
+
+    if (!allSet) {
+      document.getElementById('vc-settings-panel').setAttribute('open', '');
+      vcSetStatus('Add your API keys above to get started');
+    } else {
+      vcSetStatus('Ready — hold the button to start');
+    }
+  } catch(e) {
+    vcSetStatus('Could not load keys — check connection');
+    console.error('vcFetchKeys', e);
   }
 }
 
-window.vcSaveKeys = () => {
+window.vcSaveKeysToSupabase = async () => {
   const ak = document.getElementById('vc-anthropic-key').value.trim();
   const ek = document.getElementById('vc-eleven-key').value.trim();
   const gk = document.getElementById('vc-groq-key').value.trim();
-  if (ak) localStorage.setItem('vc_anthropic_key', ak);
-  if (ek) localStorage.setItem('vc_eleven_key', ek);
-  if (gk) localStorage.setItem('vc_groq_key', gk);
-  vcSetStatus('Keys saved ✓');
+
+  const statusEl = document.getElementById('vc-keys-status');
+  statusEl.textContent = 'Saving…';
+
+  const updates = [];
+  if (ak && !ak.startsWith('•')) updates.push({ key: 'anthropic_api_key', value: ak, updated_at: new Date().toISOString() });
+  if (ek && !ek.startsWith('•')) updates.push({ key: 'elevenlabs_api_key', value: ek, updated_at: new Date().toISOString() });
+  if (gk && !gk.startsWith('•')) updates.push({ key: 'groq_api_key', value: gk, updated_at: new Date().toISOString() });
+
+  if (!updates.length) { statusEl.textContent = 'No new keys to save.'; return; }
+
+  try {
+    for (const row of updates) {
+      await supabase.from('app_secrets').upsert(row, { onConflict: 'key' });
+    }
+    statusEl.textContent = '✓ Saved! Keys work from any device now.';
+    await vcFetchKeys(); // refresh cached keys
+    vcSetStatus('Ready — hold the button to start');
+  } catch(e) {
+    statusEl.textContent = 'Error saving: ' + e.message;
+  }
 };
 
 window.vcSetLang = (lang) => {
@@ -5078,9 +5120,9 @@ window.vcSetLang = (lang) => {
 
 // ── Session start (first AI message) ─────────────────────────────────────
 async function vcStartSession() {
-  const anthropicKey = localStorage.getItem('vc_anthropic_key');
-  const elevenKey = localStorage.getItem('vc_eleven_key');
-  if (!anthropicKey || !elevenKey) {
+  const anthropicKey = vcKeys.anthropic_api_key;
+  const elevenKey = vcKeys.elevenlabs_api_key;
+  if (!anthropicKey || anthropicKey === 'ENTER_YOUR_KEY' || !elevenKey || elevenKey === 'ENTER_YOUR_KEY') {
     document.getElementById('vc-settings-panel').setAttribute('open', '');
     vcSetStatus('Please add your API keys first');
     return;
@@ -5268,7 +5310,7 @@ async function vcTranscribeWhisper(blob) {
   // Use Groq's free Whisper endpoint — no extra key needed if user adds Groq key
   // Fallback: use Web Speech API transcript already available via browser
   // For now: use Groq if key exists, else try browser-native approach
-  const groqKey = localStorage.getItem('vc_groq_key');
+  const groqKey = vcKeys.groq_api_key;
   const langCode = VC_LANGS[vcLang].code.split('-')[0]; // 'es' or 'da'
 
   if (groqKey) {
@@ -5295,8 +5337,8 @@ async function vcTranscribeWhisper(blob) {
 
 // ── Claude LLM ────────────────────────────────────────────────────────────
 async function vcAskClaude() {
-  const key = localStorage.getItem('vc_anthropic_key');
-  if (!key) throw new Error('No Anthropic API key');
+  const key = vcKeys.anthropic_api_key;
+  if (!key || key === 'ENTER_YOUR_KEY') throw new Error('No Anthropic API key');
 
   // Claude can't be called directly from browser due to CORS.
   // We route through the existing Supabase db-proxy edge function,
@@ -5335,8 +5377,8 @@ async function vcAskClaude() {
 
 // ── ElevenLabs TTS ────────────────────────────────────────────────────────
 async function vcSpeak(text) {
-  const key = localStorage.getItem('vc_eleven_key');
-  if (!key) return; // Fail silently — text is still shown
+  const key = vcKeys.elevenlabs_api_key;
+  if (!key || key === 'ENTER_YOUR_KEY') return; // Fail silently — text still shown
 
   const voiceId = VC_LANGS[vcLang].voiceId;
 
