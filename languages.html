@@ -412,6 +412,8 @@
 .vc-settings-inner { padding: 0 14px 14px; }
 .vc-label { font-size: 12px; font-weight: 600; color: var(--gray-400); display: block; margin-bottom: 4px; }
 .vc-hint { font-size: 11px; color: var(--gray-400); margin-top: 8px; line-height: 1.5; }
+.vc-speed-section { margin-top: 4px; }
+.vc-speed-section input[type=range] { width: 100%; margin: 4px 0 2px; accent-color: var(--accent, #6c63ff); }
 
 .vc-chat {
   flex: 1; overflow-y: auto; padding: 12px 16px;
@@ -724,6 +726,18 @@
       <input type="password" id="vc-groq-key" class="form-input" placeholder="gsk_…">
       <button class="btn btn-primary btn-full" style="margin-top:10px" onclick="vcSaveKeysToSupabase()">Save Keys to Database</button>
       <p class="vc-hint" id="vc-keys-status">Keys are saved securely in your database — works from any device.</p>
+
+      <!-- Speed settings per language -->
+      <div class="vc-speed-section">
+        <label class="vc-label" style="margin-top:12px">🇪🇸 Spanish speech speed — <span id="vc-speed-spanish-val">1.0×</span></label>
+        <input type="range" id="vc-speed-spanish" min="0.7" max="1.5" step="0.05" value="1.0"
+          oninput="document.getElementById('vc-speed-spanish-val').textContent = parseFloat(this.value).toFixed(2) + '×'">
+        <label class="vc-label" style="margin-top:8px">🇩🇰 Danish speech speed — <span id="vc-speed-danish-val">1.0×</span></label>
+        <input type="range" id="vc-speed-danish" min="0.7" max="1.5" step="0.05" value="1.0"
+          oninput="document.getElementById('vc-speed-danish-val').textContent = parseFloat(this.value).toFixed(2) + '×'">
+        <button class="btn btn-secondary btn-full" style="margin-top:8px" onclick="vcSaveSpeed()">Save Speed Settings</button>
+        <p class="vc-hint" id="vc-speed-status"></p>
+      </div>
     </div>
   </details>
 
@@ -5078,6 +5092,18 @@ async function vcFetchKeys() {
     setField('vc-eleven-key', vcKeys.elevenlabs_api_key);
     setField('vc-groq-key', vcKeys.groq_api_key);
 
+    // Populate speed sliders from saved values
+    const applySpeed = (lang, sliderId, labelId) => {
+      const key = `vc_speed_${lang}`;
+      const val = vcKeys[key] ? parseFloat(vcKeys[key]) : 1.0;
+      const slider = document.getElementById(sliderId);
+      const label  = document.getElementById(labelId);
+      if (slider) slider.value = val;
+      if (label)  label.textContent = val.toFixed(2) + '×';
+    };
+    applySpeed('Spanish', 'vc-speed-spanish', 'vc-speed-spanish-val');
+    applySpeed('Danish',  'vc-speed-danish',  'vc-speed-danish-val');
+
     if (!vcKeysReady()) {
       document.getElementById('vc-settings-panel').setAttribute('open', '');
       vcSetStatus('Add your API keys above to get started');
@@ -5124,6 +5150,27 @@ window.vcSaveKeysToSupabase = async () => {
   }
 };
 
+window.vcSaveSpeed = async () => {
+  const statusEl = document.getElementById('vc-speed-status');
+  statusEl.textContent = 'Saving…';
+
+  const esSpeed = parseFloat(document.getElementById('vc-speed-spanish').value).toFixed(2);
+  const daSpeed = parseFloat(document.getElementById('vc-speed-danish').value).toFixed(2);
+
+  // Cache in memory immediately
+  vcKeys['vc_speed_Spanish'] = esSpeed;
+  vcKeys['vc_speed_Danish']  = daSpeed;
+
+  const now = new Date().toISOString();
+  try {
+    await supabase.from('app_secrets').upsert({ key: 'vc_speed_Spanish', value: esSpeed, updated_at: now }, { onConflict: 'key' });
+    await supabase.from('app_secrets').upsert({ key: 'vc_speed_Danish',  value: daSpeed, updated_at: now }, { onConflict: 'key' });
+    statusEl.textContent = '✓ Speed saved for both languages.';
+  } catch(e) {
+    statusEl.textContent = '⚠️ Saved in memory only (DB error: ' + e.message + ')';
+  }
+};
+
 window.vcSetLang = (lang) => {
   if (vcSessionActive) { vcSetStatus('End current session first'); return; }
   vcLang = lang;
@@ -5156,13 +5203,8 @@ async function vcStartSession() {
   const sysPrompt = await vcBuildSystemPrompt();
   vcMessages.push({ role: 'user', content: sysPrompt });
 
-  // Kick off with greeting
-  const greeting = VC_LANGS[vcLang].greeting;
-  vcMessages.push({ role: 'assistant', content: greeting });
-  vcAppendMsg('assistant', greeting);
-  vcSetStatus('Tutor is speaking…');
-  await vcSpeak(greeting);
-  vcSetStatus('Your turn — hold the button to speak');
+  // Session is ready — user speaks first
+  vcSetStatus('Session ready — hold the button to speak');
 }
 
 // ── Build system prompt with real Supabase vocab data ────────────────────
@@ -5220,7 +5262,7 @@ When Luke makes a mistake, do NOT lecture. Just use the correct form naturally i
 
 ${vocabSummary}
 
-START: Greet Luke naturally in ${vcLang} and ask an open-ended question to begin.`;
+IMPORTANT: Luke will speak first. Wait for his first message before responding. When he does, respond naturally in ${vcLang} and keep the conversation going.`;
 }
 
 // ── PTT handlers ──────────────────────────────────────────────────────────
@@ -5230,7 +5272,7 @@ window.vcPTTStart = async (e) => {
 
   if (!vcSessionActive) {
     await vcStartSession();
-    return;
+    // fall through — start recording on this same press
   }
 
   if (vcIsRecording) return;
@@ -5387,7 +5429,11 @@ async function vcSpeak(text) {
     body: JSON.stringify({
       text,
       model_id: 'eleven_turbo_v2_5', // ultra-low latency
-      voice_settings: { stability: 0.5, similarity_boost: 0.8, speed: 0.95 },
+      voice_settings: {
+        stability: 0.5,
+        similarity_boost: 0.8,
+        speed: parseFloat(vcKeys[`vc_speed_${vcLang}`] || '1.0'),
+      },
     }),
   });
 
