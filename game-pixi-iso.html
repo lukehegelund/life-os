@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>LifeOS Empire — PixiJS Isometric</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Cinzel+Decorative:wght@700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.3.2/pixi.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#0a0a12;overflow:hidden;font-family:'Cinzel',Georgia,serif;user-select:none;}
+#pixi-container canvas{display:block;}
+#menu-overlay{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,#1a1208 0%,#0a0a12 70%);z-index:1000;}
+.menu-title{font-family:'Cinzel Decorative',serif;font-size:clamp(28px,5vw,60px);color:#f0d080;text-shadow:0 0 40px rgba(240,180,60,.5);letter-spacing:4px;text-align:center;line-height:1.2;}
+.menu-sub{font-size:clamp(10px,1.4vw,13px);color:#8a7050;letter-spacing:6px;text-transform:uppercase;margin-top:10px;text-align:center;}
+.menu-tag{font-size:10px;color:#5a4a30;letter-spacing:3px;text-transform:uppercase;margin-top:6px;text-align:center;}
+.menu-div{width:200px;height:1px;background:linear-gradient(90deg,transparent,#5a3e1b,transparent);margin:18px auto;}
+.start-btn{margin-top:36px;background:linear-gradient(180deg,#8b5e1a,#5a3a08);border:2px solid #c8841e;border-radius:4px;color:#f5e0a0;font-family:'Cinzel',serif;font-size:18px;font-weight:600;padding:14px 60px;cursor:pointer;letter-spacing:4px;text-transform:uppercase;box-shadow:0 4px 20px rgba(200,132,30,.3),inset 0 1px 0 rgba(255,220,100,.2);transition:all .2s;}
+.start-btn:hover{background:linear-gradient(180deg,#aa7520,#7a4e0a);transform:translateY(-1px);box-shadow:0 4px 30px rgba(200,132,30,.5);}
+#top-bar{position:fixed;top:0;left:0;right:0;height:52px;background:linear-gradient(180deg,#1a1410,#110e0a);border-bottom:2px solid #5a3e1b;display:none;align-items:center;padding:0 16px;gap:12px;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,.6);}
+.empire-name{font-size:14px;font-weight:700;color:#f0d080;letter-spacing:3px;text-transform:uppercase;}
+.rpill{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:5px 12px;}
+.rpill .i{font-size:14px;} .rpill .v{color:#f0d080;font-weight:700;font-size:13px;} .rpill .l{color:#666;font-size:10px;font-family:sans-serif;letter-spacing:1px;}
+.spacer{flex:1;}
+.turn-btn{background:linear-gradient(180deg,#7a4e10,#4a2e05);border:1px solid #c8841e;border-radius:4px;color:#f5e0a0;font-family:'Cinzel',serif;font-size:12px;padding:7px 18px;cursor:pointer;letter-spacing:2px;transition:all .15s;}
+.turn-btn:hover{background:linear-gradient(180deg,#9a6218,#6a4208);}
+#turn-info{font-size:11px;color:#666;font-family:sans-serif;}
+#bot-panel{position:fixed;bottom:0;left:0;right:0;height:110px;background:linear-gradient(0deg,#0d0b08,#110e0a);border-top:2px solid #3a2a12;display:none;align-items:center;padding:0 20px;gap:16px;z-index:100;}
+#unit-name{font-size:15px;font-weight:700;color:#f0d080;letter-spacing:2px;margin-bottom:4px;}
+#unit-desc{font-size:11px;color:#888;font-family:sans-serif;line-height:1.5;}
+#action-btns{display:flex;gap:10px;}
+.abtn{background:linear-gradient(180deg,#2a3520,#1a2212);border:1px solid #4a6030;border-radius:4px;color:#a0d060;font-family:'Cinzel',serif;font-size:11px;padding:10px 18px;cursor:pointer;letter-spacing:1px;transition:all .15s;white-space:nowrap;}
+.abtn:hover{background:linear-gradient(180deg,#3a4530,#2a3220);border-color:#6a8050;}
+#status-msg{position:fixed;top:64px;left:50%;transform:translateX(-50%);background:rgba(10,8,5,.92);border:1px solid #8a6030;border-radius:4px;padding:7px 18px;font-size:13px;color:#f0d080;letter-spacing:1px;z-index:150;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;}
+</style>
+</head>
+<body>
+<div id="pixi-container"></div>
+<div id="menu-overlay">
+  <div>
+    <div class="menu-title">LifeOS<br>Empire</div>
+    <div class="menu-div"></div>
+    <div class="menu-sub">PixiJS Isometric</div>
+    <div class="menu-tag">WebGL · GPU Accelerated</div>
+  </div>
+  <button class="start-btn" onclick="startGame()">Begin</button>
+</div>
+<div id="top-bar">
+  <span class="empire-name">⚔ Your Empire</span>
+  <div class="rpill"><span class="i">🏙</span><span class="v" id="res-cities">0</span><span class="l">CITIES</span></div>
+  <div class="rpill"><span class="i">⚔</span><span class="v" id="res-units">1</span><span class="l">UNITS</span></div>
+  <div class="spacer"></div>
+  <span id="turn-info">Turn 1</span>
+  <button class="turn-btn" onclick="endTurn()">End Turn ▶</button>
+</div>
+<div id="bot-panel">
+  <div style="flex:1"><div id="unit-name">Select a unit</div><div id="unit-desc">Click your settler to begin.</div></div>
+  <div id="action-btns"></div>
+</div>
+<div id="status-msg"></div>
+
+<script>
+const TILE_W=104, TILE_H=60, DEPTH=24, COLS=18, ROWS=11, TOP_H=52, BOT_H=110;
+
+const TERRAIN={
+  ocean:    {label:'Ocean',    passable:false,top:0x1e4a70,side:0x0f2a45,sideB:0x0a1e35,topS:'#1e4a70',sideS:'#0f2a45'},
+  coast:    {label:'Coast',    passable:false,top:0x2a6090,side:0x1a4070,sideB:0x102850,topS:'#2a6090',sideS:'#1a4070'},
+  plains:   {label:'Plains',   passable:true, top:0x7ab050,side:0x4a7028,sideB:0x2a4a18,topS:'#7ab050',sideS:'#4a7028'},
+  grassland:{label:'Grassland',passable:true, top:0x5a9040,side:0x386020,sideB:0x204010,topS:'#5a9040',sideS:'#386020'},
+  forest:   {label:'Forest',   passable:true, top:0x2a6028,side:0x183818,sideB:0x0e2810,topS:'#2a6028',sideS:'#183818'},
+  hill:     {label:'Hills',    passable:true, top:0x9a8a58,side:0x6a5a30,sideB:0x4a3a18,topS:'#9a8a58',sideS:'#6a5a30'},
+  mountain: {label:'Mountain', passable:false,top:0xa8a0a0,side:0x706868,sideB:0x504848,topS:'#a8a0a0',sideS:'#706868'},
+  desert:   {label:'Desert',   passable:true, top:0xd0b050,side:0x9a7828,sideB:0x6a5018,topS:'#d0b050',sideS:'#9a7828'},
+  tundra:   {label:'Tundra',   passable:true, top:0x90a0a0,side:0x607070,sideB:0x405050,topS:'#90a0a0',sideS:'#607070'},
+  river:    {label:'River',    passable:true, top:0x5a9848,side:0x386220,sideB:0x204010,topS:'#5a9848',sideS:'#386220'},
+  snow:     {label:'Snow',     passable:false,top:0xe0eef4,side:0xa8c8d4,sideB:0x88a8b8,topS:'#e0eef4',sideS:'#a8c8d4'},
+};
+
+const MAP_DATA=[
+  ['ocean','ocean','ocean','coast','coast','plains','plains','forest','forest','hill','hill','mountain','mountain','tundra','tundra','ocean','ocean','ocean'],
+  ['ocean','ocean','coast','coast','plains','plains','grassland','forest','forest','forest','hill','mountain','tundra','tundra','snow','snow','ocean','ocean'],
+  ['ocean','coast','coast','plains','plains','grassland','grassland','river','plains','forest','forest','hill','hill','tundra','snow','snow','tundra','ocean'],
+  ['ocean','coast','plains','plains','grassland','grassland','river','river','plains','plains','forest','forest','hill','hill','tundra','tundra','ocean','ocean'],
+  ['coast','plains','plains','grassland','grassland','plains','plains','river','plains','plains','plains','forest','forest','desert','desert','tundra','ocean','ocean'],
+  ['coast','plains','grassland','grassland','plains','plains','plains','plains','hill','hill','plains','plains','desert','desert','desert','desert','coast','ocean'],
+  ['coast','plains','plains','grassland','plains','plains','hill','hill','hill','mountain','mountain','desert','desert','desert','hill','coast','coast','ocean'],
+  ['ocean','coast','plains','plains','forest','forest','forest','hill','mountain','mountain','desert','desert','hill','hill','coast','coast','ocean','ocean'],
+  ['ocean','coast','coast','plains','plains','forest','forest','forest','hill','hill','desert','desert','coast','coast','ocean','ocean','ocean','ocean'],
+  ['ocean','ocean','coast','coast','plains','plains','forest','forest','grassland','grassland','coast','coast','ocean','ocean','ocean','ocean','ocean','ocean'],
+  ['ocean','ocean','ocean','coast','coast','plains','plains','grassland','coast','coast','ocean','ocean','ocean','ocean','ocean','ocean','ocean','ocean'],
+];
+
+function isoPos(col,row){
+  const fx=col+(row%2)*0.5, fy=row*0.75;
+  return{x:(fx-fy*0.5)*TILE_W*0.75, y:(fx*0.5+fy)*TILE_H*0.6};
+}
+function hexDist(c1,r1,c2,r2){const t=(c,r)=>{const x=c-(r-(r&1))/2,z=r;return{x,z,y:-x-z};};const a=t(c1,r1),b=t(c2,r2);return Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y),Math.abs(a.z-b.z));}
+function getNeighbors(col,row){const d=row%2===0?[[-1,-1],[0,-1],[-1,0],[1,0],[-1,1],[0,1]]:[[0,-1],[1,-1],[-1,0],[1,0],[0,1],[1,1]];return d.map(([dc,dr])=>({col:col+dc,row:row+dr})).filter(n=>n.col>=0&&n.col<COLS&&n.row>=0&&n.row<ROWS);}
+function getMovable(unit,r=2){const res=[];for(let row=0;row<ROWS;row++)for(let col=0;col<COLS;col++){if(col===unit.col&&row===unit.row)continue;if(hexDist(unit.col,unit.row,col,row)<=r&&TERRAIN[MAP_DATA[row][col]].passable&&!GS.units.some(u=>u.col===col&&u.row===row))res.push({col,row});}return res;}
+function seededRng(s){let n=s;return()=>{n=(n*1664525+1013904223)&0xffffffff;return(n>>>0)/0xffffffff;};}
+function lightenHex(hex,a){const n=parseInt(hex.slice(1),16);return`rgb(${Math.min(255,(n>>16)+a)},${Math.min(255,((n>>8)&255)+a)},${Math.min(255,(n&255)+a)})`;}
+
+const GS={turn:1,cities:[],units:[],selectedUnit:null,moveHighlights:[],nextCityId:1,nextUnitId:1};
+const CITY_NAMES=['Aurum','Veridian','Solmere','Caelthon','Rivenmoor','Dunhallow','Ironspire','Thornwall','Eastmarch','Goldenveil'];
+
+// ── Generate tile textures on offscreen canvas, convert to PIXI texture ──
+function makeTileTexture(app,type) {
+  const t=TERRAIN[type]||{top:0xa09080,side:0x706050,sideB:0x504038,topS:'#a09080',sideS:'#706050'};
+  const oc=document.createElement('canvas'); oc.width=TILE_W; oc.height=TILE_H+DEPTH+50;
+  const c=oc.getContext('2d');
+  const cx=TILE_W/2, cy=TILE_H/2+8;
+
+  // South depth face
+  c.beginPath(); c.moveTo(cx,cy+TILE_H/2); c.lineTo(cx+TILE_W/2,cy); c.lineTo(cx+TILE_W/2,cy+DEPTH); c.lineTo(cx,cy+TILE_H/2+DEPTH); c.closePath();
+  const sg=c.createLinearGradient(cx,cy,cx,cy+DEPTH+TILE_H/2); sg.addColorStop(0,t.sideS); sg.addColorStop(1,'#000'); c.fillStyle=sg; c.fill();
+  c.strokeStyle='rgba(0,0,0,0.35)'; c.lineWidth=1; c.stroke();
+
+  // West depth face
+  c.beginPath(); c.moveTo(cx,cy+TILE_H/2); c.lineTo(cx-TILE_W/2,cy); c.lineTo(cx-TILE_W/2,cy+DEPTH); c.lineTo(cx,cy+TILE_H/2+DEPTH); c.closePath();
+  const wg=c.createLinearGradient(cx,cy,cx,cy+DEPTH+TILE_H/2); wg.addColorStop(0,lightenHex(t.sideS,12)); wg.addColorStop(1,'#000'); c.fillStyle=wg; c.fill();
+  c.strokeStyle='rgba(0,0,0,0.2)'; c.lineWidth=1; c.stroke();
+
+  // Top face
+  c.beginPath(); c.moveTo(cx,cy-TILE_H/2); c.lineTo(cx+TILE_W/2,cy); c.lineTo(cx,cy+TILE_H/2); c.lineTo(cx-TILE_W/2,cy); c.closePath();
+  const tg=c.createRadialGradient(cx-TILE_W*.15,cy-TILE_H*.15,0,cx,cy,TILE_W*.6);
+  tg.addColorStop(0,lightenHex(t.topS,30)); tg.addColorStop(0.6,t.topS); tg.addColorStop(1,lightenHex(t.topS,-20));
+  c.fillStyle=tg; c.fill();
+
+  // Highlight edges
+  c.beginPath(); c.moveTo(cx,cy-TILE_H/2); c.lineTo(cx+TILE_W/2,cy); c.strokeStyle='rgba(255,255,255,0.2)'; c.lineWidth=1.5; c.stroke();
+  c.beginPath(); c.moveTo(cx,cy-TILE_H/2); c.lineTo(cx-TILE_W/2,cy); c.strokeStyle='rgba(255,255,255,0.08)'; c.lineWidth=1; c.stroke();
+
+  // Terrain features (drawn in top-face clip)
+  c.save();
+  c.beginPath(); c.moveTo(cx,cy-TILE_H/2); c.lineTo(cx+TILE_W/2,cy); c.lineTo(cx,cy+TILE_H/2); c.lineTo(cx-TILE_W/2,cy); c.closePath(); c.clip();
+  drawFeatures(c,cx,cy,type);
+  c.restore();
+
+  // Top outline
+  c.beginPath(); c.moveTo(cx,cy-TILE_H/2); c.lineTo(cx+TILE_W/2,cy); c.lineTo(cx,cy+TILE_H/2); c.lineTo(cx-TILE_W/2,cy); c.closePath();
+  c.strokeStyle='rgba(0,0,0,0.3)'; c.lineWidth=1; c.stroke();
+
+  return PIXI.Texture.from(oc);
+}
+
+function drawFeatures(c,cx,cy,type){
+  const rng=seededRng(type.charCodeAt(0)*7+(type.charCodeAt(1)||0)*13);
+  if(type==='forest'){
+    for(let i=0;i<4;i++){
+      const tx=cx+(rng()-.5)*TILE_W*.5,ty=cy+(rng()-.5)*TILE_H*.35;
+      const h=14+rng()*8,w=9+rng()*4;
+      c.fillStyle='rgba(0,0,0,0.2)';c.beginPath();c.ellipse(tx+2,ty+3,w*.5,3,0,0,Math.PI*2);c.fill();
+      c.fillStyle='#5a3a20';c.fillRect(tx-1.5,ty,3,h*.35);
+      c.fillStyle='#1a4818';c.beginPath();c.moveTo(tx,ty-h*.55);c.lineTo(tx-w*.5,ty);c.lineTo(tx+w*.5,ty);c.closePath();c.fill();
+      c.fillStyle='#226022';c.beginPath();c.moveTo(tx,ty-h*.85);c.lineTo(tx-w*.35,ty-h*.18);c.lineTo(tx+w*.35,ty-h*.18);c.closePath();c.fill();
+      c.fillStyle='#2e7030';c.beginPath();c.moveTo(tx,ty-h);c.lineTo(tx-w*.2,ty-h*.52);c.lineTo(tx+w*.2,ty-h*.52);c.closePath();c.fill();
+    }
+  } else if(type==='mountain'){
+    for(let i=0;i<2;i++){
+      const ox=(i-.5)*22+(rng()-.5)*6,oy=(rng()-.5)*6;
+      const h=26+rng()*10,w=20+rng()*6;
+      c.fillStyle='rgba(0,0,0,0.22)';c.beginPath();c.moveTo(cx+ox,cy+oy-h);c.lineTo(cx+ox-w*.5,cy+oy+6);c.lineTo(cx+ox+w*.5,cy+oy+6);c.closePath();c.fill();
+      c.fillStyle='#787070';c.beginPath();c.moveTo(cx+ox,cy+oy-h);c.lineTo(cx+ox-w*.5,cy+oy+5);c.lineTo(cx+ox+w*.5,cy+oy+5);c.closePath();c.fill();
+      c.fillStyle='rgba(0,0,0,0.18)';c.beginPath();c.moveTo(cx+ox,cy+oy-h);c.lineTo(cx+ox,cy+oy+5);c.lineTo(cx+ox+w*.5,cy+oy+5);c.closePath();c.fill();
+      c.fillStyle='#e2ecf2';c.beginPath();c.moveTo(cx+ox,cy+oy-h);c.lineTo(cx+ox-w*.2,cy+oy-h+h*.32);c.lineTo(cx+ox+w*.2,cy+oy-h+h*.32);c.closePath();c.fill();
+    }
+  } else if(type==='hill'){
+    for(let i=0;i<3;i++){const ox=(i-1)*14+(rng()-.5)*6,oy=4+rng()*4;c.fillStyle='#b09a68';c.beginPath();c.ellipse(cx+ox,cy+oy,14+rng()*4,8+rng()*3,0,Math.PI,0);c.fill();c.fillStyle='#887848';c.beginPath();c.ellipse(cx+ox,cy+oy,11+rng()*3,4+rng()*2,0,Math.PI,0);c.fill();}
+  } else if(type==='ocean'||type==='coast'){
+    c.strokeStyle='rgba(120,200,255,0.22)';c.lineWidth=1.5;
+    for(let i=0;i<3;i++){c.beginPath();c.moveTo(cx-TILE_W*.45,cy-6+i*8);c.bezierCurveTo(cx-TILE_W*.15,cy-10+i*8,cx+TILE_W*.15,cy-2+i*8,cx+TILE_W*.45,cy-6+i*8);c.stroke();}
+  } else if(type==='river'){
+    c.strokeStyle='rgba(60,130,220,0.55)';c.lineWidth=7;c.lineCap='round';
+    c.beginPath();c.moveTo(cx-TILE_W*.5,cy-2);c.bezierCurveTo(cx-TILE_W*.15,cy-10,cx+TILE_W*.15,cy+10,cx+TILE_W*.5,cy+2);c.stroke();
+    c.strokeStyle='rgba(150,210,255,0.35)';c.lineWidth=3;c.stroke();
+  } else if(type==='desert'){
+    c.fillStyle='rgba(160,110,30,0.3)';
+    for(let i=0;i<8;i++){const a=rng()*Math.PI*2,d=rng()*TILE_W*.35;c.beginPath();c.ellipse(cx+Math.cos(a)*d*.7,cy+Math.sin(a)*d*.35,3+rng()*2,1.5+rng(),rng()*Math.PI,0,Math.PI*2);c.fill();}
+  } else if(type==='snow'){
+    c.fillStyle='rgba(255,255,255,0.45)';
+    for(let i=0;i<5;i++){const a=rng()*Math.PI*2,d=rng()*TILE_W*.3;c.beginPath();c.arc(cx+Math.cos(a)*d*.7,cy+Math.sin(a)*d*.35,3+rng()*4,0,Math.PI*2);c.fill();}
+  } else if(type==='tundra'){
+    c.fillStyle='rgba(200,215,215,0.3)';
+    for(let i=0;i<5;i++){const a=rng()*Math.PI*2,d=rng()*TILE_W*.35;c.beginPath();c.arc(cx+Math.cos(a)*d*.7,cy+Math.sin(a)*d*.35,2+rng()*3,0,Math.PI*2);c.fill();}
+  } else {
+    c.strokeStyle='rgba(50,100,20,0.4)';c.lineWidth=1;
+    for(let i=0;i<7;i++){const bx=cx+(rng()-.5)*TILE_W*.5,by=cy+(rng()-.5)*TILE_H*.3,h=4+rng()*4;c.beginPath();c.moveTo(bx,by);c.quadraticCurveTo(bx+(rng()-.5)*5,by-h*.6,bx+(rng()-.5)*3,by-h);c.stroke();}
+  }
+}
+
+function makeSettlerTexture(sel){
+  const oc=document.createElement('canvas');oc.width=60;oc.height=78;
+  const c=oc.getContext('2d'),cx=30,cy=66;
+  c.fillStyle='rgba(0,0,0,0.28)';c.beginPath();c.ellipse(cx+2,cy+2,15,5,0,0,Math.PI*2);c.fill();
+  c.fillStyle='#4a3a70';c.fillRect(cx-6,cy-16,5,16);c.fillRect(cx+2,cy-16,5,16);
+  c.fillStyle='#3a2a18';c.fillRect(cx-7,cy-5,7,6);c.fillRect(cx+1,cy-5,7,6);
+  c.fillStyle=sel?'#a0c0f0':'#6868b0';
+  c.beginPath();c.moveTo(cx,cy-40);c.bezierCurveTo(cx-12,cy-32,cx-16,cy-20,cx-10,cy-6);c.lineTo(cx+10,cy-6);c.bezierCurveTo(cx+16,cy-20,cx+12,cy-32,cx,cy-40);c.fill();
+  c.fillStyle='rgba(0,0,0,0.18)';c.beginPath();c.moveTo(cx,cy-40);c.bezierCurveTo(cx+3,cy-32,cx+8,cy-20,cx+5,cy-6);c.lineTo(cx+10,cy-6);c.bezierCurveTo(cx+16,cy-20,cx+12,cy-32,cx,cy-40);c.fill();
+  c.fillStyle='#8a5a20';c.fillRect(cx-9,cy-16,18,4);
+  c.fillStyle='#7a5228';c.fillRect(cx+7,cy-33,10,15);c.fillStyle='#5a3818';c.fillRect(cx+8,cy-32,8,4);
+  c.fillStyle='#d4a878';c.beginPath();c.arc(cx,cy-49,9,0,Math.PI*2);c.fill();
+  c.fillStyle=sel?'#80a8d8':'#4a4a80';
+  c.beginPath();c.arc(cx,cy-50,9,Math.PI,0);c.lineTo(cx+12,cy-41);c.lineTo(cx-12,cy-41);c.closePath();c.fill();
+  c.fillStyle='#2a1808';c.beginPath();c.arc(cx-3,cy-49,1.5,0,Math.PI*2);c.fill();c.beginPath();c.arc(cx+3,cy-49,1.5,0,Math.PI*2);c.fill();
+  c.strokeStyle='#8a6030';c.lineWidth=2.5;c.lineCap='round';c.beginPath();c.moveTo(cx-14,cy);c.lineTo(cx-12,cy-58);c.stroke();
+  c.fillStyle='#d0a840';c.beginPath();c.arc(cx-12,cy-59,3.5,0,Math.PI*2);c.fill();
+  return PIXI.Texture.from(oc);
+}
+
+function makeCityTexture(){
+  const oc=document.createElement('canvas');oc.width=TILE_W;oc.height=TILE_H+DEPTH+100;
+  const c=oc.getContext('2d'),cx=TILE_W/2,cy=TILE_H/2+8;
+  const t={topS:'#a09080',sideS:'#706050'};
+  // south face
+  c.beginPath();c.moveTo(cx,cy+TILE_H/2);c.lineTo(cx+TILE_W/2,cy);c.lineTo(cx+TILE_W/2,cy+DEPTH);c.lineTo(cx,cy+TILE_H/2+DEPTH);c.closePath();
+  c.fillStyle=t.sideS;c.fill();c.strokeStyle='rgba(0,0,0,0.35)';c.lineWidth=1;c.stroke();
+  // west face
+  c.beginPath();c.moveTo(cx,cy+TILE_H/2);c.lineTo(cx-TILE_W/2,cy);c.lineTo(cx-TILE_W/2,cy+DEPTH);c.lineTo(cx,cy+TILE_H/2+DEPTH);c.closePath();
+  c.fillStyle=lightenHex(t.sideS,12);c.fill();c.strokeStyle='rgba(0,0,0,0.2)';c.lineWidth=1;c.stroke();
+  // top
+  c.beginPath();c.moveTo(cx,cy-TILE_H/2);c.lineTo(cx+TILE_W/2,cy);c.lineTo(cx,cy+TILE_H/2);c.lineTo(cx-TILE_W/2,cy);c.closePath();
+  c.fillStyle='#b0a090';c.fill();
+  c.beginPath();c.moveTo(cx,cy-TILE_H/2);c.lineTo(cx+TILE_W/2,cy);c.strokeStyle='rgba(255,255,255,0.2)';c.lineWidth=1.5;c.stroke();
+
+  const by=cy-TILE_H/2;
+  // Buildings using isoBox helper
+  function isoBox(bx,by2,w,h,depth,tc,src,slc){
+    c.fillStyle=src;c.beginPath();c.moveTo(bx+w/2,by2);c.lineTo(bx+w/2,by2+depth);c.lineTo(bx,by2+depth+h/4);c.lineTo(bx,by2+h/4);c.closePath();c.fill();c.strokeStyle='rgba(0,0,0,0.2)';c.lineWidth=0.5;c.stroke();
+    c.fillStyle=slc;c.beginPath();c.moveTo(bx-w/2,by2);c.lineTo(bx-w/2,by2+depth);c.lineTo(bx,by2+depth+h/4);c.lineTo(bx,by2+h/4);c.closePath();c.fill();c.stroke();
+    const tg2=c.createLinearGradient(bx,by2-h,bx,by2);tg2.addColorStop(0,lightenHex(tc,20));tg2.addColorStop(1,tc);
+    c.fillStyle=tg2;c.beginPath();c.moveTo(bx,by2-h);c.lineTo(bx+w/2,by2-h+h/4);c.lineTo(bx,by2+h/4);c.lineTo(bx-w/2,by2-h+h/4);c.closePath();c.fill();
+    if(h>16){c.fillStyle='rgba(255,220,80,0.7)';c.fillRect(bx-3,by2-h+h/4+4,4,5);c.fillRect(bx+1,by2-h+h/4+4,4,5);}
+  }
+  isoBox(cx-8,by-2,16,22,28,'#c8a870','#8a6840','#6a5030');
+  isoBox(cx+13,by+4,12,16,24,'#b89860','#7a5830','#5a4020');
+  isoBox(cx-18,by+5,10,12,20,'#b08858','#6a4828','#4a3018');
+  isoBox(cx-2,by-8,10,30,34,'#d0b078','#906840','#604828');
+  c.fillStyle='#e8c888';c.beginPath();c.moveTo(cx+3,by-8-30-16);c.lineTo(cx-3,by-8-30);c.lineTo(cx+9,by-8-30);c.closePath();c.fill();
+  c.fillStyle='#3060c0';c.beginPath();c.moveTo(cx+3,by-8-30-16);c.lineTo(cx+14,by-8-30-12);c.lineTo(cx+3,by-8-30-6);c.closePath();c.fill();
+  c.strokeStyle='#907050';c.lineWidth=4;c.beginPath();c.arc(cx,by+8,30,Math.PI,0);c.stroke();
+  return PIXI.Texture.from(oc);
+}
+
+// ══════ PIXI APP ══════
+let pixiApp=null,worldContainer=null,tileSprites={},hlSprites={},unitSprites={};
+let _t=0,_drag=false,_lastPtr={x:0,y:0};
+const textures={};
+
+function startGame(){
+  document.getElementById('menu-overlay').style.display='none';
+  document.getElementById('top-bar').style.display='flex';
+  document.getElementById('bot-panel').style.display='flex';
+
+  pixiApp=new PIXI.Application({
+    width:window.innerWidth,
+    height:window.innerHeight-TOP_H-BOT_H,
+    backgroundColor:0x0d1220,
+    antialias:true,
+    resolution:window.devicePixelRatio||1,
+    autoDensity:true,
+    powerPreference:'high-performance',
+  });
+  const cv=pixiApp.view;
+  cv.style.position='fixed';cv.style.top=TOP_H+'px';cv.style.left='0';
+  document.getElementById('pixi-container').appendChild(cv);
+
+  // Build textures
+  for(const type of Object.keys(TERRAIN)) textures[type]=makeTileTexture(pixiApp,type);
+  textures['city']=makeCityTexture();
+  textures['settler_normal']=makeSettlerTexture(false);
+  textures['settler_selected']=makeSettlerTexture(true);
+  // Highlight texture
+  {const oc=document.createElement('canvas');oc.width=TILE_W;oc.height=TILE_H+DEPTH+50;
+   const c=oc.getContext('2d'),cx=TILE_W/2,cy=TILE_H/2+8;
+   c.beginPath();c.moveTo(cx,cy-TILE_H/2);c.lineTo(cx+TILE_W/2,cy);c.lineTo(cx,cy+TILE_H/2);c.lineTo(cx-TILE_W/2,cy);c.closePath();
+   c.fillStyle='rgba(60,220,60,0.22)';c.fill();c.strokeStyle='rgba(80,255,80,0.85)';c.lineWidth=2.5;c.stroke();
+   textures['highlight']=PIXI.Texture.from(oc);}
+
+  worldContainer=new PIXI.Container();
+  pixiApp.stage.addChild(worldContainer);
+
+  const terrainCt=new PIXI.Container();
+  const hlCt=new PIXI.Container();
+  const cityCt=new PIXI.Container();
+  const unitCt=new PIXI.Container();
+  worldContainer.addChild(terrainCt,hlCt,cityCt,unitCt);
+
+  // Terrain tiles — back to front
+  for(let r=0;r<ROWS;r++) for(let c2=0;c2<COLS;c2++){
+    const {x,y}=isoPos(c2,r);
+    const sp=new PIXI.Sprite(textures[MAP_DATA[r][c2]]);
+    sp.anchor.set(0.5,0.5); sp.x=x; sp.y=y;
+    terrainCt.addChild(sp); tileSprites[`${c2}_${r}`]=sp;
+    const hl=new PIXI.Sprite(textures['highlight']);
+    hl.anchor.set(0.5,0.5); hl.x=x; hl.y=y; hl.alpha=0;
+    hlCt.addChild(hl); hlSprites[`${c2}_${r}`]=hl;
+  }
+
+  // Spawn settler
+  GS.units.push({id:GS.nextUnitId++,type:'settler',col:6,row:5,movesLeft:2});
+  spawnUnitSprite(GS.units[0],unitCt);
+
+  // Center camera
+  const {x:sx,y:sy}=isoPos(6,5);
+  worldContainer.x=pixiApp.screen.width/2-sx;
+  worldContainer.y=pixiApp.screen.height/2-sy;
+
+  // Drag
+  pixiApp.stage.interactive=true;
+  pixiApp.stage.hitArea=new PIXI.Rectangle(0,0,pixiApp.screen.width,pixiApp.screen.height);
+  pixiApp.stage.on('pointerdown',e=>{_drag=false;_lastPtr={x:e.clientX,y:e.clientY};});
+  pixiApp.stage.on('pointermove',e=>{
+    if(e.buttons){
+      const dx=e.clientX-_lastPtr.x,dy=e.clientY-_lastPtr.y;
+      if(Math.abs(dx)>2||Math.abs(dy)>2){_drag=true;worldContainer.x+=dx;worldContainer.y+=dy;}
+      _lastPtr={x:e.clientX,y:e.clientY};
+    }
+  });
+  pixiApp.stage.on('pointerup',e=>{if(!_drag)handleClick(e,unitCt,cityCt);});
+  cv.addEventListener('wheel',e=>{
+    e.preventDefault();
+    const factor=1-e.deltaY*0.001;
+    const newS=Math.max(0.35,Math.min(2.5,worldContainer.scale.x*factor));
+    const mx=e.clientX-worldContainer.x, my=e.clientY-TOP_H-worldContainer.y;
+    worldContainer.x-=mx*(newS/worldContainer.scale.x-1);
+    worldContainer.y-=my*(newS/worldContainer.scale.y-1);
+    worldContainer.scale.set(newS);
+  },{passive:false});
+
+  // Vignette overlay
+  const vig=new PIXI.Graphics();
+  const vg=new PIXI.FillGradient(pixiApp.screen.width/2,pixiApp.screen.height/2,0,pixiApp.screen.width/2,pixiApp.screen.height/2,pixiApp.screen.height*.7);
+  // PixiJS v7 doesn't have easy radial gradients in Graphics — use alpha filter on edges
+  pixiApp.stage.filters=[]; // keep clean for now
+
+  // Ticker
+  pixiApp.ticker.add(()=>{
+    _t+=0.025;
+    // Unit bob
+    for(const unit of GS.units){
+      const s=unitSprites[unit.id]; if(!s) continue;
+      const {x,y}=isoPos(unit.col,unit.row);
+      const bob=Math.sin(_t+unit.id*1.3)*2.5;
+      s.sprite.y=y-s.sprite.height+bob;
+      const isSel=GS.selectedUnit&&GS.selectedUnit.id===unit.id;
+      s.sprite.texture=textures[isSel?'settler_selected':'settler_normal'];
+      // Pulse ring (Graphics redraw)
+      if(isSel){
+        if(!s.ring){s.ring=new PIXI.Graphics();unitCt.addChild(s.ring);}
+        s.ring.clear();
+        const pulse=(Math.sin(_t*2)+1)*.5;
+        s.ring.lineStyle(2.5,0xffe060,1);
+        s.ring.drawEllipse(x,y,52,18);
+        s.ring.lineStyle(3,0xffe060,pulse*.4);
+        s.ring.drawEllipse(x,y,52+pulse*16,18+pulse*5);
+      } else if(s.ring){s.ring.clear();}
+    }
+    // Highlights
+    for(let r=0;r<ROWS;r++) for(let c2=0;c2<COLS;c2++){
+      const sp=hlSprites[`${c2}_${r}`]; if(!sp) continue;
+      const isHL=GS.moveHighlights.some(h=>h.col===c2&&h.row===r);
+      if(isHL){const pulse=(Math.sin(_t*1.6+c2*.5+r*.7)+1)*.5;sp.alpha=0.45+pulse*.45;}
+      else sp.alpha=0;
+    }
+    // Water shimmer
+    const wa=0.88+Math.sin(_t*.7)*.06;
+    for(let r=0;r<ROWS;r++) for(let c2=0;c2<COLS;c2++){
+      const type=MAP_DATA[r][c2];
+      if(type==='ocean'||type==='coast'||type==='river'){
+        const sp=tileSprites[`${c2}_${r}`];
+        if(sp) sp.alpha=wa+Math.sin(_t*.4+c2*.3+r*.2)*.04;
+      }
+    }
+    // City flag waver (tint animation)
+    for(const city of GS.cities){
+      const cs=unitSprites['city_'+city.id]; if(!cs) continue;
+      // subtle scale pulse for city glow
+      const gp=1+Math.sin(_t*.8+city.id*.5)*.012;
+      cs.sprite.scale.set(gp);
+    }
+  });
+
+  window.addEventListener('resize',()=>{pixiApp.renderer.resize(window.innerWidth,window.innerHeight-TOP_H-BOT_H);});
+  updateHUD(); showStatus('Your empire awaits. Select your settler to begin.',4000);
+}
+
+function spawnUnitSprite(unit,unitCt){
+  const {x,y}=isoPos(unit.col,unit.row);
+  const sh=new PIXI.Graphics(); sh.beginFill(0x000000,0.28); sh.drawEllipse(x+3,y+6,18,7); sh.endFill();
+  const sp=new PIXI.Sprite(textures['settler_normal']); sp.anchor.set(0.5,1); sp.x=x; sp.y=y;
+  unitCt.addChild(sh,sp);
+  unitSprites[unit.id]={sprite:sp,shadow:sh};
+}
+
+function handleClick(e,unitCt,cityCt){
+  const wx=e.clientX-worldContainer.x, wy=e.clientY-TOP_H-worldContainer.y;
+  const wsx=wx/worldContainer.scale.x, wsy=wy/worldContainer.scale.y;
+  let best=null,bestD=Infinity;
+  for(let r=0;r<ROWS;r++) for(let c2=0;c2<COLS;c2++){
+    const p=isoPos(c2,r);
+    const d=Math.abs(wsx-p.x)/(TILE_W*.5)+Math.abs(wsy-p.y)/(TILE_H*.5);
+    if(d<bestD){bestD=d;best={col:c2,row:r};}
+  }
+  if(!best||bestD>2.5) return;
+  const {col,row}=best;
+  const clickedUnit=GS.units.find(u=>u.col===col&&u.row===row);
+  const isHL=GS.moveHighlights.some(h=>h.col===col&&h.row===row);
+  if(isHL&&GS.selectedUnit){
+    const unit=GS.selectedUnit;
+    const {x,y}=isoPos(col,row);
+    const s=unitSprites[unit.id];
+    // Smooth tween via ticker
+    const sx0=s.sprite.x,sy0=s.sprite.y,shx0=s.shadow.x,shy0=s.shadow.y;
+    let prog=0;
+    const moveTicker=pixiApp.ticker.add(()=>{
+      prog=Math.min(1,prog+0.06);
+      const ease=1-Math.pow(1-prog,3);
+      s.sprite.x=sx0+(x-sx0)*ease; s.shadow.x=shx0+(x-shx0)*ease;
+      const arc=Math.sin(prog*Math.PI)*18;
+      s.sprite.y=sy0+(y-sy0)*ease-arc;
+      s.shadow.y=shy0+(y-shy0)*ease;
+      if(prog>=1){pixiApp.ticker.remove(moveTicker);s.sprite.y=y;s.shadow.y=y+6;}
+    });
+    unit.col=col;unit.row=row;unit.movesLeft--;
+    GS.moveHighlights=unit.movesLeft>0?getMovable(unit,unit.movesLeft):[];
+    updateHUD();return;
+  }
+  if(clickedUnit){GS.selectedUnit=clickedUnit;GS.moveHighlights=clickedUnit.movesLeft>0?getMovable(clickedUnit,clickedUnit.movesLeft):[];updateHUD();return;}
+  GS.selectedUnit=null;GS.moveHighlights=[];updateHUD();
+}
+
+function foundCity(){
+  const u=GS.selectedUnit; if(!u) return;
+  const type=MAP_DATA[u.row][u.col];
+  if(!TERRAIN[type].passable){showStatus('Cannot found here!');return;}
+  if(GS.cities.some(c=>hexDist(c.col,c.row,u.col,u.row)<3)){showStatus('Too close!');return;}
+  const name=CITY_NAMES[(GS.nextCityId-1)%CITY_NAMES.length];
+  const territory=getNeighbors(u.col,u.row).filter(n=>TERRAIN[MAP_DATA[n.row][n.col]].passable).map(n=>({col:n.col,row:n.row}));
+  GS.cities.push({id:GS.nextCityId++,col:u.col,row:u.row,name,pop:1,territory});
+
+  // Swap tile to city
+  const sp=tileSprites[`${u.col}_${u.row}`];
+  if(sp){ sp.texture=textures['city']; sp.scale.set(1.2); let t2=0; const sc=pixiApp.ticker.add(()=>{t2+=0.08;sp.scale.set(1.2-t2*.2);if(t2>=1){sp.scale.set(1);pixiApp.ticker.remove(sc);}});}
+
+  // Territory pulse
+  for(const h of territory){const hs=tileSprites[`${h.col}_${h.row}`];if(hs){let p2=0;const pt=pixiApp.ticker.add(()=>{p2+=0.06;hs.alpha=0.7+Math.sin(p2*Math.PI)*.3;if(p2>=1){hs.alpha=1;pixiApp.ticker.remove(pt);}});}}
+
+  // City label
+  const {x,y}=isoPos(u.col,u.row);
+  const lbl=new PIXI.Text(name,{fontFamily:'Cinzel,serif',fontSize:11,fontWeight:'bold',fill:0xf0d080,stroke:0x000000,strokeThickness:3});
+  lbl.anchor.set(0.5,0.5);lbl.x=x;lbl.y=y-TILE_H*.5-60;
+  worldContainer.children[2].addChild(lbl);
+  unitSprites['city_'+GS.cities[GS.cities.length-1].id]={sprite:lbl};
+
+  // Territory rings (Graphics)
+  const tgfx=new PIXI.Graphics();
+  for(const h of territory){
+    const p=isoPos(h.col,h.row);
+    tgfx.lineStyle(2.5,0x50a0ff,0.5);
+    tgfx.drawPolygon([p.x,p.y-TILE_H/2,p.x+TILE_W/2,p.y,p.x,p.y+TILE_H/2,p.x-TILE_W/2,p.y]);
+  }
+  worldContainer.children[2].addChild(tgfx);
+
+  // Remove settler
+  const s=unitSprites[u.id];
+  if(s){let fa=1;const ft=pixiApp.ticker.add(()=>{fa-=0.04;s.sprite.alpha=fa;s.shadow.alpha=fa;if(fa<=0){s.sprite.destroy();s.shadow.destroy();if(s.ring)s.ring.destroy();pixiApp.ticker.remove(ft);}});}
+  GS.units=GS.units.filter(x=>x.id!==u.id);
+  GS.selectedUnit=null;GS.moveHighlights=[];
+  showStatus(`✦ ${name} has been founded!`);updateHUD();
+}
+
+function updateHUD(){
+  const u=GS.selectedUnit;
+  document.getElementById('res-cities').textContent=GS.cities.length;
+  document.getElementById('res-units').textContent=GS.units.length;
+  if(!u){document.getElementById('unit-name').textContent='No unit selected';document.getElementById('unit-desc').textContent='Click a unit to select it.';document.getElementById('action-btns').innerHTML='';return;}
+  const type=MAP_DATA[u.row][u.col];
+  document.getElementById('unit-name').textContent='⚑ Settler';
+  document.getElementById('unit-desc').textContent=`On: ${TERRAIN[type].label} · Moves: ${u.movesLeft}/2`;
+  document.getElementById('action-btns').innerHTML=`<button class="abtn" onclick="foundCity()">🏙 Found City</button><button class="abtn" onclick="GS.selectedUnit=null;GS.moveHighlights=[];updateHUD()">⏭ Skip</button>`;
+}
+function endTurn(){GS.turn++;for(const u of GS.units)u.movesLeft=2;document.getElementById('turn-info').textContent=`Turn ${GS.turn}`;showStatus(`Turn ${GS.turn} begins`);if(GS.turn%5===0)for(const c of GS.cities)c.pop=Math.min(10,c.pop+1);updateHUD();}
+function showStatus(msg,d=2500){const el=document.getElementById('status-msg');el.textContent=msg;el.style.opacity='1';clearTimeout(el._t);el._t=setTimeout(()=>el.style.opacity='0',d);}
+</script>
+</body>
+</html>
