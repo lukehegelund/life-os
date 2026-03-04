@@ -4,320 +4,403 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LifeOS Empire</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Cinzel+Decorative:wght@400;700&display=swap" rel="stylesheet">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
+
   body {
-    background: #0a0a12;
+    background: #04040a;
     color: #e8dfc8;
     font-family: 'Cinzel', 'Georgia', serif;
     overflow: hidden;
     user-select: none;
   }
 
-  #game-canvas {
-    display: block;
-    cursor: grab;
-  }
+  #game-canvas { display: block; cursor: grab; }
   #game-canvas:active { cursor: grabbing; }
 
   /* ── TOP BAR ── */
   #top-bar {
     position: fixed;
     top: 0; left: 0; right: 0;
-    height: 52px;
-    background: linear-gradient(180deg, #1a1410 0%, #110e0a 100%);
-    border-bottom: 2px solid #5a3e1b;
+    height: 56px;
+    background: linear-gradient(180deg, #1c1508 0%, #0f0c06 100%);
+    border-bottom: 1px solid #6a4a18;
     display: flex;
     align-items: center;
     padding: 0 16px;
-    gap: 8px;
+    gap: 6px;
     z-index: 100;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.6);
+    box-shadow: 0 3px 20px rgba(0,0,0,0.8);
   }
 
+  /* Gold divider lines at top and bottom of top bar */
+  #top-bar::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent 0%, #c8841e 20%, #f0d080 50%, #c8841e 80%, transparent 100%);
+  }
+  #top-bar::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent 0%, #6a4218 30%, #c8841e 50%, #6a4218 70%, transparent 100%);
+  }
+
+  .empire-title {
+    display: flex;
+    flex-direction: column;
+    margin-right: 16px;
+    line-height: 1;
+  }
   .empire-name {
-    font-size: 15px;
-    font-weight: bold;
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 13px;
     color: #f0d080;
     letter-spacing: 2px;
-    text-transform: uppercase;
-    margin-right: 20px;
-    text-shadow: 0 0 8px rgba(240,208,128,0.4);
+    text-shadow: 0 0 12px rgba(240,208,128,0.5), 0 1px 2px rgba(0,0,0,0.8);
     white-space: nowrap;
+  }
+  .empire-sub {
+    font-size: 9px;
+    color: #8a6a30;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    font-family: sans-serif;
+    margin-top: 2px;
+  }
+
+  .top-divider {
+    width: 1px;
+    height: 36px;
+    background: linear-gradient(180deg, transparent, #4a3010, transparent);
+    margin: 0 4px;
   }
 
   .resource-pill {
     display: flex;
     align-items: center;
-    gap: 6px;
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.12);
-    border-radius: 4px;
-    padding: 4px 10px;
-    font-size: 12px;
-    color: #ccc;
-    min-width: 80px;
+    gap: 7px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(0,0,0,0.2) 100%);
+    border: 1px solid rgba(120,80,20,0.4);
+    border-radius: 3px;
+    padding: 5px 11px 5px 8px;
+    min-width: 88px;
+    position: relative;
+    overflow: hidden;
   }
-  .resource-pill .icon { font-size: 14px; }
-  .resource-pill .val { color: #f0d080; font-weight: bold; font-size: 13px; }
-  .resource-pill .label { color: #888; font-size: 10px; font-family: sans-serif; }
+  .resource-pill::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(240,208,128,0.15), transparent);
+  }
+  .res-icon { font-size: 15px; flex-shrink: 0; }
+  .res-data { display: flex; flex-direction: column; gap: 1px; }
+  .res-val { color: #f5e090; font-weight: 600; font-size: 14px; font-family: 'Cinzel', serif; line-height: 1; }
+  .res-label { color: #6a5030; font-size: 9px; font-family: sans-serif; letter-spacing: 1px; text-transform: uppercase; }
+  .res-delta { color: #6a8a40; font-size: 9px; font-family: sans-serif; }
 
   .spacer { flex: 1; }
 
+  #turn-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    margin-right: 8px;
+  }
+  #turn-era { font-family: 'Cinzel', serif; font-size: 11px; color: #a08040; letter-spacing: 1px; }
+  #turn-counter { font-size: 10px; color: #6a5030; font-family: sans-serif; }
+
   .turn-btn {
-    background: linear-gradient(180deg, #8b5e1a 0%, #5a3a08 100%);
+    background: linear-gradient(180deg, #9a6a20 0%, #5a3808 100%);
     border: 1px solid #c8841e;
-    border-radius: 4px;
-    color: #f5e0a0;
+    border-radius: 3px;
+    color: #f5e090;
     font-family: 'Cinzel', Georgia, serif;
-    font-size: 13px;
-    padding: 6px 18px;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 8px 20px;
     cursor: pointer;
-    letter-spacing: 1px;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
-    box-shadow: 0 2px 6px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,220,100,0.15);
-    transition: all 0.15s;
+    letter-spacing: 1.5px;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,220,100,0.2);
+    transition: all 0.12s;
+    white-space: nowrap;
+    position: relative;
+    overflow: hidden;
+  }
+  .turn-btn::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,220,120,0.4), transparent);
   }
   .turn-btn:hover {
-    background: linear-gradient(180deg, #aa7520 0%, #7a4e0a 100%);
-    box-shadow: 0 2px 10px rgba(200,132,30,0.3), inset 0 1px 0 rgba(255,220,100,0.2);
+    background: linear-gradient(180deg, #be8428 0%, #7a4e10 100%);
+    box-shadow: 0 2px 14px rgba(200,132,30,0.4), inset 0 1px 0 rgba(255,220,100,0.3);
+    transform: translateY(-1px);
   }
-
-  #turn-counter {
-    font-size: 11px;
-    color: #888;
-    font-family: sans-serif;
-    white-space: nowrap;
-  }
+  .turn-btn:active { transform: translateY(0); }
 
   /* ── RIGHT PANEL ── */
   #right-panel {
     position: fixed;
-    top: 52px; right: 0; bottom: 0;
-    width: 240px;
-    background: linear-gradient(180deg, #110e0a 0%, #0d0b08 100%);
-    border-left: 2px solid #3a2a12;
+    top: 56px; right: 0; bottom: 0;
+    width: 248px;
+    background: linear-gradient(180deg, #0e0c08 0%, #09080500 100%);
+    border-left: 1px solid #3a2810;
     z-index: 90;
     display: flex;
     flex-direction: column;
     overflow: hidden;
   }
+  /* Inner gold highlight edge */
+  #right-panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    width: 1px;
+    background: linear-gradient(180deg, transparent, #5a3810 20%, #5a3810 80%, transparent);
+    pointer-events: none;
+  }
 
   .panel-section {
-    border-bottom: 1px solid #2a1e0e;
+    border-bottom: 1px solid rgba(58,40,16,0.8);
     padding: 12px 14px;
+    position: relative;
   }
-  .panel-section:last-child { border-bottom: none; flex: 1; }
+  .panel-section:last-child { border-bottom: none; flex: 1; min-height: 0; }
 
   .panel-title {
-    font-size: 10px;
-    letter-spacing: 2px;
-    color: #9a7030;
+    font-size: 9px;
+    letter-spacing: 3px;
+    color: #8a6020;
     text-transform: uppercase;
-    margin-bottom: 8px;
+    margin-bottom: 10px;
     font-family: sans-serif;
-  }
-
-  /* Selected tile info */
-  #tile-name {
-    font-size: 14px;
-    color: #f0d080;
-    font-weight: bold;
-    margin-bottom: 4px;
-    min-height: 20px;
-  }
-  #tile-desc {
-    font-size: 11px;
-    color: #a09070;
-    line-height: 1.5;
-    font-family: sans-serif;
-    min-height: 32px;
-  }
-
-  /* Minimap */
-  #minimap-canvas {
-    width: 210px;
-    height: 140px;
-    border: 1px solid #3a2a12;
-    border-radius: 3px;
-    image-rendering: pixelated;
-  }
-
-  /* Rivals list */
-  .rival-row {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-bottom: 8px;
   }
-  .rival-dot {
-    width: 10px; height: 10px;
-    border-radius: 50%;
+  .panel-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, #3a2810, transparent);
+  }
+
+  /* Selected tile */
+  #tile-icon { font-size: 28px; margin-bottom: 4px; }
+  #tile-name { font-size: 13px; color: #f0d080; font-weight: 600; margin-bottom: 4px; min-height: 18px; }
+  #tile-desc { font-size: 10px; color: #8a7050; line-height: 1.6; font-family: sans-serif; min-height: 32px; }
+  #tile-yield { font-size: 10px; color: #6a8040; font-family: sans-serif; margin-top: 6px; }
+
+  /* Minimap */
+  #minimap-canvas {
+    width: 218px; height: 130px;
+    border: 1px solid #2a1e0a;
+    border-radius: 2px;
+    display: block;
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+  }
+
+  /* Rival rows */
+  .rival-row {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin-bottom: 9px;
+    padding: 5px 6px;
+    border-radius: 3px;
+    background: rgba(0,0,0,0.2);
+    border: 1px solid rgba(255,255,255,0.03);
+  }
+  .rival-flag {
+    width: 12px; height: 12px;
+    border-radius: 2px;
     flex-shrink: 0;
+    box-shadow: 0 0 4px currentColor;
   }
-  .rival-info { flex: 1; }
-  .rival-name { font-size: 11px; color: #c8b890; }
-  .rival-stat { font-size: 10px; color: #6a5a40; font-family: sans-serif; }
+  .rival-info { flex: 1; min-width: 0; }
+  .rival-name { font-size: 11px; color: #b8a080; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rival-bar-bg {
+    height: 3px; background: rgba(255,255,255,0.06);
+    border-radius: 2px; margin-top: 4px; overflow: hidden;
+  }
+  .rival-bar { height: 100%; border-radius: 2px; transition: width 0.5s; }
+  .rival-power { font-size: 9px; color: #5a4820; font-family: sans-serif; float: right; }
+
+  /* Event log */
+  #event-log-wrap { flex: 1; overflow-y: auto; padding: 12px 14px; min-height: 0; }
+  #event-log { font-size: 10px; color: #5a4a30; font-family: sans-serif; line-height: 1.8; }
+  #event-log div { border-bottom: 1px solid rgba(255,255,255,0.02); padding-bottom: 2px; }
+  #event-log div:first-child { color: #8a7050; }
 
   /* ── BOTTOM BAR ── */
   #bottom-bar {
     position: fixed;
-    bottom: 0; left: 0; right: 240px;
-    height: 100px;
-    background: linear-gradient(0deg, #110e0a 0%, #0d0b0800 100%);
-    border-top: 1px solid #2a1e0e;
+    bottom: 0; left: 0; right: 248px;
+    height: 64px;
+    background: linear-gradient(0deg, #0e0c08 0%, transparent 100%);
+    border-top: 1px solid #2a1e0a;
     display: flex;
     align-items: center;
-    padding: 0 20px;
-    gap: 10px;
+    padding: 0 18px;
+    gap: 8px;
     z-index: 90;
+  }
+  #bottom-bar::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #4a3010 30%, #4a3010 70%, transparent);
   }
 
   .action-btn {
-    background: linear-gradient(180deg, #1e1a14 0%, #141008 100%);
-    border: 1px solid #3a2a12;
-    border-radius: 4px;
-    color: #c8a860;
+    background: linear-gradient(180deg, #1a1610 0%, #100e08 100%);
+    border: 1px solid #2e2010;
+    border-radius: 3px;
+    color: #8a7040;
     font-size: 11px;
-    padding: 8px 14px;
+    padding: 7px 14px;
     cursor: pointer;
-    font-family: sans-serif;
+    font-family: 'Cinzel', serif;
+    font-weight: 400;
     letter-spacing: 0.5px;
-    transition: all 0.15s;
+    transition: all 0.12s;
     white-space: nowrap;
+    position: relative;
   }
   .action-btn:hover {
-    border-color: #6a4a1e;
-    background: linear-gradient(180deg, #2a2018 0%, #1a140c 100%);
-    color: #f0d080;
+    border-color: #5a3a18;
+    color: #c8a060;
+    background: linear-gradient(180deg, #241e12 0%, #1a1408 100%);
   }
   .action-btn.active {
-    border-color: #c8841e;
+    border-color: #9a6820;
     color: #f0d080;
-    background: linear-gradient(180deg, #2a1e10 0%, #1a1208 100%);
+    background: linear-gradient(180deg, #2a200e 0%, #1a1206 100%);
+    box-shadow: 0 0 8px rgba(200,140,30,0.15), inset 0 1px 0 rgba(255,220,100,0.1);
   }
 
   #status-text {
     flex: 1;
-    font-size: 11px;
-    color: #6a5a40;
+    font-size: 10px;
+    color: #4a3a20;
     font-family: sans-serif;
-    padding-left: 10px;
+    padding-left: 12px;
+    letter-spacing: 0.5px;
   }
 
   /* ── NOTIFICATIONS ── */
   #notif-stack {
     position: fixed;
-    bottom: 110px;
-    left: 20px;
-    width: 280px;
+    bottom: 74px; left: 16px;
+    width: 290px;
     z-index: 200;
     display: flex;
     flex-direction: column;
     gap: 6px;
   }
   .notif {
-    background: linear-gradient(135deg, #1e1a10 0%, #150f08 100%);
-    border: 1px solid #5a3e1b;
+    background: linear-gradient(135deg, #1c180e 0%, #120e07 100%);
+    border: 1px solid #5a3e18;
     border-left: 3px solid #c8841e;
-    border-radius: 4px;
-    padding: 8px 12px;
+    border-radius: 3px;
+    padding: 9px 12px;
     font-size: 11px;
     color: #c8a860;
     font-family: sans-serif;
     animation: slideIn 0.3s ease;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+    box-shadow: 0 2px 14px rgba(0,0,0,0.6);
   }
   @keyframes slideIn {
-    from { opacity: 0; transform: translateX(-20px); }
+    from { opacity: 0; transform: translateX(-16px); }
     to { opacity: 1; transform: translateX(0); }
   }
 
-  /* ── LOADING SCREEN ── */
+  /* ── LOADING ── */
   #loading {
-    position: fixed;
-    inset: 0;
-    background: #0a0a12;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    gap: 20px;
+    position: fixed; inset: 0;
+    background: radial-gradient(ellipse at center, #0e0c08 0%, #04040a 70%);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    z-index: 1000; gap: 16px;
   }
+  #loading .crest { font-size: 56px; margin-bottom: 8px; filter: drop-shadow(0 0 20px rgba(240,208,128,0.4)); }
   #loading h1 {
-    font-size: 36px;
-    color: #f0d080;
-    letter-spacing: 6px;
-    text-shadow: 0 0 30px rgba(240,208,128,0.5);
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 30px; color: #f0d080;
+    letter-spacing: 8px;
+    text-shadow: 0 0 40px rgba(240,208,128,0.4);
     text-transform: uppercase;
   }
-  #loading p {
-    font-size: 13px;
-    color: #6a5a40;
-    letter-spacing: 3px;
-    font-family: sans-serif;
-    text-transform: uppercase;
-  }
+  #loading p { font-size: 11px; color: #5a4820; letter-spacing: 4px; font-family: sans-serif; text-transform: uppercase; }
   .load-bar-wrap {
-    width: 300px;
-    height: 3px;
-    background: #1a1410;
-    border-radius: 2px;
-    overflow: hidden;
+    width: 280px; height: 2px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 1px; overflow: hidden; margin-top: 8px;
   }
   #load-bar {
     height: 100%;
-    background: linear-gradient(90deg, #8b5e1a, #f0d080, #8b5e1a);
+    background: linear-gradient(90deg, #7a4e10, #f0d080, #7a4e10);
     background-size: 200% 100%;
-    border-radius: 2px;
-    animation: shimmer 1.5s infinite;
-    transition: width 0.5s;
+    border-radius: 1px;
+    animation: shimmer 1.8s infinite;
+    transition: width 0.4s;
     width: 0%;
   }
-  @keyframes shimmer {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
-  }
+  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
   /* ── TOOLTIP ── */
   #tooltip {
     position: fixed;
-    background: rgba(15, 11, 6, 0.95);
-    border: 1px solid #5a3e1b;
-    border-radius: 4px;
-    padding: 6px 10px;
+    background: linear-gradient(135deg, #14100a 0%, #0c0906 100%);
+    border: 1px solid #5a3e18;
+    border-radius: 3px;
+    padding: 8px 12px;
     font-size: 11px;
     color: #c8a860;
     font-family: sans-serif;
     pointer-events: none;
     z-index: 300;
     display: none;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.6);
-    max-width: 180px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.7);
+    max-width: 190px;
+    line-height: 1.5;
   }
-  #tooltip .tt-title { color: #f0d080; font-weight: bold; margin-bottom: 3px; }
+  #tooltip .tt-title { color: #f0d080; font-weight: bold; font-size: 12px; margin-bottom: 3px; font-family: 'Cinzel', serif; }
+  #tooltip .tt-owner { font-size: 9px; margin-top: 4px; letter-spacing: 1px; }
 
-  /* Google Fonts link fallback */
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #3a2810; border-radius: 2px; }
 </style>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body>
 
-<!-- Loading Screen -->
+<!-- Loading -->
 <div id="loading">
+  <div class="crest">🏛</div>
   <h1>LifeOS Empire</h1>
   <p>Building the world&hellip;</p>
-  <div class="load-bar-wrap">
-    <div id="load-bar"></div>
-  </div>
+  <div class="load-bar-wrap"><div id="load-bar"></div></div>
 </div>
 
 <!-- Tooltip -->
 <div id="tooltip">
   <div class="tt-title" id="tt-title"></div>
   <div id="tt-body"></div>
+  <div class="tt-owner" id="tt-owner"></div>
 </div>
 
 <!-- Canvas -->
@@ -325,102 +408,119 @@
 
 <!-- Top Bar -->
 <div id="top-bar">
-  <div class="empire-name">🏛 Hegelund Republic</div>
+  <div class="empire-title">
+    <div class="empire-name">🏛 Hegelund Republic</div>
+    <div class="empire-sub">Year 1 · Ancient Era</div>
+  </div>
+  <div class="top-divider"></div>
+
   <div class="resource-pill">
-    <span class="icon">📚</span>
-    <div>
-      <div class="val" id="res-knowledge">0</div>
-      <div class="label">Knowledge</div>
+    <span class="res-icon">📚</span>
+    <div class="res-data">
+      <div class="res-val" id="res-knowledge">0</div>
+      <div class="res-label">Knowledge</div>
     </div>
   </div>
   <div class="resource-pill">
-    <span class="icon">💰</span>
-    <div>
-      <div class="val" id="res-gold">0</div>
-      <div class="label">Gold</div>
+    <span class="res-icon">💰</span>
+    <div class="res-data">
+      <div class="res-val" id="res-gold">0</div>
+      <div class="res-label">Gold</div>
     </div>
   </div>
   <div class="resource-pill">
-    <span class="icon">🌐</span>
-    <div>
-      <div class="val" id="res-influence">0</div>
-      <div class="label">Influence</div>
+    <span class="res-icon">🌐</span>
+    <div class="res-data">
+      <div class="res-val" id="res-influence">0</div>
+      <div class="res-label">Influence</div>
     </div>
   </div>
   <div class="resource-pill">
-    <span class="icon">💪</span>
-    <div>
-      <div class="val" id="res-vitality">0</div>
-      <div class="label">Vitality</div>
+    <span class="res-icon">💪</span>
+    <div class="res-data">
+      <div class="res-val" id="res-vitality">0</div>
+      <div class="res-label">Vitality</div>
     </div>
   </div>
   <div class="resource-pill">
-    <span class="icon">⚡</span>
-    <div>
-      <div class="val" id="res-energy">0</div>
-      <div class="label">Energy</div>
+    <span class="res-icon">⚡</span>
+    <div class="res-data">
+      <div class="res-val" id="res-energy">0</div>
+      <div class="res-label">Energy</div>
     </div>
   </div>
+
   <div class="spacer"></div>
-  <span id="turn-counter">Turn 1 · Spring</span>
-  &nbsp;
+  <div id="turn-info">
+    <div id="turn-era">Ancient Era</div>
+    <div id="turn-counter">Turn 1 · Spring</div>
+  </div>
   <button class="turn-btn" onclick="endTurn()">End Turn ▶</button>
 </div>
 
 <!-- Right Panel -->
 <div id="right-panel">
+  <!-- Selected Tile -->
   <div class="panel-section">
-    <div class="panel-title">Selected Tile</div>
+    <div class="panel-title">Selected</div>
+    <div id="tile-icon" style="font-size:26px; margin-bottom:4px;">—</div>
     <div id="tile-name">—</div>
     <div id="tile-desc">Click a hex to inspect it.</div>
+    <div id="tile-yield"></div>
   </div>
 
+  <!-- Minimap -->
   <div class="panel-section">
-    <div class="panel-title">Overview</div>
-    <canvas id="minimap-canvas" width="210" height="140"></canvas>
+    <div class="panel-title">World Map</div>
+    <canvas id="minimap-canvas" width="218" height="130"></canvas>
   </div>
 
+  <!-- Rivals -->
   <div class="panel-section">
     <div class="panel-title">Rival Empires</div>
     <div id="rivals-list">
       <div class="rival-row">
-        <div class="rival-dot" style="background:#e05050"></div>
+        <div class="rival-flag" style="background:#c04040; box-shadow:0 0 5px #c04040;"></div>
         <div class="rival-info">
           <div class="rival-name">Productivity Bot</div>
-          <div class="rival-stat" id="rival1-stat">Power: —</div>
+          <div class="rival-bar-bg"><div class="rival-bar" id="rbar-0" style="background:#c04040; width:60%;"></div></div>
         </div>
+        <span class="rival-power" id="rival0-pow">120</span>
       </div>
       <div class="rival-row">
-        <div class="rival-dot" style="background:#50b0e0"></div>
+        <div class="rival-flag" style="background:#4090c0; box-shadow:0 0 5px #4090c0;"></div>
         <div class="rival-info">
           <div class="rival-name">Linguist Guild</div>
-          <div class="rival-stat" id="rival2-stat">Power: —</div>
+          <div class="rival-bar-bg"><div class="rival-bar" id="rbar-1" style="background:#4090c0; width:45%;"></div></div>
         </div>
+        <span class="rival-power" id="rival1-pow">90</span>
       </div>
       <div class="rival-row">
-        <div class="rival-dot" style="background:#50e090"></div>
+        <div class="rival-flag" style="background:#40b070; box-shadow:0 0 5px #40b070;"></div>
         <div class="rival-info">
           <div class="rival-name">Wellness Empire</div>
-          <div class="rival-stat" id="rival3-stat">Power: —</div>
+          <div class="rival-bar-bg"><div class="rival-bar" id="rbar-2" style="background:#40b070; width:40%;"></div></div>
         </div>
+        <span class="rival-power" id="rival2-pow">80</span>
       </div>
     </div>
   </div>
 
-  <div class="panel-section" style="flex:1; overflow-y:auto;">
+  <!-- Event Log -->
+  <div class="panel-section" style="flex:1; display:flex; flex-direction:column; min-height:0;">
     <div class="panel-title">Event Log</div>
-    <div id="event-log" style="font-size:10px; color:#6a5a40; font-family:sans-serif; line-height:1.7;"></div>
+    <div id="event-log-wrap"><div id="event-log"></div></div>
   </div>
 </div>
 
 <!-- Bottom Bar -->
 <div id="bottom-bar">
   <button class="action-btn active" id="btn-map" onclick="setMode('map')">🗺 Map</button>
-  <button class="action-btn" id="btn-city" onclick="setMode('city')">🏛 City</button>
-  <button class="action-btn" id="btn-units" onclick="setMode('units')">⚔ Units</button>
+  <button class="action-btn" id="btn-city" onclick="setMode('city')">🏛 Cities</button>
+  <button class="action-btn" id="btn-units" onclick="setMode('units')">⚔ Military</button>
   <button class="action-btn" id="btn-tech" onclick="setMode('tech')">🔬 Research</button>
   <button class="action-btn" id="btn-diplo" onclick="setMode('diplo')">🤝 Diplomacy</button>
-  <div id="status-text">Select a hex to begin. Right-click to move units.</div>
+  <div id="status-text">Select a hex to begin your conquest.</div>
 </div>
 
 <!-- Notifications -->
@@ -428,183 +528,470 @@
 
 <script>
 // ══════════════════════════════════════════════════════════
-// CONSTANTS & CONFIG
+// CONSTANTS
 // ══════════════════════════════════════════════════════════
-const COLS = 13, ROWS = 9;
-const HEX_SIZE = 52; // px, flat-top
-const CANVAS_PADDING = 60;
-const RIGHT_PANEL_W = 240;
-const TOP_BAR_H = 52;
-const BOTTOM_BAR_H = 100;
+const COLS = 16, ROWS = 10;
+const HEX_SIZE = 54;
+const RIGHT_W = 248;
+const TOP_H = 56;
+const BOT_H = 64;
 
-// Hex biome types with visual config
+// ── BIOME CONFIG ──
 const BIOMES = {
-  plains:    { label: 'Plains',        color: '#6b7e3a', dark: '#4a5a28', icon: '🌾', desc: 'Fertile lands — +2 Knowledge per turn.' },
-  forest:    { label: 'Forest',        color: '#2d5a2d', dark: '#1e3e1e', icon: '🌲', desc: 'Dense forest — +1 Vitality, +1 Influence.' },
-  mountain:  { label: 'Mountains',     color: '#7a6a5a', dark: '#5a4e40', icon: '⛰', desc: 'Rugged peaks — rich in minerals. +3 Gold.' },
-  water:     { label: 'Lake / River',  color: '#1e4a6e', dark: '#132e4a', icon: '🌊', desc: 'Water source — boosts Vitality.' },
-  desert:    { label: 'Desert',        color: '#b09050', dark: '#7a6030', icon: '🏜', desc: 'Harsh terrain — low yield, high strategic value.' },
-  tundra:    { label: 'Tundra',        color: '#8899aa', dark: '#5a6a7a', icon: '❄', desc: 'Frozen land — +2 Vitality if settled.' },
-  city:      { label: 'Capital City',  color: '#c0a060', dark: '#8a6a30', icon: '🏛', desc: 'Your capital. Heart of the Hegelund Republic.' },
-  town:      { label: 'Town',          color: '#c0a060', dark: '#7a6030', icon: '🏘', desc: 'A growing settlement.' },
-  enemy_city:{ label: 'Enemy City',    color: '#8a3030', dark: '#5a1e1e', icon: '🏯', desc: 'Rival stronghold. Must be conquered.' },
+  plains:   { label: 'Grasslands',    yield: '+2 📚 +1 ⚡',  desc: 'Fertile rolling hills — ideal for settlement.' },
+  forest:   { label: 'Forest',        yield: '+1 💪 +1 🌐',  desc: 'Ancient woodland — rich in resources.' },
+  mountain: { label: 'Mountains',     yield: '+3 💰 +1 📚',  desc: 'Rugged peaks — mineral wealth awaits.' },
+  water:    { label: 'Water',         yield: '+2 💪',         desc: 'Lakes and rivers — sustains your people.' },
+  desert:   { label: 'Desert',        yield: '+1 💰',         desc: 'Harsh terrain — hidden riches, strategic.' },
+  tundra:   { label: 'Tundra',        yield: '+1 💪',         desc: 'Frozen wastes — +2 Vitality when settled.' },
+  city:     { label: 'Capital City',  yield: '+5 all',        desc: 'Hegelund — the heart of your empire.' },
+  town:     { label: 'Settlement',    yield: '+2 all',        desc: 'A growing town — ripe for development.' },
+  enemy:    { label: 'Enemy Fortress',yield: '⚠ Rival',      desc: 'Rival stronghold. Conquer to expand.' },
 };
 
-// Elevation noise seed
-function noise(x, y, seed = 42) {
-  let n = Math.sin(x * 127.1 + y * 311.7 + seed * 57.3) * 43758.5453;
+// ══════════════════════════════════════════════════════════
+// NOISE HELPERS
+// ══════════════════════════════════════════════════════════
+function hash(x, y, seed) {
+  let n = Math.sin(x * 127.1 + y * 311.7 + seed * 74.9) * 43758.5453;
   return n - Math.floor(n);
+}
+function smoothNoise(x, y, seed) {
+  const ix = Math.floor(x), iy = Math.floor(y);
+  const fx = x - ix, fy = y - iy;
+  const a = hash(ix, iy, seed), b = hash(ix+1, iy, seed);
+  const c = hash(ix, iy+1, seed), d = hash(ix+1, iy+1, seed);
+  const ux = fx*fx*(3 - 2*fx), uy = fy*fy*(3 - 2*fy);
+  return a + (b-a)*ux + (c-a)*uy + (a-b-c+d)*ux*uy;
+}
+function fbm(x, y, seed, octaves=4) {
+  let v=0, amp=1, freq=1, max=0;
+  for (let i=0; i<octaves; i++) {
+    v += smoothNoise(x*freq, y*freq, seed+i*997) * amp;
+    max += amp; amp *= 0.5; freq *= 2;
+  }
+  return v / max;
 }
 
 // ══════════════════════════════════════════════════════════
-// WORLD GENERATION
+// WORLD
 // ══════════════════════════════════════════════════════════
 let world = [];
 let rivalData = [
-  { name: 'Productivity Bot', color: '#e05050', power: 120, hexes: [] },
-  { name: 'Linguist Guild',   color: '#50b0e0', power: 90,  hexes: [] },
-  { name: 'Wellness Empire',  color: '#50e090', power: 80,  hexes: [] },
+  { name:'Productivity Bot', color:'#c04040', maxPower:200, power:120 },
+  { name:'Linguist Guild',   color:'#4090c0', maxPower:200, power:90  },
+  { name:'Wellness Empire',  color:'#40b070', maxPower:200, power:80  },
 ];
 
 function generateWorld() {
   world = [];
-  for (let r = 0; r < ROWS; r++) {
-    for (let c = 0; c < COLS; c++) {
-      const n0 = noise(c, r, 0);
-      const n1 = noise(c * 2, r * 2, 13);
-      const n2 = noise(c * 0.5, r * 0.5, 77);
-      const elev = (n0 * 0.5 + n1 * 0.3 + n2 * 0.2);
-
+  for (let r=0; r<ROWS; r++) {
+    for (let c=0; c<COLS; c++) {
+      const nx = c/COLS, ny = r/ROWS;
+      const elev = fbm(nx*3+1, ny*3+1, 42);
+      const moist = fbm(nx*2.5+10, ny*2.5+10, 7);
       let biome;
-      if (elev < 0.18) biome = 'water';
-      else if (elev < 0.32) biome = 'tundra';
-      else if (elev < 0.45) biome = 'plains';
-      else if (elev < 0.58) biome = 'forest';
-      else if (elev < 0.68) biome = 'plains';
-      else if (elev < 0.78) biome = 'desert';
+      if (elev < 0.22) biome = 'water';
+      else if (elev < 0.34) biome = (moist > 0.55) ? 'tundra' : 'plains';
+      else if (elev < 0.50) biome = (moist > 0.52) ? 'forest' : 'plains';
+      else if (elev < 0.62) biome = (moist > 0.48) ? 'forest' : 'plains';
+      else if (elev < 0.72) biome = (moist < 0.4) ? 'desert' : 'plains';
       else biome = 'mountain';
 
       world.push({
-        col: c, row: r,
-        biome,
-        owner: null, // null=neutral, 'player', 'rival0', 'rival1', 'rival2'
-        revealed: false,
-        city: null,
-        elevation: elev,
-        selected: false,
-        hovered: false,
-        unit: null,
-        fogAlpha: 1.0, // 1 = full fog
+        col:c, row:r, biome, owner:null,
+        revealed:false, fogAlpha:1.0,
+        elevation:elev, moisture:moist,
+        selected:false, hovered:false,
+        city:null, unit:null,
+        treeSeeds: [hash(c,r,1), hash(c+100,r,2), hash(c,r+100,3)],
       });
     }
   }
 
   // Player capital
-  const playerStart = world[r2i(4, 6)];
-  playerStart.biome = 'city';
-  playerStart.owner = 'player';
-  playerStart.revealed = true;
-  playerStart.fogAlpha = 0;
-  playerStart.city = { name: 'Hegelund', pop: 2, level: 1 };
-
-  // Reveal 2-ring around capital
-  revealAround(4, 6, 2, 'player');
+  const cap = getHex(7, 5);
+  cap.biome = 'city'; cap.owner = 'player'; cap.revealed = true; cap.fogAlpha = 0;
+  cap.city = { name:'Hegelund', pop:2, level:1 };
+  revealRing(7, 5, 3);
 
   // Rival capitals
-  const rivalPositions = [[1,1], [11,1], [11,7]];
-  rivalPositions.forEach(([c, r], i) => {
-    const h = world[r2i(r, c)];
-    h.biome = 'enemy_city';
-    h.owner = `rival${i}`;
-    h.city = { name: rivalData[i].name.split(' ')[0] + ' Keep', pop: 2, level: 1 };
-    h.revealed = true;
-    h.fogAlpha = 0;
-    rivalData[i].hexes.push(r2i(r, c));
+  [[1,1],[14,1],[14,8]].forEach(([c,r], i) => {
+    const h = getHex(c, r);
+    h.biome = 'enemy'; h.owner = `r${i}`;
+    h.revealed = true; h.fogAlpha = 0;
+    h.city = { name: ['Bot Citadel','Lingua Keep','Vitae Hold'][i] };
   });
 
-  // Scatter some towns
-  [[3, 2], [8, 4], [5, 7], [10, 5]].forEach(([r, c]) => {
-    const h = world[r2i(r, c)];
-    if (h.biome !== 'water' && h.biome !== 'mountain') {
-      h.biome = 'town';
-    }
+  // Neutral towns
+  [[4,3],[10,6],[6,8],[12,3],[3,7]].forEach(([c,r]) => {
+    const h = getHex(c,r);
+    if (h.biome !== 'water' && h.biome !== 'mountain') h.biome = 'town';
   });
 }
 
-function r2i(r, c) {
-  return Math.max(0, Math.min(ROWS * COLS - 1, r * COLS + c));
+function getHex(c, r) {
+  if (c<0||c>=COLS||r<0||r>=ROWS) return null;
+  return world[r*COLS+c];
 }
 
-function revealAround(col, row, radius, owner) {
-  for (let r = -radius; r <= radius; r++) {
-    for (let c = -radius; c <= radius; c++) {
-      const nr = row + r;
-      const nc = col + c;
-      if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
-        const h = world[r2i(nr, nc)];
-        h.revealed = true;
-        h.fogAlpha = 0;
-        if (!h.owner && owner === 'player') {
-          // just reveal, don't claim
-        }
-      }
+function revealRing(cc, cr, radius) {
+  for (let dr=-radius; dr<=radius; dr++) {
+    for (let dc=-radius; dc<=radius; dc++) {
+      const h = getHex(cc+dc, cr+dr);
+      if (h) { h.revealed = true; h.fogAlpha = 0; }
     }
   }
 }
 
 // ══════════════════════════════════════════════════════════
-// HEX MATH (flat-top hexagons)
+// HEX MATH (offset, pointy-top)
 // ══════════════════════════════════════════════════════════
-function hexToPixel(col, row) {
-  const w = Math.sqrt(3) * HEX_SIZE;
-  const h = 2 * HEX_SIZE;
-  const x = col * w + (row % 2 === 0 ? 0 : w / 2) + cameraX;
-  const y = row * h * 0.75 + cameraY + TOP_BAR_H + CANVAS_PADDING;
+const W = Math.sqrt(3) * HEX_SIZE;
+const H = 2 * HEX_SIZE;
+
+function hexCenter(c, r) {
+  const x = c * W + (r % 2 === 1 ? W/2 : 0) + cameraX + W/2;
+  const y = r * H * 0.75 + cameraY + TOP_H + HEX_SIZE;
   return { x, y };
 }
 
 function pixelToHex(px, py) {
-  const w = Math.sqrt(3) * HEX_SIZE;
-  const h = 2 * HEX_SIZE * 0.75;
-  const row = Math.round((py - TOP_BAR_H - CANVAS_PADDING - cameraY) / h);
-  const offset = row % 2 === 0 ? 0 : w / 2;
-  const col = Math.round((px - offset - cameraX) / w);
-  if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return null;
-  return { col, row };
+  // Reverse-map pixel → hex (approximate)
+  const adjY = py - cameraY - TOP_H - HEX_SIZE;
+  const r = Math.round(adjY / (H * 0.75));
+  const offset = (r % 2 === 1) ? W/2 : 0;
+  const adjX = px - cameraX - offset - W/2;
+  const c = Math.round(adjX / W);
+  // Check neighbours for closest
+  let best = null, bestD = Infinity;
+  for (let dr=-1; dr<=1; dr++) for (let dc=-1; dc<=1; dc++) {
+    const tc = c+dc, tr = r+dr;
+    const h = getHex(tc, tr);
+    if (!h) continue;
+    const {x,y} = hexCenter(tc, tr);
+    const d = Math.hypot(px-x, py-y);
+    if (d < bestD) { bestD = d; best = h; }
+  }
+  return (bestD < HEX_SIZE * 1.1) ? best : null;
 }
 
-// Draw a flat-top hexagon
-function drawHex(ctx, cx, cy, size, fillStyle, strokeStyle, lineWidth = 1) {
+function hexPath(ctx, cx, cy, size) {
   ctx.beginPath();
-  for (let i = 0; i < 6; i++) {
-    const angle = (Math.PI / 180) * (60 * i + 30);
-    const x = cx + size * Math.cos(angle);
-    const y = cy + size * Math.sin(angle);
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
+  for (let i=0; i<6; i++) {
+    const a = Math.PI/180 * (60*i - 30);  // pointy-top
+    const x = cx + size * Math.cos(a);
+    const y = cy + size * Math.sin(a);
+    i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
   }
   ctx.closePath();
-  ctx.fillStyle = fillStyle;
-  ctx.fill();
-  if (strokeStyle) {
-    ctx.strokeStyle = strokeStyle;
-    ctx.lineWidth = lineWidth;
-    ctx.stroke();
-  }
 }
 
 // ══════════════════════════════════════════════════════════
-// CAMERA & INTERACTION
+// TERRAIN RENDERERS (canvas-drawn detail art)
 // ══════════════════════════════════════════════════════════
-let cameraX = 40;
-let cameraY = 20;
-let isDragging = false;
-let dragStart = { x: 0, y: 0 };
-let selectedHex = null;
-let hoveredHex = null;
-let turn = 1;
-let season = ['Spring', 'Summer', 'Autumn', 'Winter'];
-let resources = { knowledge: 0, gold: 0, influence: 0, vitality: 0, energy: 0 };
+
+function drawTrees(ctx, cx, cy, seeds, count=3, fogAlpha=0) {
+  if (fogAlpha > 0.5) return;
+  ctx.save();
+  ctx.globalAlpha = (1 - fogAlpha) * 0.9;
+  for (let i=0; i<count; i++) {
+    const seed = seeds[i % seeds.length];
+    const angle = seed * Math.PI * 2;
+    const dist = 8 + seed * 14;
+    const tx = cx + Math.cos(angle) * dist;
+    const ty = cy + Math.sin(angle) * dist;
+    const h = 11 + (seeds[(i+1)%seeds.length] || 0.5) * 8;
+    const w = h * 0.5;
+    // Trunk
+    ctx.fillStyle = '#3a2510';
+    ctx.fillRect(tx - 1.5, ty - 1, 3, 5);
+    // Canopy (layered triangles)
+    ctx.fillStyle = '#1e4a1e';
+    ctx.beginPath();
+    ctx.moveTo(tx, ty - h - 2);
+    ctx.lineTo(tx - w*0.7, ty - h*0.4);
+    ctx.lineTo(tx + w*0.7, ty - h*0.4);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#2a5e2a';
+    ctx.beginPath();
+    ctx.moveTo(tx, ty - h + 2);
+    ctx.lineTo(tx - w*0.9, ty - h*0.2 + 2);
+    ctx.lineTo(tx + w*0.9, ty - h*0.2 + 2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#3a6e2a';
+    ctx.beginPath();
+    ctx.moveTo(tx, ty - h*0.5 + 3);
+    ctx.lineTo(tx - w, ty + 1);
+    ctx.lineTo(tx + w, ty + 1);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawMountain(ctx, cx, cy, seed, fogAlpha=0) {
+  if (fogAlpha > 0.5) return;
+  ctx.save();
+  ctx.globalAlpha = (1 - fogAlpha) * 0.95;
+  const h = 24 + seed * 12;
+  const w = 28 + seed * 10;
+  // Shadow/base
+  ctx.fillStyle = '#3a3028';
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - h - 2);
+  ctx.lineTo(cx - w*0.6, cy + 4);
+  ctx.lineTo(cx + w*0.6, cy + 4);
+  ctx.closePath();
+  ctx.fill();
+  // Main peak
+  ctx.fillStyle = '#6a5e50';
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - h);
+  ctx.lineTo(cx - w*0.55, cy + 2);
+  ctx.lineTo(cx + w*0.55, cy + 2);
+  ctx.closePath();
+  ctx.fill();
+  // Left face (darker)
+  ctx.fillStyle = '#4a4038';
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - h);
+  ctx.lineTo(cx - w*0.55, cy + 2);
+  ctx.lineTo(cx - 2, cy + 2);
+  ctx.closePath();
+  ctx.fill();
+  // Snow cap
+  ctx.fillStyle = '#dde8ee';
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - h);
+  ctx.lineTo(cx - w*0.18, cy - h + h*0.28);
+  ctx.lineTo(cx + w*0.18, cy - h + h*0.28);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawWater(ctx, cx, cy, anim, fogAlpha=0) {
+  if (fogAlpha > 0.5) return;
+  ctx.save();
+  ctx.globalAlpha = (1 - fogAlpha) * 0.8;
+  // Wave lines
+  const wavePhase = anim * 0.04;
+  for (let wi=0; wi<3; wi++) {
+    const wy = cy - 6 + wi * 6;
+    ctx.strokeStyle = `rgba(100,180,255,${0.25 - wi*0.05})`;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let wxi=-18; wxi<=18; wxi+=4) {
+      const wx = cx + wxi;
+      const dy = Math.sin(wxi*0.3 + wavePhase + wi*1.5) * 2.5;
+      wxi===-18 ? ctx.moveTo(wx, wy+dy) : ctx.lineTo(wx, wy+dy);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawDesertDune(ctx, cx, cy, seed, fogAlpha=0) {
+  if (fogAlpha > 0.5) return;
+  ctx.save();
+  ctx.globalAlpha = (1 - fogAlpha) * 0.6;
+  // Dune curves
+  for (let di=0; di<2; di++) {
+    const dy = cy - 4 + di * 8;
+    const dx = cx - 12 + seed * 6;
+    ctx.strokeStyle = `rgba(200,160,60,${0.5 - di*0.15})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(dx - 10, dy + 3);
+    ctx.bezierCurveTo(dx, dy - 4, dx + 10, dy - 4, dx + 20, dy + 3);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawTundraIce(ctx, cx, cy, seed, fogAlpha=0) {
+  if (fogAlpha > 0.5) return;
+  ctx.save();
+  ctx.globalAlpha = (1 - fogAlpha) * 0.7;
+  for (let i=0; i<4; i++) {
+    const a = seed * Math.PI + i * Math.PI/2;
+    const r = 8 + hash(cx,cy,i)*8;
+    const tx = cx + Math.cos(a)*r;
+    const ty = cy + Math.sin(a)*r;
+    ctx.strokeStyle = 'rgba(180,210,240,0.5)';
+    ctx.lineWidth = 1;
+    // Snowflake arm
+    ctx.beginPath();
+    ctx.moveTo(tx, ty);
+    ctx.lineTo(tx + Math.cos(a)*6, ty + Math.sin(a)*6);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(tx + Math.cos(a)*3, ty + Math.sin(a)*3);
+    ctx.lineTo(tx + Math.cos(a+0.8)*4, ty + Math.sin(a+0.8)*4);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawCity(ctx, cx, cy, cityData, isEnemy, anim, fogAlpha=0) {
+  if (fogAlpha > 0.5) return;
+  ctx.save();
+  ctx.globalAlpha = 1 - fogAlpha * 0.6;
+
+  if (!isEnemy) {
+    // Glow halo
+    const haloR = HEX_SIZE * 0.9;
+    const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, haloR);
+    grd.addColorStop(0, 'rgba(240,200,80,0.18)');
+    grd.addColorStop(1, 'rgba(240,200,80,0)');
+    ctx.fillStyle = grd;
+    ctx.beginPath();
+    ctx.arc(cx, cy, haloR, 0, Math.PI*2);
+    ctx.fill();
+
+    // City walls (circle)
+    ctx.strokeStyle = '#c8a040';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 16, 0, Math.PI*2);
+    ctx.stroke();
+
+    // Central keep
+    ctx.fillStyle = '#c0952a';
+    ctx.fillRect(cx - 7, cy - 12, 14, 18);
+    // Roof
+    ctx.fillStyle = '#a07020';
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - 18); ctx.lineTo(cx-9, cy-12); ctx.lineTo(cx+9, cy-12);
+    ctx.closePath(); ctx.fill();
+    // Door
+    ctx.fillStyle = '#5a3008';
+    ctx.fillRect(cx - 3, cy - 2, 6, 8);
+    // Windows
+    ctx.fillStyle = 'rgba(255,220,100,0.8)';
+    const glow = Math.sin(anim * 0.06) * 0.3 + 0.7;
+    ctx.globalAlpha = glow * (1 - fogAlpha * 0.6);
+    ctx.fillRect(cx - 6, cy - 9, 4, 4);
+    ctx.fillRect(cx + 2, cy - 9, 4, 4);
+    ctx.globalAlpha = 1 - fogAlpha * 0.6;
+    // Towers
+    [[-10, 2], [10, 2]].forEach(([ox, oy]) => {
+      ctx.fillStyle = '#a07828';
+      ctx.fillRect(cx + ox - 4, cy + oy - 14, 8, 16);
+      ctx.fillStyle = '#7a5a18';
+      ctx.beginPath();
+      ctx.moveTo(cx+ox, cy+oy-20);
+      ctx.lineTo(cx+ox-4, cy+oy-14);
+      ctx.lineTo(cx+ox+4, cy+oy-14);
+      ctx.closePath(); ctx.fill();
+    });
+  } else {
+    // Enemy fortress
+    ctx.fillStyle = '#7a3030';
+    ctx.fillRect(cx - 9, cy - 13, 18, 20);
+    ctx.fillStyle = '#5a1e1e';
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - 19); ctx.lineTo(cx-10, cy-13); ctx.lineTo(cx+10, cy-13);
+    ctx.closePath(); ctx.fill();
+    // Battlements
+    [-8,-2,4].forEach(ox => {
+      ctx.fillStyle = '#6a2a2a';
+      ctx.fillRect(cx+ox-1, cy-20, 4, 6);
+    });
+    // Red glow
+    const gr = ctx.createRadialGradient(cx, cy, 0, cx, cy, 24);
+    gr.addColorStop(0,'rgba(200,0,0,0.15)');
+    gr.addColorStop(1,'rgba(200,0,0,0)');
+    ctx.fillStyle = gr;
+    ctx.beginPath(); ctx.arc(cx, cy, 24, 0, Math.PI*2); ctx.fill();
+  }
+
+  // City name below
+  ctx.globalAlpha = Math.max(0, 1 - fogAlpha);
+  ctx.font = 'bold 8px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = isEnemy ? '#e09090' : '#f0d080';
+  ctx.shadowColor = 'rgba(0,0,0,0.9)';
+  ctx.shadowBlur = 4;
+  ctx.fillText(cityData?.name || '', cx, cy + HEX_SIZE * 0.5);
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
+
+// Plains detail
+function drawGrass(ctx, cx, cy, seeds, fogAlpha=0) {
+  if (fogAlpha > 0.5) return;
+  ctx.save();
+  ctx.globalAlpha = (1-fogAlpha)*0.5;
+  for (let i=0; i<6; i++) {
+    const a = seeds[i%3]*Math.PI*2 + i*1.05;
+    const r = 6 + seeds[(i+1)%3]*16;
+    const tx = cx + Math.cos(a)*r;
+    const ty = cy + Math.sin(a)*r;
+    ctx.strokeStyle = '#5a7830';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(tx, ty+4);
+    ctx.quadraticCurveTo(tx + seeds[i%3]*4-2, ty-4, tx + seeds[(i+2)%3]*3-1.5, ty-9);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// ══════════════════════════════════════════════════════════
+// BIOME COLORS
+// ══════════════════════════════════════════════════════════
+const BIOME_COLORS = {
+  plains:   { base:'#5a7032', dark:'#3a4e1e', edge:'#2a3a10' },
+  forest:   { base:'#1e4220', dark:'#122a14', edge:'#0c1e0c' },
+  mountain: { base:'#6a5e50', dark:'#4a4038', edge:'#3a3028' },
+  water:    { base:'#1a3e62', dark:'#0e2840', edge:'#091c30' },
+  desert:   { base:'#b89040', dark:'#8a6820', edge:'#6a5010' },
+  tundra:   { base:'#7a8e9a', dark:'#5a6e7a', edge:'#3a4e5a' },
+  city:     { base:'#8a7028', dark:'#5a4a18', edge:'#3a3010' },
+  town:     { base:'#7a6828', dark:'#5a4a18', edge:'#3a3010' },
+  enemy:    { base:'#7a2828', dark:'#4a1818', edge:'#2a0c0c' },
+};
+
+function hexFillStyle(ctx, cx, cy, hex) {
+  const bc = BIOME_COLORS[hex.biome] || BIOME_COLORS.plains;
+  const elev = hex.elevation;
+  const lighten = (elev - 0.5) * 40;
+
+  const grad = ctx.createLinearGradient(cx, cy - HEX_SIZE*0.9, cx, cy + HEX_SIZE*0.9);
+  const topColor = adjustColor(bc.base, lighten + 20);
+  const midColor = adjustColor(bc.base, lighten);
+  const botColor = adjustColor(bc.dark, lighten - 10);
+  grad.addColorStop(0, topColor);
+  grad.addColorStop(0.4, midColor);
+  grad.addColorStop(1, botColor);
+  return grad;
+}
+
+function adjustColor(hex, amount) {
+  const r = clamp(parseInt(hex.slice(1,3),16) + amount, 0, 255);
+  const g = clamp(parseInt(hex.slice(3,5),16) + amount, 0, 255);
+  const b = clamp(parseInt(hex.slice(5,7),16) + amount, 0, 255);
+  return `rgb(${r},${g},${b})`;
+}
+function clamp(v, mn, mx) { return Math.max(mn, Math.min(mx, v)); }
+
+// ══════════════════════════════════════════════════════════
+// CAMERA & STATE
+// ══════════════════════════════════════════════════════════
+let cameraX = 40, cameraY = 30;
+let isDragging = false, dragStart = {x:0,y:0}, dragMoved = false;
+let mouseDown = false;
+let selectedHex = null, hoveredHex = null;
+let turn = 1, animFrame = 0;
+let resources = { knowledge:0, gold:0, influence:0, vitality:0, energy:0 };
+
+const SEASONS = ['Spring','Summer','Autumn','Winter'];
+const ERAS = ['Ancient Era','Classical Era','Medieval Era','Renaissance','Industrial Era'];
 
 // ══════════════════════════════════════════════════════════
 // RENDERING
@@ -613,208 +1000,145 @@ const canvas = document.getElementById('game-canvas');
 const ctx = canvas.getContext('2d');
 
 function resize() {
-  canvas.width = window.innerWidth - RIGHT_PANEL_W;
+  canvas.width = window.innerWidth - RIGHT_W;
   canvas.height = window.innerHeight;
 }
-
-// Ground texture gradient per biome
-const biomeGradientCache = {};
-
-function getBiomeColor(hex, variant = 'base') {
-  const b = BIOMES[hex.biome] || BIOMES.plains;
-  if (variant === 'dark') return b.dark;
-  // Add slight elevation shading
-  const elev = hex.elevation || 0.5;
-  const shade = Math.round((elev - 0.5) * 30);
-  return shadeHex(b.color, shade);
-}
-
-function shadeHex(col, amount) {
-  // Parse #rrggbb and add amount to each channel
-  const r = Math.min(255, Math.max(0, parseInt(col.slice(1,3),16) + amount));
-  const g = Math.min(255, Math.max(0, parseInt(col.slice(3,5),16) + amount));
-  const b = Math.min(255, Math.max(0, parseInt(col.slice(5,7),16) + amount));
-  return `rgb(${r},${g},${b})`;
-}
-
-function ownerBorderColor(owner) {
-  if (!owner) return null;
-  if (owner === 'player') return '#f0d080';
-  const idx = parseInt(owner.replace('rival',''));
-  return rivalData[idx]?.color || '#fff';
-}
-
-let animFrame = 0;
 
 function render() {
   animFrame++;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // Sky gradient background
-  const sky = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  sky.addColorStop(0, '#080818');
-  sky.addColorStop(1, '#12100a');
-  ctx.fillStyle = sky;
+  // ── Background ──
+  const bg = ctx.createRadialGradient(canvas.width/2, canvas.height/2, 0, canvas.width/2, canvas.height/2, canvas.width*0.8);
+  bg.addColorStop(0, '#0c0e0a');
+  bg.addColorStop(1, '#040408');
+  ctx.fillStyle = bg;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // Grid lines layer (very subtle)
-  ctx.globalAlpha = 0.03;
-  for (let x = 0; x < canvas.width; x += 40) {
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
-  }
-  for (let y = 0; y < canvas.height; y += 40) {
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
-  }
-  ctx.globalAlpha = 1;
-
-  // ── Draw hexes ──
+  // ── Render each hex ──
   world.forEach(hex => {
-    const { x, y } = hexToPixel(hex.col, hex.row);
-    // Cull offscreen
-    const R = HEX_SIZE + 4;
-    if (x < -R || x > canvas.width + R || y < TOP_BAR_H - R || y > canvas.height + R) return;
+    const {x, y} = hexCenter(hex.col, hex.row);
+    // Cull
+    if (x < -HEX_SIZE*2 || x > canvas.width+HEX_SIZE*2) return;
+    if (y < TOP_H-HEX_SIZE*2 || y > canvas.height+HEX_SIZE*2) return;
 
     if (!hex.revealed) {
-      // Full fog — draw dark hex only
-      drawHex(ctx, x, y, HEX_SIZE - 1, '#070608', '#0a090e', 0.5);
+      // Pure fog
+      hexPath(ctx, x, y, HEX_SIZE - 0.5);
+      ctx.fillStyle = '#060508';
+      ctx.fill();
+      ctx.strokeStyle = '#0d0b10';
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
       return;
     }
 
-    // Base color
-    const baseCol = getBiomeColor(hex);
-    const darkCol = getBiomeColor(hex, 'dark');
+    // ── Base terrain fill ──
+    hexPath(ctx, x, y, HEX_SIZE - 0.5);
+    ctx.fillStyle = hexFillStyle(ctx, x, y, hex);
+    ctx.fill();
 
-    // Gradient fill
-    const grad = ctx.createLinearGradient(x, y - HEX_SIZE, x, y + HEX_SIZE);
-    grad.addColorStop(0, shadeHex(baseCol, 15));
-    grad.addColorStop(0.5, baseCol);
-    grad.addColorStop(1, darkCol);
-
-    // Selection pulse
-    const pulse = hex.selected ? (Math.sin(animFrame * 0.08) * 0.3 + 0.7) : 1;
-
-    drawHex(ctx, x, y, HEX_SIZE - 1, grad, null);
-
-    // Inner detail lines (terrain texture)
-    ctx.globalAlpha = 0.12;
-    for (let i = 0; i < 3; i++) {
-      const angle = (Math.PI / 3) * i;
-      const len = HEX_SIZE * 0.3 * (0.6 + noise(hex.col + i, hex.row, i * 7) * 0.4);
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(x + Math.cos(angle) * (HEX_SIZE * 0.1), y + Math.sin(angle) * (HEX_SIZE * 0.1));
-      ctx.lineTo(x + Math.cos(angle) * len, y + Math.sin(angle) * len);
-      ctx.stroke();
-    }
+    // ── Edge highlight (top-left lighter) ──
+    hexPath(ctx, x, y, HEX_SIZE - 0.5);
+    ctx.strokeStyle = adjustColor((BIOME_COLORS[hex.biome]||BIOME_COLORS.plains).base, 25);
+    ctx.lineWidth = 0.5;
+    ctx.globalAlpha = 0.25;
+    ctx.stroke();
     ctx.globalAlpha = 1;
 
-    // Border
-    let borderCol = '#1a1208';
-    let borderW = 0.7;
-    const ownerCol = ownerBorderColor(hex.owner);
-    if (ownerCol) {
-      borderCol = ownerCol;
-      borderW = 1.5;
+    // ── Terrain detail art ──
+    if (hex.fogAlpha < 0.9) {
+      const fog = hex.fogAlpha;
+      switch(hex.biome) {
+        case 'forest':
+          drawTrees(ctx, x, y - 4, hex.treeSeeds, 3, fog); break;
+        case 'mountain':
+          drawMountain(ctx, x, y - 2, hex.treeSeeds[0], fog); break;
+        case 'water':
+          drawWater(ctx, x, y, animFrame, fog); break;
+        case 'desert':
+          drawDesertDune(ctx, x, y, hex.treeSeeds[0], fog); break;
+        case 'tundra':
+          drawTundraIce(ctx, x, y, hex.treeSeeds[0], fog); break;
+        case 'plains':
+          drawGrass(ctx, x, y, hex.treeSeeds, fog); break;
+        case 'city':
+          drawCity(ctx, x, y, hex.city, false, animFrame, fog); break;
+        case 'town':
+          // Small house
+          if (fog < 0.5) {
+            ctx.save(); ctx.globalAlpha = 1 - fog;
+            ctx.fillStyle = '#b09040'; ctx.fillRect(x-6, y-8, 12, 10);
+            ctx.fillStyle = '#8a6820';
+            ctx.beginPath(); ctx.moveTo(x,y-15); ctx.lineTo(x-8,y-8); ctx.lineTo(x+8,y-8); ctx.closePath(); ctx.fill();
+            ctx.fillStyle = '#4a2808'; ctx.fillRect(x-2, y-2, 4, 6);
+            ctx.restore();
+          }
+          break;
+        case 'enemy':
+          drawCity(ctx, x, y, hex.city, true, animFrame, fog); break;
+      }
     }
-    if (hex.hovered && !hex.selected) {
-      borderCol = '#ffffff';
-      borderW = 1.2;
-    }
+
+    // ── Territory border ──
+    let borderColor = (BIOME_COLORS[hex.biome]||BIOME_COLORS.plains).edge;
+    let borderW = 0.8;
+    if (hex.owner === 'player') { borderColor = '#d4b040'; borderW = 2; }
+    else if (hex.owner === 'r0') { borderColor = '#c04040'; borderW = 1.5; }
+    else if (hex.owner === 'r1') { borderColor = '#4090c0'; borderW = 1.5; }
+    else if (hex.owner === 'r2') { borderColor = '#40b070'; borderW = 1.5; }
+
+    if (hex.hovered && !hex.selected) { borderColor = 'rgba(255,255,255,0.6)'; borderW = 1.5; }
     if (hex.selected) {
-      borderCol = '#ffe060';
-      borderW = 2.2 * pulse;
+      const pulse = Math.sin(animFrame * 0.09) * 0.5 + 0.5;
+      borderColor = `rgba(255,220,60,${0.7 + pulse*0.3})`;
+      borderW = 2.5;
     }
-    drawHex(ctx, x, y, HEX_SIZE - 1, 'rgba(0,0,0,0)', borderCol, borderW);
 
-    // Fog partial overlay
+    hexPath(ctx, x, y, HEX_SIZE - 0.5);
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = borderW;
+    ctx.stroke();
+
+    // ── Fog overlay ──
     if (hex.fogAlpha > 0) {
-      ctx.globalAlpha = hex.fogAlpha * 0.85;
-      drawHex(ctx, x, y, HEX_SIZE - 1, '#070608', null);
-      ctx.globalAlpha = 1;
+      hexPath(ctx, x, y, HEX_SIZE - 0.5);
+      ctx.fillStyle = `rgba(5,4,8,${hex.fogAlpha * 0.88})`;
+      ctx.fill();
     }
 
-    // ── Icons & labels ──
-    const biome = BIOMES[hex.biome];
-    if (biome && hex.fogAlpha < 0.8) {
-      ctx.globalAlpha = 1 - hex.fogAlpha;
-      ctx.font = `${Math.round(HEX_SIZE * 0.38)}px serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-
-      // Shadow behind icon
-      ctx.shadowColor = 'rgba(0,0,0,0.7)';
-      ctx.shadowBlur = 4;
-
-      if (hex.biome === 'city') {
-        // Capital: larger icon + glow ring
-        ctx.font = `${Math.round(HEX_SIZE * 0.52)}px serif`;
-        ctx.shadowColor = 'rgba(240,208,0,0.6)';
-        ctx.shadowBlur = 14;
-        ctx.fillText('🏛', x, y - 4);
-        ctx.shadowBlur = 0;
-
-        // City name
-        ctx.font = 'bold 8px sans-serif';
-        ctx.fillStyle = '#f0d080';
-        ctx.shadowColor = 'rgba(0,0,0,0.9)';
-        ctx.shadowBlur = 3;
-        ctx.fillText(hex.city?.name || '', x, y + HEX_SIZE * 0.55);
-        ctx.shadowBlur = 0;
-
-      } else if (hex.biome === 'enemy_city') {
-        ctx.font = `${Math.round(HEX_SIZE * 0.48)}px serif`;
-        ctx.shadowColor = 'rgba(200,0,0,0.5)';
-        ctx.shadowBlur = 10;
-        ctx.fillText('🏯', x, y - 4);
-        ctx.shadowBlur = 0;
-        ctx.font = 'bold 8px sans-serif';
-        ctx.fillStyle = '#e08080';
-        ctx.shadowColor = 'rgba(0,0,0,0.9)';
-        ctx.shadowBlur = 3;
-        ctx.fillText(hex.city?.name || '', x, y + HEX_SIZE * 0.55);
-        ctx.shadowBlur = 0;
-
-      } else if (hex.biome === 'town') {
-        ctx.fillText('🏘', x, y);
-      } else {
-        // Subtle terrain icon
-        ctx.globalAlpha = (1 - hex.fogAlpha) * 0.75;
-        ctx.fillText(biome.icon, x, y);
-      }
-      ctx.shadowColor = 'transparent';
-      ctx.shadowBlur = 0;
-      ctx.globalAlpha = 1;
-    }
-
-    // Owner territory marker (small dot in corner)
-    if (hex.owner && hex.biome !== 'city' && hex.biome !== 'enemy_city') {
-      const oc = ownerBorderColor(hex.owner);
-      if (oc) {
-        ctx.beginPath();
-        ctx.arc(x + HEX_SIZE * 0.4, y - HEX_SIZE * 0.55, 4, 0, Math.PI * 2);
-        ctx.fillStyle = oc;
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(0,0,0,0.6)';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-      }
+    // ── Owner territory dot ──
+    if (hex.owner && hex.biome !== 'city' && hex.biome !== 'enemy' && hex.biome !== 'town' && hex.fogAlpha < 0.5) {
+      const oc = hex.owner === 'player' ? '#f0d080' : rivalData[parseInt(hex.owner[1])]?.color || '#aaa';
+      ctx.beginPath();
+      ctx.arc(x + HEX_SIZE*0.45, y - HEX_SIZE*0.6, 4, 0, Math.PI*2);
+      ctx.fillStyle = oc;
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
     }
   });
 
-  // ── Selected hex highlight ring ──
-  if (selectedHex) {
-    const { x, y } = hexToPixel(selectedHex.col, selectedHex.row);
-    const pulse = Math.sin(animFrame * 0.08) * 0.5 + 0.5;
-    ctx.globalAlpha = 0.3 + pulse * 0.3;
-    drawHex(ctx, x, y, HEX_SIZE + 3, 'rgba(255,220,80,0.1)', '#ffe060', 2);
-    ctx.globalAlpha = 1;
+  // ── Selection outer ring ──
+  if (selectedHex && selectedHex.revealed) {
+    const {x, y} = hexCenter(selectedHex.col, selectedHex.row);
+    const pulse = Math.sin(animFrame * 0.09) * 0.5 + 0.5;
+    hexPath(ctx, x, y, HEX_SIZE + 4);
+    ctx.strokeStyle = `rgba(255,220,60,${0.2 + pulse*0.2})`;
+    ctx.lineWidth = 3;
+    ctx.stroke();
   }
 
   // ── Minimap ──
   renderMinimap();
+
+  // ── Vignette ──
+  const vig = ctx.createRadialGradient(canvas.width/2, canvas.height/2, canvas.height*0.3, canvas.width/2, canvas.height/2, canvas.width*0.8);
+  vig.addColorStop(0, 'rgba(0,0,0,0)');
+  vig.addColorStop(1, 'rgba(0,0,0,0.45)');
+  ctx.fillStyle = vig;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
 
 function renderMinimap() {
@@ -822,36 +1146,31 @@ function renderMinimap() {
   const mx = mc.getContext('2d');
   const mw = mc.width, mh = mc.height;
   mx.clearRect(0, 0, mw, mh);
-  mx.fillStyle = '#080810';
+  mx.fillStyle = '#050406';
   mx.fillRect(0, 0, mw, mh);
 
-  const cellW = mw / COLS;
-  const cellH = mh / ROWS;
-
+  const cw = mw/COLS, ch = mh/ROWS;
   world.forEach(hex => {
-    const px = hex.col * cellW;
-    const py = hex.row * cellH;
-    if (!hex.revealed) {
-      mx.fillStyle = '#0d0d14';
-    } else {
-      const b = BIOMES[hex.biome] || BIOMES.plains;
-      mx.fillStyle = b.color;
-      if (hex.owner === 'player') mx.fillStyle = '#f0d080';
-      else if (hex.owner?.startsWith('rival')) {
-        const idx = parseInt(hex.owner.replace('rival',''));
-        mx.fillStyle = rivalData[idx]?.color || '#888';
-      }
+    const px = hex.col*cw, py = hex.row*ch;
+    if (!hex.revealed) { mx.fillStyle = '#0a080e'; }
+    else {
+      const bc = BIOME_COLORS[hex.biome] || BIOME_COLORS.plains;
+      mx.fillStyle = bc.base;
+      if (hex.owner === 'player') mx.fillStyle = '#d4b040';
+      else if (hex.owner === 'r0') mx.fillStyle = '#c04040';
+      else if (hex.owner === 'r1') mx.fillStyle = '#4090c0';
+      else if (hex.owner === 'r2') mx.fillStyle = '#40b070';
     }
-    mx.fillRect(px + 0.5, py + 0.5, cellW - 0.5, cellH - 0.5);
+    mx.fillRect(px+0.5, py+0.5, cw-0.5, ch-0.5);
   });
 
-  // Viewport indicator
-  const mapW = COLS * Math.sqrt(3) * HEX_SIZE;
-  const mapH = ROWS * HEX_SIZE * 1.5;
-  const vx = (-cameraX / mapW) * mw;
-  const vy = (-cameraY / mapH) * mh;
-  const vw = (canvas.width / mapW) * mw;
-  const vh = ((canvas.height - TOP_BAR_H) / mapH) * mh;
+  // Viewport rect
+  const totalW = COLS * W;
+  const totalH = ROWS * H * 0.75;
+  const vx = (-cameraX/totalW)*mw;
+  const vy = (-cameraY/totalH)*mh;
+  const vw = (canvas.width/totalW)*mw;
+  const vh = ((canvas.height-TOP_H)/totalH)*mh;
   mx.strokeStyle = '#f0d080';
   mx.lineWidth = 1.5;
   mx.strokeRect(vx, vy, vw, vh);
@@ -869,138 +1188,125 @@ function loop() {
 // EVENTS
 // ══════════════════════════════════════════════════════════
 canvas.addEventListener('mousedown', e => {
-  if (e.button === 0) {
-    isDragging = false;
-    dragStart = { x: e.clientX, y: e.clientY };
-    canvas._dragMoved = false;
-    canvas._mousedown = true;
-    canvas._mdPos = { x: e.clientX, y: e.clientY };
-  }
+  if (e.button !== 0) return;
+  mouseDown = true;
+  dragMoved = false;
+  dragStart = {x: e.clientX, y: e.clientY};
 });
 
 canvas.addEventListener('mousemove', e => {
-  if (canvas._mousedown) {
-    const dx = e.clientX - dragStart.x;
-    const dy = e.clientY - dragStart.y;
-    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
-      isDragging = true;
-      canvas._dragMoved = true;
-      cameraX += e.clientX - dragStart.x;
-      cameraY += e.clientY - dragStart.y;
-      dragStart = { x: e.clientX, y: e.clientY };
+  if (mouseDown) {
+    const dx = e.clientX - dragStart.x, dy = e.clientY - dragStart.y;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+      dragMoved = true;
+      cameraX += dx; cameraY += dy;
+      dragStart = {x: e.clientX, y: e.clientY};
     }
   }
-
-  // Hovered hex
+  // Hover
   const h = pixelToHex(e.clientX, e.clientY);
-  if (hoveredHex) {
-    const prev = world.find(w => w.col === hoveredHex.col && w.row === hoveredHex.row);
-    if (prev) prev.hovered = false;
-  }
-  if (h) {
-    const hex = world[r2i(h.row, h.col)];
-    if (hex && hex.revealed) {
-      hex.hovered = true;
-      hoveredHex = h;
-      showTooltip(e.clientX + 12, e.clientY - 10, hex);
-    } else {
-      hideTooltip();
-      hoveredHex = null;
-    }
+  if (hoveredHex) { hoveredHex.hovered = false; }
+  if (h && h.revealed) {
+    h.hovered = true; hoveredHex = h;
+    showTooltip(e.clientX, e.clientY, h);
   } else {
-    hideTooltip();
     hoveredHex = null;
+    hideTooltip();
   }
 });
 
 canvas.addEventListener('mouseup', e => {
-  canvas._mousedown = false;
-  if (!canvas._dragMoved) {
-    // Click
-    const h = pixelToHex(e.clientX, e.clientY);
-    if (h) {
-      // Deselect old
-      if (selectedHex) {
-        const old = world[r2i(selectedHex.row, selectedHex.col)];
-        if (old) old.selected = false;
-      }
-      const hex = world[r2i(h.row, h.col)];
-      if (hex && hex.revealed) {
-        hex.selected = true;
-        selectedHex = h;
-        updateTilePanel(hex);
-      } else {
-        selectedHex = null;
-        updateTilePanel(null);
-      }
-    }
+  mouseDown = false;
+  if (e.button !== 0 || dragMoved) return;
+  // Click
+  const h = pixelToHex(e.clientX, e.clientY);
+  if (selectedHex) selectedHex.selected = false;
+  if (h && h.revealed) {
+    h.selected = true;
+    selectedHex = h;
+    updateTilePanel(h);
+  } else {
+    selectedHex = null;
+    updateTilePanel(null);
   }
-  isDragging = false;
 });
 
 canvas.addEventListener('mouseleave', () => {
-  canvas._mousedown = false;
-  isDragging = false;
+  mouseDown = false;
+  if (hoveredHex) { hoveredHex.hovered = false; hoveredHex = null; }
   hideTooltip();
 });
 
 canvas.addEventListener('wheel', e => {
   e.preventDefault();
-  // Zoom toward cursor (scale HEX_SIZE)
-  // For simplicity: just pan
-  cameraX -= e.deltaX * 0.5;
-  cameraY -= e.deltaY * 0.5;
-}, { passive: false });
+  cameraX -= e.deltaX * 0.6;
+  cameraY -= e.deltaY * 0.6;
+}, {passive:false});
 
-window.addEventListener('resize', () => { resize(); });
+window.addEventListener('resize', resize);
 
 // ══════════════════════════════════════════════════════════
 // TOOLTIP
 // ══════════════════════════════════════════════════════════
 const tooltip = document.getElementById('tooltip');
-function showTooltip(x, y, hex) {
+function showTooltip(mx, my, hex) {
   const b = BIOMES[hex.biome] || {};
   document.getElementById('tt-title').textContent = b.label || hex.biome;
   document.getElementById('tt-body').textContent = b.desc || '';
+  const ownerMap = { player:'✦ Your territory', r0:'⚠ Productivity Bot', r1:'⚠ Linguist Guild', r2:'⚠ Wellness Empire' };
+  document.getElementById('tt-owner').textContent = hex.owner ? (ownerMap[hex.owner] || '') : '';
+  document.getElementById('tt-owner').style.color = hex.owner === 'player' ? '#f0d080' : '#e07060';
   tooltip.style.display = 'block';
-  let tx = x, ty = y;
-  if (tx + 200 > window.innerWidth - RIGHT_PANEL_W) tx = x - 200;
+  let tx = mx + 14, ty = my - 60;
+  if (tx + 200 > window.innerWidth - RIGHT_W) tx = mx - 210;
+  if (ty < 60) ty = my + 12;
   tooltip.style.left = tx + 'px';
   tooltip.style.top = ty + 'px';
 }
-function hideTooltip() {
-  tooltip.style.display = 'none';
-}
+function hideTooltip() { tooltip.style.display = 'none'; }
 
 // ══════════════════════════════════════════════════════════
-// PANEL UPDATES
+// UI UPDATES
 // ══════════════════════════════════════════════════════════
 function updateTilePanel(hex) {
   if (!hex) {
+    document.getElementById('tile-icon').textContent = '—';
     document.getElementById('tile-name').textContent = '—';
     document.getElementById('tile-desc').textContent = 'Click a hex to inspect it.';
+    document.getElementById('tile-yield').textContent = '';
     return;
   }
+  const icons = {plains:'🌾',forest:'🌲',mountain:'⛰️',water:'💧',desert:'🏜️',tundra:'❄️',city:'🏛️',town:'🏘️',enemy:'🏯'};
   const b = BIOMES[hex.biome] || {};
-  document.getElementById('tile-name').textContent = (b.icon || '') + ' ' + (b.label || hex.biome);
+  document.getElementById('tile-icon').textContent = icons[hex.biome] || '?';
+  document.getElementById('tile-name').textContent = b.label || hex.biome;
   let desc = b.desc || '';
   if (hex.owner === 'player') desc += ' ✦ Your territory.';
-  else if (hex.owner?.startsWith('rival')) {
-    const idx = parseInt(hex.owner.replace('rival',''));
-    desc += ` ⚠ Controlled by ${rivalData[idx]?.name}.`;
+  else if (hex.owner?.startsWith('r')) {
+    const idx = parseInt(hex.owner[1]);
+    desc += ` ⚠ ${rivalData[idx]?.name || 'Rival'} controls this.`;
   }
   document.getElementById('tile-desc').textContent = desc;
+  document.getElementById('tile-yield').textContent = b.yield ? 'Yield: ' + b.yield : '';
 }
 
 function updateResourceUI() {
-  for (const [k, v] of Object.entries(resources)) {
-    const el = document.getElementById(`res-${k}`);
+  Object.entries(resources).forEach(([k,v]) => {
+    const el = document.getElementById('res-' + k);
     if (el) el.textContent = v;
-  }
-  document.getElementById('turn-counter').textContent = `Turn ${turn} · ${season[(turn - 1) % 4]}`;
-  document.getElementById('rival1-stat').textContent = `Power: ${rivalData[0].power}`;
-  document.getElementById('rival2-stat').textContent = `Power: ${rivalData[1].power}`;
-  document.getElementById('rival3-stat').textContent = `Power: ${rivalData[2].power}`;
+  });
+  const era = ERAS[Math.min(Math.floor((turn-1)/12), ERAS.length-1)];
+  document.getElementById('turn-era').textContent = era;
+  document.getElementById('turn-counter').textContent = `Turn ${turn} · ${SEASONS[(turn-1)%4]}`;
+  document.querySelector('.empire-sub').textContent = `${era.toUpperCase()} · YEAR ${turn}`;
+
+  // Rivals
+  const maxP = Math.max(...rivalData.map(r=>r.power), 200);
+  rivalData.forEach((rv, i) => {
+    document.getElementById(`rival${i}-pow`).textContent = rv.power;
+    const bar = document.getElementById(`rbar-${i}`);
+    if (bar) bar.style.width = Math.round((rv.power/maxP)*100) + '%';
+  });
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1008,56 +1314,48 @@ function updateResourceUI() {
 // ══════════════════════════════════════════════════════════
 function endTurn() {
   turn++;
-  // Small passive resource gain
-  resources.knowledge += 3;
-  resources.gold += 2;
-  resources.influence += 1;
-  resources.vitality += 1;
-  resources.energy += 2;
-  // Rivals grow
-  rivalData.forEach(r => { r.power += Math.floor(Math.random() * 5) + 2; });
+  resources.knowledge += 3 + Math.floor(turn/5);
+  resources.gold      += 2 + Math.floor(turn/8);
+  resources.influence += 2;
+  resources.vitality  += 1;
+  resources.energy    += 2;
+  rivalData.forEach(r => { r.power = Math.min(r.maxPower, r.power + Math.floor(Math.random()*6)+2); });
   updateResourceUI();
-  addEvent(`⏭ Turn ${turn} begins. ${season[(turn-1)%4]}.`);
+  addEvent(`⏭ Turn ${turn} · ${SEASONS[(turn-1)%4]}`);
+  if (turn % 4 === 0) addEvent(`📜 The ${ERAS[Math.min(Math.floor((turn-1)/12),4)]} begins.`);
 }
 
 function setMode(mode) {
-  ['map','city','units','tech','diplo'].forEach(m => {
-    document.getElementById('btn-' + m)?.classList.remove('active');
-  });
-  document.getElementById('btn-' + mode)?.classList.add('active');
+  ['map','city','units','tech','diplo'].forEach(m => document.getElementById('btn-'+m)?.classList.remove('active'));
+  document.getElementById('btn-'+mode)?.classList.add('active');
   const msgs = {
-    map: 'Map view — click hexes to explore.',
-    city: 'City view — manage your settlements.',
-    units: 'Military view — deploy and command units.',
-    tech: 'Research tree — unlock new technologies.',
-    diplo: 'Diplomacy — negotiate with rival empires.',
+    map: 'Map view — explore your empire.',
+    city: 'City management — grow your settlements.',
+    units: 'Military — deploy and command your armies.',
+    tech: 'Research — unlock new technologies.',
+    diplo: 'Diplomacy — forge alliances or issue ultimatums.',
   };
   document.getElementById('status-text').textContent = msgs[mode] || '';
 }
 
-// ══════════════════════════════════════════════════════════
-// NOTIFICATIONS & LOG
-// ══════════════════════════════════════════════════════════
 function addEvent(text) {
   const log = document.getElementById('event-log');
-  const line = document.createElement('div');
-  line.textContent = text;
-  log.prepend(line);
-  // Keep max 20
-  while (log.children.length > 20) log.removeChild(log.lastChild);
+  const div = document.createElement('div');
+  div.textContent = text;
+  log.prepend(div);
+  while (log.children.length > 30) log.removeChild(log.lastChild);
 }
 
 function showNotif(text) {
   const stack = document.getElementById('notif-stack');
   const el = document.createElement('div');
-  el.className = 'notif';
-  el.textContent = text;
+  el.className = 'notif'; el.textContent = text;
   stack.prepend(el);
   setTimeout(() => {
-    el.style.transition = 'opacity 0.5s';
+    el.style.transition = 'opacity 0.6s';
     el.style.opacity = '0';
-    setTimeout(() => el.remove(), 600);
-  }, 4000);
+    setTimeout(() => el.remove(), 700);
+  }, 4500);
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1068,28 +1366,29 @@ function init() {
   generateWorld();
   updateResourceUI();
 
-  // Animate loading bar
   const bar = document.getElementById('load-bar');
   let pct = 0;
   const iv = setInterval(() => {
-    pct += Math.random() * 15 + 5;
+    pct += Math.random() * 14 + 4;
     bar.style.width = Math.min(pct, 100) + '%';
     if (pct >= 100) {
       clearInterval(iv);
       setTimeout(() => {
-        document.getElementById('loading').style.transition = 'opacity 0.8s';
-        document.getElementById('loading').style.opacity = '0';
+        const ld = document.getElementById('loading');
+        ld.style.transition = 'opacity 1s';
+        ld.style.opacity = '0';
         setTimeout(() => {
-          document.getElementById('loading').style.display = 'none';
+          ld.style.display = 'none';
           loop();
           addEvent('⚔ The Hegelund Republic rises!');
           addEvent('📜 Year 1, Spring — begin your conquest.');
+          addEvent('👁 The world awaits discovery...');
           showNotif('🏛 Welcome, Emperor. Your empire awaits.');
           updateResourceUI();
-        }, 800);
-      }, 300);
+        }, 1000);
+      }, 200);
     }
-  }, 80);
+  }, 70);
 }
 
 init();
