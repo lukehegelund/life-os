@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>LifeOS Empire — Three.js 3D</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Cinzel+Decorative:wght@700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#0a0a12;overflow:hidden;font-family:'Cinzel',Georgia,serif;user-select:none;}
+#three-container{position:fixed;top:0;left:0;width:100vw;height:100vh;}
+#menu-overlay{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,#1a1208 0%,#0a0a12 70%);z-index:1000;}
+.menu-title{font-family:'Cinzel Decorative',serif;font-size:clamp(28px,5vw,60px);color:#f0d080;text-shadow:0 0 40px rgba(240,180,60,.5);letter-spacing:4px;text-align:center;line-height:1.2;}
+.menu-sub{font-size:clamp(10px,1.4vw,13px);color:#8a7050;letter-spacing:6px;text-transform:uppercase;margin-top:10px;text-align:center;}
+.menu-tag{font-size:10px;color:#5a4a30;letter-spacing:3px;text-transform:uppercase;margin-top:6px;text-align:center;}
+.menu-div{width:200px;height:1px;background:linear-gradient(90deg,transparent,#5a3e1b,transparent);margin:18px auto;}
+.start-btn{margin-top:36px;background:linear-gradient(180deg,#8b5e1a,#5a3a08);border:2px solid #c8841e;border-radius:4px;color:#f5e0a0;font-family:'Cinzel',serif;font-size:18px;font-weight:600;padding:14px 60px;cursor:pointer;letter-spacing:4px;text-transform:uppercase;box-shadow:0 4px 20px rgba(200,132,30,.3),inset 0 1px 0 rgba(255,220,100,.2);transition:all .2s;}
+.start-btn:hover{background:linear-gradient(180deg,#aa7520,#7a4e0a);transform:translateY(-1px);box-shadow:0 4px 30px rgba(200,132,30,.5);}
+#top-bar{position:fixed;top:0;left:0;right:0;height:52px;background:linear-gradient(180deg,#1a1410,#110e0a);border-bottom:2px solid #5a3e1b;display:none;align-items:center;padding:0 16px;gap:12px;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,.6);}
+.empire-name{font-size:14px;font-weight:700;color:#f0d080;letter-spacing:3px;text-transform:uppercase;}
+.rpill{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:5px 12px;}
+.rpill .i{font-size:14px;} .rpill .v{color:#f0d080;font-weight:700;font-size:13px;} .rpill .l{color:#666;font-size:10px;font-family:sans-serif;letter-spacing:1px;}
+.spacer{flex:1;}
+.turn-btn{background:linear-gradient(180deg,#7a4e10,#4a2e05);border:1px solid #c8841e;border-radius:4px;color:#f5e0a0;font-family:'Cinzel',serif;font-size:12px;padding:7px 18px;cursor:pointer;letter-spacing:2px;transition:all .15s;}
+.turn-btn:hover{background:linear-gradient(180deg,#9a6218,#6a4208);}
+#turn-info{font-size:11px;color:#666;font-family:sans-serif;}
+#bot-panel{position:fixed;bottom:0;left:0;right:0;height:110px;background:linear-gradient(0deg,#0d0b08,#110e0a);border-top:2px solid #3a2a12;display:none;align-items:center;padding:0 20px;gap:16px;z-index:100;}
+#unit-name{font-size:15px;font-weight:700;color:#f0d080;letter-spacing:2px;margin-bottom:4px;}
+#unit-desc{font-size:11px;color:#888;font-family:sans-serif;line-height:1.5;}
+#action-btns{display:flex;gap:10px;}
+.abtn{background:linear-gradient(180deg,#2a3520,#1a2212);border:1px solid #4a6030;border-radius:4px;color:#a0d060;font-family:'Cinzel',serif;font-size:11px;padding:10px 18px;cursor:pointer;letter-spacing:1px;transition:all .15s;white-space:nowrap;}
+.abtn:hover{background:linear-gradient(180deg,#3a4530,#2a3220);border-color:#6a8050;}
+#status-msg{position:fixed;top:64px;left:50%;transform:translateX(-50%);background:rgba(10,8,5,.92);border:1px solid #8a6030;border-radius:4px;padding:7px 18px;font-size:13px;color:#f0d080;letter-spacing:1px;z-index:150;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;}
+#cam-hint{position:fixed;bottom:120px;right:16px;font-size:10px;color:#4a3a20;font-family:sans-serif;letter-spacing:1px;z-index:100;line-height:1.8;}
+</style>
+</head>
+<body>
+<div id="three-container"></div>
+<div id="menu-overlay">
+  <div>
+    <div class="menu-title">LifeOS<br>Empire</div>
+    <div class="menu-div"></div>
+    <div class="menu-sub">Three.js 3D</div>
+    <div class="menu-tag">WebGL · Real 3D · Dynamic Lighting</div>
+  </div>
+  <button class="start-btn" onclick="startGame()">Begin</button>
+</div>
+<div id="top-bar">
+  <span class="empire-name">⚔ Your Empire</span>
+  <div class="rpill"><span class="i">🏙</span><span class="v" id="res-cities">0</span><span class="l">CITIES</span></div>
+  <div class="rpill"><span class="i">⚔</span><span class="v" id="res-units">1</span><span class="l">UNITS</span></div>
+  <div class="spacer"></div>
+  <span id="turn-info">Turn 1</span>
+  <button class="turn-btn" onclick="endTurn()">End Turn ▶</button>
+</div>
+<div id="bot-panel">
+  <div style="flex:1"><div id="unit-name">Select a unit</div><div id="unit-desc">Click your settler to begin.</div></div>
+  <div id="action-btns"></div>
+</div>
+<div id="status-msg"></div>
+<div id="cam-hint">🖱 Drag: Pan · Scroll: Zoom · Right-drag: Orbit</div>
+
+<script>
+const COLS=18,ROWS=11,HEX_R=1.0,HEX_H_BASE=0.18,TOP_H=52,BOT_H=110;
+
+// Terrain heights + colors
+const TERRAIN={
+  ocean:    {label:'Ocean',    passable:false,h:0.0,  top:0x1a3a60,side:0x0f2040,water:true},
+  coast:    {label:'Coast',    passable:false,h:0.04, top:0x255080,side:0x183860,water:true},
+  plains:   {label:'Plains',   passable:true, h:0.18, top:0x6a9840,side:0x3a6018,water:false},
+  grassland:{label:'Grassland',passable:true, h:0.22, top:0x4a8030,side:0x286010,water:false},
+  forest:   {label:'Forest',   passable:true, h:0.26, top:0x286020,side:0x153810,water:false},
+  hill:     {label:'Hills',    passable:true, h:0.45, top:0x887848,side:0x504828,water:false},
+  mountain: {label:'Mountain', passable:false,h:0.9,  top:0x909090,side:0x585858,water:false},
+  desert:   {label:'Desert',   passable:true, h:0.22, top:0xc8a038,side:0x806018,water:false},
+  tundra:   {label:'Tundra',   passable:true, h:0.20, top:0x809090,side:0x486060,water:false},
+  river:    {label:'River',    passable:true, h:0.16, top:0x4a8838,side:0x286018,water:false},
+  snow:     {label:'Snow',     passable:false,h:0.30, top:0xd8e8f0,side:0x90a8b8,water:false},
+};
+
+const MAP_DATA=[
+  ['ocean','ocean','ocean','coast','coast','plains','plains','forest','forest','hill','hill','mountain','mountain','tundra','tundra','ocean','ocean','ocean'],
+  ['ocean','ocean','coast','coast','plains','plains','grassland','forest','forest','forest','hill','mountain','tundra','tundra','snow','snow','ocean','ocean'],
+  ['ocean','coast','coast','plains','plains','grassland','grassland','river','plains','forest','forest','hill','hill','tundra','snow','snow','tundra','ocean'],
+  ['ocean','coast','plains','plains','grassland','grassland','river','river','plains','plains','forest','forest','hill','hill','tundra','tundra','ocean','ocean'],
+  ['coast','plains','plains','grassland','grassland','plains','plains','river','plains','plains','plains','forest','forest','desert','desert','tundra','ocean','ocean'],
+  ['coast','plains','grassland','grassland','plains','plains','plains','plains','hill','hill','plains','plains','desert','desert','desert','desert','coast','ocean'],
+  ['coast','plains','plains','grassland','plains','plains','hill','hill','hill','mountain','mountain','desert','desert','desert','hill','coast','coast','ocean'],
+  ['ocean','coast','plains','plains','forest','forest','forest','hill','mountain','mountain','desert','desert','hill','hill','coast','coast','ocean','ocean'],
+  ['ocean','coast','coast','plains','plains','forest','forest','forest','hill','hill','desert','desert','coast','coast','ocean','ocean','ocean','ocean'],
+  ['ocean','ocean','coast','coast','plains','plains','forest','forest','grassland','grassland','coast','coast','ocean','ocean','ocean','ocean','ocean','ocean'],
+  ['ocean','ocean','ocean','coast','coast','plains','plains','grassland','coast','coast','ocean','ocean','ocean','ocean','ocean','ocean','ocean','ocean'],
+];
+
+function hexWorld(col,row){
+  const w=HEX_R*Math.sqrt(3);
+  const x=col*w+(row%2)*(w/2);
+  const z=row*HEX_R*1.5;
+  return{x,z};
+}
+function hexDist(c1,r1,c2,r2){const t=(c,r)=>{const x=c-(r-(r&1))/2,z=r;return{x,z,y:-x-z};};const a=t(c1,r1),b=t(c2,r2);return Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y),Math.abs(a.z-b.z));}
+function getNeighbors(col,row){const d=row%2===0?[[-1,-1],[0,-1],[-1,0],[1,0],[-1,1],[0,1]]:[[0,-1],[1,-1],[-1,0],[1,0],[0,1],[1,1]];return d.map(([dc,dr])=>({col:col+dc,row:row+dr})).filter(n=>n.col>=0&&n.col<COLS&&n.row>=0&&n.row<ROWS);}
+function getMovable(unit,r=2){const res=[];for(let row=0;row<ROWS;row++)for(let col=0;col<COLS;col++){if(col===unit.col&&row===unit.row)continue;if(hexDist(unit.col,unit.row,col,row)<=r&&TERRAIN[MAP_DATA[row][col]].passable&&!GS.units.some(u=>u.col===col&&u.row===row))res.push({col,row});}return res;}
+function seededRng(s){let n=s;return()=>{n=(n*1664525+1013904223)&0xffffffff;return(n>>>0)/0xffffffff;};}
+
+const GS={turn:1,cities:[],units:[],selectedUnit:null,moveHighlights:[],nextCityId:1,nextUnitId:1};
+const CITY_NAMES=['Aurum','Veridian','Solmere','Caelthon','Rivenmoor','Dunhallow','Ironspire','Thornwall','Eastmarch','Goldenveil'];
+
+let renderer,scene,camera,raycaster,mouse;
+let hexMeshes={},hlMeshes={},unitMeshes={},cityMeshes={};
+let _t=0,animId=null;
+
+// Camera state
+let camTarget=new THREE.Vector3(8,0,7);
+let camDist=16,camAngle=0.72,camAzimuth=0;
+let _mouseDown=false,_rightDown=false,_lastMouse={x:0,y:0},_drag=false;
+
+function startGame(){
+  document.getElementById('menu-overlay').style.display='none';
+  document.getElementById('top-bar').style.display='flex';
+  document.getElementById('bot-panel').style.display='flex';
+
+  const W=window.innerWidth, H=window.innerHeight;
+  renderer=new THREE.WebGLRenderer({antialias:true});
+  renderer.setSize(W,H);
+  renderer.setPixelRatio(window.devicePixelRatio||1);
+  renderer.shadowMap.enabled=true;
+  renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+  renderer.toneMapping=THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure=1.1;
+  document.getElementById('three-container').appendChild(renderer.domElement);
+
+  scene=new THREE.Scene();
+  scene.background=new THREE.Color(0x0d1220);
+  scene.fog=new THREE.Fog(0x0d1220,28,55);
+
+  camera=new THREE.PerspectiveCamera(42,W/H,0.1,100);
+  updateCamera();
+
+  raycaster=new THREE.Raycaster();
+  mouse=new THREE.Vector2();
+
+  // ── LIGHTING ──
+  // Ambient
+  scene.add(new THREE.AmbientLight(0x334466,1.2));
+  // Main sun (directional, casts shadows)
+  const sun=new THREE.DirectionalLight(0xfff0d0,2.2);
+  sun.position.set(8,14,-4);
+  sun.castShadow=true;
+  sun.shadow.mapSize.width=2048; sun.shadow.mapSize.height=2048;
+  sun.shadow.camera.near=0.5; sun.shadow.camera.far=60;
+  sun.shadow.camera.left=-20; sun.shadow.camera.right=20;
+  sun.shadow.camera.top=20; sun.shadow.camera.bottom=-20;
+  sun.shadow.bias=-0.001;
+  scene.add(sun);
+  // Fill light (opposite side, cool blue)
+  const fill=new THREE.DirectionalLight(0x8090c0,0.6);
+  fill.position.set(-6,6,8);
+  scene.add(fill);
+  // Rim light
+  const rim=new THREE.DirectionalLight(0xffd080,0.3);
+  rim.position.set(0,2,12);
+  scene.add(rim);
+
+  // ── BUILD HEX TILES ──
+  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) buildHexTile(c,r);
+
+  // ── WATER PLANE ──
+  const waterGeo=new THREE.PlaneGeometry(40,30);
+  const waterMat=new THREE.MeshStandardMaterial({color:0x1a3a60,metalness:0.3,roughness:0.1,transparent:true,opacity:0.85});
+  const water=new THREE.Mesh(waterGeo,waterMat);
+  water.rotation.x=-Math.PI/2; water.position.y=-0.02; water.receiveShadow=true;
+  scene.add(water);
+
+  // ── SPAWN SETTLER ──
+  const sc=6,sr=5;
+  GS.units.push({id:GS.nextUnitId++,type:'settler',col:sc,row:sr,movesLeft:2});
+  buildSettlerMesh(GS.units[0]);
+
+  // ── INPUT ──
+  const cv=renderer.domElement;
+  cv.addEventListener('mousedown',e=>{_mouseDown=true;_rightDown=e.button===2;_drag=false;_lastMouse={x:e.clientX,y:e.clientY};});
+  cv.addEventListener('mousemove',e=>{
+    if(!_mouseDown) return;
+    const dx=e.clientX-_lastMouse.x,dy=e.clientY-_lastMouse.y;
+    if(Math.abs(dx)>3||Math.abs(dy)>3) _drag=true;
+    if(_drag){
+      if(_rightDown){ camAzimuth-=dx*0.008; camAngle=Math.max(0.3,Math.min(1.45,camAngle+dy*0.006)); }
+      else {
+        // Pan in camera-relative space
+        const right=new THREE.Vector3(Math.sin(camAzimuth+Math.PI/2),0,Math.cos(camAzimuth+Math.PI/2));
+        const fwd=new THREE.Vector3(Math.sin(camAzimuth)*Math.cos(camAngle),0,Math.cos(camAzimuth)*Math.cos(camAngle));
+        camTarget.addScaledVector(right,-dx*0.02);
+        camTarget.addScaledVector(fwd,dy*0.02);
+      }
+    }
+    _lastMouse={x:e.clientX,y:e.clientY};
+    updateCamera();
+  });
+  cv.addEventListener('mouseup',e=>{_mouseDown=false; if(!_drag) handleClick(e); _drag=false;});
+  cv.addEventListener('wheel',e=>{e.preventDefault();camDist=Math.max(4,Math.min(30,camDist+e.deltaY*0.02));updateCamera();},{passive:false});
+  cv.addEventListener('contextmenu',e=>e.preventDefault());
+
+  window.addEventListener('resize',()=>{
+    camera.aspect=window.innerWidth/window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth,window.innerHeight);
+  });
+
+  // ── ANIMATE ──
+  function animate(){
+    animId=requestAnimationFrame(animate);
+    _t+=0.016;
+    tickAnimations();
+    renderer.render(scene,camera);
+  }
+  animate();
+  updateHUD(); showStatus('Your empire awaits. Right-drag to orbit, scroll to zoom.',4500);
+}
+
+function updateCamera(){
+  const x=camTarget.x+Math.sin(camAzimuth)*Math.cos(camAngle)*camDist;
+  const y=Math.sin(camAngle)*camDist;
+  const z=camTarget.z+Math.cos(camAzimuth)*Math.cos(camAngle)*camDist;
+  camera.position.set(x,y,z);
+  camera.lookAt(camTarget);
+}
+
+// ── BUILD HEX TILE ──
+function buildHexTile(col,row){
+  const type=MAP_DATA[row][col];
+  const t=TERRAIN[type];
+  const {x,z}=hexWorld(col,row);
+  const totalH=HEX_H_BASE+t.h;
+  if(t.water) return; // water tiles use the flat water plane
+
+  // Cylinder for hex shape (6 sides = hex)
+  const geo=new THREE.CylinderGeometry(HEX_R*0.97,HEX_R*0.97,totalH,6,1);
+  const mat=new THREE.MeshStandardMaterial({
+    color:t.top,
+    roughness:type==='snow'?0.9:type==='desert'?0.95:0.78,
+    metalness:0.05,
+  });
+  const mesh=new THREE.Mesh(geo,mat);
+  mesh.position.set(x,totalH/2,z);
+  mesh.castShadow=true; mesh.receiveShadow=true;
+  mesh.userData={col,row,type};
+  scene.add(mesh);
+  hexMeshes[`${col}_${row}`]=mesh;
+
+  // Side color
+  const sideMat=new THREE.MeshStandardMaterial({color:t.side,roughness:0.9,metalness:0.0});
+  // Override the side faces material
+  mesh.material=[sideMat,mat,mat]; // Three.js CylinderGeometry: 0=side, 1=top, 2=bottom
+
+  // Terrain features
+  addTerrainFeatures(col,row,type,x,totalH,z);
+
+  // Highlight ring (invisible by default)
+  const hlGeo=new THREE.CylinderGeometry(HEX_R*1.01,HEX_R*1.01,0.04,6,1);
+  const hlMat=new THREE.MeshBasicMaterial({color:0x40dd40,transparent:true,opacity:0,wireframe:false});
+  const hlMesh=new THREE.Mesh(hlGeo,hlMat);
+  hlMesh.position.set(x,totalH+0.03,z);
+  scene.add(hlMesh);
+  hlMeshes[`${col}_${row}`]=hlMesh;
+}
+
+function addTerrainFeatures(col,row,type,wx,tileH,wz){
+  const rng=seededRng(col*37+row*13);
+  const topY=tileH+0.01;
+
+  if(type==='forest'){
+    for(let i=0;i<3+Math.floor(rng()*2);i++){
+      const ox=(rng()-.5)*HEX_R*1.2, oz=(rng()-.5)*HEX_R*1.2;
+      const h=0.35+rng()*.25, r2=0.12+rng()*.08;
+      // Trunk
+      const tg=new THREE.CylinderGeometry(0.04,0.05,h*.5,5);
+      const tm=new THREE.MeshStandardMaterial({color:0x4a3018,roughness:1});
+      const tr=new THREE.Mesh(tg,tm); tr.position.set(wx+ox,topY+h*.25,wz+oz); tr.castShadow=true; scene.add(tr);
+      // Canopy layers
+      for(let l=0;l<3;l++){
+        const cg=new THREE.ConeGeometry(r2*(1.1-l*.2),h*.45,6);
+        const cm=new THREE.MeshStandardMaterial({color:[0x1a5018,0x226622,0x2a7a2a][l],roughness:0.9});
+        const cn=new THREE.Mesh(cg,cm); cn.position.set(wx+ox,topY+h*.4+l*h*.22,wz+oz); cn.castShadow=true; scene.add(cn);
+      }
+    }
+  } else if(type==='mountain'){
+    for(let i=0;i<1+Math.floor(rng()*2);i++){
+      const ox=(rng()-.5)*HEX_R*.9, oz=(rng()-.5)*HEX_R*.9;
+      const ph=0.55+rng()*.4, pr=0.28+rng()*.12;
+      // Rock body
+      const pg=new THREE.ConeGeometry(pr,ph,7);
+      const pm=new THREE.MeshStandardMaterial({color:0x706868,roughness:0.95,metalness:0.05});
+      const pk=new THREE.Mesh(pg,pm); pk.position.set(wx+ox,topY+ph/2,wz+oz); pk.castShadow=true; scene.add(pk);
+      // Snow cap
+      const sg=new THREE.ConeGeometry(pr*.35,ph*.28,7);
+      const sm=new THREE.MeshStandardMaterial({color:0xe8f0f8,roughness:0.8});
+      const sk=new THREE.Mesh(sg,sm); sk.position.set(wx+ox,topY+ph*.72,wz+oz); sk.castShadow=true; scene.add(sk);
+    }
+  } else if(type==='hill'){
+    for(let i=0;i<2+Math.floor(rng()*2);i++){
+      const ox=(rng()-.5)*HEX_R*1.0, oz=(rng()-.5)*HEX_R*1.0;
+      const hg=new THREE.SphereGeometry(0.2+rng()*.12,8,5,0,Math.PI*2,0,Math.PI*.55);
+      const hm=new THREE.MeshStandardMaterial({color:0xa09060,roughness:0.9});
+      const hk=new THREE.Mesh(hg,hm); hk.position.set(wx+ox,topY,wz+oz); hk.castShadow=true; scene.add(hk);
+    }
+  } else if(type==='desert'){
+    // Sand dune ripples (torus segments)
+    for(let i=0;i<2;i++){
+      const dg=new THREE.TorusGeometry(0.18+i*.12,0.025,4,12,Math.PI*1.3);
+      const dm=new THREE.MeshStandardMaterial({color:0xb89030,roughness:1});
+      const dk=new THREE.Mesh(dg,dm); dk.rotation.x=Math.PI/2; dk.position.set(wx+(rng()-.5)*.4,topY+.01,wz+(rng()-.5)*.4); scene.add(dk);
+    }
+  } else if(type==='snow'){
+    const sg=new THREE.SphereGeometry(HEX_R*.7,8,4);
+    const sm=new THREE.MeshStandardMaterial({color:0xeef6fc,roughness:0.7,transparent:true,opacity:.5});
+    const sk=new THREE.Mesh(sg,sm); sk.position.set(wx,topY+.05,wz); scene.add(sk);
+  } else if(type==='river'){
+    // River strip
+    const rg=new THREE.BoxGeometry(HEX_R*.3,0.02,HEX_R*1.6);
+    const rm=new THREE.MeshStandardMaterial({color:0x3070b8,metalness:.2,roughness:.2,transparent:true,opacity:.8});
+    const rk=new THREE.Mesh(rg,rm); rk.position.set(wx+(rng()-.5)*.3,topY,wz); rk.rotation.y=(rng()-.5)*.5; scene.add(rk);
+  }
+}
+
+// ── SETTLER MESH ──
+function buildSettlerMesh(unit){
+  const {x,z}=hexWorld(unit.col,unit.row);
+  const t=TERRAIN[MAP_DATA[unit.row][unit.col]];
+  const baseY=HEX_H_BASE+t.h;
+  const group=new THREE.Group();
+
+  // Base
+  const bodyGeo=new THREE.CylinderGeometry(0.12,0.14,0.38,8);
+  const bodyMat=new THREE.MeshStandardMaterial({color:0x6868b0,roughness:.8});
+  const body=new THREE.Mesh(bodyGeo,bodyMat); body.position.y=.19; group.add(body);
+
+  // Cloak flare
+  const cloakGeo=new THREE.CylinderGeometry(0.16,0.2,0.12,8);
+  const cloakMat=new THREE.MeshStandardMaterial({color:0x5858a0,roughness:.9});
+  const cloak=new THREE.Mesh(cloakGeo,cloakMat); cloak.position.y=.06; group.add(cloak);
+
+  // Pack
+  const packGeo=new THREE.BoxGeometry(0.12,0.16,0.08);
+  const packMat=new THREE.MeshStandardMaterial({color:0x7a5228,roughness:.95});
+  const pack=new THREE.Mesh(packGeo,packMat); pack.position.set(.1,.28,.0); group.add(pack);
+
+  // Head
+  const headGeo=new THREE.SphereGeometry(0.1,10,8);
+  const headMat=new THREE.MeshStandardMaterial({color:0xd4a878,roughness:.7});
+  const head=new THREE.Mesh(headGeo,headMat); head.position.y=.52; group.add(head);
+
+  // Hood
+  const hoodGeo=new THREE.ConeGeometry(0.11,0.14,8);
+  const hoodMat=new THREE.MeshStandardMaterial({color:0x4a4a80,roughness:.9});
+  const hood=new THREE.Mesh(hoodGeo,hoodMat); hood.position.y=.63; group.add(hood);
+
+  // Staff
+  const stGeo=new THREE.CylinderGeometry(0.015,0.015,0.7,6);
+  const stMat=new THREE.MeshStandardMaterial({color:0x8a6030,roughness:.9});
+  const st=new THREE.Mesh(stGeo,stMat); st.position.set(-.15,.35,0); group.add(st);
+  const sg=new THREE.SphereGeometry(0.04,8,6);
+  const sfm=new THREE.MeshStandardMaterial({color:0xd0a840,metalness:.6,roughness:.3});
+  const sf=new THREE.Mesh(sg,sfm); sf.position.set(-.15,.72,0); group.add(sf);
+
+  // Shadow disc
+  const sdGeo=new THREE.CircleGeometry(.18,12);
+  const sdMat=new THREE.MeshBasicMaterial({color:0x000000,transparent:true,opacity:.35});
+  const sd=new THREE.Mesh(sdGeo,sdMat); sd.rotation.x=-Math.PI/2; sd.position.y=.005; group.add(sd);
+
+  group.position.set(x,baseY,z);
+  group.castShadow=true;
+  group.userData={unitId:unit.id,isUnit:true};
+  scene.add(group);
+  unitMeshes[unit.id]={group,baseY,head,hood,body,sf};
+}
+
+// ── CITY MESH ──
+function buildCityMesh(city){
+  const {x,z}=hexWorld(city.col,city.row);
+  const t=TERRAIN[MAP_DATA[city.row][city.col]];
+  const baseY=HEX_H_BASE+t.h;
+  const group=new THREE.Group();
+
+  // Wall ring
+  const wallGeo=new THREE.TorusGeometry(0.52,0.06,6,12);
+  const wallMat=new THREE.MeshStandardMaterial({color:0x907050,roughness:.9});
+  const wall=new THREE.Mesh(wallGeo,wallMat); wall.rotation.x=Math.PI/2; wall.position.y=.08; group.add(wall);
+
+  // Plaza floor
+  const plazaGeo=new THREE.CylinderGeometry(.5,.5,.04,6);
+  const plazaMat=new THREE.MeshStandardMaterial({color:0xb0a090,roughness:.95});
+  const plaza=new THREE.Mesh(plazaGeo,plazaMat); plaza.position.y=.02; group.add(plaza);
+
+  // Buildings
+  const buildingDefs=[
+    {x:0,   z:0,   w:.18,d:.18,h:.38,col:0xc8a870},
+    {x:-.22,z:-.08,w:.14,d:.14,h:.24,col:0xb09060},
+    {x:.2,  z:-.05,w:.13,d:.13,h:.22,col:0xb09060},
+    {x:-.08,z:.18, w:.12,d:.12,h:.18,col:0xa08050},
+    {x:.12, z:.15, w:.10,d:.10,h:.16,col:0xa08050},
+  ];
+  for(const b of buildingDefs){
+    const bg=new THREE.BoxGeometry(b.w,b.h,b.d);
+    const bm=new THREE.MeshStandardMaterial({color:b.col,roughness:.8});
+    const bk=new THREE.Mesh(bg,bm); bk.position.set(b.x,b.h/2+.04,b.z); bk.castShadow=true; group.add(bk);
+    // Roof
+    const rg=new THREE.ConeGeometry(b.w*.75,b.h*.3,4); rg.rotateY(Math.PI/4);
+    const rm=new THREE.MeshStandardMaterial({color:0x7a5028,roughness:.9});
+    const rk=new THREE.Mesh(rg,rm); rk.position.set(b.x,b.h+.04+b.h*.15,b.z); rk.castShadow=true; group.add(rk);
+  }
+
+  // Main tower spire
+  const spireGeo=new THREE.ConeGeometry(.06,.28,4); spireGeo.rotateY(Math.PI/4);
+  const spireMat=new THREE.MeshStandardMaterial({color:0xe8c080,metalness:.4,roughness:.4});
+  const spire=new THREE.Mesh(spireGeo,spireMat); spire.position.set(0,.38+.28/2+.04,0); spire.castShadow=true; group.add(spire);
+
+  // Flag
+  const fgGeo=new THREE.PlaneGeometry(.12,.08);
+  const fgMat=new THREE.MeshBasicMaterial({color:0x3060c0,side:THREE.DoubleSide});
+  const fg=new THREE.Mesh(fgGeo,fgMat); fg.position.set(.07,.38+.28+.08,.0); group.add(fg);
+
+  // Point light glow
+  const glow=new THREE.PointLight(0x6090d0,0.8,3.5);
+  glow.position.set(x,.5+baseY,z); scene.add(glow);
+  cityMeshes['glow_'+city.id]=glow;
+
+  // Territory: raise a subtle ring on border tiles
+  for(const h of city.territory){
+    const hm=hexMeshes[`${h.col}_${h.row}`];
+    if(hm){ hm.material[1]&&(hm.material[1]=new THREE.MeshStandardMaterial({color:0x4888cc,roughness:.8,emissive:0x102844,emissiveIntensity:.35})); }
+  }
+
+  group.position.set(x,baseY,z);
+  scene.add(group);
+
+  // Label (HTML overlay)
+  cityMeshes['label_'+city.id]={pos:{x,y:baseY+1.1,z},name:city.name};
+  updateCityLabels();
+  cityMeshes[city.id]={group,glow,flag:fg};
+}
+
+function updateCityLabels(){
+  let overlay=document.getElementById('city-label-overlay');
+  if(!overlay){overlay=document.createElement('div');overlay.id='city-label-overlay';overlay.style.cssText='position:fixed;top:0;left:0;pointer-events:none;z-index:50;';document.body.appendChild(overlay);}
+  overlay.innerHTML='';
+  for(const key of Object.keys(cityMeshes)){
+    if(!key.startsWith('label_')) continue;
+    const {pos,name}=cityMeshes[key];
+    const v=new THREE.Vector3(pos.x,pos.y,pos.z);
+    v.project(camera);
+    const sx=(v.x+1)/2*window.innerWidth, sy=(-v.y+1)/2*window.innerHeight;
+    overlay.innerHTML+=`<div style="position:absolute;left:${sx}px;top:${sy}px;transform:translate(-50%,-50%);font-family:Cinzel,serif;font-size:11px;font-weight:700;color:#f0d080;text-shadow:0 0 6px #000,0 0 12px #000;white-space:nowrap;">${name}</div>`;
+  }
+}
+
+// ── ANIMATIONS ──
+function tickAnimations(){
+  // Unit bob
+  for(const unit of GS.units){
+    const m=unitMeshes[unit.id]; if(!m) continue;
+    const bob=Math.sin(_t*2.5+unit.id*1.3)*.035;
+    m.group.position.y=m.baseY+bob;
+    // Staff sway
+    if(m.group.children[4]) m.group.children[4].rotation.z=Math.sin(_t*1.8)*.05;
+    // Hover ring (selected)
+    const isSel=GS.selectedUnit&&GS.selectedUnit.id===unit.id;
+    if(isSel){
+      if(!m.selRing){
+        const rg=new THREE.TorusGeometry(0.32,0.025,6,20);
+        const rm=new THREE.MeshBasicMaterial({color:0xffe060});
+        m.selRing=new THREE.Mesh(rg,rm); m.selRing.rotation.x=Math.PI/2; m.selRing.position.set(m.group.position.x,m.baseY+.05,m.group.position.z); scene.add(m.selRing);
+      }
+      const pulse=1+Math.sin(_t*3)*.08;
+      m.selRing.scale.set(pulse,1,pulse);
+      m.selRing.position.y=m.baseY+.05+bob;
+      m.selRing.material.color.setHex(0xffe060);
+    } else {
+      if(m.selRing){m.selRing.geometry.dispose();m.selRing.material.dispose();scene.remove(m.selRing);m.selRing=null;}
+    }
+  }
+
+  // Highlight pulse
+  for(const key of Object.keys(hlMeshes)){
+    const m=hlMeshes[key]; if(!m) continue;
+    const [c,r]=key.split('_').map(Number);
+    const isHL=GS.moveHighlights.some(h=>h.col===c&&h.row===r);
+    if(isHL){
+      const pulse=(Math.sin(_t*2.5+c*.5+r*.7)+1)*.5;
+      m.material.opacity=0.35+pulse*.45; m.material.color.setHex(0x40dd40);
+    } else { m.material.opacity=0; }
+  }
+
+  // City glow pulse + flag wave
+  for(const city of GS.cities){
+    const cm=cityMeshes[city.id]; if(!cm) continue;
+    if(cm.glow){cm.glow.intensity=0.6+Math.sin(_t*1.2+city.id*.4)*.25;}
+    if(cm.flag){cm.flag.rotation.y=Math.sin(_t*2.4)*.25;}
+  }
+
+  // Water shimmer
+  const waterObj=scene.children.find(o=>o.isMesh&&o.geometry.type==='PlaneGeometry');
+  if(waterObj){ waterObj.material.opacity=0.78+Math.sin(_t*.8)*.07; }
+
+  // Update city label positions (project 3D→2D each frame)
+  if(GS.cities.length>0) updateCityLabels();
+}
+
+// ── CLICK HANDLING ──
+function handleClick(e){
+  const rect=renderer.domElement.getBoundingClientRect();
+  mouse.x=((e.clientX-rect.left)/rect.width)*2-1;
+  mouse.y=-((e.clientY-rect.top)/rect.height)*2+1;
+  raycaster.setFromCamera(mouse,camera);
+
+  // Check unit hits
+  const unitGroups=GS.units.map(u=>unitMeshes[u.id]?.group).filter(Boolean);
+  const flatHexes=Object.values(hexMeshes);
+  const uHits=raycaster.intersectObjects(unitGroups,true);
+  if(uHits.length>0){
+    const hitGroup=uHits[0].object.parent;
+    const unit=GS.units.find(u=>unitMeshes[u.id]?.group===hitGroup);
+    if(unit){GS.selectedUnit=unit;GS.moveHighlights=unit.movesLeft>0?getMovable(unit,unit.movesLeft):[];updateHUD();return;}
+  }
+
+  // Check highlight tiles
+  const hlKeys=GS.moveHighlights.map(h=>`${h.col}_${h.row}`);
+  const hlMs=hlKeys.map(k=>hlMeshes[k]).filter(Boolean);
+  const hexHits=raycaster.intersectObjects([...flatHexes,...hlMs]);
+  if(hexHits.length>0){
+    const hit=hexHits[0].object;
+    const {col,row}=hit.userData||{};
+    if(col===undefined||row===undefined) return;
+    const isHL=GS.moveHighlights.some(h=>h.col===col&&h.row===row);
+    if(isHL&&GS.selectedUnit){
+      moveUnit(GS.selectedUnit,col,row); return;
+    }
+    const clickedUnit=GS.units.find(u=>u.col===col&&u.row===row);
+    if(clickedUnit){GS.selectedUnit=clickedUnit;GS.moveHighlights=clickedUnit.movesLeft>0?getMovable(clickedUnit,clickedUnit.movesLeft):[];updateHUD();return;}
+    GS.selectedUnit=null;GS.moveHighlights=[];updateHUD();
+  }
+}
+
+function moveUnit(unit,col,row){
+  const m=unitMeshes[unit.id]; if(!m) return;
+  const {x,z}=hexWorld(col,row);
+  const t=TERRAIN[MAP_DATA[row][col]];
+  const newBaseY=HEX_H_BASE+t.h;
+  // Animate arc
+  const sx=m.group.position.x,sz=m.group.position.z,sy=m.baseY;
+  let prog=0;
+  function moveStep(){
+    prog=Math.min(1,prog+0.045);
+    const ease=1-Math.pow(1-prog,3);
+    m.group.position.x=sx+(x-sx)*ease;
+    m.group.position.z=sz+(z-sz)*ease;
+    const arc=Math.sin(prog*Math.PI)*.8;
+    m.group.position.y=sy+(newBaseY-sy)*ease+arc;
+    if(m.selRing){m.selRing.position.x=m.group.position.x;m.selRing.position.z=m.group.position.z;m.selRing.position.y=m.group.position.y+.05;}
+    if(prog<1) requestAnimationFrame(moveStep);
+    else { m.baseY=newBaseY; m.group.position.y=newBaseY; }
+  }
+  moveStep();
+  unit.col=col; unit.row=row; unit.movesLeft--;
+  GS.moveHighlights=unit.movesLeft>0?getMovable(unit,unit.movesLeft):[];
+  updateHUD();
+}
+
+function foundCity(){
+  const u=GS.selectedUnit; if(!u) return;
+  const type=MAP_DATA[u.row][u.col];
+  if(!TERRAIN[type].passable){showStatus('Cannot found here!');return;}
+  if(GS.cities.some(c=>hexDist(c.col,c.row,u.col,u.row)<3)){showStatus('Too close!');return;}
+  const name=CITY_NAMES[(GS.nextCityId-1)%CITY_NAMES.length];
+  const territory=getNeighbors(u.col,u.row).filter(n=>TERRAIN[MAP_DATA[n.row][n.col]].passable).map(n=>({col:n.col,row:n.row}));
+  GS.cities.push({id:GS.nextCityId++,col:u.col,row:u.row,name,pop:1,territory});
+  buildCityMesh(GS.cities[GS.cities.length-1]);
+  // Dissolve settler
+  const m=unitMeshes[u.id]; if(m){
+    let fa=1;
+    function fadeOut(){fa-=0.04;m.group.children.forEach(c2=>{if(c2.material)c2.material.transparent=true,c2.material.opacity=fa;});m.group.scale.setScalar(1+(.015*(1-fa))*10);if(fa>0)requestAnimationFrame(fadeOut);else{scene.remove(m.group);if(m.selRing)scene.remove(m.selRing);}}
+    fadeOut();
+  }
+  GS.units=GS.units.filter(x=>x.id!==u.id);
+  GS.selectedUnit=null;GS.moveHighlights=[];
+  showStatus(`✦ ${name} has been founded!`);updateHUD();
+}
+
+function updateHUD(){
+  const u=GS.selectedUnit;
+  document.getElementById('res-cities').textContent=GS.cities.length;
+  document.getElementById('res-units').textContent=GS.units.length;
+  if(!u){document.getElementById('unit-name').textContent='No unit selected';document.getElementById('unit-desc').textContent='Click a unit to select it.';document.getElementById('action-btns').innerHTML='';return;}
+  const type=MAP_DATA[u.row][u.col];
+  document.getElementById('unit-name').textContent='⚑ Settler';
+  document.getElementById('unit-desc').textContent=`On: ${TERRAIN[type].label} · Moves: ${u.movesLeft}/2`;
+  document.getElementById('action-btns').innerHTML=`<button class="abtn" onclick="foundCity()">🏙 Found City</button><button class="abtn" onclick="GS.selectedUnit=null;GS.moveHighlights=[];updateHUD()">⏭ Skip</button>`;
+}
+function endTurn(){GS.turn++;for(const u of GS.units)u.movesLeft=2;document.getElementById('turn-info').textContent=`Turn ${GS.turn}`;showStatus(`Turn ${GS.turn} begins`);if(GS.turn%5===0)for(const c of GS.cities)c.pop=Math.min(10,c.pop+1);updateHUD();}
+function showStatus(msg,d=2500){const el=document.getElementById('status-msg');el.textContent=msg;el.style.opacity='1';clearTimeout(el._t);el._t=setTimeout(()=>el.style.opacity='0',d);}
+</script>
+</body>
+</html>
