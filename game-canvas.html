@@ -1,0 +1,1230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LifeOS Empire — Canvas Edition</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Cinzel+Decorative:wght@700&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #0a0a12;
+  color: #e8dfc8;
+  font-family: 'Cinzel', Georgia, serif;
+  overflow: hidden;
+  user-select: none;
+  width: 100vw;
+  height: 100vh;
+}
+
+/* ── MENU SCREEN ── */
+#menu-screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  background: radial-gradient(ellipse at center, #1a1208 0%, #0a0a12 70%);
+}
+
+#menu-screen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(1px 1px at 20% 30%, rgba(255,220,100,0.4) 0%, transparent 100%),
+    radial-gradient(1px 1px at 80% 20%, rgba(255,220,100,0.3) 0%, transparent 100%),
+    radial-gradient(1px 1px at 50% 70%, rgba(255,200,80,0.2) 0%, transparent 100%),
+    radial-gradient(1px 1px at 10% 80%, rgba(255,220,100,0.3) 0%, transparent 100%),
+    radial-gradient(1px 1px at 90% 60%, rgba(255,210,90,0.25) 0%, transparent 100%);
+  pointer-events: none;
+}
+
+.menu-title-wrap {
+  text-align: center;
+  margin-bottom: 60px;
+}
+.menu-title {
+  font-family: 'Cinzel Decorative', serif;
+  font-size: clamp(32px, 5vw, 64px);
+  color: #f0d080;
+  text-shadow: 0 0 40px rgba(240,180,60,0.5), 0 0 80px rgba(240,150,30,0.2);
+  letter-spacing: 4px;
+  line-height: 1.2;
+}
+.menu-subtitle {
+  font-size: clamp(12px, 1.5vw, 16px);
+  color: #8a7050;
+  letter-spacing: 6px;
+  text-transform: uppercase;
+  margin-top: 12px;
+}
+
+.menu-divider {
+  width: 200px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #5a3e1b, transparent);
+  margin: 20px auto;
+}
+
+.start-btn {
+  background: linear-gradient(180deg, #8b5e1a 0%, #5a3a08 100%);
+  border: 2px solid #c8841e;
+  border-radius: 4px;
+  color: #f5e0a0;
+  font-family: 'Cinzel', Georgia, serif;
+  font-size: 18px;
+  font-weight: 600;
+  padding: 16px 64px;
+  cursor: pointer;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+  box-shadow:
+    0 4px 20px rgba(200,132,30,0.3),
+    0 0 40px rgba(200,100,10,0.1),
+    inset 0 1px 0 rgba(255,220,100,0.2);
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+.start-btn::after {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%; width: 60%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,220,100,0.15), transparent);
+  transition: left 0.4s;
+}
+.start-btn:hover::after { left: 150%; }
+.start-btn:hover {
+  background: linear-gradient(180deg, #aa7520 0%, #7a4e0a 100%);
+  box-shadow: 0 4px 30px rgba(200,132,30,0.5), 0 0 60px rgba(200,100,10,0.2), inset 0 1px 0 rgba(255,220,100,0.25);
+  transform: translateY(-1px);
+}
+.start-btn:active { transform: translateY(0); }
+
+/* ── GAME SCREEN ── */
+#game-screen {
+  display: none;
+  position: fixed;
+  inset: 0;
+}
+
+canvas#game-canvas {
+  display: block;
+  cursor: default;
+}
+
+/* ── TOP BAR ── */
+#top-bar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 52px;
+  background: linear-gradient(180deg, #1a1410 0%, #110e0a 100%);
+  border-bottom: 2px solid #5a3e1b;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 12px;
+  z-index: 100;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.6);
+}
+.empire-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #f0d080;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  text-shadow: 0 0 10px rgba(240,180,60,0.4);
+}
+.resource-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 4px;
+  padding: 5px 12px;
+  font-size: 12px;
+}
+.rp-icon { font-size: 15px; }
+.rp-val { color: #f0d080; font-weight: 700; font-size: 13px; }
+.rp-lbl { color: #666; font-size: 10px; font-family: sans-serif; letter-spacing: 1px; }
+.spacer { flex: 1; }
+.turn-btn {
+  background: linear-gradient(180deg, #7a4e10 0%, #4a2e05 100%);
+  border: 1px solid #c8841e;
+  border-radius: 4px;
+  color: #f5e0a0;
+  font-family: 'Cinzel', Georgia, serif;
+  font-size: 12px;
+  padding: 7px 20px;
+  cursor: pointer;
+  letter-spacing: 2px;
+  transition: all 0.15s;
+}
+.turn-btn:hover { background: linear-gradient(180deg, #9a6218 0%, #6a4208 100%); }
+#turn-info { font-size: 11px; color: #666; font-family: sans-serif; }
+
+/* ── BOTTOM PANEL ── */
+#bottom-panel {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  height: 120px;
+  background: linear-gradient(0deg, #0d0b08 0%, #110e0a 100%);
+  border-top: 2px solid #3a2a12;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 16px;
+}
+#unit-info {
+  flex: 1;
+}
+#unit-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: #f0d080;
+  letter-spacing: 2px;
+  margin-bottom: 4px;
+}
+#unit-desc {
+  font-size: 11px;
+  color: #888;
+  font-family: sans-serif;
+  line-height: 1.5;
+}
+#action-btns {
+  display: flex;
+  gap: 10px;
+}
+.action-btn {
+  background: linear-gradient(180deg, #2a3520 0%, #1a2212 100%);
+  border: 1px solid #4a6030;
+  border-radius: 4px;
+  color: #a0d060;
+  font-family: 'Cinzel', Georgia, serif;
+  font-size: 11px;
+  padding: 10px 20px;
+  cursor: pointer;
+  letter-spacing: 1px;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.action-btn:hover { background: linear-gradient(180deg, #3a4530 0%, #2a3220 100%); border-color: #6a8050; }
+.action-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.action-btn.danger {
+  background: linear-gradient(180deg, #3a1510 0%, #220c08 100%);
+  border-color: #6a2518;
+  color: #e06040;
+}
+.action-btn.danger:hover { background: linear-gradient(180deg, #4a2018 0%, #321008 100%); }
+
+/* ── TOOLTIP ── */
+#tooltip {
+  position: fixed;
+  background: rgba(10,8,5,0.95);
+  border: 1px solid #5a3e1b;
+  border-radius: 4px;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: #c8b890;
+  pointer-events: none;
+  z-index: 200;
+  display: none;
+  max-width: 200px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+}
+#tooltip h4 { color: #f0d080; font-size: 13px; margin-bottom: 4px; }
+#tooltip p { font-family: sans-serif; line-height: 1.4; }
+
+/* ── STATUS MSG ── */
+#status-msg {
+  position: fixed;
+  top: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(10,8,5,0.9);
+  border: 1px solid #8a6030;
+  border-radius: 4px;
+  padding: 8px 20px;
+  font-size: 13px;
+  color: #f0d080;
+  letter-spacing: 1px;
+  z-index: 150;
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+  white-space: nowrap;
+}
+</style>
+</head>
+<body>
+
+<!-- MENU -->
+<div id="menu-screen">
+  <div class="menu-title-wrap">
+    <div class="menu-title">LifeOS<br>Empire</div>
+    <div class="menu-divider"></div>
+    <div class="menu-subtitle">Canvas Edition</div>
+  </div>
+  <button class="start-btn" onclick="startGame()">Begin</button>
+</div>
+
+<!-- GAME -->
+<div id="game-screen">
+  <div id="top-bar">
+    <span class="empire-name" id="empire-label">⚔ Your Empire</span>
+    <div class="resource-pill"><span class="rp-icon">🏙</span><span class="rp-val" id="res-cities">0</span><span class="rp-lbl">CITIES</span></div>
+    <div class="resource-pill"><span class="rp-icon">⚔</span><span class="rp-val" id="res-units">1</span><span class="rp-lbl">UNITS</span></div>
+    <div class="spacer"></div>
+    <span id="turn-info">Turn 1</span>
+    <button class="turn-btn" onclick="endTurn()">End Turn ▶</button>
+  </div>
+  <canvas id="game-canvas"></canvas>
+  <div id="bottom-panel">
+    <div id="unit-info">
+      <div id="unit-name">Select a unit</div>
+      <div id="unit-desc">Click on your settler to begin your empire.</div>
+    </div>
+    <div id="action-btns"></div>
+  </div>
+</div>
+
+<div id="tooltip"><h4 id="tt-title"></h4><p id="tt-body"></p></div>
+<div id="status-msg" id="status-msg"></div>
+
+<script>
+// ══════════════════════════════════════════════════════
+// CONSTANTS & CONFIG
+// ══════════════════════════════════════════════════════
+const HEX_SIZE = 54;
+const TOP_BAR_H = 52;
+const BOT_BAR_H = 120;
+const COLS = 18;
+const ROWS = 11;
+
+// ══════════════════════════════════════════════════════
+// TERRAIN DEFINITIONS
+// ══════════════════════════════════════════════════════
+const TERRAIN = {
+  ocean:    { label: 'Ocean',    passable: false, color: '#1a3a5c', dark: '#0f2540', feature: 'water' },
+  coast:    { label: 'Coast',    passable: false, color: '#2a5a8c', dark: '#1a3a6c', feature: 'water' },
+  plains:   { label: 'Plains',   passable: true,  color: '#7a9a50', dark: '#5a7a30', feature: 'land' },
+  grassland:{ label: 'Grassland',passable: true,  color: '#5a8a40', dark: '#3a6a20', feature: 'land' },
+  forest:   { label: 'Forest',   passable: true,  color: '#2a5a25', dark: '#1a3a18', feature: 'land' },
+  hill:     { label: 'Hills',    passable: true,  color: '#8a7a50', dark: '#6a5a30', feature: 'land' },
+  mountain: { label: 'Mountain', passable: false, color: '#9a9090', dark: '#6a6060', feature: 'land' },
+  desert:   { label: 'Desert',   passable: true,  color: '#c8a84a', dark: '#9a7a30', feature: 'land' },
+  tundra:   { label: 'Tundra',   passable: true,  color: '#8a9898', dark: '#6a7878', feature: 'land' },
+  river:    { label: 'River',    passable: true,  color: '#3a6a9c', dark: '#2a4a7c', feature: 'water' },
+  snow:     { label: 'Snow',     passable: false, color: '#dce8ec', dark: '#b0c8d0', feature: 'land' },
+};
+
+// ══════════════════════════════════════════════════════
+// HAND-CRAFTED MAP (18 cols × 11 rows)
+// Each cell: terrain type
+// ══════════════════════════════════════════════════════
+const MAP_DATA = [
+//  0         1         2         3         4         5         6         7         8         9        10        11        12        13        14        15        16        17
+['ocean',  'ocean',  'ocean',  'coast',  'coast',  'plains', 'plains', 'forest', 'forest', 'hill',   'hill',   'mountain','mountain','tundra','tundra', 'ocean',  'ocean',  'ocean' ], // row 0
+['ocean',  'ocean',  'coast',  'coast',  'plains', 'plains', 'grassland','forest','forest','forest', 'hill',   'mountain','tundra','tundra','snow',   'snow',   'ocean',  'ocean' ], // row 1
+['ocean',  'coast',  'coast',  'plains', 'plains', 'grassland','grassland','river','plains','forest','forest', 'hill',   'hill',  'tundra','snow',   'snow',   'tundra', 'ocean' ], // row 2
+['ocean',  'coast',  'plains', 'plains', 'grassland','grassland','river','river', 'plains','plains','forest', 'forest', 'hill',  'hill',  'tundra', 'tundra', 'ocean',  'ocean' ], // row 3
+['coast',  'plains', 'plains', 'grassland','grassland','plains','plains','river','plains', 'plains','plains', 'forest', 'forest','desert','desert', 'tundra', 'ocean',  'ocean' ], // row 4
+['coast',  'plains', 'grassland','grassland','plains','plains','plains','plains','hill',  'hill',   'plains', 'plains', 'desert','desert','desert', 'desert', 'coast',  'ocean' ], // row 5
+['coast',  'plains', 'plains', 'grassland','plains','plains','hill',   'hill',  'hill',   'mountain','mountain','desert','desert','desert','hill',  'coast',  'coast',  'ocean' ], // row 6
+['ocean',  'coast',  'plains', 'plains', 'forest', 'forest', 'forest', 'hill',  'mountain','mountain','desert','desert','hill',  'hill',  'coast',  'coast',  'ocean',  'ocean' ], // row 7
+['ocean',  'coast',  'coast',  'plains', 'plains', 'forest', 'forest', 'forest','hill',   'hill',   'desert', 'desert', 'coast', 'coast', 'ocean',  'ocean',  'ocean',  'ocean' ], // row 8
+['ocean',  'ocean',  'coast',  'coast',  'plains', 'plains', 'forest', 'forest','grassland','grassland','coast','coast','ocean','ocean', 'ocean',  'ocean',  'ocean',  'ocean' ], // row 9
+['ocean',  'ocean',  'ocean',  'coast',  'coast',  'plains', 'plains', 'grassland','coast','coast',  'ocean',  'ocean',  'ocean', 'ocean', 'ocean',  'ocean',  'ocean',  'ocean' ], // row 10
+];
+
+// ══════════════════════════════════════════════════════
+// GAME STATE
+// ══════════════════════════════════════════════════════
+let gameState = {
+  turn: 1,
+  cities: [],
+  units: [],
+  selectedUnit: null,
+  moveHighlights: [],
+  camera: { x: 0, y: 0 },
+  dragging: false,
+  dragStart: { x: 0, y: 0 },
+  camStart: { x: 0, y: 0 },
+};
+
+let animFrame = 0; // incremented each render loop for animations
+
+// ══════════════════════════════════════════════════════
+// HEX MATH
+// ══════════════════════════════════════════════════════
+function hexToPixel(col, row) {
+  const w = HEX_SIZE * Math.sqrt(3);
+  const h = HEX_SIZE * 2;
+  const x = col * w + (row % 2) * (w / 2) + HEX_SIZE;
+  const y = row * (h * 0.75) + HEX_SIZE + TOP_BAR_H;
+  return { x, y };
+}
+
+function pixelToHex(px, py) {
+  // Approximate inverse for pointy-top offset grid
+  const w = HEX_SIZE * Math.sqrt(3);
+  const h = HEX_SIZE * 2;
+  let row = Math.round((py - TOP_BAR_H - HEX_SIZE) / (h * 0.75));
+  row = Math.max(0, Math.min(ROWS - 1, row));
+  let col = Math.round((px - HEX_SIZE - (row % 2) * (w / 2)) / w);
+  col = Math.max(0, Math.min(COLS - 1, col));
+  return { col, row };
+}
+
+function getNeighbors(col, row) {
+  const dirs = row % 2 === 0
+    ? [[-1,-1],[0,-1],[-1,0],[1,0],[-1,1],[0,1]]
+    : [[0,-1],[1,-1],[-1,0],[1,0],[0,1],[1,1]];
+  return dirs.map(([dc,dr]) => ({ col: col+dc, row: row+dr }))
+    .filter(n => n.col >= 0 && n.col < COLS && n.row >= 0 && n.row < ROWS);
+}
+
+function hexDist(c1,r1,c2,r2) {
+  // Convert offset to cube coords for distance
+  const toC = (c,r) => {
+    const x = c - (r - (r & 1)) / 2;
+    const z = r;
+    return { x, z, y: -x-z };
+  };
+  const a = toC(c1,r1), b = toC(c2,r2);
+  return Math.max(Math.abs(a.x-b.x), Math.abs(a.y-b.y), Math.abs(a.z-b.z));
+}
+
+function getMovableHexes(unit, radius = 2) {
+  const results = [];
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      if (c === unit.col && r === unit.row) continue;
+      const d = hexDist(unit.col, unit.row, c, r);
+      if (d <= radius && TERRAIN[MAP_DATA[r][c]].passable) {
+        const occupied = gameState.units.some(u => u.col === c && u.row === r);
+        if (!occupied) results.push({ col: c, row: r });
+      }
+    }
+  }
+  return results;
+}
+
+// ══════════════════════════════════════════════════════
+// DRAWING HELPERS
+// ══════════════════════════════════════════════════════
+const canvas = document.getElementById('game-canvas');
+const ctx = canvas.getContext('2d');
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+
+function drawHexPath(cx, cy, size) {
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    // pointy-top: start at 30°
+    const angle = Math.PI / 180 * (60 * i - 30);
+    const px = cx + size * Math.cos(angle);
+    const py = cy + size * Math.sin(angle);
+    i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+}
+
+// ══════════════════════════════════════════════════════
+// TERRAIN RENDERING
+// ══════════════════════════════════════════════════════
+function drawTerrainHex(cx, cy, col, row) {
+  const type = MAP_DATA[row][col];
+  const t = TERRAIN[type];
+  const seed = col * 37 + row * 13;
+
+  // Base gradient fill
+  const grad = ctx.createRadialGradient(cx - HEX_SIZE*0.2, cy - HEX_SIZE*0.2, 0, cx, cy, HEX_SIZE);
+  grad.addColorStop(0, lighten(t.color, 30));
+  grad.addColorStop(0.6, t.color);
+  grad.addColorStop(1, t.dark);
+  drawHexPath(cx, cy, HEX_SIZE - 1);
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Terrain-specific details
+  if (type === 'forest') drawForest(cx, cy, seed);
+  else if (type === 'mountain') drawMountain(cx, cy, seed);
+  else if (type === 'snow') drawSnow(cx, cy, seed);
+  else if (type === 'ocean' || type === 'coast') drawWater(cx, cy, seed);
+  else if (type === 'river') drawRiver(cx, cy, seed);
+  else if (type === 'desert') drawDesert(cx, cy, seed);
+  else if (type === 'hill') drawHills(cx, cy, seed);
+  else if (type === 'tundra') drawTundra(cx, cy, seed);
+  else if (type === 'plains' || type === 'grassland') drawGrass(cx, cy, seed);
+
+  // Edge shading (3D raised effect)
+  drawHexPath(cx, cy, HEX_SIZE - 1);
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Top-left highlight
+  ctx.save();
+  drawHexPath(cx, cy, HEX_SIZE - 1);
+  ctx.clip();
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  for (let i = 0; i < 3; i++) {
+    const a1 = Math.PI / 180 * (60 * i - 30);
+    const a2 = Math.PI / 180 * (60 * (i+1) - 30);
+    ctx.moveTo(cx + (HEX_SIZE-2)*Math.cos(a1), cy + (HEX_SIZE-2)*Math.sin(a1));
+    ctx.lineTo(cx + (HEX_SIZE-2)*Math.cos(a2), cy + (HEX_SIZE-2)*Math.sin(a2));
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawForest(cx, cy, seed) {
+  const rng = seededRng(seed);
+  const count = 4 + Math.floor(rng() * 3);
+  for (let i = 0; i < count; i++) {
+    const angle = rng() * Math.PI * 2;
+    const dist = rng() * HEX_SIZE * 0.45;
+    const tx = cx + Math.cos(angle) * dist;
+    const ty = cy + Math.sin(angle) * dist;
+    const h = 14 + rng() * 10;
+    const w = 9 + rng() * 5;
+    // Tree shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath();
+    ctx.ellipse(tx + 2, ty + h*0.3 + 2, w*0.5, h*0.2, 0, 0, Math.PI*2);
+    ctx.fill();
+    // Tree trunk
+    ctx.fillStyle = '#5a3a20';
+    ctx.fillRect(tx - 2, ty + h*0.15, 4, h*0.3);
+    // Tree canopy layers
+    ctx.fillStyle = '#1a4a18';
+    ctx.beginPath(); ctx.moveTo(tx, ty - h*0.5); ctx.lineTo(tx - w*0.5, ty); ctx.lineTo(tx + w*0.5, ty); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#225a22';
+    ctx.beginPath(); ctx.moveTo(tx, ty - h*0.8); ctx.lineTo(tx - w*0.4, ty - h*0.15); ctx.lineTo(tx + w*0.4, ty - h*0.15); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#2a6a2a';
+    ctx.beginPath(); ctx.moveTo(tx, ty - h); ctx.lineTo(tx - w*0.25, ty - h*0.5); ctx.lineTo(tx + w*0.25, ty - h*0.5); ctx.closePath(); ctx.fill();
+  }
+}
+
+function drawMountain(cx, cy, seed) {
+  const rng = seededRng(seed);
+  const count = 2 + Math.floor(rng() * 2);
+  for (let i = 0; i < count; i++) {
+    const ox = (i - (count-1)/2) * 18 + (rng()-0.5)*8;
+    const oy = (rng()-0.5)*10;
+    const h = 28 + rng()*14;
+    const w = 22 + rng()*10;
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath(); ctx.moveTo(cx+ox, cy+oy-h); ctx.lineTo(cx+ox-w*0.5, cy+oy+8); ctx.lineTo(cx+ox+w*0.5, cy+oy+8); ctx.closePath(); ctx.fill();
+    // Mountain body
+    ctx.fillStyle = '#7a7068';
+    ctx.beginPath(); ctx.moveTo(cx+ox, cy+oy-h); ctx.lineTo(cx+ox-w*0.5, cy+oy+6); ctx.lineTo(cx+ox+w*0.5, cy+oy+6); ctx.closePath(); ctx.fill();
+    // Right face shading
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.beginPath(); ctx.moveTo(cx+ox, cy+oy-h); ctx.lineTo(cx+ox, cy+oy+6); ctx.lineTo(cx+ox+w*0.5, cy+oy+6); ctx.closePath(); ctx.fill();
+    // Snow cap
+    const snowH = h * 0.35;
+    ctx.fillStyle = '#dce8f0';
+    ctx.beginPath(); ctx.moveTo(cx+ox, cy+oy-h); ctx.lineTo(cx+ox-w*0.22, cy+oy-h+snowH); ctx.lineTo(cx+ox+w*0.22, cy+oy-h+snowH); ctx.closePath(); ctx.fill();
+  }
+}
+
+function drawSnow(cx, cy, seed) {
+  const rng = seededRng(seed);
+  ctx.fillStyle = 'rgba(220,235,245,0.4)';
+  for (let i = 0; i < 6; i++) {
+    const angle = rng() * Math.PI * 2;
+    const dist = rng() * HEX_SIZE * 0.4;
+    const r = 4 + rng() * 6;
+    ctx.beginPath();
+    ctx.arc(cx + Math.cos(angle)*dist, cy + Math.sin(angle)*dist, r, 0, Math.PI*2);
+    ctx.fill();
+  }
+}
+
+function drawWater(cx, cy, seed) {
+  const t = animFrame * 0.02;
+  ctx.save();
+  drawHexPath(cx, cy, HEX_SIZE - 2);
+  ctx.clip();
+  ctx.strokeStyle = 'rgba(100,180,255,0.2)';
+  ctx.lineWidth = 1.5;
+  for (let i = 0; i < 3; i++) {
+    const yo = (i * 14) - 14 + (Math.sin(t + seed * 0.1 + i) * 4);
+    ctx.beginPath();
+    ctx.moveTo(cx - HEX_SIZE * 0.6, cy + yo);
+    ctx.bezierCurveTo(
+      cx - HEX_SIZE*0.2, cy + yo - 5 + Math.sin(t*0.7+i)*3,
+      cx + HEX_SIZE*0.2, cy + yo + 5 + Math.cos(t*0.8+i)*3,
+      cx + HEX_SIZE*0.6, cy + yo
+    );
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawRiver(cx, cy, seed) {
+  ctx.save();
+  drawHexPath(cx, cy, HEX_SIZE - 2);
+  ctx.clip();
+  const t = animFrame * 0.02;
+  ctx.strokeStyle = 'rgba(80,160,220,0.5)';
+  ctx.lineWidth = 8;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(cx - HEX_SIZE*0.8, cy + Math.sin(seed)*10);
+  ctx.bezierCurveTo(cx - HEX_SIZE*0.2, cy - 12 + Math.sin(t+seed)*4, cx + HEX_SIZE*0.2, cy + 12 + Math.cos(t+seed)*4, cx + HEX_SIZE*0.8, cy + Math.cos(seed)*10);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(130,200,255,0.3)';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawDesert(cx, cy, seed) {
+  const rng = seededRng(seed);
+  ctx.fillStyle = 'rgba(160,120,40,0.3)';
+  for (let i = 0; i < 8; i++) {
+    const angle = rng() * Math.PI * 2;
+    const dist = rng() * HEX_SIZE * 0.5;
+    ctx.beginPath();
+    ctx.ellipse(cx + Math.cos(angle)*dist, cy + Math.sin(angle)*dist, 3 + rng()*3, 1.5 + rng()*1.5, rng()*Math.PI, 0, Math.PI*2);
+    ctx.fill();
+  }
+}
+
+function drawHills(cx, cy, seed) {
+  const rng = seededRng(seed);
+  for (let i = 0; i < 3; i++) {
+    const ox = (i-1)*16 + (rng()-0.5)*8;
+    const oy = 8 + rng()*8;
+    ctx.fillStyle = '#9a8a60';
+    ctx.beginPath();
+    ctx.ellipse(cx+ox, cy+oy, 16+rng()*6, 10+rng()*4, 0, Math.PI, 0);
+    ctx.fill();
+    ctx.fillStyle = '#7a6a48';
+    ctx.beginPath();
+    ctx.ellipse(cx+ox, cy+oy, 14+rng()*5, 5+rng()*3, 0, Math.PI, 0);
+    ctx.fill();
+  }
+}
+
+function drawTundra(cx, cy, seed) {
+  const rng = seededRng(seed);
+  ctx.fillStyle = 'rgba(180,200,200,0.25)';
+  for (let i = 0; i < 5; i++) {
+    const angle = rng() * Math.PI * 2;
+    const dist = rng() * HEX_SIZE * 0.45;
+    ctx.beginPath();
+    ctx.arc(cx + Math.cos(angle)*dist, cy + Math.sin(angle)*dist, 3 + rng()*4, 0, Math.PI*2);
+    ctx.fill();
+  }
+}
+
+function drawGrass(cx, cy, seed) {
+  const rng = seededRng(seed);
+  ctx.strokeStyle = 'rgba(80,120,40,0.4)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 6; i++) {
+    const angle = rng() * Math.PI * 2;
+    const dist = rng() * HEX_SIZE * 0.45;
+    const bx = cx + Math.cos(angle)*dist;
+    const by = cy + Math.sin(angle)*dist;
+    const h = 5 + rng()*5;
+    ctx.beginPath();
+    ctx.moveTo(bx, by);
+    ctx.quadraticCurveTo(bx + (rng()-0.5)*6, by - h*0.6, bx + (rng()-0.5)*4, by - h);
+    ctx.stroke();
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// CITY RENDERING
+// ══════════════════════════════════════════════════════
+function drawCity(cx, cy, city) {
+  const t = animFrame * 0.02;
+
+  // Territory fill for all owned hexes
+  for (const h of city.territory) {
+    const p = hexToPixel(h.col, h.row);
+    const px = p.x + gameState.camera.x;
+    const py = p.y + gameState.camera.y;
+    drawHexPath(px, py, HEX_SIZE - 2);
+    ctx.fillStyle = 'rgba(80,140,220,0.12)';
+    ctx.fill();
+    drawHexPath(px, py, HEX_SIZE - 2);
+    ctx.strokeStyle = 'rgba(80,160,255,0.45)';
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([6, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Glow under city
+  const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, HEX_SIZE * 1.2);
+  glow.addColorStop(0, 'rgba(100,180,255,0.25)');
+  glow.addColorStop(1, 'rgba(100,180,255,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(cx - HEX_SIZE*1.5, cy - HEX_SIZE*1.5, HEX_SIZE*3, HEX_SIZE*3);
+
+  // City walls base
+  const wallR = HEX_SIZE * 0.55;
+  ctx.fillStyle = '#6a5030';
+  ctx.beginPath();
+  ctx.arc(cx, cy + 6, wallR, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = '#8a6840';
+  ctx.beginPath();
+  ctx.arc(cx, cy, wallR, 0, Math.PI*2);
+  ctx.fill();
+
+  // Wall battlements
+  ctx.fillStyle = '#a07848';
+  for (let i = 0; i < 12; i++) {
+    const a = (Math.PI * 2 / 12) * i;
+    const bx = cx + Math.cos(a) * wallR;
+    const by = cy + Math.sin(a) * wallR;
+    ctx.fillRect(bx - 3, by - 3, 6, 6);
+  }
+
+  // Buildings inside walls
+  const buildingConfigs = [
+    { ox: 0, oy: 0, w: 16, h: 22, color: '#c8a870' },      // keep / main tower
+    { ox: -14, oy: 8, w: 10, h: 14, color: '#b09060' },    // left building
+    { ox: 14, oy: 8, w: 10, h: 14, color: '#b09060' },     // right building
+    { ox: -6, oy: 12, w: 8, h: 10, color: '#a08050' },     // small left
+    { ox: 6, oy: 12, w: 8, h: 10, color: '#a08050' },      // small right
+  ];
+
+  for (const b of buildingConfigs) {
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.fillRect(cx + b.ox - b.w/2 + 2, cy - b.h + b.oy + 2, b.w, b.h);
+    // Building
+    ctx.fillStyle = b.color;
+    ctx.fillRect(cx + b.ox - b.w/2, cy - b.h + b.oy, b.w, b.h);
+    // Roof
+    ctx.fillStyle = lighten(b.color, 20);
+    ctx.fillRect(cx + b.ox - b.w/2, cy - b.h + b.oy, b.w, 4);
+    // Windows
+    ctx.fillStyle = 'rgba(255,220,100,0.7)';
+    if (b.w >= 12) {
+      ctx.fillRect(cx + b.ox - 4, cy - b.h + b.oy + 6, 4, 5);
+      ctx.fillRect(cx + b.ox + 2, cy - b.h + b.oy + 6, 4, 5);
+    }
+  }
+
+  // Main tower spire
+  ctx.fillStyle = '#e8c080';
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - 22 - 16);
+  ctx.lineTo(cx - 6, cy - 22);
+  ctx.lineTo(cx + 6, cy - 22);
+  ctx.closePath();
+  ctx.fill();
+
+  // Flag on spire
+  const flagY = cy - 22 - 16 + Math.sin(t + 1) * 2;
+  ctx.fillStyle = '#3060c0';
+  ctx.beginPath();
+  ctx.moveTo(cx, flagY);
+  ctx.lineTo(cx + 10, flagY + 3 + Math.sin(t*1.5)*2);
+  ctx.lineTo(cx, flagY + 7);
+  ctx.closePath();
+  ctx.fill();
+
+  // City name label
+  ctx.font = 'bold 11px Cinzel, Georgia, serif';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillText(city.name, cx + 1, cy + HEX_SIZE * 0.85 + 1);
+  ctx.fillStyle = '#f0d080';
+  ctx.fillText(city.name, cx, cy + HEX_SIZE * 0.85);
+
+  // Population ring
+  ctx.strokeStyle = 'rgba(80,160,255,0.6)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(cx, cy, wallR + 6, -Math.PI/2, -Math.PI/2 + (Math.PI*2 * city.pop / 10));
+  ctx.stroke();
+}
+
+// ══════════════════════════════════════════════════════
+// SETTLER / UNIT RENDERING
+// ══════════════════════════════════════════════════════
+function drawUnit(unit) {
+  const p = hexToPixel(unit.col, unit.row);
+  const cx = p.x + gameState.camera.x;
+  const cy = p.y + gameState.camera.y;
+  const t = animFrame * 0.025;
+  const bob = Math.sin(t + unit.id * 1.3) * 2.5;
+
+  const isSelected = gameState.selectedUnit && gameState.selectedUnit.id === unit.id;
+
+  // Shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + 16, 14, 6, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  if (unit.type === 'settler') {
+    drawSettler(ctx, cx, cy - bob, isSelected);
+  }
+
+  // Selection ring
+  if (isSelected) {
+    ctx.strokeStyle = '#ffe060';
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([5, 3]);
+    ctx.beginPath();
+    ctx.arc(cx, cy + 2, 22, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Pulse ring
+    const pulse = (Math.sin(t * 2) + 1) * 0.5;
+    ctx.strokeStyle = `rgba(255,220,80,${pulse * 0.4})`;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(cx, cy + 2, 22 + pulse * 8, 0, Math.PI*2);
+    ctx.stroke();
+  }
+
+  // Moves remaining indicator
+  if (unit.movesLeft > 0) {
+    ctx.fillStyle = '#60c040';
+    ctx.beginPath();
+    ctx.arc(cx + 14, cy - 14, 5, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 8px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(unit.movesLeft, cx + 14, cy - 11);
+  }
+}
+
+function drawSettler(ctx, cx, cy, selected) {
+  // Cloak / body
+  ctx.fillStyle = selected ? '#c8e0ff' : '#8080c0';
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - 10);
+  ctx.bezierCurveTo(cx - 10, cy - 5, cx - 14, cy + 5, cx - 10, cy + 18);
+  ctx.lineTo(cx + 10, cy + 18);
+  ctx.bezierCurveTo(cx + 14, cy + 5, cx + 10, cy - 5, cx, cy - 10);
+  ctx.fill();
+
+  // Cloak shading
+  ctx.fillStyle = 'rgba(0,0,0,0.2)';
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - 10);
+  ctx.bezierCurveTo(cx + 2, cy - 5, cx + 6, cy + 5, cx + 4, cy + 18);
+  ctx.lineTo(cx + 10, cy + 18);
+  ctx.bezierCurveTo(cx + 14, cy + 5, cx + 10, cy - 5, cx, cy - 10);
+  ctx.fill();
+
+  // Pack / supplies on back
+  ctx.fillStyle = '#8a6030';
+  ctx.fillRect(cx + 6, cy - 2, 9, 12);
+  ctx.fillStyle = '#6a4818';
+  ctx.fillRect(cx + 7, cy - 1, 7, 3);
+
+  // Head
+  ctx.fillStyle = '#d4a878';
+  ctx.beginPath();
+  ctx.arc(cx, cy - 15, 8, 0, Math.PI*2);
+  ctx.fill();
+
+  // Hood
+  ctx.fillStyle = selected ? '#90b8e8' : '#5a5a90';
+  ctx.beginPath();
+  ctx.arc(cx, cy - 16, 8, Math.PI, 0);
+  ctx.lineTo(cx + 10, cy - 8);
+  ctx.lineTo(cx - 10, cy - 8);
+  ctx.closePath();
+  ctx.fill();
+
+  // Eyes
+  ctx.fillStyle = '#2a1a0a';
+  ctx.beginPath(); ctx.arc(cx - 3, cy - 15, 1.5, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx + 3, cy - 15, 1.5, 0, Math.PI*2); ctx.fill();
+
+  // Staff
+  ctx.strokeStyle = '#8a6030';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(cx - 12, cy + 18);
+  ctx.lineTo(cx - 10, cy - 18);
+  ctx.stroke();
+  // Staff tip
+  ctx.fillStyle = '#c8a850';
+  ctx.beginPath();
+  ctx.arc(cx - 10, cy - 19, 3, 0, Math.PI*2);
+  ctx.fill();
+}
+
+// ══════════════════════════════════════════════════════
+// MOVE HIGHLIGHTS
+// ══════════════════════════════════════════════════════
+function drawMoveHighlights() {
+  const t = animFrame * 0.04;
+  for (const h of gameState.moveHighlights) {
+    const p = hexToPixel(h.col, h.row);
+    const cx = p.x + gameState.camera.x;
+    const cy = p.y + gameState.camera.y;
+    const pulse = (Math.sin(t + h.col * 0.5 + h.row * 0.7) + 1) * 0.5;
+    drawHexPath(cx, cy, HEX_SIZE - 2);
+    ctx.fillStyle = `rgba(80,200,80,${0.1 + pulse * 0.12})`;
+    ctx.fill();
+    drawHexPath(cx, cy, HEX_SIZE - 2);
+    ctx.strokeStyle = `rgba(100,220,100,${0.5 + pulse * 0.4})`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// TERRAIN LABEL
+// ══════════════════════════════════════════════════════
+function drawTerrainLabel(cx, cy, col, row) {
+  const type = MAP_DATA[row][col];
+  const t = TERRAIN[type];
+  ctx.font = '9px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  ctx.fillText(t.label, cx, cy + HEX_SIZE * 0.72);
+}
+
+// ══════════════════════════════════════════════════════
+// MAIN RENDER LOOP
+// ══════════════════════════════════════════════════════
+function render() {
+  animFrame++;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Sky background
+  const sky = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  sky.addColorStop(0, '#0a0f18');
+  sky.addColorStop(1, '#0d1420');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Draw all terrain hexes
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const p = hexToPixel(c, r);
+      const cx = p.x + gameState.camera.x;
+      const cy = p.y + gameState.camera.y;
+      if (cx < -HEX_SIZE*2 || cx > canvas.width + HEX_SIZE*2) continue;
+      if (cy < TOP_BAR_H - HEX_SIZE*2 || cy > canvas.height - BOT_BAR_H + HEX_SIZE*2) continue;
+      drawTerrainHex(cx, cy, c, r);
+      drawTerrainLabel(cx, cy, c, r);
+    }
+  }
+
+  // Move highlights
+  drawMoveHighlights();
+
+  // Cities
+  for (const city of gameState.cities) {
+    const p = hexToPixel(city.col, city.row);
+    const cx = p.x + gameState.camera.x;
+    const cy = p.y + gameState.camera.y;
+    drawCity(cx, cy, city);
+  }
+
+  // Units
+  for (const unit of gameState.units) {
+    drawUnit(unit);
+  }
+
+  // Vignette
+  const vig = ctx.createRadialGradient(canvas.width/2, canvas.height/2, canvas.height*0.3, canvas.width/2, canvas.height/2, canvas.height);
+  vig.addColorStop(0, 'rgba(0,0,0,0)');
+  vig.addColorStop(1, 'rgba(0,0,0,0.45)');
+  ctx.fillStyle = vig;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  requestAnimationFrame(render);
+}
+
+// ══════════════════════════════════════════════════════
+// UTILITY
+// ══════════════════════════════════════════════════════
+function seededRng(seed) {
+  let s = seed;
+  return () => { s = (s * 1664525 + 1013904223) & 0xffffffff; return (s >>> 0) / 0xffffffff; };
+}
+
+function lighten(hex, amt) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.min(255, (n >> 16) + amt);
+  const g = Math.min(255, ((n >> 8) & 0xff) + amt);
+  const b = Math.min(255, (n & 0xff) + amt);
+  return `rgb(${r},${g},${b})`;
+}
+
+function showStatus(msg, duration = 2500) {
+  const el = document.getElementById('status-msg');
+  el.textContent = msg;
+  el.style.opacity = '1';
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => el.style.opacity = '0', duration);
+}
+
+// ══════════════════════════════════════════════════════
+// UI UPDATES
+// ══════════════════════════════════════════════════════
+function updateBottomPanel() {
+  const u = gameState.selectedUnit;
+  const nameEl = document.getElementById('unit-name');
+  const descEl = document.getElementById('unit-desc');
+  const btnEl = document.getElementById('action-btns');
+
+  if (!u) {
+    nameEl.textContent = 'No unit selected';
+    descEl.textContent = 'Click a unit to select it, then click a highlighted hex to move.';
+    btnEl.innerHTML = '';
+    return;
+  }
+
+  const type = MAP_DATA[u.row][u.col];
+  const terrain = TERRAIN[type];
+
+  if (u.type === 'settler') {
+    nameEl.textContent = '⚑ Settler';
+    descEl.textContent = `Standing on: ${terrain.label} · Moves left: ${u.movesLeft}/2 · Click green hexes to move, or found a city here.`;
+
+    const canFound = !gameState.cities.some(c => hexDist(c.col, c.row, u.col, u.row) < 3);
+    const onLand = terrain.passable;
+
+    btnEl.innerHTML = `
+      <button class="action-btn" onclick="foundCity()" ${(!onLand || !canFound || u.movesLeft <= 0 && gameState.moveHighlights.length === 0) && !onLand ? 'disabled' : ''}>
+        🏙 Found City
+      </button>
+      <button class="action-btn" onclick="skipUnit()">⏭ Skip</button>
+    `;
+    if (!canFound) {
+      descEl.textContent += ' (Too close to another city to found here)';
+    }
+  }
+
+  document.getElementById('res-units').textContent = gameState.units.length;
+  document.getElementById('res-cities').textContent = gameState.cities.length;
+}
+
+// ══════════════════════════════════════════════════════
+// GAME ACTIONS
+// ══════════════════════════════════════════════════════
+let nextCityId = 1;
+let nextUnitId = 1;
+
+function foundCity() {
+  const u = gameState.selectedUnit;
+  if (!u) return;
+  const type = MAP_DATA[u.row][u.col];
+  if (!TERRAIN[type].passable) { showStatus('Cannot found a city here!'); return; }
+  const tooClose = gameState.cities.some(c => hexDist(c.col, c.row, u.col, u.row) < 3);
+  if (tooClose) { showStatus('Too close to an existing city!'); return; }
+
+  const cityNames = ['Aurum','Veridian','Solmere','Caelthon','Rivenmoor','Dunhallow','Ironspire','Thornwall','Eastmarch','Goldenveil'];
+  const name = cityNames[(nextCityId - 1) % cityNames.length];
+
+  // Build territory (1-hex ring)
+  const territory = getNeighbors(u.col, u.row)
+    .filter(n => TERRAIN[MAP_DATA[n.row][n.col]].passable || MAP_DATA[n.row][n.col] === 'coast')
+    .map(n => ({ col: n.col, row: n.row }));
+
+  const city = {
+    id: nextCityId++,
+    col: u.col,
+    row: u.row,
+    name,
+    pop: 1,
+    territory,
+  };
+  gameState.cities.push(city);
+
+  // Remove settler
+  gameState.units = gameState.units.filter(x => x.id !== u.id);
+  gameState.selectedUnit = null;
+  gameState.moveHighlights = [];
+
+  showStatus(`✦ ${name} has been founded!`);
+  updateBottomPanel();
+  document.getElementById('res-cities').textContent = gameState.cities.length;
+  document.getElementById('res-units').textContent = gameState.units.length;
+}
+
+function skipUnit() {
+  gameState.selectedUnit = null;
+  gameState.moveHighlights = [];
+  updateBottomPanel();
+}
+
+function endTurn() {
+  gameState.turn++;
+  for (const u of gameState.units) u.movesLeft = 2;
+  document.getElementById('turn-info').textContent = `Turn ${gameState.turn}`;
+  showStatus(`Turn ${gameState.turn} begins`);
+  // City growth every 5 turns
+  if (gameState.turn % 5 === 0) {
+    for (const city of gameState.cities) {
+      city.pop = Math.min(10, city.pop + 1);
+    }
+  }
+  updateBottomPanel();
+}
+
+// ══════════════════════════════════════════════════════
+// INPUT HANDLING
+// ══════════════════════════════════════════════════════
+function setupInput() {
+  canvas.addEventListener('mousedown', e => {
+    if (e.button === 2) return;
+    gameState.dragging = false;
+    gameState._mdPos = { x: e.clientX, y: e.clientY };
+    gameState._mdCam = { ...gameState.camera };
+    gameState._mousedown = true;
+  });
+
+  canvas.addEventListener('mousemove', e => {
+    if (!gameState._mousedown) {
+      // Tooltip on hover
+      const worldX = e.clientX - gameState.camera.x;
+      const worldY = e.clientY - gameState.camera.y;
+      const { col, row } = pixelToHex(worldX, worldY);
+      if (col >= 0 && col < COLS && row >= 0 && row < ROWS) {
+        const type = MAP_DATA[row][col];
+        const t = TERRAIN[type];
+        const tt = document.getElementById('tooltip');
+        tt.style.display = 'block';
+        tt.style.left = (e.clientX + 14) + 'px';
+        tt.style.top = (e.clientY - 10) + 'px';
+        document.getElementById('tt-title').textContent = t.label;
+        document.getElementById('tt-body').textContent = t.passable ? 'Passable terrain' : 'Impassable terrain';
+      }
+      return;
+    }
+    const dx = e.clientX - gameState._mdPos.x;
+    const dy = e.clientY - gameState._mdPos.y;
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
+      gameState.dragging = true;
+      canvas.style.cursor = 'grabbing';
+    }
+    if (gameState.dragging) {
+      gameState.camera.x = gameState._mdCam.x + dx;
+      gameState.camera.y = gameState._mdCam.y + dy;
+    }
+  });
+
+  canvas.addEventListener('mouseup', e => {
+    gameState._mousedown = false;
+    canvas.style.cursor = 'default';
+    if (!gameState.dragging) handleClick(e);
+    gameState.dragging = false;
+  });
+
+  canvas.addEventListener('mouseleave', () => {
+    document.getElementById('tooltip').style.display = 'none';
+    gameState._mousedown = false;
+  });
+
+  // Wheel zoom — just camera for now
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+  }, { passive: false });
+
+  canvas.addEventListener('contextmenu', e => e.preventDefault());
+}
+
+function handleClick(e) {
+  document.getElementById('tooltip').style.display = 'none';
+  const worldX = e.clientX - gameState.camera.x;
+  const worldY = e.clientY - gameState.camera.y;
+  const { col, row } = pixelToHex(worldX, worldY);
+
+  if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return;
+
+  // Check if clicking a unit
+  const clickedUnit = gameState.units.find(u => u.col === col && u.row === row);
+
+  // Check if clicking a move highlight
+  const isHighlight = gameState.moveHighlights.some(h => h.col === col && h.row === row);
+
+  if (isHighlight && gameState.selectedUnit) {
+    // Move unit
+    gameState.selectedUnit.col = col;
+    gameState.selectedUnit.row = row;
+    gameState.selectedUnit.movesLeft--;
+    if (gameState.selectedUnit.movesLeft <= 0) {
+      gameState.moveHighlights = [];
+    } else {
+      gameState.moveHighlights = getMovableHexes(gameState.selectedUnit, gameState.selectedUnit.movesLeft);
+    }
+    updateBottomPanel();
+    return;
+  }
+
+  if (clickedUnit) {
+    gameState.selectedUnit = clickedUnit;
+    if (clickedUnit.movesLeft > 0) {
+      gameState.moveHighlights = getMovableHexes(clickedUnit, clickedUnit.movesLeft);
+    } else {
+      gameState.moveHighlights = [];
+    }
+    updateBottomPanel();
+    return;
+  }
+
+  // Clicking empty terrain deselects
+  gameState.selectedUnit = null;
+  gameState.moveHighlights = [];
+  updateBottomPanel();
+}
+
+// ══════════════════════════════════════════════════════
+// GAME START
+// ══════════════════════════════════════════════════════
+function startGame() {
+  document.getElementById('menu-screen').style.display = 'none';
+  document.getElementById('game-screen').style.display = 'block';
+
+  resize();
+  window.addEventListener('resize', resize);
+
+  // Center camera on starting position
+  const startCol = 6, startRow = 5;
+  const startP = hexToPixel(startCol, startRow);
+  gameState.camera.x = canvas.width / 2 - startP.x;
+  gameState.camera.y = (canvas.height - BOT_BAR_H - TOP_BAR_H) / 2 - startP.y + TOP_BAR_H;
+
+  // Spawn settler
+  gameState.units.push({
+    id: nextUnitId++,
+    type: 'settler',
+    col: startCol,
+    row: startRow,
+    movesLeft: 2,
+  });
+
+  setupInput();
+  render();
+  updateBottomPanel();
+  showStatus('Your empire awaits. Select your settler to begin.', 4000);
+}
+</script>
+</body>
+</html>
