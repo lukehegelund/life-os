@@ -389,6 +389,99 @@
 .ph-stat { flex: 1; background: var(--gray-50); border: 1px solid var(--gray-100); border-radius: 10px; padding: 10px 12px; text-align: center; }
 .ph-stat-num { font-size: 1.4rem; font-weight: 800; color: var(--blue); }
 .ph-stat-label { font-size: 11px; color: var(--gray-400); margin-top: 2px; }
+
+/* ─── VOICE PANEL ──────────────────────────────────────────────────────── */
+.vc-body { display: flex; flex-direction: column; height: calc(100dvh - 112px); padding: 0; }
+
+.vc-lang-select { display: flex; gap: 8px; padding: 12px 16px 8px; }
+.vc-lang-btn {
+  flex: 1; padding: 9px 12px; border-radius: 20px; border: 2px solid var(--gray-200);
+  background: var(--white); font-size: 14px; font-weight: 600; color: var(--gray-500);
+  cursor: pointer; transition: all 0.15s;
+}
+.vc-lang-btn.active { border-color: var(--blue); background: var(--blue); color: #fff; }
+
+.vc-settings {
+  margin: 0 16px 8px; border: 1px solid var(--gray-100); border-radius: 10px;
+  background: var(--gray-50); overflow: hidden;
+}
+.vc-settings summary {
+  padding: 10px 14px; font-size: 13px; font-weight: 600; color: var(--gray-500);
+  cursor: pointer; list-style: none;
+}
+.vc-settings-inner { padding: 0 14px 14px; }
+.vc-label { font-size: 12px; font-weight: 600; color: var(--gray-400); display: block; margin-bottom: 4px; }
+.vc-hint { font-size: 11px; color: var(--gray-400); margin-top: 8px; line-height: 1.5; }
+
+.vc-chat {
+  flex: 1; overflow-y: auto; padding: 12px 16px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+
+.vc-welcome {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  flex: 1; text-align: center; padding: 20px; color: var(--gray-400);
+}
+.vc-welcome-icon { font-size: 3rem; margin-bottom: 12px; }
+.vc-welcome-title { font-size: 1.1rem; font-weight: 700; color: var(--gray-600); margin-bottom: 6px; }
+.vc-welcome-sub { font-size: 13px; line-height: 1.5; }
+
+/* Chat bubbles */
+.vc-msg { max-width: 85%; border-radius: 16px; padding: 10px 14px; font-size: 14px; line-height: 1.5; }
+.vc-msg.user {
+  align-self: flex-end; background: var(--blue); color: #fff;
+  border-bottom-right-radius: 4px;
+}
+.vc-msg.assistant {
+  align-self: flex-start; background: var(--gray-100); color: var(--gray-800);
+  border-bottom-left-radius: 4px;
+}
+.vc-msg.correction {
+  align-self: flex-start; background: #fff8e7; color: #7c5c00;
+  border: 1px solid #f5d76e; border-bottom-left-radius: 4px;
+}
+.vc-msg-label { font-size: 10px; font-weight: 700; opacity: 0.6; margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+.vc-typing {
+  align-self: flex-start; background: var(--gray-100); border-radius: 16px;
+  border-bottom-left-radius: 4px; padding: 12px 16px; display: flex; gap: 5px; align-items: center;
+}
+.vc-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--gray-400); animation: vcBounce 1.2s infinite; }
+.vc-dot:nth-child(2) { animation-delay: 0.2s; }
+.vc-dot:nth-child(3) { animation-delay: 0.4s; }
+@keyframes vcBounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-5px)} }
+
+.vc-info-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 16px; background: var(--gray-50); border-top: 1px solid var(--gray-100);
+  font-size: 12px; color: var(--gray-500);
+}
+.vc-end-btn {
+  padding: 4px 12px; border-radius: 12px; border: 1px solid var(--gray-300);
+  background: var(--white); font-size: 12px; font-weight: 600; color: var(--gray-600); cursor: pointer;
+}
+
+.vc-status {
+  text-align: center; font-size: 12px; color: var(--gray-400);
+  padding: 4px 0; min-height: 20px;
+}
+
+.vc-controls {
+  padding: 12px 16px 20px; display: flex; justify-content: center;
+}
+
+.vc-ptt-btn {
+  width: 90px; height: 90px; border-radius: 50%;
+  background: var(--blue); border: none; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  box-shadow: 0 4px 20px rgba(59,130,246,0.4); transition: all 0.12s; color: #fff;
+  -webkit-user-select: none; user-select: none; touch-action: none;
+}
+.vc-ptt-btn:active, .vc-ptt-btn.recording {
+  background: #ef4444; box-shadow: 0 4px 24px rgba(239,68,68,0.5); transform: scale(1.08);
+}
+.vc-ptt-btn.loading { background: var(--gray-400); cursor: not-allowed; }
+.vc-mic-icon { width: 28px; height: 28px; }
+.vc-ptt-label { font-size: 10px; font-weight: 700; letter-spacing: 0.3px; }
 </style>
 </head>
 <body>
@@ -406,6 +499,7 @@
     <div class="lang-tab" id="ltab-flashcards" onclick="switchLangTab('flashcards')">⚡ Flashcards</div>
     <div class="lang-tab" id="ltab-vocab" onclick="switchLangTab('vocab')">📖 Vocab</div>
     <div class="lang-tab" id="ltab-phrases" onclick="switchLangTab('phrases')">💬 Phrases</div>
+    <div class="lang-tab" id="ltab-voice" onclick="switchLangTab('voice')">🎙️ Speak</div>
   </div>
 </header>
 
@@ -608,6 +702,66 @@
 </div>
 </div><!-- /panel-phrases -->
 
+<!-- ══════════════════════════════════════════════════════════ VOICE ═══════ -->
+<div class="lang-panel" id="panel-voice">
+<div class="vc-body">
+
+  <!-- Language selector -->
+  <div class="vc-lang-select">
+    <button class="vc-lang-btn active" data-lang="Spanish" onclick="vcSetLang('Spanish')">🇪🇸 Spanish</button>
+    <button class="vc-lang-btn" data-lang="Danish" onclick="vcSetLang('Danish')">🇩🇰 Danish</button>
+  </div>
+
+  <!-- API Key setup (collapsible) -->
+  <details class="vc-settings" id="vc-settings-panel">
+    <summary>⚙️ API Keys</summary>
+    <div class="vc-settings-inner">
+      <label class="vc-label">Anthropic API Key</label>
+      <input type="password" id="vc-anthropic-key" class="form-input" placeholder="sk-ant-…" oninput="vcSaveKeys()">
+      <label class="vc-label" style="margin-top:8px">ElevenLabs API Key</label>
+      <input type="password" id="vc-eleven-key" class="form-input" placeholder="sk_…" oninput="vcSaveKeys()">
+      <label class="vc-label" style="margin-top:8px">Groq API Key <span style="font-weight:400;color:var(--gray-400)">(free — for speech-to-text)</span></label>
+      <input type="password" id="vc-groq-key" class="form-input" placeholder="gsk_…" oninput="vcSaveKeys()">
+      <p class="vc-hint">Keys are saved locally in your browser only — never sent anywhere except the respective APIs.</p>
+    </div>
+  </details>
+
+  <!-- Status / transcript area -->
+  <div class="vc-chat" id="vc-chat">
+    <div class="vc-welcome">
+      <div class="vc-welcome-icon">🎙️</div>
+      <div class="vc-welcome-title">Voice Lesson</div>
+      <div class="vc-welcome-sub">Hold the button below to speak. Release to send.</div>
+    </div>
+  </div>
+
+  <!-- Lesson info bar -->
+  <div class="vc-info-bar" id="vc-info-bar" style="display:none">
+    <span id="vc-info-text">Conversation started</span>
+    <button class="vc-end-btn" onclick="vcEndSession()">End</button>
+  </div>
+
+  <!-- Status label -->
+  <div class="vc-status" id="vc-status">Ready</div>
+
+  <!-- PTT Button -->
+  <div class="vc-controls">
+    <button class="vc-ptt-btn" id="vc-ptt-btn"
+      ontouchstart="vcPTTStart(event)" ontouchend="vcPTTEnd(event)"
+      onmousedown="vcPTTStart(event)" onmouseup="vcPTTEnd(event)" onmouseleave="vcPTTEnd(event)">
+      <svg class="vc-mic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+        <line x1="12" y1="19" x2="12" y2="23"/>
+        <line x1="8" y1="23" x2="16" y2="23"/>
+      </svg>
+      <span class="vc-ptt-label">Hold to Speak</span>
+    </button>
+  </div>
+
+</div><!-- /vc-body -->
+</div><!-- /panel-voice -->
+
 </main>
 
 <nav class="bottom-nav">
@@ -667,6 +821,7 @@ window.switchLangTab = (tab) => {
   if (tab === 'flashcards') fcInit();
   if (tab === 'vocab') vocabLoad();
   if (tab === 'phrases') phInit();
+  if (tab === 'voice') vcInit();
 };
 
 // ══════════════════════════════════════════════════════════ STATS ════════
@@ -4855,6 +5010,413 @@ function esc(s) {
   return String(s||'')
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+
+// ═══════════════════════════════════════════════════════════ VOICE ════════
+// Push-to-talk AI voice tutor — Claude (LLM) + Web Speech (STT) + ElevenLabs (TTS)
+
+const VC_LANGS = {
+  Spanish: {
+    code: 'es-ES',
+    flag: '🇪🇸',
+    voiceId: 'EXAVITQu4vr4xnSDxMaL', // Sarah — warm, clear, multilingual
+    systemLang: 'Spanish',
+    greeting: '¡Hola! Estoy aquí para practicar contigo. ¿De qué quieres hablar hoy?',
+  },
+  Danish: {
+    code: 'da-DK',
+    flag: '🇩🇰',
+    voiceId: 'XrExE9yKIg1WjnnlVkGX', // Matilda — professional, multilingual
+    systemLang: 'Danish',
+    greeting: 'Hej! Jeg er her for at øve med dig. Hvad vil du tale om i dag?',
+  },
+};
+
+let vcLang = 'Spanish';
+let vcMessages = []; // full conversation history for Claude
+let vcRecorder = null;
+let vcAudioChunks = [];
+let vcIsRecording = false;
+let vcIsLoading = false;
+let vcSessionActive = false;
+let vcTurnCount = 0;
+let vcMediaStream = null;
+let vcInitDone = false;
+
+// ── Init ──────────────────────────────────────────────────────────────────
+async function vcInit() {
+  if (vcInitDone) return;
+  vcInitDone = true;
+
+  // Restore saved keys
+  document.getElementById('vc-anthropic-key').value = localStorage.getItem('vc_anthropic_key') || '';
+  document.getElementById('vc-eleven-key').value = localStorage.getItem('vc_eleven_key') || '';
+  document.getElementById('vc-groq-key').value = localStorage.getItem('vc_groq_key') || '';
+
+  // Show settings if keys missing
+  const hasKeys = localStorage.getItem('vc_anthropic_key') && localStorage.getItem('vc_eleven_key') && localStorage.getItem('vc_groq_key');
+  if (!hasKeys) {
+    document.getElementById('vc-settings-panel').setAttribute('open', '');
+    vcSetStatus('Add your API keys above to get started');
+  }
+}
+
+window.vcSaveKeys = () => {
+  const ak = document.getElementById('vc-anthropic-key').value.trim();
+  const ek = document.getElementById('vc-eleven-key').value.trim();
+  const gk = document.getElementById('vc-groq-key').value.trim();
+  if (ak) localStorage.setItem('vc_anthropic_key', ak);
+  if (ek) localStorage.setItem('vc_eleven_key', ek);
+  if (gk) localStorage.setItem('vc_groq_key', gk);
+  vcSetStatus('Keys saved ✓');
+};
+
+window.vcSetLang = (lang) => {
+  if (vcSessionActive) { vcSetStatus('End current session first'); return; }
+  vcLang = lang;
+  document.querySelectorAll('.vc-lang-btn').forEach(b => b.classList.toggle('active', b.dataset.lang === lang));
+};
+
+// ── Session start (first AI message) ─────────────────────────────────────
+async function vcStartSession() {
+  const anthropicKey = localStorage.getItem('vc_anthropic_key');
+  const elevenKey = localStorage.getItem('vc_eleven_key');
+  if (!anthropicKey || !elevenKey) {
+    document.getElementById('vc-settings-panel').setAttribute('open', '');
+    vcSetStatus('Please add your API keys first');
+    return;
+  }
+
+  vcSessionActive = true;
+  vcTurnCount = 0;
+  vcMessages = [];
+
+  // Clear welcome screen
+  const chat = document.getElementById('vc-chat');
+  chat.innerHTML = '';
+
+  // Show info bar
+  document.getElementById('vc-info-bar').style.display = 'flex';
+  document.getElementById('vc-info-text').textContent = `${VC_LANGS[vcLang].flag} ${vcLang} conversation`;
+
+  // Build system prompt from vocab data
+  const sysPrompt = await vcBuildSystemPrompt();
+  vcMessages.push({ role: 'user', content: sysPrompt });
+
+  // Kick off with greeting
+  const greeting = VC_LANGS[vcLang].greeting;
+  vcMessages.push({ role: 'assistant', content: greeting });
+  vcAppendMsg('assistant', greeting);
+  vcSetStatus('Tutor is speaking…');
+  await vcSpeak(greeting);
+  vcSetStatus('Your turn — hold the button to speak');
+}
+
+// ── Build system prompt with real Supabase vocab data ────────────────────
+async function vcBuildSystemPrompt() {
+  let vocabSummary = '';
+  try {
+    const { data: words } = await supabase.from('vocab_words')
+      .select('english, translation, srs_stage, next_review, language')
+      .eq('language', vcLang)
+      .order('srs_stage', { ascending: false });
+
+    if (words && words.length) {
+      const today = todayPST();
+      const mastered = words.filter(w => w.srs_stage >= 5).length;
+      const learning = words.filter(w => w.srs_stage >= 1 && w.srs_stage < 5).length;
+      const brandNew = words.filter(w => w.srs_stage === 0).length;
+      const due = words.filter(w => w.srs_stage === 0 || w.next_review <= today).length;
+
+      // Sample up to 40 known words to weave in
+      const knownWords = words.filter(w => w.srs_stage >= 2).slice(0, 40)
+        .map(w => `${w.english} = ${w.translation} (stage ${w.srs_stage})`).join(', ');
+      const newWords = words.filter(w => w.srs_stage <= 1).slice(0, 20)
+        .map(w => `${w.english} = ${w.translation}`).join(', ');
+
+      vocabSummary = `
+## Learner's Vocabulary Profile (${vcLang})
+- Total words: ${words.length} | Mastered (stage 5+): ${mastered} | Learning: ${learning} | New: ${brandNew} | Due for review today: ${due}
+- Known words to weave naturally into conversation: ${knownWords || 'none yet'}
+- Newer/weaker words to gently reinforce: ${newWords || 'none yet'}`;
+    }
+  } catch(e) {
+    console.warn('vcBuildSystemPrompt vocab fetch failed', e);
+  }
+
+  const langConf = VC_LANGS[vcLang];
+
+  return `You are a warm, encouraging ${vcLang} language tutor named "Tutor" having a real-time spoken conversation with Luke, an English speaker learning ${vcLang}.
+
+## Your Role
+- Speak ONLY in ${vcLang} (except for corrections/explanations which can include English)
+- Keep responses SHORT — 1-3 sentences max. This is a VOICE conversation, not an essay.
+- Ask follow-up questions to keep the conversation flowing naturally
+- Choose everyday conversational topics (food, travel, weather, hobbies, work, stories)
+- Aim for Luke's actual level — not too easy, not overwhelming
+- Gently correct grammar/vocabulary mistakes by naturally using the correct form in your response
+- Every 4-5 turns, give a brief encouraging note (can be in English) about something Luke did well or a correction
+
+## Correction Style
+When Luke makes a mistake, do NOT lecture. Just use the correct form naturally in your reply. Every 5 turns max, you can say something brief like: "By the way — you said X, but Y is more natural." Then continue the conversation.
+
+## Conversation
+- Keep it flowing, warm, and fun
+- Ask one question at a time
+- Vary topics naturally
+
+${vocabSummary}
+
+START: Greet Luke naturally in ${vcLang} and ask an open-ended question to begin.`;
+}
+
+// ── PTT handlers ──────────────────────────────────────────────────────────
+window.vcPTTStart = async (e) => {
+  e.preventDefault();
+  if (vcIsLoading) return;
+
+  if (!vcSessionActive) {
+    await vcStartSession();
+    return;
+  }
+
+  if (vcIsRecording) return;
+
+  // Request mic
+  try {
+    vcMediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch(err) {
+    vcSetStatus('Microphone access denied');
+    return;
+  }
+
+  vcAudioChunks = [];
+  vcRecorder = new MediaRecorder(vcMediaStream, { mimeType: 'audio/webm' });
+  vcRecorder.ondataavailable = e => { if (e.data.size > 0) vcAudioChunks.push(e.data); };
+  vcRecorder.start(100);
+
+  vcIsRecording = true;
+  const btn = document.getElementById('vc-ptt-btn');
+  btn.classList.add('recording');
+  btn.querySelector('.vc-ptt-label').textContent = 'Recording…';
+  vcSetStatus('🔴 Recording… release to send');
+};
+
+window.vcPTTEnd = async (e) => {
+  e.preventDefault();
+  if (!vcIsRecording) return;
+
+  vcIsRecording = false;
+  vcRecorder.stop();
+  vcMediaStream.getTracks().forEach(t => t.stop());
+
+  const btn = document.getElementById('vc-ptt-btn');
+  btn.classList.remove('recording');
+  btn.classList.add('loading');
+  btn.querySelector('.vc-ptt-label').textContent = '…';
+  vcIsLoading = true;
+  vcSetStatus('Transcribing…');
+
+  // Wait for recorder to finish flushing
+  await new Promise(res => vcRecorder.onstop = res);
+
+  const audioBlob = new Blob(vcAudioChunks, { type: 'audio/webm' });
+
+  try {
+    // 1. STT via Whisper (Groq free tier — very fast)
+    const transcript = await vcTranscribeWhisper(audioBlob);
+    if (!transcript || transcript.trim().length < 2) {
+      vcSetStatus('Didn\'t catch that — try again');
+      vcResetBtn();
+      return;
+    }
+
+    vcAppendMsg('user', transcript);
+    vcSetStatus('Thinking…');
+    vcShowTyping();
+
+    // 2. Claude for response
+    vcMessages.push({ role: 'user', content: transcript });
+    const reply = await vcAskClaude();
+    vcHideTyping();
+    vcMessages.push({ role: 'assistant', content: reply });
+    vcTurnCount++;
+
+    vcAppendMsg('assistant', reply);
+    vcSetStatus('Tutor is speaking…');
+
+    // 3. ElevenLabs TTS
+    await vcSpeak(reply);
+    vcSetStatus('Your turn — hold the button to speak');
+  } catch(err) {
+    vcHideTyping();
+    vcSetStatus('Error: ' + (err.message || 'Something went wrong'));
+    console.error('vcPTTEnd error', err);
+  }
+
+  vcResetBtn();
+};
+
+function vcResetBtn() {
+  vcIsLoading = false;
+  const btn = document.getElementById('vc-ptt-btn');
+  btn.classList.remove('loading', 'recording');
+  btn.querySelector('.vc-ptt-label').textContent = 'Hold to Speak';
+}
+
+// ── Whisper STT (Groq — free, fast) ──────────────────────────────────────
+async function vcTranscribeWhisper(blob) {
+  // Use Groq's free Whisper endpoint — no extra key needed if user adds Groq key
+  // Fallback: use Web Speech API transcript already available via browser
+  // For now: use Groq if key exists, else try browser-native approach
+  const groqKey = localStorage.getItem('vc_groq_key');
+  const langCode = VC_LANGS[vcLang].code.split('-')[0]; // 'es' or 'da'
+
+  if (groqKey) {
+    const form = new FormData();
+    form.append('file', blob, 'audio.webm');
+    form.append('model', 'whisper-large-v3-turbo');
+    form.append('language', langCode);
+    form.append('response_format', 'json');
+    const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${groqKey}` },
+      body: form,
+    });
+    if (!res.ok) throw new Error(`Groq STT error ${res.status}`);
+    const j = await res.json();
+    return j.text;
+  }
+
+  // Fallback: OpenAI Whisper using Anthropic key isn't possible.
+  // Use browser Web Speech API via a re-record approach — not great for recorded blobs.
+  // Best fallback: prompt user to also add Groq key (free tier generous).
+  throw new Error('Please add a Groq API key in settings for speech recognition (it\'s free — groq.com)');
+}
+
+// ── Claude LLM ────────────────────────────────────────────────────────────
+async function vcAskClaude() {
+  const key = localStorage.getItem('vc_anthropic_key');
+  if (!key) throw new Error('No Anthropic API key');
+
+  // Claude can't be called directly from browser due to CORS.
+  // We route through the existing Supabase db-proxy edge function,
+  // OR call Anthropic via a tiny proxy. Use the Supabase edge function approach.
+  // Actually — Anthropic's API does NOT support browser CORS by default.
+  // Solution: call through Supabase edge function "claude-proxy" if it exists,
+  // otherwise fall back to a simple serverless approach.
+  // For now we attempt direct call — works in some environments.
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+      'anthropic-dangerous-allow-browser': 'true', // Required for browser calls
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 300,
+      messages: vcMessages.map(m => ({
+        role: m.role,
+        content: m.content,
+      })),
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || `Claude API ${res.status}`);
+  }
+
+  const j = await res.json();
+  return j.content[0].text;
+}
+
+// ── ElevenLabs TTS ────────────────────────────────────────────────────────
+async function vcSpeak(text) {
+  const key = localStorage.getItem('vc_eleven_key');
+  if (!key) return; // Fail silently — text is still shown
+
+  const voiceId = VC_LANGS[vcLang].voiceId;
+
+  const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream`, {
+    method: 'POST',
+    headers: {
+      'xi-api-key': key,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      text,
+      model_id: 'eleven_turbo_v2_5', // ultra-low latency
+      voice_settings: { stability: 0.5, similarity_boost: 0.8, speed: 0.95 },
+    }),
+  });
+
+  if (!res.ok) {
+    console.warn('ElevenLabs TTS error', res.status);
+    return;
+  }
+
+  const arrayBuf = await res.arrayBuffer();
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const decoded = await audioCtx.decodeAudioData(arrayBuf);
+  const source = audioCtx.createBufferSource();
+  source.buffer = decoded;
+  source.connect(audioCtx.destination);
+  source.start();
+  await new Promise(res => source.onended = res);
+}
+
+// ── UI helpers ────────────────────────────────────────────────────────────
+function vcAppendMsg(role, text) {
+  const chat = document.getElementById('vc-chat');
+  const div = document.createElement('div');
+  div.className = `vc-msg ${role}`;
+  const label = document.createElement('div');
+  label.className = 'vc-msg-label';
+  label.textContent = role === 'user' ? 'You' : `Tutor (${vcLang})`;
+  div.appendChild(label);
+  const content = document.createElement('div');
+  content.textContent = text;
+  div.appendChild(content);
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function vcShowTyping() {
+  const chat = document.getElementById('vc-chat');
+  const div = document.createElement('div');
+  div.className = 'vc-typing';
+  div.id = 'vc-typing-indicator';
+  div.innerHTML = '<div class="vc-dot"></div><div class="vc-dot"></div><div class="vc-dot"></div>';
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function vcHideTyping() {
+  document.getElementById('vc-typing-indicator')?.remove();
+}
+
+function vcSetStatus(msg) {
+  document.getElementById('vc-status').textContent = msg;
+}
+
+window.vcEndSession = () => {
+  vcSessionActive = false;
+  vcMessages = [];
+  vcTurnCount = 0;
+  document.getElementById('vc-info-bar').style.display = 'none';
+  const chat = document.getElementById('vc-chat');
+  chat.innerHTML = `
+    <div class="vc-welcome">
+      <div class="vc-welcome-icon">🎙️</div>
+      <div class="vc-welcome-title">Session ended</div>
+      <div class="vc-welcome-sub">Great work! Hold the button to start a new conversation.</div>
+    </div>`;
+  vcSetStatus('Ready for a new session');
+  vcResetBtn();
+};
 
 // ══════════════════════════════════════════ AUTO-INIT on load ═══════════
 fcInit();
