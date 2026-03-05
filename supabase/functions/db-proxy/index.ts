@@ -1,16 +1,14 @@
 // db-proxy — LifeOS secure database proxy
 // All browser requests go through here instead of hitting Supabase directly
-// This function runs with service_role, so RLS is bypassed intentionally here
-// Security is enforced by the allow-lists and validation rules below
+// Uses service_role to bypass RLS. Security enforced by allow-lists below.
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient } from 'npm:@supabase/supabase-js@2'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SERVICE_KEY  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
-// ── Fase 1: Table-level allow-lists ───────────────────────────────────────────
+// ── Table-level allow-lists ───────────────────────────────────────────────────
 
-// Tables the browser is allowed to read (SELECT)
 const READABLE_TABLES = new Set([
   'attendance', 'attendance_imported', 'calendar_events', 'class_enrollments', 'class_overview_notes',
   'classes', 'claude_notifications', 'claude_projects', 'claude_tasks', 'console_errors',
@@ -24,7 +22,6 @@ const READABLE_TABLES = new Set([
   'language_placement_results', 'language_lesson_progress'
 ])
 
-// Tables the browser is allowed to INSERT or UPDATE
 const INSERT_UPDATE_TABLES = new Set([
   'attendance', 'calendar_events', 'class_overview_notes', 'classes', 'claude_notifications',
   'claude_projects', 'claude_tasks', 'console_errors', 'daily_sessions', 'exercise_log', 'food_log',
@@ -37,9 +34,6 @@ const INSERT_UPDATE_TABLES = new Set([
   'language_placement_results', 'language_lesson_progress'
 ])
 
-// ── Fase 2: Granular DELETE allow-list ────────────────────────────────────────
-// Only low-risk, user-generated content tables allow DELETE from the browser.
-// Financial records, contracts, reports, student data — DELETE blocked (use archive pattern).
 const DELETABLE_TABLES = new Set([
   'attendance', 'attendance_imported', 'calendar_events', 'class_overview_notes', 'claude_notifications',
   'claude_tasks', 'exercise_log', 'food_log', 'gold_transactions', 'grades',
@@ -49,8 +43,6 @@ const DELETABLE_TABLES = new Set([
   'tasks', 'time_blocks', 'vocab_words'
 ])
 
-// ── Fase 2: Tables that REQUIRE a filter on UPDATE/DELETE ─────────────────────
-// Prevents accidental bulk mutations. These tables require at least one filter.
 const REQUIRE_FILTER_FOR_MUTATIONS = new Set([
   'claude_projects', 'tov_clients', 'tov_contracts', 'tov_payments',
   'tov_expenses', 'tov_inquiries', 'tov_transfers', 'parent_crm',
@@ -58,8 +50,6 @@ const REQUIRE_FILTER_FOR_MUTATIONS = new Set([
   'tasks', 'food_log', 'exercise_log', 'reminders'
 ])
 
-// ── Fase 2: Protected fields that cannot be written from the browser ──────────
-// Keyed by table name → Set of field names
 const PROTECTED_FIELDS: Record<string, Set<string>> = {
   tov_contracts: new Set(['signed_date', 'contract_value_override']),
   tov_payments:  new Set(['amount', 'payment_method', 'confirmed_at']),
@@ -83,6 +73,7 @@ interface ProxyRequest {
   order?: { column: string; ascending?: boolean }[]
   limit?: number
   single?: boolean
+  maybeSingle?: boolean
   count?: 'exact' | 'planned' | 'estimated'
   head?: boolean
   upsertOpts?: Record<string, any>
@@ -107,7 +98,7 @@ function checkProtectedFields(table: string, data: any): string | null {
     if (row && typeof row === 'object') {
       for (const field of Object.keys(row)) {
         if (protected_.has(field)) {
-          return `Field '${field}' on table '${table}' is protected and cannot be written from the browser`
+          return `Field '${field}' on table '${table}' is protected`
         }
       }
     }
@@ -122,46 +113,19 @@ Deno.serve(async (req) => {
 
   try {
     const body: ProxyRequest = await req.json()
-    const { table, op, filters, data, select, order, limit, single, count, head, upsertOpts } = body
+    const { table, op, filters, data, select, order, limit, single, maybeSingle, count, head, upsertOpts } = body
 
-    // ── Fase 1: Table-level checks ────────────────────────────────────────────
-
-    if (!READABLE_TABLES.has(table)) {
-      return err(`Table '${table}' not allowed`)
+    if (!READABLE_TABLES.has(table)) return err(`Table '${table}' not allowed`)
+    if (['insert', 'update', 'upsert'].includes(op) && !INSERT_UPDATE_TABLES.has(table)) return err(`Write to '${table}' not allowed`)
+    if (op === 'delete' && !DELETABLE_TABLES.has(table)) return err(`DELETE on '${table}' not allowed`)
+    if (['update', 'delete'].includes(op) && REQUIRE_FILTER_FOR_MUTATIONS.has(table) && !hasFilters(filters)) {
+      return err(`UPDATE/DELETE on '${table}' requires at least one filter`)
     }
-
-    if (['insert', 'update', 'upsert'].includes(op) && !INSERT_UPDATE_TABLES.has(table)) {
-      return err(`Write to '${table}' not allowed`)
-    }
-
-    // ── Fase 2: Granular operation checks ─────────────────────────────────────
-
-    // DELETE: only allowed on explicitly deletable tables
-    if (op === 'delete' && !DELETABLE_TABLES.has(table)) {
-      return err(`DELETE on '${table}' not allowed from browser — use archive pattern instead`)
-    }
-
-    // UPDATE/DELETE: require at least one filter on sensitive tables
-    if (['update', 'delete'].includes(op) && REQUIRE_FILTER_FOR_MUTATIONS.has(table)) {
-      if (!hasFilters(filters)) {
-        return err(`UPDATE/DELETE on '${table}' requires at least one filter (prevents bulk mutations)`)
-      }
-    }
-
-    // Validate data is an object or array (not a string/primitive)
-    if (data !== undefined && data !== null) {
-      if (typeof data !== 'object') {
-        return err(`Invalid data payload — must be an object or array`, 400)
-      }
-    }
-
-    // Protected field check on INSERT/UPDATE/UPSERT
+    if (data !== undefined && data !== null && typeof data !== 'object') return err('Invalid data payload', 400)
     if (['insert', 'update', 'upsert'].includes(op) && data) {
       const fieldError = checkProtectedFields(table, data)
       if (fieldError) return err(fieldError)
     }
-
-    // ── Execute query ─────────────────────────────────────────────────────────
 
     const sb = createClient(SUPABASE_URL, SERVICE_KEY)
     let query: any
@@ -182,14 +146,11 @@ Deno.serve(async (req) => {
       query = sb.from(table).upsert(data, upsertOpts || undefined)
     }
 
-    // Apply filters
     if (filters) {
       for (const [method, args] of Object.entries(filters)) {
         if (method === 'or' && typeof args === 'string') {
-          // .or() takes a raw query string, not a col/val pair
           query = query.or(args)
         } else if (method === 'not' && Array.isArray(args)) {
-          // .not(col, operator, value) — stored as array of {col, op, val}
           for (const { col, op: notOp, val } of args as { col: string; op: string; val: any }[]) {
             query = query.not(col, notOp, val)
           }
@@ -201,18 +162,10 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Apply ordering
-    if (order) {
-      for (const o of order) {
-        query = query.order(o.column, { ascending: o.ascending ?? true })
-      }
-    }
-
-    // Apply limit
+    if (order) { for (const o of order) query = query.order(o.column, { ascending: o.ascending ?? true }) }
     if (limit) query = query.limit(limit)
-
-    // Single row
     if (single) query = query.single()
+    if (maybeSingle) query = query.maybeSingle()
 
     const { data: result, error, count: resultCount } = await query
 
