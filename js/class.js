@@ -100,14 +100,14 @@ async function loadRoster(cls) {
   const el = document.getElementById('roster');
   showSpinner(el);
 
-  // Compute date windows for inline pages stats
+  // Compute date windows for inline pages stats (day-of is included: last 7 = d-6..d, last 30 = d-29..d)
   const thirtyAgo = (() => {
     const [y, m, d] = selectedDate.split('-').map(Number);
-    return new Date(Date.UTC(y, m - 1, d - 30)).toISOString().split('T')[0];
+    return new Date(Date.UTC(y, m - 1, d - 29)).toISOString().split('T')[0];
   })();
   const sevenAgo = (() => {
     const [y, m, d] = selectedDate.split('-').map(Number);
-    return new Date(Date.UTC(y, m - 1, d - 7)).toISOString().split('T')[0];
+    return new Date(Date.UTC(y, m - 1, d - 6)).toISOString().split('T')[0];
   })();
 
   const [enrRes, attRes, pagesRes, partRes, importRes, pagesHistRes] = await Promise.all([
@@ -306,10 +306,10 @@ function renderRoster(enrs, pagesMap = {}, pagesStatsMap = {}) {
   }).join('');
 }
 
-// Helper: date string for 7 days ago relative to selectedDate
+// Helper: start of 7-day window (day-of inclusive: d-6 through d = 7 days)
 function sevenAgoDate() {
   const [y, m, d] = selectedDate.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d - 7)).toISOString().split('T')[0];
+  return new Date(Date.UTC(y, m - 1, d - 6)).toISOString().split('T')[0];
 }
 
 // Mark all enrolled students as Present
@@ -409,15 +409,15 @@ async function loadOverviewNotes(studentId) {
   const el = document.getElementById(`overview-notes-${studentId}`);
   if (!el) return;
 
-  // Shift 30-day/7-day windows relative to selectedDate
+  // Shift 30-day/7-day windows relative to selectedDate (day-of inclusive)
   const thirtyAgo = (() => {
     const [y, m, d] = selectedDate.split('-').map(Number);
-    const base = new Date(Date.UTC(y, m - 1, d - 30));
+    const base = new Date(Date.UTC(y, m - 1, d - 29));
     return base.toISOString().split('T')[0];
   })();
   const sevenAgo = (() => {
     const [y, m, d] = selectedDate.split('-').map(Number);
-    const base = new Date(Date.UTC(y, m - 1, d - 7));
+    const base = new Date(Date.UTC(y, m - 1, d - 6));
     return base.toISOString().split('T')[0];
   })();
   const trackPages = cls?.track_pages !== 'None';
@@ -679,14 +679,15 @@ window.adjustPages = async (studentId, delta) => {
     }).eq('id', existing.id);
     pagesErr = result.error;
   } else {
-    const result = await supabase.from('student_pages').insert({
+    // Use upsert to safely handle race conditions / unique constraint on (student_id, class_id, date)
+    const result = await supabase.from('student_pages').upsert({
       student_id: studentId,
       class_id: Number(classId),
       date: selectedDate,
       pages_delta: delta,
       total_pages: newPages,
       gold_delta: goldDelta,
-    });
+    }, { onConflict: 'student_id,class_id,date' });
     pagesErr = result.error;
   }
 
