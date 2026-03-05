@@ -23,20 +23,20 @@ const READABLE_TABLES = new Set([
 ])
 
 const INSERT_UPDATE_TABLES = new Set([
-  'attendance', 'calendar_events', 'class_overview_notes', 'classes', 'claude_notifications',
+  'attendance', 'calendar_events', 'class_enrollments', 'class_overview_notes', 'classes', 'claude_notifications',
   'claude_projects', 'claude_tasks', 'console_errors', 'daily_sessions', 'exercise_log', 'food_log',
   'gold_transactions', 'grades', 'health_notes', 'language_errors', 'lesson_plans',
   'lifeos_feedback', 'pages_completed', 'parent_contacts', 'parent_crm',
   'participation_scores', 'reminders', 'smart_reports', 'spelling_tests',
-  'srs_reviews', 'student_notes', 'student_pages', 'tasks', 'time_blocks',
+  'srs_reviews', 'student_notes', 'student_pages', 'students', 'tasks', 'time_blocks',
   'tov_clients', 'tov_contracts', 'tov_expenses', 'tov_inquiries', 'tov_payments',
   'tov_transfers', 'vocab_words',
   'language_placement_results', 'language_lesson_progress'
 ])
 
 const DELETABLE_TABLES = new Set([
-  'attendance', 'attendance_imported', 'calendar_events', 'class_overview_notes', 'claude_notifications',
-  'claude_tasks', 'exercise_log', 'food_log', 'gold_transactions', 'grades',
+  'attendance', 'attendance_imported', 'calendar_events', 'class_enrollments', 'class_overview_notes', 'claude_notifications',
+  'classes', 'claude_tasks', 'exercise_log', 'food_log', 'gold_transactions', 'grades',
   'health_notes', 'language_errors', 'lesson_plans', 'lifeos_feedback',
   'pages_completed', 'parent_contacts', 'participation_scores', 'reminders',
   'spelling_tests', 'srs_reviews', 'student_notes', 'student_pages',
