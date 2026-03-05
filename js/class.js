@@ -94,12 +94,23 @@ const attMap = {};
 const partMap = {}; // participation scores: { studentId: score }
 let enrollments = [];
 let attImported = false; // is attendance imported for selectedDate+classId?
+let _pagesStatsMap = {}; // module-level cache so toggleExpand can pass it to renderRoster
 
 async function loadRoster(cls) {
   const el = document.getElementById('roster');
   showSpinner(el);
 
-  const [enrRes, attRes, pagesRes, partRes, importRes] = await Promise.all([
+  // Compute date windows for inline pages stats
+  const thirtyAgo = (() => {
+    const [y, m, d] = selectedDate.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d - 30)).toISOString().split('T')[0];
+  })();
+  const sevenAgo = (() => {
+    const [y, m, d] = selectedDate.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d - 7)).toISOString().split('T')[0];
+  })();
+
+  const [enrRes, attRes, pagesRes, partRes, importRes, pagesHistRes] = await Promise.all([
     // Historical enrollment: enrolled on or before selectedDate and not yet unenrolled (or unenrolled after selectedDate)
     supabase.from('class_enrollments')
       .select('*, students(id, name, current_gold, english_pages_class_id, math_pages_class_id)')
@@ -124,6 +135,15 @@ async function loadRoster(cls) {
       .eq('date', selectedDate)
       .eq('class_id', Number(classId))
       .limit(1),
+    // Fetch 30-day pages history for ALL students at once (for inline stats + sorting)
+    cls.track_pages !== 'None'
+      ? supabase.from('student_pages')
+          .select('student_id, date, pages_delta')
+          .eq('class_id', classId)
+          .gte('date', thirtyAgo)
+          .lte('date', selectedDate)
+          .order('date', { ascending: false })
+      : Promise.resolve({ data: [] }),
   ]);
 
   // Check attendance import status
@@ -155,6 +175,28 @@ async function loadRoster(cls) {
     pagesMap[p.student_id] = p.total_pages;
   }
 
+  // Build per-student pages stats from history
+  const pagesStatsMap = {}; // studentId → { last7, last30, lastDate }
+  if (cls.track_pages !== 'None') {
+    const histRows = pagesHistRes.data || [];
+    for (const row of histRows) {
+      const sid = row.student_id;
+      if (!pagesStatsMap[sid]) pagesStatsMap[sid] = { last7: 0, last30: 0, lastDate: null };
+      pagesStatsMap[sid].last30 += (row.pages_delta || 0);
+      if (row.date >= sevenAgo) pagesStatsMap[sid].last7 += (row.pages_delta || 0);
+      if (!pagesStatsMap[sid].lastDate || row.date > pagesStatsMap[sid].lastDate) {
+        pagesStatsMap[sid].lastDate = row.date;
+      }
+    }
+
+    // Sort enrollments by lastDate ascending (null/oldest first = needs attention most)
+    enrollments.sort((a, b) => {
+      const aDate = pagesStatsMap[a.students?.id]?.lastDate || '0000-00-00';
+      const bDate = pagesStatsMap[b.students?.id]?.lastDate || '0000-00-00';
+      return aDate.localeCompare(bDate);
+    });
+  }
+
   // Show imported banner on roster card if attendance is locked
   const rosterCard = el.closest('.card');
   if (rosterCard) {
@@ -172,23 +214,46 @@ async function loadRoster(cls) {
     }
   }
 
-  renderRoster(enrollments, pagesMap);
+  _pagesStatsMap = pagesStatsMap; // cache for toggleExpand
+  renderRoster(enrollments, pagesMap, pagesStatsMap);
   // Re-expand if one was open
   if (expandedStudent) {
     loadOverviewNotes(expandedStudent);
   }
 }
 
-function renderRoster(enrs, pagesMap = {}) {
+function renderRoster(enrs, pagesMap = {}, pagesStatsMap = {}) {
   const el = document.getElementById('roster');
   const trackPages = cls?.track_pages !== 'None';
   const readOnly = isPast() && !isToday(); // pages/notes read-only on past days
 
-  el.innerHTML = enrs.map(e => {
+  // "Mark All Present" button above roster
+  const markAllBtn = `
+    <div style="margin-bottom:8px">
+      <button class="btn btn-sm" style="background:var(--green-light);color:var(--green);border:none;font-weight:600"
+        onclick="markAllPresent()">✅ Mark All Present</button>
+    </div>`;
+
+  el.innerHTML = markAllBtn + enrs.map(e => {
     const s = e.students;
     const status = attMap[s.id] || null;
     const isExpanded = expandedStudent === s.id;
     const pages = pagesMap[s.id] ?? null;
+    const stats = pagesStatsMap[s.id] || null;
+
+    // Inline pages stats chip (only for classes that track pages)
+    let pagesInline = '';
+    if (trackPages && stats) {
+      const lastLabel = stats.lastDate
+        ? daysAgo(stats.lastDate)
+        : 'never';
+      const urgentColor = !stats.lastDate || stats.lastDate < sevenAgoDate() ? 'var(--red)' : 'var(--gray-400)';
+      pagesInline = `<span style="font-size:10px;color:var(--gray-500);background:var(--gray-50);border-radius:6px;padding:1px 6px;white-space:nowrap;flex-shrink:0" title="7-day / 30-day / last logged">
+        📄 ${stats.last7}/${stats.last30} · <span style="color:${urgentColor}">${lastLabel}</span>
+      </span>`;
+    } else if (trackPages && !stats) {
+      pagesInline = `<span style="font-size:10px;color:var(--red);background:#fef2f2;border-radius:6px;padding:1px 6px;white-space:nowrap;flex-shrink:0">📄 never</span>`;
+    }
 
     // Attendance: always editable (but will warn if imported)
     const attButtons = ['Present','Late','Absent','Excused'].map(opt => {
@@ -229,6 +294,7 @@ function renderRoster(enrs, pagesMap = {}) {
           </a>
           <span class="roster-gold">${s.current_gold ?? 0}🪙</span>
           ${trackPages && pages !== null ? `<span class="roster-pages">${pages}p</span>` : ''}
+          ${pagesInline}
           <div class="att-pills">${attButtons}</div>
           <div class="part-pills" style="display:flex;gap:3px;align-items:center;margin-left:4px" title="Participation (1–5)">
             <span style="font-size:10px;color:var(--gray-400);margin-right:2px">⭐</span>
@@ -238,6 +304,39 @@ function renderRoster(enrs, pagesMap = {}) {
         ${isExpanded ? renderExpandedStudent(s, pages, readOnly) : ''}
       </div>`;
   }).join('');
+}
+
+// Helper: date string for 7 days ago relative to selectedDate
+function sevenAgoDate() {
+  const [y, m, d] = selectedDate.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d - 7)).toISOString().split('T')[0];
+}
+
+// Mark all enrolled students as Present
+window.markAllPresent = async () => {
+  const ids = enrollments.map(e => e.students?.id).filter(Boolean);
+  if (!ids.length) return;
+  for (const sid of ids) {
+    if (attMap[sid] !== 'Present') {
+      await setAttSilent(sid, 'Present');
+    }
+  }
+  // Rebuild roster to reflect new state
+  const pagesMap = {};
+  document.querySelectorAll('[id^="pages-display-"]').forEach(elp => {
+    const sid = parseInt(elp.id.replace('pages-display-', ''), 10);
+    pagesMap[sid] = parseInt(elp.textContent, 10) || 0;
+  });
+  renderRoster(enrollments, pagesMap);
+  toast('All students marked Present ✅', 'success');
+};
+
+// Silent version of setAtt (no confirm dialog, no DOM update — used by markAllPresent)
+async function setAttSilent(studentId, status) {
+  attMap[studentId] = status;
+  await supabase.from('attendance').upsert({
+    student_id: studentId, class_id: Number(classId), date: selectedDate, status
+  }, { onConflict: 'student_id,class_id,date' });
 }
 
 function renderExpandedStudent(s, pages, readOnly) {
@@ -299,7 +398,7 @@ window.toggleExpand = async (studentId) => {
     const sid = parseInt(el.id.replace('pages-display-', ''), 10);
     pagesMap[sid] = parseInt(el.textContent, 10) || 0;
   });
-  renderRoster(enrollments, pagesMap);
+  renderRoster(enrollments, pagesMap, _pagesStatsMap);
 
   if (expandedStudent) {
     loadOverviewNotes(expandedStudent);
