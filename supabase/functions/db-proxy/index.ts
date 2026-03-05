@@ -38,7 +38,7 @@ const DELETABLE_TABLES = new Set([
   'attendance', 'attendance_imported', 'calendar_events', 'class_enrollments', 'class_overview_notes', 'claude_notifications',
   'classes', 'claude_tasks', 'exercise_log', 'food_log', 'gold_transactions', 'grades',
   'health_notes', 'language_errors', 'lesson_plans', 'lifeos_feedback',
-  'pages_completed', 'parent_contacts', 'participation_scores', 'reminders',
+  'pages_completed', 'parent_contacts', 'parent_crm', 'participation_scores', 'reminders',
   'spelling_tests', 'srs_reviews', 'student_notes', 'student_pages',
   'tasks', 'time_blocks', 'vocab_words'
 ])
