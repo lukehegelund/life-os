@@ -424,6 +424,112 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+function renderDayGrid() {
+  document.getElementById('cal-day-labels').style.display = 'none';
+  const gridEl = document.getElementById('cal-grid');
+  gridEl.style.display = 'block';
+  gridEl.style.gridTemplateColumns = '';
+
+  const ds = dateStr(viewDay);
+  const dayLabel = viewDay.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  document.getElementById('period-label').textContent = dayLabel;
+
+  const hours = [];
+  for (let h = WEEK_HOUR_START; h < WEEK_HOUR_END; h++) {
+    const label = h === 12 ? '12pm' : h < 12 ? `${h}am` : `${h - 12}pm`;
+    hours.push(label);
+  }
+
+  const gutterW = 36;
+  const isToday = ds === T;
+  const timedEvents = (eventCache[ds] || []).filter(e => e.timeStart);
+  const allDayEvents = (eventCache[ds] || []).filter(e => !e.timeStart);
+
+  let html = `<div class="week-gcal-wrap" style="overflow-x:auto">
+  <div class="week-gcal" style="min-width:300px">`;
+
+  // All-day section
+  if (allDayEvents.length > 0) {
+    html += `<div class="wgcal-allday" style="display:flex;align-items:flex-start;border-bottom:1px solid var(--gray-100);min-height:28px">
+      <div style="width:${gutterW}px;flex-shrink:0;font-size:10px;color:var(--gray-400);padding-top:6px;text-align:right;padding-right:4px">all-day</div>
+      <div style="flex:1;padding:2px;min-height:28px">`;
+    for (const e of allDayEvents) {
+      html += `<a href="${e.link}" onclick="event.stopPropagation()" class="week-event" style="background:${e.color};display:block;border-radius:3px;padding:1px 4px;font-size:10px;font-weight:500;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px;text-decoration:none">${e.title}</a>`;
+    }
+    html += `</div></div>`;
+  }
+
+  html += `<div id="wgcal-body" style="display:flex;overflow-y:auto;max-height:${TOTAL_HEIGHT + 20}px">
+      <div style="width:${gutterW}px;flex-shrink:0;position:relative;height:${TOTAL_HEIGHT}px">`;
+
+  for (let i = 0; i < hours.length; i++) {
+    html += `<div style="position:absolute;top:${i * HOUR_HEIGHT_PX - 8}px;right:4px;font-size:10px;color:var(--gray-400);white-space:nowrap">${hours[i]}</div>`;
+  }
+
+  html += `</div><!-- /gutter -->
+      <div id="wgcal-daycols" style="flex:1;display:flex;position:relative">
+        <div style="position:absolute;inset:0;pointer-events:none">`;
+  for (let i = 0; i < hours.length; i++) {
+    html += `<div style="position:absolute;left:0;right:0;top:${i * HOUR_HEIGHT_PX}px;border-top:1px solid var(--gray-100)"></div>`;
+  }
+  html += `</div>`;
+
+  html += `<div class="wgcal-day-col" data-date="${ds}" style="flex:1;position:relative;height:${TOTAL_HEIGHT}px;${isToday ? 'background:rgba(37,99,235,0.03)' : ''}">`;
+
+  // Current time indicator
+  if (isToday) {
+    const now = new Date();
+    const pstTime = now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', minute: 'numeric', hour12: false });
+    const [pstH, pstM] = pstTime.split(':').map(Number);
+    const nowMins = pstH * 60 + pstM;
+    const startMins = WEEK_HOUR_START * 60;
+    const endMins = WEEK_HOUR_END * 60;
+    if (nowMins >= startMins && nowMins <= endMins) {
+      const pct = (nowMins - startMins) / ((WEEK_HOUR_END - WEEK_HOUR_START) * 60) * 100;
+      html += `<div style="position:absolute;left:0;right:0;top:${pct}%;height:2px;background:var(--red);z-index:10;pointer-events:none">
+        <div style="position:absolute;left:-3px;top:-3px;width:8px;height:8px;border-radius:50%;background:var(--red)"></div>
+      </div>`;
+    }
+  }
+
+  for (const e of timedEvents) {
+    const startMins = timeToMinutes(e.timeStart);
+    const rawEnd = e.timeEnd ? timeToMinutes(e.timeEnd) : startMins + 60;
+    const endMins = Math.max(rawEnd, startMins + 30);
+    const topPct = minutesToPct(startMins);
+    const heightPx = Math.max(20, (endMins - startMins) / 60 * HOUR_HEIGHT_PX);
+    const timeLabel = fmt12Range(e.timeStart, e.timeEnd);
+    const isEditable = (e.type === 'gcal' && e.id) || (e.type === 'class' && e.classId);
+    const cursor = isEditable ? 'grab' : 'pointer';
+    const evId = e.id ? `data-ev-id="${e.id}"` : '';
+    const classIdAttr = e.classId ? `data-class-id="${e.classId}"` : '';
+    const evTypeAttr = `data-ev-type="${e.type}"`;
+
+    html += `<div class="wcal-ev${isEditable ? ' wcal-ev-editable' : ''}" ${evId} ${classIdAttr} ${evTypeAttr}
+      data-date="${ds}" data-start="${e.timeStart}" data-end="${e.timeEnd || ''}"
+      style="position:absolute;top:${topPct}%;left:2px;right:2px;
+        min-height:${heightPx}px;background:${e.color};border-radius:4px;
+        padding:2px 5px;font-size:10px;font-weight:600;color:white;
+        overflow:hidden;z-index:5;display:block;line-height:1.3;
+        cursor:${cursor};user-select:none;box-sizing:border-box"
+      title="${e.title} ${timeLabel}">
+      <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.title}</div>
+      ${heightPx > 28 ? `<div style="font-size:9px;opacity:0.85">${timeLabel}</div>` : ''}
+      ${isEditable ? `<div class="wcal-resize-handle" style="position:absolute;bottom:0;left:0;right:0;height:6px;cursor:s-resize;background:rgba(0,0,0,0.15);border-radius:0 0 4px 4px"></div>` : ''}
+    </div>`;
+  }
+
+  html += `</div><!-- /day col -->
+      </div><!-- /day cols -->
+    </div><!-- /time grid body -->
+  </div><!-- /week-gcal -->
+</div><!-- /wrap -->`;
+
+  document.getElementById('cal-grid').innerHTML = html;
+  attachWeekInteractions();
+  attachSwipeNavigation();
+}
+
 function renderWeekGrid() {
   document.getElementById('cal-day-labels').style.display = 'none';
   const gridEl = document.getElementById('cal-grid');
