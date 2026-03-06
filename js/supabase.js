@@ -47,6 +47,7 @@ class ProxyQueryBuilder {
     this._filters = {};
     this._data = null;
     this._select = '*';
+    this._selectCalled = false; // tracks if .select() was explicitly called (for insert/update chaining)
     this._order = [];
     this._limit = null;
     this._single = false;
@@ -59,7 +60,13 @@ class ProxyQueryBuilder {
   // --- Operation setters ---
   select(cols = '*', opts = {}) {
     this._select = cols;
-    this._op = 'select';
+    this._selectCalled = true;
+    // Only set op to 'select' if no mutation op is already set.
+    // When chained after insert/update/upsert (.insert(data).select()), we want
+    // to return the inserted/updated row — do NOT overwrite the mutation op.
+    if (!['insert', 'update', 'upsert', 'delete'].includes(this._op)) {
+      this._op = 'select';
+    }
     if (opts && opts.count) this._count = opts.count;
     if (opts && opts.head)  this._head  = true;
     return this;
@@ -112,7 +119,8 @@ class ProxyQueryBuilder {
       op:          this._op,
       filters:     Object.keys(this._filters).length ? this._filters : undefined,
       data:        this._data,
-      select:      this._select !== '*' ? this._select : undefined,
+      // Send select if: explicitly called (for insert/update return), or if non-default columns
+      select:      (this._selectCalled || this._select !== '*') ? this._select : undefined,
       order:       this._order.length ? this._order : undefined,
       limit:       this._limit,
       single:      this._single || undefined,
