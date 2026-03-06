@@ -315,8 +315,8 @@ function renderMonthGrid() {
 }
 
 // ── Week grid (Google Calendar style, proportional blocks) ───────────────────
-const WEEK_HOUR_START = 6;  // 6am
-const WEEK_HOUR_END   = 21; // 9pm
+const WEEK_HOUR_START = 5;  // 5am
+const WEEK_HOUR_END   = 23; // 11pm
 const HOUR_HEIGHT_PX  = 56; // px per hour
 const TOTAL_HEIGHT    = (WEEK_HOUR_END - WEEK_HOUR_START) * HOUR_HEIGHT_PX;
 const SNAP_MINS       = 15; // snap to 15-minute increments
