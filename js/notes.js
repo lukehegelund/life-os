@@ -181,6 +181,9 @@ function noteCardHtml(note) {
             <button class="note-tool-btn" onclick="toggleNotePin('${note.id}')" title="${note.pinned ? 'Desfijar' : 'Fijar'}">
               ${note.pinned ? '📌' : '📍'}
             </button>
+            <button class="note-tool-btn" onclick="copyNote('${note.id}')" title="Copiar nota">
+              📋
+            </button>
             <button class="note-tool-btn" onclick="deleteNote('${note.id}')" title="Eliminar" style="color:var(--coral)">
               🗑️
             </button>
@@ -205,6 +208,48 @@ window.fmtFontSize = function(size) {
   document.execCommand('fontSize', false, FONT_SIZES[size] || '3');
   if (activeNoteId) scheduleSaveNote(activeNoteId);
 };
+
+// ── Auto bullet detection ─────────────────────────────────────────
+// When user types "- " (dash + space) at the start of a line, auto-convert to bullet list
+function tryAutoBullet(noteId, event) {
+  const bodyEl = document.getElementById(`note-body-${noteId}`);
+  if (!bodyEl) return false;
+
+  const sel = window.getSelection();
+  if (!sel.rangeCount) return false;
+  const range = sel.getRangeAt(0);
+  const node = range.startContainer;
+  if (node.nodeType !== Node.TEXT_NODE) return false;
+
+  const text = node.textContent || '';
+  const offset = range.startOffset;
+
+  // The user just typed a space — check if the text up to cursor ends with "- "
+  // We check for "- " pattern: the char just before cursor is space, before that is "-"
+  // and that "-" is at the start of the line (no other text before it on this line)
+  if (offset < 2) return false;
+  const before = text.slice(0, offset);
+  // Find the start of the current line
+  const lineStart = before.lastIndexOf('\n') + 1;
+  const lineText = before.slice(lineStart);
+
+  if (lineText === '- ') {
+    // Remove the "- " we just typed
+    node.textContent = text.slice(0, offset - 2) + text.slice(offset);
+    // Move cursor back 2
+    const r = document.createRange();
+    r.setStart(node, Math.max(0, offset - 2));
+    r.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(r);
+
+    // Insert an unordered list item
+    document.execCommand('insertUnorderedList', false, null);
+    scheduleSaveNote(noteId);
+    return true;
+  }
+  return false;
+}
 
 // ── Slash Command Detection ───────────────────────────────────────
 // When user types /task or /note at start of a line, show action popup
@@ -349,6 +394,12 @@ window.dismissSlashPopup = function() {
 window.detectSlashCommand = function(noteId, event) {
   const bodyEl = document.getElementById(`note-body-${noteId}`);
   if (!bodyEl) return;
+
+  // Auto bullet: "- " at start of line → unordered list
+  // Only check on input events where a space was typed (inputType = insertText with ' ')
+  if (event && event.inputType === 'insertText' && event.data === ' ') {
+    if (tryAutoBullet(noteId, event)) return; // bullet inserted, don't run slash check
+  }
 
   scheduleSaveNote(noteId);
 
@@ -712,6 +763,34 @@ window.toggleNotePin = async function(noteId) {
   }).eq('id', noteId);
 
   renderNotes();
+};
+
+// ── Copy note to clipboard ────────────────────────────────────────
+window.copyNote = function(noteId) {
+  const note = allNotes.find(n => n.id === noteId);
+  if (!note) return;
+
+  // Build plain text: title + body text
+  const titlePart = note.title ? note.title + '\n' + '─'.repeat(Math.min(note.title.length, 40)) + '\n' : '';
+  const bodyPart = stripHtml(note.body);
+  const fullText = (titlePart + bodyPart).trim();
+
+  navigator.clipboard.writeText(fullText).then(() => {
+    // Show feedback on the button briefly
+    const btn = document.querySelector(`#note-card-${noteId} .note-tool-btn[title="Copiar nota"]`);
+    if (btn) {
+      const orig = btn.textContent;
+      btn.textContent = '✅';
+      setTimeout(() => { btn.textContent = orig; }, 1500);
+    }
+  }).catch(() => {
+    // Fallback: show toast
+    const t = document.createElement('div');
+    t.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#e8563a;color:white;padding:8px 16px;border-radius:20px;font-size:13px;font-weight:600;z-index:900;pointer-events:none';
+    t.textContent = '⚠️ No se pudo copiar';
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 2000);
+  });
 };
 
 // ── Delete note (instant DOM removal) ────────────────────────────
