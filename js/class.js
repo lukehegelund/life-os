@@ -234,7 +234,8 @@ function renderRoster(enrs, pagesMap = {}, pagesStatsMap = {}) {
         onclick="markAllPresent()">✅ Mark All Present</button>
     </div>`;
 
-  el.innerHTML = markAllBtn + enrs.map(e => {
+  // Helper: render a single enrollment row
+  function renderEnrollmentRow(e) {
     const s = e.students;
     const status = attMap[s.id] || null;
     const isExpanded = expandedStudent === s.id;
@@ -244,9 +245,7 @@ function renderRoster(enrs, pagesMap = {}, pagesStatsMap = {}) {
     // Inline pages stats chip (only for classes that track pages)
     let pagesInline = '';
     if (trackPages && stats) {
-      const lastLabel = stats.lastDate
-        ? daysAgo(stats.lastDate)
-        : 'never';
+      const lastLabel = stats.lastDate ? daysAgo(stats.lastDate) : 'never';
       const urgentColor = !stats.lastDate || stats.lastDate < sevenAgoDate() ? 'var(--red)' : 'var(--gray-400)';
       pagesInline = `<span style="font-size:10px;color:var(--gray-500);background:var(--gray-50);border-radius:6px;padding:1px 6px;white-space:nowrap;flex-shrink:0" title="7-day / 30-day / last logged">
         📄 ${stats.last7}/${stats.last30} · <span style="color:${urgentColor}">${lastLabel}</span>
@@ -258,10 +257,7 @@ function renderRoster(enrs, pagesMap = {}, pagesStatsMap = {}) {
     // Attendance: always editable (but will warn if imported)
     const attButtons = ['Present','Late','Absent','Excused'].map(opt => {
       const sel = status === opt;
-      const colors = {
-        Present: 'var(--green)', Late: 'var(--orange)',
-        Absent: 'var(--red)', Excused: 'var(--gray-400)'
-      };
+      const colors = { Present: 'var(--green)', Late: 'var(--orange)', Absent: 'var(--red)', Excused: 'var(--gray-400)' };
       return `<button class="att-pill ${sel ? 'att-pill-selected' : ''}"
         style="${sel ? `background:${colors[opt]};color:#fff;` : ''}"
         onclick="setAtt(${s.id},'${opt}')">${opt[0]}</button>`;
@@ -270,8 +266,7 @@ function renderRoster(enrs, pagesMap = {}, pagesStatsMap = {}) {
     // Participation: always editable on any day
     const partScore = partMap[s.id] ?? null;
     const partColors = ['#ef4444','#f97316','#eab308','#84cc16','#22c55e'];
-    const partLabels = ['1','2','3','4','5'];
-    const partButtons = partLabels.map((lbl, idx) => {
+    const partButtons = ['1','2','3','4','5'].map((lbl, idx) => {
       const val = idx + 1;
       const sel = partScore === val;
       return `<button class="part-pill ${sel ? 'part-pill-selected' : ''}"
@@ -289,9 +284,7 @@ function renderRoster(enrs, pagesMap = {}, pagesStatsMap = {}) {
           <button class="roster-expand-btn" onclick="toggleExpand(${s.id})" title="Expand">
             ${isExpanded ? '▼' : '▶'}
           </button>
-          <a href="student.html?id=${s.id}" class="roster-name">
-            ${s.name}
-          </a>
+          <a href="student.html?id=${s.id}" class="roster-name">${s.name}</a>
           <span class="roster-gold">${s.current_gold ?? 0}🪙</span>
           ${trackPages && pages !== null ? `<span class="roster-pages">${pages}p</span>` : ''}
           ${pagesInline}
@@ -303,7 +296,31 @@ function renderRoster(enrs, pagesMap = {}, pagesStatsMap = {}) {
         </div>
         ${isExpanded ? renderExpandedStudent(s, pages, readOnly) : ''}
       </div>`;
-  }).join('');
+  }
+
+  // Check if any enrollments have section notes — if so, group by section
+  const hasSections = enrs.some(e => e.notes);
+  let rosterBody = '';
+  if (hasSections) {
+    // Group by section label (using notes field); unsectioned go to a default group
+    const sectionMap = {};
+    for (const e of enrs) {
+      const sec = e.notes || 'other';
+      if (!sectionMap[sec]) sectionMap[sec] = [];
+      sectionMap[sec].push(e);
+    }
+    // Section display names
+    const sectionLabels = { 'homeschool': '🏠 Homeschoolers', 'full-time': '🏫 Full Timers', 'other': '👥 Students' };
+    for (const [sec, secEnrs] of Object.entries(sectionMap)) {
+      const label = sectionLabels[sec] || sec;
+      rosterBody += `<div style="font-size:11px;font-weight:700;color:var(--gray-400);letter-spacing:.05em;text-transform:uppercase;padding:10px 0 4px 2px;margin-top:${rosterBody ? '8px' : '0'}">${label}</div>`;
+      rosterBody += secEnrs.map(renderEnrollmentRow).join('');
+    }
+  } else {
+    rosterBody = enrs.map(renderEnrollmentRow).join('');
+  }
+
+  el.innerHTML = markAllBtn + rosterBody;
 }
 
 // Helper: start of 7-day window (day-of inclusive: d-6 through d = 7 days)
