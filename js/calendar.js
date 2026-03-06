@@ -320,17 +320,14 @@ const EVENT_COLORS = [
   { val: '#0F9D58', label: 'Green' },
   { val: '#7C3AED', label: 'Purple' },
   { val: '#DC2626', label: 'Red' },
-  { val: '#D97706', label: 'Amber' },
-  { val: '#0891B2', label: 'Teal' },
-  { val: '#DB2777', label: 'Pink' },
   { val: '#EA580C', label: 'Orange' },
+  { val: '#EAB308', label: 'Yellow' },
+  { val: '#0891B2', label: 'Teal' },
+  { val: '#F9A8D4', label: 'Flamingo' },
+  { val: '#DB2777', label: 'Pink' },
   { val: '#65A30D', label: 'Lime' },
-  { val: '#0284C7', label: 'Sky' },
-  { val: '#9333EA', label: 'Violet' },
-  { val: '#14B8A6', label: 'Cyan' },
   { val: '#854D0E', label: 'Brown' },
   { val: '#475569', label: 'Slate' },
-  { val: '#111827', label: 'Charcoal' },
 ];
 
 // ── Week grid (Google Calendar style, proportional blocks) ───────────────────
@@ -983,14 +980,6 @@ function attachWeekInteractions() {
         }
       });
 
-      // Right-click → quick color picker
-      if (evType === 'gcal' && evId) {
-        evEl.addEventListener('contextmenu', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          openColorPicker(evId, evEl, e.clientX, e.clientY);
-        });
-      }
     });
   });
 }
@@ -1323,84 +1312,67 @@ function _attachSwatchListeners(gridId, inputId) {
   });
 }
 
-// ── Quick color picker (right-click) ─────────────────────────────────────────
-function openColorPicker(id, evEl, clientX, clientY) {
+// ── Event detail popup (title + color swatches + edit + delete) ───────────────
+function openEventPopup(id, startTime, endTime, title, evDate, anchorEl) {
   removeModal();
-
-  const picker = document.createElement('div');
-  picker.id = 'cal-ev-modal';
-  picker.style.cssText = `
-    position:fixed;z-index:600;background:var(--white);border-radius:12px;
-    padding:12px;box-shadow:0 8px 28px rgba(0,0,0,0.22);
-    border:1px solid var(--gray-200);
-    top:${Math.min(clientY, window.innerHeight - 180)}px;
-    left:${Math.min(clientX, window.innerWidth - 200)}px;
-  `;
-
-  const currentColor = evEl.style.background || '#2563EB';
-  const swatchSize = 28;
-  const cols = 5;
+  const rect = anchorEl.getBoundingClientRect();
+  const currentColor = anchorEl.style.background || '#2563EB';
 
   const swatchesHTML = EVENT_COLORS.map(c => {
-    const isSelected = c.val.toLowerCase() === currentColor.toLowerCase();
+    const isSel = c.val.toLowerCase() === currentColor.toLowerCase();
     return `<div data-color="${c.val}" title="${c.label}" style="
-      width:${swatchSize}px;height:${swatchSize}px;border-radius:50%;background:${c.val};
-      cursor:pointer;flex-shrink:0;
-      box-shadow:${isSelected ? `0 0 0 2px var(--white),0 0 0 4px ${c.val}` : 'none'};
-      transform:${isSelected ? 'scale(1.15)' : 'scale(1)'};
+      width:26px;height:26px;border-radius:50%;background:${c.val};cursor:pointer;flex-shrink:0;
+      box-shadow:${isSel ? `0 0 0 2px #fff,0 0 0 4px ${c.val}` : 'none'};
+      transform:${isSel ? 'scale(1.18)' : 'scale(1)'};
       transition:transform 0.1s,box-shadow 0.1s;
     "></div>`;
   }).join('');
 
-  picker.innerHTML = `
-    <div style="font-size:11px;font-weight:600;color:var(--gray-400);margin-bottom:8px;letter-spacing:0.05em">COLOR</div>
-    <div style="display:grid;grid-template-columns:repeat(${cols},${swatchSize}px);gap:8px;">
+  const popup = document.createElement('div');
+  popup.id = 'cal-ev-modal';
+  // Position below event, but keep on screen
+  const top  = Math.min(rect.bottom + 6, window.innerHeight - 220);
+  const left = Math.min(Math.max(rect.left, 4), window.innerWidth - 228);
+  popup.style.cssText = `position:fixed;z-index:600;background:var(--white);border-radius:12px;
+    padding:14px 14px 12px;box-shadow:0 8px 28px rgba(0,0,0,0.18);width:220px;
+    top:${top}px;left:${left}px;border:1px solid var(--gray-200)`;
+
+  popup.innerHTML = `
+    <div style="font-size:13px;font-weight:700;color:var(--gray-800);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px">${title}</div>
+    <div style="font-size:11px;color:var(--gray-400);margin-bottom:10px">${fmt12Range(startTime, endTime)}</div>
+    <div id="ev-color-swatches" style="display:grid;grid-template-columns:repeat(6,26px);gap:7px;margin-bottom:12px">
       ${swatchesHTML}
     </div>
+    <div style="display:flex;gap:6px">
+      <button id="ev-edit-btn" style="flex:1;padding:7px 0;border:1.5px solid var(--gray-200);border-radius:7px;background:var(--white);font-size:12px;font-weight:600;color:var(--gray-700);cursor:pointer">✏️ Edit</button>
+      <button id="ev-del-btn" style="flex:1;padding:7px 0;border:none;border-radius:7px;background:#FEF2F2;font-size:12px;font-weight:600;color:var(--red);cursor:pointer">🗑 Delete</button>
+    </div>
   `;
+  document.body.appendChild(popup);
 
-  document.body.appendChild(picker);
-  setTimeout(() => document.addEventListener('click', () => removeModal(), { once: true }), 10);
-  picker.addEventListener('click', e => e.stopPropagation());
-
-  picker.querySelectorAll('[data-color]').forEach(swatch => {
-    swatch.addEventListener('mouseenter', () => { swatch.style.transform = 'scale(1.2)'; });
-    swatch.addEventListener('mouseleave', () => {
-      const isSel = swatch.dataset.color.toLowerCase() === currentColor.toLowerCase();
-      swatch.style.transform = isSel ? 'scale(1.15)' : 'scale(1)';
+  // Wire up color swatches — instant save, no modal close
+  let liveColor = currentColor;
+  popup.querySelectorAll('[data-color]').forEach(sw => {
+    sw.addEventListener('mouseenter', () => { sw.style.transform = 'scale(1.22)'; });
+    sw.addEventListener('mouseleave', () => {
+      sw.style.transform = sw.dataset.color === liveColor ? 'scale(1.18)' : 'scale(1)';
     });
-    swatch.addEventListener('click', async () => {
-      const newColor = swatch.dataset.color;
-      removeModal();
-      // Optimistic UI update
-      evEl.style.background = newColor;
+    sw.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const newColor = sw.dataset.color;
+      liveColor = newColor;
+      // Update ring on swatches
+      popup.querySelectorAll('[data-color]').forEach(s => {
+        const sel = s.dataset.color === newColor;
+        s.style.boxShadow = sel ? `0 0 0 2px #fff,0 0 0 4px ${newColor}` : 'none';
+        s.style.transform = sel ? 'scale(1.18)' : 'scale(1)';
+      });
+      // Optimistic update on the event block itself
+      anchorEl.style.background = newColor;
       const { error } = await supabase.from('calendar_events').update({ color: newColor }).eq('id', id);
       if (error) { toast('Color update failed', 'error'); render(); }
     });
   });
-}
-
-// ── Event detail/edit/delete popup ───────────────────────────────────────────
-function openEventPopup(id, startTime, endTime, title, evDate, anchorEl) {
-  removeModal();
-  const rect = anchorEl.getBoundingClientRect();
-
-  const popup = document.createElement('div');
-  popup.id = 'cal-ev-modal';
-  popup.style.cssText = `position:fixed;z-index:500;background:var(--white);border-radius:10px;
-    padding:14px 16px;box-shadow:0 8px 24px rgba(0,0,0,0.2);width:240px;
-    top:${Math.min(rect.bottom + 8, window.innerHeight - 200)}px;
-    left:${Math.min(rect.left, window.innerWidth - 260)}px;
-    border:1px solid var(--gray-200)`;
-  popup.innerHTML = `
-    <div style="font-size:14px;font-weight:700;color:var(--gray-800);margin-bottom:4px">${title}</div>
-    <div style="font-size:12px;color:var(--gray-400);margin-bottom:12px">${evDate} · ${fmt12Range(startTime, endTime)}</div>
-    <div style="display:flex;gap:6px">
-      <button id="ev-edit-btn" style="flex:1;padding:8px;border:1.5px solid var(--gray-200);border-radius:7px;background:var(--white);font-size:13px;font-weight:600;color:var(--gray-700);cursor:pointer">✏️ Edit</button>
-      <button id="ev-del-btn" style="flex:1;padding:8px;border:none;border-radius:7px;background:#FEF2F2;font-size:13px;font-weight:600;color:var(--red);cursor:pointer">🗑 Delete</button>
-    </div>
-  `;
-  document.body.appendChild(popup);
 
   // Close on outside click
   setTimeout(() => document.addEventListener('click', () => removeModal(), { once: true }), 10);
