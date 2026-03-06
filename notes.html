@@ -369,6 +369,47 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
 }
 .folder-menu-item:hover { background: var(--gray-100); }
 
+/* Linked task row inside expanded note */
+.note-linked-task-row {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+}
+.note-link-task-btn {
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1.5px dashed var(--gray-300);
+  background: none;
+  color: var(--gray-500);
+  cursor: pointer;
+  font-family: inherit;
+}
+.note-link-task-btn:hover { border-color: var(--blue); color: var(--blue); }
+.note-linked-task-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: #EFF6FF;
+  border: 1.5px solid #BFDBFE;
+  color: #2563EB;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.note-linked-task-clear {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #93C5FD;
+  font-size: 12px;
+  padding: 0 2px;
+  margin-left: 4px;
+}
+.note-linked-task-clear:hover { color: #2563EB; }
+
 /* FAB */
 .fab {
   position: fixed;
@@ -454,7 +495,7 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
 </nav>
 
 <script type="module" src="js/auth-guard.js"></script>
-<script type="module" src="js/notes.js?v=9"></script>
+<script type="module" src="js/notes.js?v=10"></script>
 <script type="module" src="js/error-reporter.js?v=1"></script>
 <script type="module" src="js/topbar.js?v=6"></script>
 </body>
