@@ -4,6 +4,7 @@
 
 import { supabase } from './supabase.js';
 import { today, toast } from './utils.js';
+import { logout } from './auth.js';
 
 function esc(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -61,11 +62,23 @@ function injectButtons() {
         background:#ef4444;color:white;border-radius:50%;width:16px;height:16px;font-size:10px;
         font-weight:700;align-items:center;justify-content:center;line-height:1"></span>
     </div>
+    <button id="topbar-logout" title="Lock / Log out"
+      style="width:34px;height:34px;border-radius:50%;background:var(--gray-100);color:var(--gray-500);border:1px solid var(--gray-200);
+             font-size:15px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;
+             box-shadow:var(--shadow);flex-shrink:0">🔒</button>
   `;
 
   // Always append directly to headerRow (not inside a nested container)
   // so the topbar buttons appear at the top level of the flex row
   headerRow.appendChild(wrap);
+
+  // Logout button
+  document.getElementById('topbar-logout')?.addEventListener('click', () => {
+    if (confirm('Lock Life OS?')) {
+      logout();
+      window.location.replace('login.html');
+    }
+  });
 
   // Load unread badge on init
   loadBellBadge();

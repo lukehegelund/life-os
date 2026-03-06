@@ -1,12 +1,8 @@
-// notes.js — Life OS Notes (v5: fix color/pin persistence, await DB updates)
+// notes.js — Life OS Notes (v6: use secure db-proxy client to fix RLS errors)
 // Notes stored in `tasks` table with module='Personal' + notes JSON flag {is_note:true}
 // body = HTML string (contenteditable), color/pinned in notes JSON
 
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
-
-const SUPABASE_URL = 'https://kxsuzgpnvtepsyhkezin.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4c3V6Z3BudnRlcHN5aGtlemluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3Nzc1MDAsImV4cCI6MjA4NzM1MzUwMH0.oKtpiH63heyK-wJ87ZRvkhUzRqy6NT6Z2XWF1xjbtxA';
-const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
+import { supabase as sb } from './supabase.js';
 
 const NOTE_MODULE = 'Personal';
 const NOTE_FLAG   = '"is_note":true';

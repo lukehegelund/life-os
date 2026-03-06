@@ -789,6 +789,10 @@ window.submitBulkGold = async () => {
   if (!amountRaw || amountRaw === 0) { toast('Enter an amount', 'info'); return; }
   if (!goldChecked.size) { toast('Select at least one student', 'info'); return; }
 
+  // Disable button + show loading state to prevent double-submit
+  const btn = document.querySelector('.btn-gold');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Submitting...'; }
+
   const inserts = [];
   for (const sid of goldChecked) {
     inserts.push({
@@ -800,15 +804,26 @@ window.submitBulkGold = async () => {
   }
 
   const { error } = await supabase.from('gold_transactions').insert(inserts);
-  if (error) { toast('Error: ' + error.message, 'error'); return; }
-
-  for (const sid of goldChecked) {
-    const r = await supabase.from('students').select('current_gold').eq('id', sid).single();
-    const cur = r.data?.current_gold ?? 0;
-    await supabase.from('students').update({ current_gold: cur + amountRaw }).eq('id', sid);
+  if (error) {
+    toast('Error: ' + error.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = '🪙 Submit Gold'; }
+    return;
   }
 
-  toast(`Gold submitted for ${goldChecked.size} student${goldChecked.size > 1 ? 's' : ''}!`, 'success');
+  // Fetch all current gold balances in parallel, then update all in parallel
+  const sids = [...goldChecked];
+  const balances = await Promise.all(
+    sids.map(sid => supabase.from('students').select('current_gold').eq('id', sid).single())
+  );
+  await Promise.all(
+    sids.map((sid, i) => {
+      const cur = balances[i].data?.current_gold ?? 0;
+      return supabase.from('students').update({ current_gold: cur + amountRaw }).eq('id', sid);
+    })
+  );
+
+  const count = goldChecked.size;
+  toast(`Gold submitted for ${count} student${count > 1 ? 's' : ''}!`, 'success');
   goldChecked.clear();
   document.getElementById('gold-amount').value = '';
   document.getElementById('gold-reason').value = '';

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Life OS — Login</title>
+<link rel="stylesheet" href="css/main.css?v=2">
+<style>
+  body { display:flex; align-items:center; justify-content:center; min-height:100vh; padding:24px; background:var(--gray-50,#F9FAFB); }
+  .login-card {
+    background:var(--white);
+    border-radius:20px;
+    padding:36px 28px;
+    max-width:360px;
+    width:100%;
+    box-shadow:0 4px 24px rgba(0,0,0,0.08);
+    text-align:center;
+  }
+  .login-logo { font-size:48px; margin-bottom:8px; }
+  .login-title { font-size:24px; font-weight:800; color:var(--gray-900,#111); margin-bottom:4px; }
+  .login-sub { font-size:14px; color:var(--gray-400); margin-bottom:28px; }
+  .pin-display {
+    display:flex; gap:10px; justify-content:center; margin-bottom:24px;
+  }
+  .pin-dot {
+    width:14px; height:14px; border-radius:50%;
+    background:var(--gray-200); border:2px solid var(--gray-300);
+    transition:all 0.15s;
+  }
+  .pin-dot.filled { background:var(--blue,#2563EB); border-color:var(--blue,#2563EB); }
+  .pin-dot.error { background:var(--red,#EF4444); border-color:var(--red,#EF4444); }
+  .keypad {
+    display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-bottom:16px;
+  }
+  .key-btn {
+    background:var(--gray-100,#F3F4F6); border:none; border-radius:12px;
+    font-size:22px; font-weight:700; color:var(--gray-800);
+    padding:18px 10px; cursor:pointer; transition:all 0.1s;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .key-btn:active { background:var(--blue-light,#EFF6FF); transform:scale(0.96); }
+  .key-btn.del { font-size:18px; color:var(--gray-500); }
+  .key-btn.empty { background:transparent; cursor:default; }
+  .login-error { color:var(--red,#EF4444); font-size:13px; font-weight:600; margin-top:8px; min-height:20px; }
+  .login-hint { font-size:12px; color:var(--gray-400); margin-top:16px; }
+</style>
+</head>
+<body>
+
+<div class="login-card">
+  <div class="login-logo">🔐</div>
+  <div class="login-title">Life OS</div>
+  <div class="login-sub">Enter your PIN to continue</div>
+
+  <div class="pin-display" id="pin-display">
+    <div class="pin-dot" id="dot-0"></div>
+    <div class="pin-dot" id="dot-1"></div>
+    <div class="pin-dot" id="dot-2"></div>
+    <div class="pin-dot" id="dot-3"></div>
+  </div>
+
+  <div class="keypad">
+    <button class="key-btn" onclick="addDigit('1')">1</button>
+    <button class="key-btn" onclick="addDigit('2')">2</button>
+    <button class="key-btn" onclick="addDigit('3')">3</button>
+    <button class="key-btn" onclick="addDigit('4')">4</button>
+    <button class="key-btn" onclick="addDigit('5')">5</button>
+    <button class="key-btn" onclick="addDigit('6')">6</button>
+    <button class="key-btn" onclick="addDigit('7')">7</button>
+    <button class="key-btn" onclick="addDigit('8')">8</button>
+    <button class="key-btn" onclick="addDigit('9')">9</button>
+    <button class="key-btn empty"></button>
+    <button class="key-btn" onclick="addDigit('0')">0</button>
+    <button class="key-btn del" onclick="delDigit()">⌫</button>
+  </div>
+
+  <div class="login-error" id="login-error"></div>
+  <div class="login-hint">Session expires after 12 hours</div>
+</div>
+
+<script type="module">
+import { tryLogin, isLoggedIn } from './js/auth.js';
+
+// If already logged in, redirect immediately
+if (isLoggedIn()) {
+  const params = new URLSearchParams(window.location.search);
+  const ret = params.get('return');
+  window.location.replace(ret || 'index.html');
+}
+
+let pin = '';
+const PIN_LENGTH = 4;
+
+function updateDots() {
+  for (let i = 0; i < PIN_LENGTH; i++) {
+    const dot = document.getElementById('dot-' + i);
+    dot.classList.toggle('filled', i < pin.length);
+    dot.classList.remove('error');
+  }
+}
+
+async function submitPin() {
+  const ok = await tryLogin(pin);
+  if (ok) {
+    const params = new URLSearchParams(window.location.search);
+    const ret = params.get('return');
+    window.location.replace(ret || 'index.html');
+  } else {
+    // Flash red
+    for (let i = 0; i < PIN_LENGTH; i++) {
+      document.getElementById('dot-' + i).classList.add('error');
+    }
+    document.getElementById('login-error').textContent = 'Incorrect PIN. Try again.';
+    setTimeout(() => {
+      pin = '';
+      updateDots();
+      document.getElementById('login-error').textContent = '';
+    }, 1000);
+  }
+}
+
+window.addDigit = function(d) {
+  if (pin.length >= PIN_LENGTH) return;
+  pin += d;
+  updateDots();
+  if (pin.length === PIN_LENGTH) {
+    setTimeout(submitPin, 120); // small delay so last dot fills visually
+  }
+};
+
+window.delDigit = function() {
+  if (pin.length > 0) {
+    pin = pin.slice(0, -1);
+    updateDots();
+    document.getElementById('login-error').textContent = '';
+  }
+};
+
+// Keyboard support
+document.addEventListener('keydown', e => {
+  if (e.key >= '0' && e.key <= '9') window.addDigit(e.key);
+  else if (e.key === 'Backspace') window.delDigit();
+});
+</script>
+
+</body>
+</html>
