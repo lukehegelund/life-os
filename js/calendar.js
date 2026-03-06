@@ -367,7 +367,8 @@ function pxToMins(px) {
 
 // ── Drag state ────────────────────────────────────────────────────────────────
 let dragState = null;
-let lastDragEnd = 0; // timestamp of last completed drag, to suppress click // { type: 'create'|'move'|'resize', ... }
+let lastDragEnd = 0; // timestamp of last completed drag, to suppress click
+let _dragListenersAttached = false; // global listeners attached once only
 
 // ── Undo stack ────────────────────────────────────────────────────────────────
 const undoStack = []; // each entry: { type, data } — max 20 entries
@@ -506,7 +507,7 @@ function renderDayGrid() {
     const evTypeAttr = `data-ev-type="${e.type}"`;
 
     html += `<div class="wcal-ev${isEditable ? ' wcal-ev-editable' : ''}" ${evId} ${classIdAttr} ${evTypeAttr}
-      data-date="${ds}" data-start="${e.timeStart}" data-end="${e.timeEnd || ''}"
+      data-date="${ds}" data-start="${e.timeStart}" data-end="${e.timeEnd || ''}" data-title="${(e.title||'').replace(/"/g,'&quot;')}"
       style="position:absolute;top:${topPct}%;left:2px;right:2px;
         min-height:${heightPx}px;background:${e.color};border-radius:4px;
         padding:2px 5px;font-size:10px;font-weight:600;color:white;
@@ -514,7 +515,7 @@ function renderDayGrid() {
         cursor:${cursor};user-select:none;box-sizing:border-box"
       title="${e.title} ${timeLabel}">
       <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.title}</div>
-      ${heightPx > 28 ? `<div style="font-size:9px;opacity:0.85">${timeLabel}</div>` : ''}
+      ${heightPx > 28 ? `<div class="wcal-time-lbl" style="font-size:9px;opacity:0.85">${timeLabel}</div>` : ''}
       ${isEditable ? `<div class="wcal-resize-handle" style="position:absolute;bottom:0;left:0;right:0;height:6px;cursor:s-resize;background:rgba(0,0,0,0.15);border-radius:0 0 4px 4px"></div>` : ''}
     </div>`;
   }
@@ -634,7 +635,7 @@ function renderWeekGrid() {
       const evTypeAttr = `data-ev-type="${e.type}"`;
 
       html += `<div class="wcal-ev${isEditable ? ' wcal-ev-editable' : ''}" ${evId} ${classIdAttr} ${evTypeAttr}
-        data-date="${str}" data-start="${e.timeStart}" data-end="${e.timeEnd || ''}"
+        data-date="${str}" data-start="${e.timeStart}" data-end="${e.timeEnd || ''}" data-title="${(e.title||'').replace(/"/g,'&quot;')}"
         style="position:absolute;top:${topPct}%;left:2px;right:2px;
           min-height:${heightPx}px;background:${e.color};border-radius:4px;
           padding:2px 5px;font-size:10px;font-weight:600;color:white;
@@ -642,7 +643,7 @@ function renderWeekGrid() {
           cursor:${cursor};user-select:none;box-sizing:border-box"
         title="${e.title} ${timeLabel}">
         <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.title}</div>
-        ${heightPx > 28 ? `<div style="font-size:9px;opacity:0.85">${timeLabel}</div>` : ''}
+        ${heightPx > 28 ? `<div class="wcal-time-lbl" style="font-size:9px;opacity:0.85">${timeLabel}</div>` : ''}
         ${isEditable ? `<div class="wcal-resize-handle" style="position:absolute;bottom:0;left:0;right:0;height:6px;cursor:s-resize;background:rgba(0,0,0,0.15);border-radius:0 0 4px 4px"></div>` : ''}
       </div>`;
     }
@@ -662,42 +663,144 @@ function renderWeekGrid() {
   attachSwipeNavigation();
 }
 
+
+// ── Shared drag helpers (module-level, persist across re-renders) ─────────────
+function _getXY(e) {
+  if (e.touches && e.touches.length > 0)               return { x: e.touches[0].clientX,        y: e.touches[0].clientY };
+  if (e.changedTouches && e.changedTouches.length > 0) return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+  return { x: e.clientX, y: e.clientY };
+}
+
+function _yToMins(colEl, clientY) {
+  const rect = colEl.getBoundingClientRect();
+  const py   = Math.max(0, Math.min(TOTAL_HEIGHT, clientY - rect.top));
+  return snapMins(Math.round(pxToMins(py)));
+}
+
+function _colAtX(clientX) {
+  let found = null;
+  document.querySelectorAll('.wgcal-day-col').forEach(col => {
+    const r = col.getBoundingClientRect();
+    if (clientX >= r.left && clientX <= r.right) found = col;
+  });
+  return found;
+}
+
+function _handleDragMove(e) {
+  if (!dragState) return;
+  if (e.cancelable) e.preventDefault();
+  const { x, y } = _getXY(e);
+
+  if (dragState.type === 'create') {
+    const m = _yToMins(dragState.col, y);
+    if (m > dragState.anchorM) { dragState.startM = dragState.anchorM; dragState.endM = m; }
+    else                        { dragState.startM = m;                dragState.endM = dragState.anchorM; }
+    dragState.endM = Math.max(dragState.startM + SNAP_MINS, dragState.endM);
+    updateGhostBlock(dragState.ghost, dragState.startM, dragState.endM);
+  }
+
+  if (dragState.type === 'resize') {
+    const m = _yToMins(dragState.col, y);
+    dragState.endM = Math.max(dragState.startM + SNAP_MINS, m);
+    const heightPx = Math.max(20, (dragState.endM - dragState.startM) / 60 * HOUR_HEIGHT_PX);
+    dragState.evEl.style.minHeight = heightPx + 'px';
+    dragState.evEl.style.height    = heightPx + 'px';
+    const liveStr = `${fmt12(minsToTimeStr(dragState.startM))}–${fmt12(minsToTimeStr(dragState.endM))}`;
+    const tl = dragState.evEl.querySelector('.wcal-time-lbl');
+    if (tl) tl.textContent = liveStr;
+  }
+
+  if (dragState.type === 'move') {
+    const targetCol = _colAtX(x);
+    if (!targetCol) return;
+    dragState.startM = Math.max(WEEK_HOUR_START * 60, _yToMins(targetCol, y) - dragState.offsetM);
+    dragState.endM   = dragState.startM + dragState.duration;
+    dragState.col    = targetCol;
+    dragState.evDate = targetCol.dataset.date;
+
+    // Move the floating ghost to follow cursor across columns
+    const colRect  = targetCol.getBoundingClientRect();
+    const topPx    = colRect.top + (dragState.startM - WEEK_HOUR_START * 60) / ((WEEK_HOUR_END - WEEK_HOUR_START) * 60) * TOTAL_HEIGHT;
+    const heightPx = Math.max(20, dragState.duration / 60 * HOUR_HEIGHT_PX);
+    dragState.ghost.style.left   = (colRect.left + 2) + 'px';
+    dragState.ghost.style.top    = topPx + 'px';
+    dragState.ghost.style.width  = (colRect.width - 4) + 'px';
+    dragState.ghost.style.height = heightPx + 'px';
+
+    const liveStr = `${fmt12(minsToTimeStr(dragState.startM))}–${fmt12(minsToTimeStr(dragState.endM))}`;
+    const tl = dragState.ghost.querySelector('.wcal-time-lbl');
+    if (tl) tl.textContent = liveStr;
+  }
+}
+
+function _handleDragUp(e) {
+  if (!dragState) return;
+  const ds = dragState;
+  dragState = null;
+
+  if (ds.type === 'create') {
+    ds.ghost.remove();
+    if (ds.endM - ds.startM < SNAP_MINS) return;
+    openCreateModal(ds.dateStr, minsToTimeStr(ds.startM), minsToTimeStr(ds.endM));
+  }
+
+  if (ds.type === 'resize') {
+    ds.evEl.style.cursor = '';
+    lastDragEnd = Date.now();
+    if (ds.evType === 'class' && ds.classId) {
+      saveClassTime(ds.classId, minsToTimeStr(ds.startM), minsToTimeStr(ds.endM));
+    } else {
+      saveEventTime(ds.evId, ds.evDate, minsToTimeStr(ds.startM), minsToTimeStr(ds.endM),
+        ds.origDate, ds.origStart, ds.origEnd, 'resize');
+    }
+  }
+
+  if (ds.type === 'move') {
+    ds.ghost.remove();
+    ds.evEl.style.opacity = '';
+    ds.evEl.style.cursor  = 'grab';
+    lastDragEnd = Date.now();
+    if (ds.evType === 'class' && ds.classId) {
+      saveClassTime(ds.classId, minsToTimeStr(ds.startM), minsToTimeStr(ds.endM));
+    } else {
+      saveEventTime(ds.evId, ds.evDate, minsToTimeStr(ds.startM), minsToTimeStr(ds.endM),
+        ds.origDate, ds.origStart, ds.origEnd, 'move');
+    }
+  }
+}
+
+// Attach global drag listeners once — they stay alive permanently across re-renders
+function _ensureGlobalDragListeners() {
+  if (_dragListenersAttached) return;
+  _dragListenersAttached = true;
+  document.addEventListener('mousemove',   _handleDragMove);
+  document.addEventListener('mouseup',     _handleDragUp);
+  document.addEventListener('touchmove',   _handleDragMove, { passive: false });
+  document.addEventListener('touchend',    _handleDragUp);
+  document.addEventListener('touchcancel', _handleDragUp);
+  // Safety net: if the window loses focus mid-drag, cancel cleanly so events don't vanish
+  window.addEventListener('blur', _cancelDragSafely);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) _cancelDragSafely(); });
+}
+
+function _cancelDragSafely() {
+  if (!dragState) return;
+  const ds = dragState;
+  dragState = null;
+  // Restore hidden original event element
+  if (ds.evEl) { ds.evEl.style.opacity = ''; ds.evEl.style.cursor = 'grab'; }
+  // Remove any floating ghost
+  if (ds.ghost && ds.ghost.parentNode) ds.ghost.remove();
+}
+
 // ── Week view interactions ────────────────────────────────────────────────────
 function attachWeekInteractions() {
+  _ensureGlobalDragListeners();
+
   const dayCols = document.querySelectorAll('.wgcal-day-col');
-  const body = document.getElementById('wgcal-body');
 
-  // Helper: get minutes from a Y coordinate (clientY) relative to a day column element
-  function yToMins(colEl, clientY) {
-    const rect = colEl.getBoundingClientRect();
-    const py = Math.max(0, Math.min(TOTAL_HEIGHT, clientY - rect.top));
-    return snapMins(Math.round(pxToMins(py)));
-  }
-
-  // Helper: extract clientX/clientY from a touch or mouse event
-  function getXY(e) {
-    if (e.touches && e.touches.length > 0) {
-      return { x: e.touches[0].clientX, y: e.touches[0].clientY };
-    }
-    if (e.changedTouches && e.changedTouches.length > 0) {
-      return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
-    }
-    return { x: e.clientX, y: e.clientY };
-  }
-
-  // Helper: find which day column a clientX falls into
-  function colAtX(clientX) {
-    let found = null;
-    document.querySelectorAll('.wgcal-day-col').forEach(col => {
-      const rect = col.getBoundingClientRect();
-      if (clientX >= rect.left && clientX <= rect.right) found = col;
-    });
-    return found;
-  }
-
-  // Track touch hold timer for long-press-to-create on column background
   let touchHoldTimer = null;
-  let touchStartInfo = null; // { col, dateStr, x, y }
+  let touchStartInfo = null;
 
   dayCols.forEach(col => {
     const colDateStr = col.dataset.date;
@@ -706,60 +809,49 @@ function attachWeekInteractions() {
     col.addEventListener('mousedown', (e) => {
       if (e.target !== col) return;
       e.preventDefault();
-      const startM = yToMins(col, e.clientY);
+      const startM = _yToMins(col, e.clientY);
       const endM   = startM + 60;
-      const ghost = createGhostBlock(col, startM, endM, colDateStr);
+      const ghost  = createGhostBlock(col, startM, endM, colDateStr);
       dragState = { type: 'create', col, dateStr: colDateStr, startM, endM, anchorM: startM, ghost };
     });
 
-    // ── Touchstart on column background → long-press to start create drag ─
+    // ── Touchstart on column background → long-press to create ────────────
     col.addEventListener('touchstart', (e) => {
       if (e.target !== col) return;
-      const { x, y } = getXY(e);
+      const { x, y } = _getXY(e);
       touchStartInfo = { col, dateStr: colDateStr, x, y };
       touchHoldTimer = setTimeout(() => {
-        // Long press confirmed — start a create drag
-        e.preventDefault();
-        const startM = yToMins(col, y);
+        const startM = _yToMins(col, touchStartInfo.y);
         const endM   = startM + 60;
-        const ghost = createGhostBlock(col, startM, endM, colDateStr);
+        const ghost  = createGhostBlock(col, startM, endM, colDateStr);
         dragState = { type: 'create', col, dateStr: colDateStr, startM, endM, anchorM: startM, ghost };
-        touchStartInfo = null;
-      }, 300);
+      }, 500);
     }, { passive: true });
 
-    col.addEventListener('touchend', () => {
-      if (touchHoldTimer) { clearTimeout(touchHoldTimer); touchHoldTimer = null; }
-      touchStartInfo = null;
-    });
-
-    col.addEventListener('touchcancel', () => {
-      if (touchHoldTimer) { clearTimeout(touchHoldTimer); touchHoldTimer = null; }
-      touchStartInfo = null;
-    });
+    col.addEventListener('touchmove',  () => { if (touchHoldTimer) { clearTimeout(touchHoldTimer); touchHoldTimer = null; } }, { passive: true });
+    col.addEventListener('touchend',   () => { if (touchHoldTimer) { clearTimeout(touchHoldTimer); touchHoldTimer = null; } }, { passive: true });
 
     // ── Mousedown / Touchstart on editable events ──────────────────────────
     col.querySelectorAll('.wcal-ev-editable').forEach(evEl => {
-      const evId      = evEl.dataset.evId;
-      const classId   = evEl.dataset.classId;
-      const evType    = evEl.dataset.evType;
-      const evDate    = evEl.dataset.date;
-      const evStart   = evEl.dataset.start;
-      const evEnd     = evEl.dataset.end;
+      const evId    = evEl.dataset.evId;
+      const classId = evEl.dataset.classId;
+      const evType  = evEl.dataset.evType;
 
-      // Resize handle
       const resizeHandle = evEl.querySelector('.wcal-resize-handle');
 
       function startResize(e) {
         e.preventDefault();
         e.stopPropagation();
+        // Read live dataset values — may have changed after prior drag
+        const evStart = evEl.dataset.start;
+        const evEnd   = evEl.dataset.end;
+        const evDate  = evEl.dataset.date || colDateStr;
         dragState = {
           type: 'resize',
           evEl, evId, classId, evType, evDate,
-          startM: timeToMinutes(evStart),
-          endM:   timeToMinutes(evEnd) || timeToMinutes(evStart) + 60,
+          startM:   timeToMinutes(evStart),
+          endM:     timeToMinutes(evEnd) || timeToMinutes(evStart) + 60,
           col,
-          // Store originals for undo
           origDate: evDate, origStart: evStart, origEnd: evEnd,
         };
       }
@@ -773,23 +865,54 @@ function attachWeekInteractions() {
         if (e.target === resizeHandle) return;
         e.preventDefault();
         e.stopPropagation();
-        const { x, y } = getXY(e);
-        const clickMins = yToMins(col, y);
+
+        // Read live dataset values — may have changed after prior drag
+        const evStart = evEl.dataset.start;
+        const evEnd   = evEl.dataset.end;
+        const evDate  = evEl.dataset.date || colDateStr;
+
+        const { x, y } = _getXY(e);
+        const clickMins = _yToMins(col, y);
         const sMins = timeToMinutes(evStart);
         const eMins = timeToMinutes(evEnd) || sMins + 60;
+
+        // Create a fixed-position ghost that tracks the cursor freely across columns
+        const colRect  = col.getBoundingClientRect();
+        const heightPx = Math.max(20, (eMins - sMins) / 60 * HOUR_HEIGHT_PX);
+        const topPx    = colRect.top + (sMins - WEEK_HOUR_START * 60) / ((WEEK_HOUR_END - WEEK_HOUR_START) * 60) * TOTAL_HEIGHT;
+        const evColor  = evEl.style.background || evEl.style.backgroundColor || '#2563EB';
+        const liveStr  = `${fmt12(minsToTimeStr(sMins))}–${fmt12(minsToTimeStr(eMins))}`;
+        const ghost    = document.createElement('div');
+        ghost.style.cssText = `
+          position:fixed;z-index:9999;pointer-events:none;box-sizing:border-box;
+          left:${colRect.left + 2}px;top:${topPx}px;
+          width:${colRect.width - 4}px;height:${heightPx}px;
+          background:${evColor};border-radius:4px;
+          padding:2px 5px;font-size:10px;font-weight:600;color:white;
+          opacity:0.88;box-shadow:0 4px 18px rgba(0,0,0,0.28);
+          transition:none;
+        `;
+        ghost.innerHTML = `
+          <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${evEl.dataset.title || ''}</div>
+          <div class="wcal-time-lbl" style="font-size:9px;opacity:0.9">${liveStr}</div>
+        `;
+        document.body.appendChild(ghost);
+
+        // Hide original during drag
+        evEl.style.opacity = '0';
+        evEl.style.cursor  = 'grabbing';
+
         dragState = {
           type: 'move',
-          evEl, evId, classId, evType, evDate: colDateStr,
-          startM: sMins,
-          endM:   eMins,
+          evEl, evId, classId, evType, evDate,
+          startM:   sMins,
+          endM:     eMins,
           duration: eMins - sMins,
-          offsetM: clickMins - sMins,
+          offsetM:  clickMins - sMins,
           col,
-          // Store originals for undo
-          origDate: colDateStr, origStart: evStart, origEnd: evEnd,
+          ghost,
+          origDate: evDate, origStart: evStart, origEnd: evEnd,
         };
-        evEl.style.opacity = '0.6';
-        evEl.style.cursor = 'grabbing';
       }
 
       evEl.addEventListener('mousedown', startMove);
@@ -797,8 +920,11 @@ function attachWeekInteractions() {
 
       // Click (no drag) → open detail popup
       evEl.addEventListener('click', (e) => {
-        if (Date.now() - lastDragEnd < 400) return; // was a drag, not a click
+        if (Date.now() - lastDragEnd < 400) return;
         e.stopPropagation();
+        const evStart = evEl.dataset.start;
+        const evEnd   = evEl.dataset.end;
+        const evDate  = evEl.dataset.date || colDateStr;
         if (evType === 'gcal') {
           openEventPopup(evId, evStart, evEnd, evEl.dataset.title || evEl.title, evDate, evEl);
         } else if (evType === 'class' && classId) {
@@ -808,119 +934,7 @@ function attachWeekInteractions() {
       });
     });
   });
-
-  // ── Global mouse + touch move ──────────────────────────────────────────────
-  document.addEventListener('mousemove', handleMove);
-  document.addEventListener('mouseup', handleUp);
-  document.addEventListener('touchmove', handleMove, { passive: false });
-  document.addEventListener('touchend', handleUp);
-  document.addEventListener('touchcancel', handleUp);
-
-  function handleMove(e) {
-    if (!dragState) return;
-    // Prevent page scroll while dragging in the calendar
-    if (e.cancelable) e.preventDefault();
-
-    const { x, y } = getXY(e);
-
-    if (dragState.type === 'create') {
-      const m = yToMins(dragState.col, y);
-      if (m > dragState.anchorM) {
-        dragState.startM = dragState.anchorM;
-        dragState.endM = m;
-      } else {
-        dragState.startM = m;
-        dragState.endM = dragState.anchorM;
-      }
-      dragState.endM = Math.max(dragState.startM + SNAP_MINS, dragState.endM);
-      updateGhostBlock(dragState.ghost, dragState.startM, dragState.endM);
-    }
-
-    if (dragState.type === 'resize') {
-      const m = yToMins(dragState.col, y);
-      dragState.endM = Math.max(dragState.startM + SNAP_MINS, m);
-      const heightPx = Math.max(20, (dragState.endM - dragState.startM) / 60 * HOUR_HEIGHT_PX);
-      dragState.evEl.style.minHeight = heightPx + 'px';
-      dragState.evEl.style.height = heightPx + 'px';
-      // Live time label update
-      const liveTimeStr = `${fmt12(minsToTimeStr(dragState.startM))}–${fmt12(minsToTimeStr(dragState.endM))}`;
-      const tl = dragState.evEl.querySelector('div:nth-child(2)');
-      if (tl) tl.textContent = liveTimeStr;
-      else {
-        // Add time div if not present
-        const newTl = document.createElement('div');
-        newTl.style.cssText = 'font-size:9px;opacity:0.85';
-        newTl.textContent = liveTimeStr;
-        dragState.evEl.appendChild(newTl);
-      }
-    }
-
-    if (dragState.type === 'move') {
-      // Determine which column we're over (by clientX)
-      const targetCol = colAtX(x);
-      if (!targetCol) return;
-      const targetDate = targetCol.dataset.date;
-
-      const m = yToMins(targetCol, y);
-      dragState.startM = m - dragState.offsetM;
-      dragState.endM   = dragState.startM + dragState.duration;
-      dragState.col = targetCol;
-      dragState.evDate = targetDate;
-
-      dragState.evEl.style.top = minutesToPct(dragState.startM) + '%';
-
-      // Live time label update
-      const liveTimeLabel = `${fmt12(minsToTimeStr(dragState.startM))}–${fmt12(minsToTimeStr(dragState.endM))}`;
-      const timeLbl = dragState.evEl.querySelector('div:nth-child(2)');
-      if (timeLbl) timeLbl.textContent = liveTimeLabel;
-      dragState.evEl.title = (dragState.evEl.dataset.title || '') + ' — ' + liveTimeLabel;
-    }
-  }
-
-  function handleUp(e) {
-    if (!dragState) return;
-    const ds = dragState;
-    dragState = null;
-
-    if (ds.type === 'create') {
-      ds.ghost.remove();
-      if (ds.endM - ds.startM < SNAP_MINS) return; // too small, ignore
-      openCreateModal(ds.dateStr, minsToTimeStr(ds.startM), minsToTimeStr(ds.endM));
-    }
-
-    if (ds.type === 'resize') {
-      ds.evEl.style.cursor = '';
-      lastDragEnd = Date.now();
-      if (ds.evType === 'class' && ds.classId) {
-        saveClassTime(ds.classId, minsToTimeStr(ds.startM), minsToTimeStr(ds.endM));
-      } else {
-        saveEventTime(ds.evId, ds.evDate, minsToTimeStr(ds.startM), minsToTimeStr(ds.endM),
-          ds.origDate, ds.origStart, ds.origEnd, 'resize');
-      }
-    }
-
-    if (ds.type === 'move') {
-      ds.evEl.style.opacity = '';
-      ds.evEl.style.cursor = 'grab';
-      lastDragEnd = Date.now();
-      if (ds.evType === 'class' && ds.classId) {
-        saveClassTime(ds.classId, minsToTimeStr(ds.startM), minsToTimeStr(ds.endM));
-      } else {
-        saveEventTime(ds.evId, ds.evDate, minsToTimeStr(ds.startM), minsToTimeStr(ds.endM),
-          ds.origDate, ds.origStart, ds.origEnd, 'move');
-      }
-    }
-
-    // Clean up listeners
-    document.removeEventListener('mousemove', handleMove);
-    document.removeEventListener('mouseup', handleUp);
-    document.removeEventListener('touchmove', handleMove);
-    document.removeEventListener('touchend', handleUp);
-    document.removeEventListener('touchcancel', handleUp);
-  }
 }
-
-// ── Swipe left/right to navigate weeks (mobile) ───────────────────────────────
 function attachSwipeNavigation() {
   const wrap = document.querySelector('.week-gcal-wrap');
   if (!wrap) return;
@@ -1138,6 +1152,8 @@ function openCreateModal(dateStr, startTime, endTime) {
     const btn = document.getElementById('cev-save-btn');
     if (btn) btn.disabled = true;
 
+    const groupId = recur !== 'none' ? crypto.randomUUID() : null;
+
     const rows = dates.map(ds => ({
       title,
       start_time: `${ds}T${start}:00+00:00`,
@@ -1146,6 +1162,8 @@ function openCreateModal(dateStr, startTime, endTime) {
       color,
       calendar_name: 'LifeOS',
       is_busy: true,
+      recurrence: recur,
+      recurrence_group_id: groupId,
     }));
 
     const { data: insertedRows, error } = await supabase.from('calendar_events').insert(rows).select('id');
@@ -1248,9 +1266,22 @@ function openEventPopup(id, startTime, endTime, title, evDate, anchorEl) {
 
   document.getElementById('ev-del-btn').addEventListener('click', async () => {
     popup.remove();
-    // Fetch the row before deleting (for undo)
+    // Fetch the row before deleting (for undo / group check)
     const { data: rows } = await supabase.from('calendar_events').select('*').eq('id', id);
     const row = rows && rows[0];
+    const grpId = row && row.recurrence_group_id;
+
+    if (grpId) {
+      // Recurring event — ask scope
+      const delAll = confirm('This is a recurring event.\n\nOK = Delete ALL events in this series\nCancel = Delete this event only');
+      if (delAll) {
+        const { error } = await supabase.from('calendar_events').delete().eq('recurrence_group_id', grpId);
+        if (error) { toast('Delete failed: ' + error.message, 'error'); return; }
+        toast('All recurring events deleted', 'success');
+        render(); return;
+      }
+    }
+
     const { error } = await supabase.from('calendar_events').delete().eq('id', id);
     if (error) { toast('Delete failed: ' + error.message, 'error'); return; }
     if (row) {
@@ -1261,24 +1292,57 @@ function openEventPopup(id, startTime, endTime, title, evDate, anchorEl) {
     render();
   });
 
-  document.getElementById('ev-edit-btn').addEventListener('click', () => {
+  document.getElementById('ev-edit-btn').addEventListener('click', async () => {
     popup.remove();
-    openEditModal(id, title, evDate, startTime, endTime);
+    // Fetch recurrence field before opening edit modal
+    const { data: rows } = await supabase.from('calendar_events').select('recurrence, recurrence_group_id, color').eq('id', id);
+    const recurrence = (rows && rows[0] && rows[0].recurrence) || 'none';
+    const groupId    = (rows && rows[0] && rows[0].recurrence_group_id) || null;
+    const color      = (rows && rows[0] && rows[0].color) || '#2563EB';
+    openEditModal(id, title, evDate, startTime, endTime, recurrence, groupId, color);
   });
 }
 
-function openEditModal(id, title, evDate, startTime, endTime) {
+function openEditModal(id, title, evDate, startTime, endTime, currentRecur = 'none', groupId = null, currentColor = '#2563EB') {
   removeModal();
   const modal = document.createElement('div');
   modal.id = 'cal-ev-modal';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:500;display:flex;align-items:center;justify-content:center';
+
+  const recurOptions = ['none','daily','weekdays','weekly','biweekly','monthly'];
+  const recurLabels  = {
+    none: '🔂 Doesn\'t repeat',
+    daily: '📅 Daily (30 days)',
+    weekdays: '🗓 Weekdays Mon–Fri (8 weeks)',
+    weekly: '📆 Weekly (2 years)',
+    biweekly: '📆 Every 2 weeks (2 years)',
+    monthly: '🗓 Monthly (3 years)',
+  };
+  const recurSelectHTML = recurOptions.map(v =>
+    `<option value="${v}"${v === currentRecur ? ' selected' : ''}>${recurLabels[v]}</option>`
+  ).join('');
+
+  const colorOptions = [
+    { val: '#0F9D58', label: '🟢 Green' },
+    { val: '#2563EB', label: '🔵 Blue' },
+    { val: '#7C3AED', label: '🟣 Purple' },
+    { val: '#D97706', label: '🟡 Amber' },
+    { val: '#DC2626', label: '🔴 Red' },
+    { val: '#0891B2', label: '🩵 Teal' },
+  ];
+  const colorSelectHTML = colorOptions.map(c =>
+    `<option value="${c.val}"${c.val === currentColor ? ' selected' : ''}>${c.label}</option>`
+  ).join('');
+
+  const hasGroup = !!groupId;
+
   modal.innerHTML = `
     <div style="background:var(--white);border-radius:12px;padding:20px;width:90%;max-width:360px;box-shadow:0 8px 32px rgba(0,0,0,0.2)" onclick="event.stopPropagation()">
       <div style="font-size:16px;font-weight:700;margin-bottom:14px">Edit Event</div>
-      <input id="eev-title" type="text" value="${title}" autocomplete="off"
+      <input id="eev-title" type="text" value="${title.replace(/"/g, '&quot;')}" autocomplete="off"
         style="width:100%;border:1.5px solid var(--gray-200);border-radius:8px;padding:9px 12px;font-size:14px;margin-bottom:10px;outline:none;box-sizing:border-box"
         onfocus="this.style.borderColor='var(--blue)'" onblur="this.style.borderColor='var(--gray-200)'" />
-      <div style="display:flex;gap:8px;margin-bottom:14px">
+      <div style="display:flex;gap:8px;margin-bottom:10px">
         <div style="flex:1">
           <label style="font-size:11px;color:var(--gray-400);margin-bottom:3px;display:block">Start</label>
           <input id="eev-start" type="time" value="${startTime}"
@@ -1290,6 +1354,22 @@ function openEditModal(id, title, evDate, startTime, endTime) {
             style="width:100%;border:1.5px solid var(--gray-200);border-radius:8px;padding:8px 10px;font-size:14px;outline:none;box-sizing:border-box" />
         </div>
       </div>
+      <select id="eev-color" style="width:100%;border:1.5px solid var(--gray-200);border-radius:8px;padding:9px 12px;font-size:14px;margin-bottom:10px;outline:none;box-sizing:border-box;background:var(--white)">
+        ${colorSelectHTML}
+      </select>
+      <select id="eev-recur" style="width:100%;border:1.5px solid var(--gray-200);border-radius:8px;padding:9px 12px;font-size:14px;margin-bottom:${hasGroup ? '6px' : '14px'};outline:none;box-sizing:border-box;background:var(--white)">
+        ${recurSelectHTML}
+      </select>
+      ${hasGroup ? `
+      <div id="eev-scope-wrap" style="margin-bottom:14px;padding:10px;background:var(--gray-50,#f9fafb);border-radius:8px;border:1px solid var(--gray-200)">
+        <div style="font-size:11px;color:var(--gray-500);margin-bottom:6px;font-weight:600">APPLY CHANGES TO</div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:4px">
+          <input type="radio" name="eev-scope" value="this" checked style="accent-color:var(--blue)"> This event only
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+          <input type="radio" name="eev-scope" value="all" style="accent-color:var(--blue)"> All events in series
+        </label>
+      </div>` : ''}
       <div style="display:flex;gap:8px">
         <button onclick="document.getElementById('cal-ev-modal').remove()"
           style="flex:1;padding:10px;border:1.5px solid var(--gray-200);border-radius:8px;background:var(--white);font-size:14px;font-weight:600;color:var(--gray-600);cursor:pointer">
@@ -1308,18 +1388,108 @@ function openEditModal(id, title, evDate, startTime, endTime) {
   const titleEl = document.getElementById('eev-title');
   titleEl.select();
 
+  // Show/hide scope picker when recurrence changes
+  const recurEl = document.getElementById('eev-recur');
+  const scopeWrap = document.getElementById('eev-scope-wrap');
+  recurEl.addEventListener('change', () => {
+    if (scopeWrap) scopeWrap.style.display = recurEl.value !== 'none' && hasGroup ? '' : 'none';
+  });
+
   document.getElementById('eev-save-btn').addEventListener('click', async () => {
-    const newTitle = titleEl.value.trim();
+    const newTitle  = titleEl.value.trim();
     if (!newTitle) { titleEl.focus(); return; }
-    const start = document.getElementById('eev-start').value;
-    const end   = document.getElementById('eev-end').value;
+    const start     = document.getElementById('eev-start').value;
+    const end       = document.getElementById('eev-end').value;
+    const newRecur  = recurEl.value;
+    const newColor  = document.getElementById('eev-color').value;
+    const scopeEl   = document.querySelector('input[name="eev-scope"]:checked');
+    const scope     = scopeEl ? scopeEl.value : 'this';
+
+    const btn = document.getElementById('eev-save-btn');
+    if (btn) btn.disabled = true;
+
     const startISO = `${evDate}T${start}:00+00:00`;
     const endISO   = end ? `${evDate}T${end}:00+00:00` : null;
 
+    // If recurrence changed and scope === 'all' and there's a group, rebuild the series
+    const recurChanged = newRecur !== currentRecur;
+
+    if (recurChanged && scope === 'all' && groupId) {
+      // Delete old group, re-create from this event's date forward with new recurrence
+      const { error: delErr } = await supabase.from('calendar_events')
+        .delete().eq('recurrence_group_id', groupId)
+        .gte('start_time', `${evDate}T00:00:00+00:00`);
+      if (delErr) { toast('Error: ' + delErr.message, 'error'); if (btn) btn.disabled = false; return; }
+
+      const newGroupId = crypto.randomUUID();
+      const dates = buildRecurDates(evDate, newRecur);
+      const rows = dates.map(ds => ({
+        title: newTitle,
+        start_time: `${ds}T${start}:00+00:00`,
+        end_time:   end ? `${ds}T${end}:00+00:00` : null,
+        all_day: false,
+        color: newColor,
+        calendar_name: 'LifeOS',
+        is_busy: true,
+        recurrence: newRecur,
+        recurrence_group_id: newGroupId,
+      }));
+      const { error: insErr } = await supabase.from('calendar_events').insert(rows);
+      if (insErr) { toast('Error: ' + insErr.message, 'error'); if (btn) btn.disabled = false; return; }
+      toast(`Series updated — ${dates.length} events ✅`, 'success');
+      modal.remove(); render(); return;
+    }
+
+    // Scope === 'all' title/time/color update across group
+    if (scope === 'all' && groupId) {
+      const { error } = await supabase.from('calendar_events').update({
+        title: newTitle, color: newColor,
+        recurrence: newRecur,
+      }).eq('recurrence_group_id', groupId);
+      if (error) { toast('Error: ' + error.message, 'error'); if (btn) btn.disabled = false; return; }
+      toast('All events in series updated ✅', 'success');
+      modal.remove(); render(); return;
+    }
+
+    // Single event update (scope === 'this' OR no group)
+    const newGroupId = (newRecur !== 'none' && !groupId) ? crypto.randomUUID() : (groupId || null);
+
+    if (newRecur !== 'none' && !groupId) {
+      // First time setting recurrence on a standalone event — build the series
+      const dates = buildRecurDates(evDate, newRecur);
+      const rows = dates.map(ds => ({
+        title: newTitle,
+        start_time: `${ds}T${start}:00+00:00`,
+        end_time:   end ? `${ds}T${end}:00+00:00` : null,
+        all_day: false,
+        color: newColor,
+        calendar_name: 'LifeOS',
+        is_busy: true,
+        recurrence: newRecur,
+        recurrence_group_id: newGroupId,
+      }));
+      // Update this event in place (first of series), insert the rest
+      const { error: updErr } = await supabase.from('calendar_events').update({
+        title: newTitle, start_time: startISO, end_time: endISO,
+        color: newColor, recurrence: newRecur, recurrence_group_id: newGroupId,
+      }).eq('id', id);
+      if (updErr) { toast('Error: ' + updErr.message, 'error'); if (btn) btn.disabled = false; return; }
+      const restRows = rows.slice(1);
+      if (restRows.length) {
+        const { error: insErr } = await supabase.from('calendar_events').insert(restRows);
+        if (insErr) { toast('Error: ' + insErr.message, 'error'); if (btn) btn.disabled = false; return; }
+      }
+      toast(`Recurrence set — ${dates.length} events ✅`, 'success');
+      modal.remove(); render(); return;
+    }
+
+    // Plain single-event update
     const { error } = await supabase.from('calendar_events').update({
       title: newTitle, start_time: startISO, end_time: endISO,
+      color: newColor, recurrence: newRecur,
+      recurrence_group_id: newRecur === 'none' ? null : newGroupId,
     }).eq('id', id);
-    if (error) { toast('Error: ' + error.message, 'error'); return; }
+    if (error) { toast('Error: ' + error.message, 'error'); if (btn) btn.disabled = false; return; }
     toast('Event updated ✅', 'success');
     modal.remove();
     render();
