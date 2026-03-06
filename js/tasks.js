@@ -396,14 +396,22 @@ async function loadTasks() {
   let html = '';
 
   // ── Today section (only when showing All schedules) ──
-  if (todayDisplay.length) {
+  if (todayDisplay.length || activeModule !== 'Default') {
     const todayGroupKey = '__today__';
     const orderedToday = applyTaskOrder(todayDisplay, todayGroupKey);
+    const schedSafeId = 'sched-Today';
     html += `<div class="card" style="border-left:4px solid #f59e0b;padding:0;overflow:hidden;margin-bottom:12px">
       <div style="padding:10px 16px;background:#fffbeb">
-        <div class="urgent-section-header" style="color:#92400e">📅 Today (${orderedToday.length})</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <div class="urgent-section-header" style="color:#92400e;margin-bottom:0">📅 Today (${orderedToday.length})</div>
+          <button class="btn btn-sm btn-ghost" style="font-size:11px;padding:2px 8px;line-height:1.4;color:#92400e"
+            onclick="event.stopPropagation();showInlineAddSched('Today')">+ Add</button>
+        </div>
         <div id="task-group-${todayGroupKey.replace(/\s+/g, '-')}" class="task-group-body">
           ${renderTaskGroup(orderedToday, true, todayGroupKey)}
+        </div>
+        <div id="inline-add-${schedSafeId}" style="display:none;padding:8px 0 4px 0;border-top:1px solid rgba(245,158,11,0.2);margin-top:4px">
+          ${inlineAddSchedHTML('Today', '#92400e')}
         </div>
       </div>
     </div>`;
@@ -416,15 +424,25 @@ async function loadTasks() {
     const unlabeled = nonTodayTasks.filter(t => !getScheduleLabel(t) || !SCHED_SECTIONS.includes(getScheduleLabel(t)));
     for (const sched of SCHED_SECTIONS) {
       const schedTasks = nonTodayTasks.filter(t => getScheduleLabel(t) === sched);
-      if (!schedTasks.length) continue;
       const sc = SCHEDULE_COLORS[sched];
       const schedKey = `__sched_${sched}__`;
       const orderedSched = applyTaskOrder(schedTasks, schedKey);
+      const schedSafeId = `sched-${sched.replace(/\s+/g,'-')}`;
+      const emoji = sched === 'Next Up' ? '⏩' : sched === 'Later' ? '🔵' : '🔜';
+      // Always show schedule section when user is in a specific category (even if empty)
+      if (!schedTasks.length && activeModule === 'Default') continue;
       html += `<div class="card" style="border-left:4px solid ${sc.border};padding:0;overflow:hidden;margin-bottom:12px">
         <div style="padding:8px 14px;background:${sc.bg}">
-          <div style="font-size:12px;font-weight:700;color:${sc.color};margin-bottom:6px;letter-spacing:0.3px">${sched === 'Next Up' ? '⏩' : sched === 'Later' ? '🔵' : '🔜'} ${sched.toUpperCase()} (${orderedSched.length})</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <div style="font-size:12px;font-weight:700;color:${sc.color};letter-spacing:0.3px">${emoji} ${sched.toUpperCase()} (${orderedSched.length})</div>
+            <button class="btn btn-sm btn-ghost" style="font-size:11px;padding:2px 8px;line-height:1.4;color:${sc.color}"
+              onclick="event.stopPropagation();showInlineAddSched('${sched}')">+ Add</button>
+          </div>
           <div id="task-group-${schedKey.replace(/\s+/g,'-')}" class="task-group-body">
             ${renderTaskGroup(orderedSched, true, schedKey)}
+          </div>
+          <div id="inline-add-${schedSafeId}" style="display:none;padding:8px 0 4px 0;border-top:1px solid ${sc.border};margin-top:4px">
+            ${inlineAddSchedHTML(sched, sc.color)}
           </div>
         </div>
       </div>`;
@@ -656,6 +674,73 @@ window.submitInlineTask = async (mod) => {
   if (error) { toast('Error: ' + error.message, 'error'); return; }
   toast('Task added! ✅', 'success');
   window.hideInlineAdd(mod);
+  loadTasks();
+};
+
+// ── Inline task creation inside schedule sections ─────────────────────────────
+function inlineAddSchedHTML(schedLabel, accentColor) {
+  const safeId = `sched-${schedLabel.replace(/\s+/g, '-')}`;
+  // If in a specific non-Default/non-All module, no module selector needed
+  const needsMod = activeModule === 'Default' || activeModule === 'All';
+  const modOptions = needsMod
+    ? `<select id="inline-mod-${safeId}" style="font-size:12px;border:1px solid var(--gray-200);border-radius:8px;padding:5px 6px;background:var(--white);outline:none;flex-shrink:0">
+        ${categoryOrder.map(m => `<option value="${m}">${MODULE_ICONS[m]||''} ${m}</option>`).join('')}
+      </select>`
+    : '';
+
+  return `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+    <input type="text" id="inline-title-${safeId}"
+      placeholder="New task…"
+      style="flex:1;min-width:120px;border:1px solid var(--gray-200);border-radius:8px;padding:6px 10px;font-size:13px;outline:none"
+      onkeydown="if(event.key==='Enter'){submitInlineTaskSched('${schedLabel}')}else if(event.key==='Escape'){hideInlineAddSched('${schedLabel}')}">
+    ${modOptions}
+    <button class="btn btn-sm" style="background:${accentColor};color:white;border:none;padding:6px 12px;flex-shrink:0"
+      onclick="submitInlineTaskSched('${schedLabel}')">Add</button>
+    <button class="btn btn-sm btn-ghost" style="padding:6px 8px;flex-shrink:0"
+      onclick="hideInlineAddSched('${schedLabel}')">✕</button>
+  </div>`;
+}
+
+window.showInlineAddSched = (schedLabel) => {
+  const safeId = `sched-${schedLabel.replace(/\s+/g, '-')}`;
+  const el = document.getElementById(`inline-add-${safeId}`);
+  if (!el) return;
+  el.style.display = 'block';
+  setTimeout(() => document.getElementById(`inline-title-${safeId}`)?.focus(), 50);
+};
+
+window.hideInlineAddSched = (schedLabel) => {
+  const safeId = `sched-${schedLabel.replace(/\s+/g, '-')}`;
+  const el = document.getElementById(`inline-add-${safeId}`);
+  if (el) el.style.display = 'none';
+  const input = document.getElementById(`inline-title-${safeId}`);
+  if (input) input.value = '';
+};
+
+window.submitInlineTaskSched = async (schedLabel) => {
+  const safeId = `sched-${schedLabel.replace(/\s+/g, '-')}`;
+  const input = document.getElementById(`inline-title-${safeId}`);
+  const title = input?.value.trim();
+  if (!title) { input?.focus(); return; }
+
+  // Determine module
+  let displayMod;
+  if (activeModule === 'Default' || activeModule === 'All') {
+    const sel = document.getElementById(`inline-mod-${safeId}`);
+    displayMod = sel?.value || categoryOrder[0] || 'Personal';
+  } else {
+    displayMod = activeModule;
+  }
+
+  const module = storageModule(displayMod);
+  const notes  = buildNotesJson(displayMod, '', schedLabel);
+
+  const { error } = await supabase.from('tasks').insert({
+    title, module, notes: notes || null, priority: 'normal', status: 'open'
+  });
+  if (error) { toast('Error: ' + error.message, 'error'); return; }
+  toast(`Task added to ${schedLabel} ✅`, 'success');
+  window.hideInlineAddSched(schedLabel);
   loadTasks();
 };
 
