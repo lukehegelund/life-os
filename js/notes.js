@@ -227,6 +227,8 @@ function noteCardHtml(note) {
         <div class="note-collapsed-meta">
           ${note.pinned ? '<span class="note-pin-badge">📌</span>' : ''}
           <span class="note-meta-date">${fmtDate(note.updated_at)}</span>
+          <button class="note-copy-quick" title="Copiar nota"
+            onclick="event.stopPropagation();copyNote('${note.id}',this)">📋</button>
         </div>
       </div>
 
@@ -1070,7 +1072,7 @@ window.toggleNotePin = async function(noteId) {
 };
 
 // ── Copy note to clipboard ────────────────────────────────────────
-window.copyNote = function(noteId) {
+window.copyNote = function(noteId, refBtn) {
   const note = allNotes.find(n => n.id === noteId);
   if (!note) return;
 
@@ -1079,12 +1081,14 @@ window.copyNote = function(noteId) {
   const fullText = (titlePart + bodyPart).trim();
 
   navigator.clipboard.writeText(fullText).then(() => {
-    const btn = document.querySelector(`#note-card-${noteId} .note-tool-btn[title="Copiar nota"]`);
-    if (btn) {
+    // Flash any copy buttons for this note
+    const flashBtn = (btn) => {
+      if (!btn) return;
       const orig = btn.textContent;
       btn.textContent = '✅';
       setTimeout(() => { btn.textContent = orig; }, 1500);
-    }
+    };
+    flashBtn(refBtn || document.querySelector(`#note-card-${noteId} .note-tool-btn[title="Copiar nota"]`));
   }).catch(() => {
     const t = document.createElement('div');
     t.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#e8563a;color:white;padding:8px 16px;border-radius:20px;font-size:13px;font-weight:600;z-index:900;pointer-events:none';
