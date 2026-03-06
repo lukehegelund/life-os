@@ -863,7 +863,8 @@ function attachWeekInteractions() {
 
       function startMove(e) {
         if (e.target === resizeHandle) return;
-        e.preventDefault();
+        // Do NOT preventDefault here — that would cancel the subsequent click event.
+        // Instead, we use a pending-drag pattern: commit to a drag only after >5px movement.
         e.stopPropagation();
 
         // Read live dataset values — may have changed after prior drag
@@ -871,48 +872,78 @@ function attachWeekInteractions() {
         const evEnd   = evEl.dataset.end;
         const evDate  = evEl.dataset.date || colDateStr;
 
-        const { x, y } = _getXY(e);
-        const clickMins = _yToMins(col, y);
+        const { x: startX, y: startY } = _getXY(e);
+        const clickMins = _yToMins(col, startY);
         const sMins = timeToMinutes(evStart);
         const eMins = timeToMinutes(evEnd) || sMins + 60;
 
-        // Create a fixed-position ghost that tracks the cursor freely across columns
-        const colRect  = col.getBoundingClientRect();
-        const heightPx = Math.max(20, (eMins - sMins) / 60 * HOUR_HEIGHT_PX);
-        const topPx    = colRect.top + (sMins - WEEK_HOUR_START * 60) / ((WEEK_HOUR_END - WEEK_HOUR_START) * 60) * TOTAL_HEIGHT;
-        const evColor  = evEl.style.background || evEl.style.backgroundColor || '#2563EB';
-        const liveStr  = `${fmt12(minsToTimeStr(sMins))}–${fmt12(minsToTimeStr(eMins))}`;
-        const ghost    = document.createElement('div');
-        ghost.style.cssText = `
-          position:fixed;z-index:9999;pointer-events:none;box-sizing:border-box;
-          left:${colRect.left + 2}px;top:${topPx}px;
-          width:${colRect.width - 4}px;height:${heightPx}px;
-          background:${evColor};border-radius:4px;
-          padding:2px 5px;font-size:10px;font-weight:600;color:white;
-          opacity:0.88;box-shadow:0 4px 18px rgba(0,0,0,0.28);
-          transition:none;
-        `;
-        ghost.innerHTML = `
-          <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${evEl.dataset.title || ''}</div>
-          <div class="wcal-time-lbl" style="font-size:9px;opacity:0.9">${liveStr}</div>
-        `;
-        document.body.appendChild(ghost);
+        let dragCommitted = false;
 
-        // Hide original during drag
-        evEl.style.opacity = '0';
-        evEl.style.cursor  = 'grabbing';
+        function commitDrag() {
+          if (dragCommitted) return;
+          dragCommitted = true;
 
-        dragState = {
-          type: 'move',
-          evEl, evId, classId, evType, evDate,
-          startM:   sMins,
-          endM:     eMins,
-          duration: eMins - sMins,
-          offsetM:  clickMins - sMins,
-          col,
-          ghost,
-          origDate: evDate, origStart: evStart, origEnd: evEnd,
-        };
+          const colRect  = col.getBoundingClientRect();
+          const heightPx = Math.max(20, (eMins - sMins) / 60 * HOUR_HEIGHT_PX);
+          const topPx    = colRect.top + (sMins - WEEK_HOUR_START * 60) / ((WEEK_HOUR_END - WEEK_HOUR_START) * 60) * TOTAL_HEIGHT;
+          const evColor  = evEl.style.background || evEl.style.backgroundColor || '#2563EB';
+          const liveStr  = `${fmt12(minsToTimeStr(sMins))}–${fmt12(minsToTimeStr(eMins))}`;
+          const ghost    = document.createElement('div');
+          ghost.style.cssText = `
+            position:fixed;z-index:9999;pointer-events:none;box-sizing:border-box;
+            left:${colRect.left + 2}px;top:${topPx}px;
+            width:${colRect.width - 4}px;height:${heightPx}px;
+            background:${evColor};border-radius:4px;
+            padding:2px 5px;font-size:10px;font-weight:600;color:white;
+            opacity:0.88;box-shadow:0 4px 18px rgba(0,0,0,0.28);
+            transition:none;
+          `;
+          ghost.innerHTML = `
+            <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${evEl.dataset.title || ''}</div>
+            <div class="wcal-time-lbl" style="font-size:9px;opacity:0.9">${liveStr}</div>
+          `;
+          document.body.appendChild(ghost);
+
+          // Hide original during drag
+          evEl.style.opacity = '0';
+          evEl.style.cursor  = 'grabbing';
+
+          dragState = {
+            type: 'move',
+            evEl, evId, classId, evType, evDate,
+            startM:   sMins,
+            endM:     eMins,
+            duration: eMins - sMins,
+            offsetM:  clickMins - sMins,
+            col,
+            ghost,
+            origDate: evDate, origStart: evStart, origEnd: evEnd,
+          };
+        }
+
+        function onPendingMove(ev) {
+          const { x, y } = _getXY(ev);
+          const dist = Math.hypot(x - startX, y - startY);
+          if (dist > 5) {
+            document.removeEventListener('mousemove', onPendingMove);
+            document.removeEventListener('mouseup',   onPendingCancel);
+            document.removeEventListener('touchmove', onPendingMove);
+            document.removeEventListener('touchend',  onPendingCancel);
+            commitDrag();
+          }
+        }
+
+        function onPendingCancel() {
+          document.removeEventListener('mousemove', onPendingMove);
+          document.removeEventListener('mouseup',   onPendingCancel);
+          document.removeEventListener('touchmove', onPendingMove);
+          document.removeEventListener('touchend',  onPendingCancel);
+        }
+
+        document.addEventListener('mousemove', onPendingMove);
+        document.addEventListener('mouseup',   onPendingCancel);
+        document.addEventListener('touchmove', onPendingMove, { passive: true });
+        document.addEventListener('touchend',  onPendingCancel);
       }
 
       evEl.addEventListener('mousedown', startMove);
