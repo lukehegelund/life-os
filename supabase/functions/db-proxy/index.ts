@@ -14,7 +14,7 @@ const READABLE_TABLES = new Set([
   'classes', 'claude_notifications', 'claude_projects', 'claude_tasks', 'console_errors',
   'daily_sessions', 'events', 'exercise_log', 'food_log', 'gold_transactions',
   'grades', 'health_notes', 'language_errors', 'lesson_plans', 'lifeos_feedback',
-  'pages_completed', 'parent_contacts', 'parent_crm', 'participation_scores',
+  'note_folders', 'pages_completed', 'parent_contacts', 'parent_crm', 'participation_scores',
   'reminders', 'smart_reports', 'spelling_tests', 'srs_reviews', 'student_notes',
   'student_pages', 'students', 'tasks', 'time_blocks', 'tov_clients',
   'tov_contracts', 'tov_expenses', 'tov_inquiries', 'tov_payments',
@@ -26,7 +26,7 @@ const INSERT_UPDATE_TABLES = new Set([
   'attendance', 'calendar_events', 'class_enrollments', 'class_overview_notes', 'classes', 'claude_notifications',
   'claude_projects', 'claude_tasks', 'console_errors', 'daily_sessions', 'exercise_log', 'food_log',
   'gold_transactions', 'grades', 'health_notes', 'language_errors', 'lesson_plans',
-  'lifeos_feedback', 'pages_completed', 'parent_contacts', 'parent_crm',
+  'lifeos_feedback', 'note_folders', 'pages_completed', 'parent_contacts', 'parent_crm',
   'participation_scores', 'reminders', 'smart_reports', 'spelling_tests',
   'srs_reviews', 'student_notes', 'student_pages', 'students', 'tasks', 'time_blocks',
   'tov_clients', 'tov_contracts', 'tov_expenses', 'tov_inquiries', 'tov_payments',
@@ -38,7 +38,7 @@ const DELETABLE_TABLES = new Set([
   'attendance', 'attendance_imported', 'calendar_events', 'class_enrollments', 'class_overview_notes', 'claude_notifications',
   'classes', 'claude_tasks', 'exercise_log', 'food_log', 'gold_transactions', 'grades',
   'health_notes', 'language_errors', 'lesson_plans', 'lifeos_feedback',
-  'pages_completed', 'parent_contacts', 'parent_crm', 'participation_scores', 'reminders',
+  'note_folders', 'pages_completed', 'parent_contacts', 'parent_crm', 'participation_scores', 'reminders',
   'spelling_tests', 'srs_reviews', 'student_notes', 'student_pages',
   'tasks', 'time_blocks', 'vocab_words'
 ])
