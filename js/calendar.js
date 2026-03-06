@@ -314,6 +314,25 @@ function renderMonthGrid() {
   document.getElementById('cal-grid').innerHTML = html;
 }
 
+// ── Shared color palette ──────────────────────────────────────────────────────
+const EVENT_COLORS = [
+  { val: '#2563EB', label: 'Blue' },
+  { val: '#0F9D58', label: 'Green' },
+  { val: '#7C3AED', label: 'Purple' },
+  { val: '#DC2626', label: 'Red' },
+  { val: '#D97706', label: 'Amber' },
+  { val: '#0891B2', label: 'Teal' },
+  { val: '#DB2777', label: 'Pink' },
+  { val: '#EA580C', label: 'Orange' },
+  { val: '#65A30D', label: 'Lime' },
+  { val: '#0284C7', label: 'Sky' },
+  { val: '#9333EA', label: 'Violet' },
+  { val: '#14B8A6', label: 'Cyan' },
+  { val: '#854D0E', label: 'Brown' },
+  { val: '#475569', label: 'Slate' },
+  { val: '#111827', label: 'Charcoal' },
+];
+
 // ── Week grid (Google Calendar style, proportional blocks) ───────────────────
 const WEEK_HOUR_START = 5;  // 5am
 const WEEK_HOUR_END   = 23; // 11pm
@@ -963,6 +982,15 @@ function attachWeekInteractions() {
           openClassEditModal(classId, className, evStart, evEnd);
         }
       });
+
+      // Right-click → quick color picker
+      if (evType === 'gcal' && evId) {
+        evEl.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          openColorPicker(evId, evEl, e.clientX, e.clientY);
+        });
+      }
     });
   });
 }
@@ -1135,23 +1163,13 @@ function openCreateModal(dateStr, startTime, endTime) {
             style="width:100%;border:1.5px solid var(--gray-200);border-radius:8px;padding:8px 10px;font-size:14px;outline:none;box-sizing:border-box" />
         </div>
       </div>
-      <select id="cev-color" style="width:100%;border:1.5px solid var(--gray-200);border-radius:8px;padding:9px 12px;font-size:14px;margin-bottom:10px;outline:none;box-sizing:border-box;background:var(--white)">
-        <option value="#2563EB">🔵 Blue</option>
-        <option value="#0F9D58">🟢 Green</option>
-        <option value="#7C3AED">🟣 Purple</option>
-        <option value="#DC2626">🔴 Red</option>
-        <option value="#D97706">🟡 Amber</option>
-        <option value="#0891B2">🩵 Teal</option>
-        <option value="#DB2777">🩷 Pink</option>
-        <option value="#EA580C">🟠 Orange</option>
-        <option value="#65A30D">🫛 Lime</option>
-        <option value="#0284C7">🩵 Sky</option>
-        <option value="#9333EA">💜 Violet</option>
-        <option value="#14B8A6">🩵 Cyan</option>
-        <option value="#854D0E">🤎 Brown</option>
-        <option value="#475569">🩶 Slate</option>
-        <option value="#111827">⬛ Charcoal</option>
-      </select>
+      <input type="hidden" id="cev-color" value="#2563EB" />
+      <div style="margin-bottom:10px">
+        <label style="font-size:11px;color:var(--gray-400);margin-bottom:6px;display:block">Color</label>
+        <div id="cev-color-swatches" style="display:grid;grid-template-columns:repeat(8,28px);gap:6px;">
+          ${EVENT_COLORS.map(c => `<div data-color="${c.val}" title="${c.label}" style="width:28px;height:28px;border-radius:50%;background:${c.val};cursor:pointer;transition:transform 0.1s,box-shadow 0.1s;${c.val==='#2563EB'?'box-shadow:0 0 0 2px var(--white),0 0 0 4px #2563EB;transform:scale(1.15)':''}"></div>`).join('')}
+        </div>
+      </div>
       <select id="cev-recur" style="width:100%;border:1.5px solid var(--gray-200);border-radius:8px;padding:9px 12px;font-size:14px;margin-bottom:14px;outline:none;box-sizing:border-box;background:var(--white)">
         <option value="none">🔂 Doesn't repeat</option>
         <option value="daily">📅 Daily (30 days)</option>
@@ -1177,6 +1195,9 @@ function openCreateModal(dateStr, startTime, endTime) {
 
   const titleEl = document.getElementById('cev-title');
   titleEl.focus();
+
+  // Wire up color swatches for create modal
+  _attachSwatchListeners('cev-color-swatches', 'cev-color');
 
   document.getElementById('cev-save-btn').addEventListener('click', async () => {
     const title = titleEl.value.trim();
@@ -1278,6 +1299,87 @@ function buildRecurDates(startDateStr, recur) {
   return dates;
 }
 
+// ── Shared swatch-grid wiring ─────────────────────────────────────────────────
+// Attach click + hover handlers to a swatch grid. Updates a hidden input with the chosen color.
+function _attachSwatchListeners(gridId, inputId) {
+  const grid = document.getElementById(gridId);
+  const input = document.getElementById(inputId);
+  if (!grid || !input) return;
+  grid.querySelectorAll('[data-color]').forEach(sw => {
+    sw.addEventListener('mouseenter', () => { sw.style.transform = 'scale(1.2)'; });
+    sw.addEventListener('mouseleave', () => {
+      sw.style.transform = sw.dataset.color === input.value ? 'scale(1.15)' : 'scale(1)';
+    });
+    sw.addEventListener('click', () => {
+      // Deselect all, select clicked
+      grid.querySelectorAll('[data-color]').forEach(s => {
+        s.style.boxShadow = 'none';
+        s.style.transform = 'scale(1)';
+      });
+      sw.style.boxShadow = `0 0 0 2px var(--white),0 0 0 4px ${sw.dataset.color}`;
+      sw.style.transform = 'scale(1.15)';
+      input.value = sw.dataset.color;
+    });
+  });
+}
+
+// ── Quick color picker (right-click) ─────────────────────────────────────────
+function openColorPicker(id, evEl, clientX, clientY) {
+  removeModal();
+
+  const picker = document.createElement('div');
+  picker.id = 'cal-ev-modal';
+  picker.style.cssText = `
+    position:fixed;z-index:600;background:var(--white);border-radius:12px;
+    padding:12px;box-shadow:0 8px 28px rgba(0,0,0,0.22);
+    border:1px solid var(--gray-200);
+    top:${Math.min(clientY, window.innerHeight - 180)}px;
+    left:${Math.min(clientX, window.innerWidth - 200)}px;
+  `;
+
+  const currentColor = evEl.style.background || '#2563EB';
+  const swatchSize = 28;
+  const cols = 5;
+
+  const swatchesHTML = EVENT_COLORS.map(c => {
+    const isSelected = c.val.toLowerCase() === currentColor.toLowerCase();
+    return `<div data-color="${c.val}" title="${c.label}" style="
+      width:${swatchSize}px;height:${swatchSize}px;border-radius:50%;background:${c.val};
+      cursor:pointer;flex-shrink:0;
+      box-shadow:${isSelected ? `0 0 0 2px var(--white),0 0 0 4px ${c.val}` : 'none'};
+      transform:${isSelected ? 'scale(1.15)' : 'scale(1)'};
+      transition:transform 0.1s,box-shadow 0.1s;
+    "></div>`;
+  }).join('');
+
+  picker.innerHTML = `
+    <div style="font-size:11px;font-weight:600;color:var(--gray-400);margin-bottom:8px;letter-spacing:0.05em">COLOR</div>
+    <div style="display:grid;grid-template-columns:repeat(${cols},${swatchSize}px);gap:8px;">
+      ${swatchesHTML}
+    </div>
+  `;
+
+  document.body.appendChild(picker);
+  setTimeout(() => document.addEventListener('click', () => removeModal(), { once: true }), 10);
+  picker.addEventListener('click', e => e.stopPropagation());
+
+  picker.querySelectorAll('[data-color]').forEach(swatch => {
+    swatch.addEventListener('mouseenter', () => { swatch.style.transform = 'scale(1.2)'; });
+    swatch.addEventListener('mouseleave', () => {
+      const isSel = swatch.dataset.color.toLowerCase() === currentColor.toLowerCase();
+      swatch.style.transform = isSel ? 'scale(1.15)' : 'scale(1)';
+    });
+    swatch.addEventListener('click', async () => {
+      const newColor = swatch.dataset.color;
+      removeModal();
+      // Optimistic UI update
+      evEl.style.background = newColor;
+      const { error } = await supabase.from('calendar_events').update({ color: newColor }).eq('id', id);
+      if (error) { toast('Color update failed', 'error'); render(); }
+    });
+  });
+}
+
 // ── Event detail/edit/delete popup ───────────────────────────────────────────
 function openEventPopup(id, startTime, endTime, title, evDate, anchorEl) {
   removeModal();
@@ -1362,26 +1464,10 @@ function openEditModal(id, title, evDate, startTime, endTime, currentRecur = 'no
     `<option value="${v}"${v === currentRecur ? ' selected' : ''}>${recurLabels[v]}</option>`
   ).join('');
 
-  const colorOptions = [
-    { val: '#2563EB', label: '🔵 Blue' },
-    { val: '#0F9D58', label: '🟢 Green' },
-    { val: '#7C3AED', label: '🟣 Purple' },
-    { val: '#DC2626', label: '🔴 Red' },
-    { val: '#D97706', label: '🟡 Amber' },
-    { val: '#0891B2', label: '🩵 Teal' },
-    { val: '#DB2777', label: '🩷 Pink' },
-    { val: '#EA580C', label: '🟠 Orange' },
-    { val: '#65A30D', label: '🫛 Lime' },
-    { val: '#0284C7', label: '🩵 Sky' },
-    { val: '#9333EA', label: '💜 Violet' },
-    { val: '#14B8A6', label: '🩵 Cyan' },
-    { val: '#854D0E', label: '🤎 Brown' },
-    { val: '#475569', label: '🩶 Slate' },
-    { val: '#111827', label: '⬛ Charcoal' },
-  ];
-  const colorSelectHTML = colorOptions.map(c =>
-    `<option value="${c.val}"${c.val === currentColor ? ' selected' : ''}>${c.label}</option>`
-  ).join('');
+  const colorSwatchesHTML = EVENT_COLORS.map(c => {
+    const isSel = c.val.toLowerCase() === (currentColor || '').toLowerCase();
+    return `<div data-color="${c.val}" title="${c.label}" style="width:28px;height:28px;border-radius:50%;background:${c.val};cursor:pointer;transition:transform 0.1s,box-shadow 0.1s;${isSel ? `box-shadow:0 0 0 2px var(--white),0 0 0 4px ${c.val};transform:scale(1.15)` : ''}"></div>`;
+  }).join('');
 
   const hasGroup = !!groupId;
 
@@ -1403,9 +1489,13 @@ function openEditModal(id, title, evDate, startTime, endTime, currentRecur = 'no
             style="width:100%;border:1.5px solid var(--gray-200);border-radius:8px;padding:8px 10px;font-size:14px;outline:none;box-sizing:border-box" />
         </div>
       </div>
-      <select id="eev-color" style="width:100%;border:1.5px solid var(--gray-200);border-radius:8px;padding:9px 12px;font-size:14px;margin-bottom:10px;outline:none;box-sizing:border-box;background:var(--white)">
-        ${colorSelectHTML}
-      </select>
+      <input type="hidden" id="eev-color" value="${currentColor || '#2563EB'}" />
+      <div style="margin-bottom:10px">
+        <label style="font-size:11px;color:var(--gray-400);margin-bottom:6px;display:block">Color</label>
+        <div id="eev-color-swatches" style="display:grid;grid-template-columns:repeat(8,28px);gap:6px;">
+          ${colorSwatchesHTML}
+        </div>
+      </div>
       <select id="eev-recur" style="width:100%;border:1.5px solid var(--gray-200);border-radius:8px;padding:9px 12px;font-size:14px;margin-bottom:${hasGroup ? '6px' : '14px'};outline:none;box-sizing:border-box;background:var(--white)">
         ${recurSelectHTML}
       </select>
@@ -1436,6 +1526,9 @@ function openEditModal(id, title, evDate, startTime, endTime, currentRecur = 'no
 
   const titleEl = document.getElementById('eev-title');
   titleEl.select();
+
+  // Wire up color swatches for edit modal
+  _attachSwatchListeners('eev-color-swatches', 'eev-color');
 
   // Show/hide scope picker when recurrence changes
   const recurEl = document.getElementById('eev-recur');
