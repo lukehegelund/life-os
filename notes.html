@@ -311,6 +311,21 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
 }
 .folder-chip.active .folder-chip-count { background: rgba(37,99,235,0.12); }
 
+/* Quick copy button on collapsed card */
+.note-copy-quick {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 4px;
+  border-radius: 6px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  line-height: 1;
+  color: var(--gray-500);
+}
+.note-card:hover .note-copy-quick { opacity: 1; }
+
 /* Folder badge on collapsed card */
 .note-folder-badge {
   display: inline-flex;
