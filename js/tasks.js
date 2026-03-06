@@ -945,23 +945,36 @@ window.openEditTaskModal = async (id, event) => {
   if (error || !t) { toast('Could not load task', 'error'); return; }
 
   const parsed = (() => { try { return JSON.parse(t.notes || '{}'); } catch { return {}; } })();
-  const currentLabel = parsed.schedule_label || '';
-  const currentNote  = parsed.note || (typeof t.notes === 'string' && !t.notes.startsWith('{') ? t.notes : '');
-  const currentMod   = isRTAdmin(t) ? 'RT Admin' : (t.module || 'Personal');
+  const currentLabel  = parsed.schedule_label || '';
+  const currentNote   = parsed.note || (typeof t.notes === 'string' && !t.notes.startsWith('{') ? t.notes : '');
+  const currentMod    = isRTAdmin(t) ? 'RT Admin' : (t.module || 'Personal');
+  const linkedNoteId  = parsed.linked_note_id || null;
+
+  // Fetch linked note title if any
+  let linkedNoteTitle = '';
+  if (linkedNoteId) {
+    const { data: noteRow } = await supabase.from('tasks').select('title').eq('id', linkedNoteId).single();
+    linkedNoteTitle = noteRow?.title || 'Note';
+  }
 
   // Remove any existing edit modal
   document.getElementById('edit-task-modal')?.remove();
+
+  const linkedBadgeHtml = linkedNoteId
+    ? `<div id="edit-linked-note-badge" class="linked-note-badge" onclick="openLinkNotePickerEdit()">📝 <span id="edit-linked-note-title">${linkedNoteTitle.replace(/</g,'&lt;')}</span> <span style="margin-left:auto;opacity:0.6;font-weight:400" onclick="event.stopPropagation();clearLinkedNoteEdit()">✕</span></div>`
+    : `<button class="btn btn-ghost" id="edit-link-note-btn" style="font-size:13px;padding:7px 12px" onclick="openLinkNotePickerEdit()">📝 Link a note</button>`;
 
   const modal = document.createElement('div');
   modal.id = 'edit-task-modal';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:600;display:flex;align-items:flex-end;justify-content:center';
   modal.innerHTML = `
-    <div style="background:var(--white);border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:600px;max-height:90vh;overflow-y:auto">
+    <div style="background:var(--white);border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:600px;max-height:92vh;overflow-y:auto">
       <div style="font-size:17px;font-weight:700;margin-bottom:16px">✏️ Edit Task</div>
       <input type="hidden" id="edit-task-id" value="${id}">
+      <input type="hidden" id="edit-linked-note-id" value="${linkedNoteId || ''}">
       <div class="form-group">
         <label class="form-label">Title</label>
-        <input type="text" class="form-input" id="edit-task-title" value="${(t.title || '').replace(/"/g, '&quot;')}" placeholder="Task description">
+        <textarea class="modal-textarea" id="edit-task-title" placeholder="Task description" style="min-height:60px;resize:none">${(t.title || '').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
       </div>
       <div class="form-group">
         <label class="form-label">Module</label>
@@ -992,7 +1005,11 @@ window.openEditTaskModal = async (id, event) => {
       </div>
       <div class="form-group">
         <label class="form-label">Notes (optional)</label>
-        <input type="text" class="form-input" id="edit-task-notes" value="${(currentNote || '').replace(/"/g, '&quot;')}" placeholder="Brief notes">
+        <textarea class="modal-textarea" id="edit-task-notes" placeholder="Add context, details, or anything useful...">${(currentNote || '').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Linked Note</label>
+        <div id="edit-linked-note-section">${linkedBadgeHtml}</div>
       </div>
       <div style="display:flex;gap:8px;margin-top:4px">
         <button class="btn btn-primary" style="flex:1" onclick="saveEditTask()">Save Changes</button>
@@ -1005,23 +1022,28 @@ window.openEditTaskModal = async (id, event) => {
 };
 
 window.saveEditTask = async () => {
-  const id       = document.getElementById('edit-task-id')?.value;
-  const title    = document.getElementById('edit-task-title')?.value.trim();
-  const modSel   = document.getElementById('edit-task-module')?.value;
-  const priority = document.getElementById('edit-task-priority')?.value;
-  const schedule = document.getElementById('edit-task-schedule')?.value;
-  const due      = document.getElementById('edit-task-due')?.value || null;
-  const noteRaw  = document.getElementById('edit-task-notes')?.value.trim();
+  const id           = document.getElementById('edit-task-id')?.value;
+  const title        = document.getElementById('edit-task-title')?.value.trim();
+  const modSel       = document.getElementById('edit-task-module')?.value;
+  const priority     = document.getElementById('edit-task-priority')?.value;
+  const schedule     = document.getElementById('edit-task-schedule')?.value;
+  const due          = document.getElementById('edit-task-due')?.value || null;
+  const noteRaw      = document.getElementById('edit-task-notes')?.value.trim();
+  const linkedNoteIdRaw = document.getElementById('edit-linked-note-id')?.value;
+  const linkedNoteId = linkedNoteIdRaw ? parseInt(linkedNoteIdRaw) : null;
   if (!title) { toast('Enter a title', 'error'); return; }
 
   const module = storageModule(modSel);
   const base = modSel === 'RT Admin' ? { rt_admin: true } : {};
   if (noteRaw) base.note = noteRaw;
   if (schedule) base.schedule_label = schedule;
+  if (linkedNoteId) base.linked_note_id = linkedNoteId;
   const notes = Object.keys(base).length ? JSON.stringify(base) : null;
 
   const { error } = await supabase.from('tasks').update({ title, module, priority, due_date: due, notes }).eq('id', id);
   if (error) { toast('Error saving: ' + error.message, 'error'); return; }
+  // Sync linked_task_id on the note
+  if (linkedNoteId) await linkNoteToTask(linkedNoteId, parseInt(id));
   toast('Task updated ✅', 'success');
   document.getElementById('edit-task-modal').remove();
   load();
@@ -1031,21 +1053,32 @@ window.saveEditTask = async () => {
 window.showTaskForm = () => { document.getElementById('task-modal').style.display = 'flex'; };
 window.closeTaskModal = () => { document.getElementById('task-modal').style.display = 'none'; };
 window.submitTask = async () => {
-  const title    = document.getElementById('task-title').value.trim();
-  const modSel   = document.getElementById('task-module').value;
-  const priority = document.getElementById('task-priority').value;
-  const due      = document.getElementById('task-due').value || null;
-  const notesRaw = document.getElementById('task-notes').value.trim();
+  const title        = document.getElementById('task-title').value.trim();
+  const modSel       = document.getElementById('task-module').value;
+  const priority     = document.getElementById('task-priority').value;
+  const due          = document.getElementById('task-due').value || null;
+  const notesRaw     = document.getElementById('task-notes').value.trim();
+  const linkedNoteId = document.getElementById('task-linked-note-id')?.value || null;
   if (!title) { toast('Enter a title', 'error'); return; }
   const module = storageModule(modSel);
-  const notes  = storageNotes(modSel, notesRaw);
-  const { error } = await supabase.from('tasks').insert({ title, module, priority, due_date: due, notes, status: 'open' });
+  // Build notes JSON with optional linked_note_id
+  const base = modSel === 'RT Admin' ? { rt_admin: true } : {};
+  if (notesRaw) base.note = notesRaw;
+  if (linkedNoteId) base.linked_note_id = parseInt(linkedNoteId);
+  const notes = Object.keys(base).length ? JSON.stringify(base) : null;
+  const { data: newTask, error } = await supabase.from('tasks').insert({ title, module, priority, due_date: due, notes, status: 'open' }).select('id').single();
   if (error) { toast('Error: ' + error.message, 'error'); return; }
+  // If linked note, update note's JSON with linked_task_id
+  if (linkedNoteId && newTask?.id) {
+    await linkNoteToTask(parseInt(linkedNoteId), newTask.id);
+  }
   toast('Task added!', 'success');
   window.closeTaskModal();
   document.getElementById('task-title').value = '';
   document.getElementById('task-due').value = '';
   document.getElementById('task-notes').value = '';
+  if (document.getElementById('task-linked-note-id')) document.getElementById('task-linked-note-id').value = '';
+  clearLinkedNoteAdd();
   load();
 };
 
@@ -1294,6 +1327,111 @@ window.submitHomework = async () => {
   document.getElementById('hw-title').value = '';
   document.getElementById('hw-due').value = '';
   loadHomework();
+};
+
+// ── Note↔Task Linking ─────────────────────────────────────────────────────────
+
+/** Update the note's JSON to set linked_task_id */
+async function linkNoteToTask(noteId, taskId) {
+  const { data: noteRow } = await supabase.from('tasks').select('notes').eq('id', noteId).single();
+  if (!noteRow) return;
+  let meta = {};
+  try { meta = JSON.parse(noteRow.notes || '{}'); } catch {}
+  meta.linked_task_id = taskId;
+  await supabase.from('tasks').update({ notes: JSON.stringify(meta) }).eq('id', noteId);
+}
+
+/** Show a bottom-sheet picker of all notes — used from Add Task modal */
+window.openLinkNotePickerAdd = async () => {
+  _openLinkNotePicker(async (noteId, noteTitle) => {
+    document.getElementById('task-linked-note-id').value = noteId;
+    document.getElementById('task-linked-note-title').textContent = noteTitle;
+    const badge = document.getElementById('task-linked-note-badge');
+    const btn   = document.getElementById('task-link-note-btn');
+    if (badge) badge.style.display = 'flex';
+    if (btn)   btn.style.display   = 'none';
+  });
+};
+
+window.clearLinkedNoteAdd = () => {
+  if (document.getElementById('task-linked-note-id')) document.getElementById('task-linked-note-id').value = '';
+  const badge = document.getElementById('task-linked-note-badge');
+  const btn   = document.getElementById('task-link-note-btn');
+  if (badge) badge.style.display = 'none';
+  if (btn)   btn.style.display   = '';
+};
+
+/** Show a note picker from within the Edit Task modal */
+window.openLinkNotePickerEdit = async () => {
+  _openLinkNotePicker(async (noteId, noteTitle) => {
+    document.getElementById('edit-linked-note-id').value = noteId;
+    const section = document.getElementById('edit-linked-note-section');
+    if (section) section.innerHTML = `<div id="edit-linked-note-badge" class="linked-note-badge" onclick="openLinkNotePickerEdit()">📝 <span id="edit-linked-note-title">${noteTitle.replace(/</g,'&lt;')}</span> <span style="margin-left:auto;opacity:0.6;font-weight:400" onclick="event.stopPropagation();clearLinkedNoteEdit()">✕</span></div>`;
+  });
+};
+
+window.clearLinkedNoteEdit = () => {
+  if (document.getElementById('edit-linked-note-id')) document.getElementById('edit-linked-note-id').value = '';
+  const section = document.getElementById('edit-linked-note-section');
+  if (section) section.innerHTML = `<button class="btn btn-ghost" id="edit-link-note-btn" style="font-size:13px;padding:7px 12px" onclick="openLinkNotePickerEdit()">📝 Link a note</button>`;
+};
+
+/** Internal: render a note-picker bottom sheet, call onSelect(noteId, noteTitle) on pick */
+async function _openLinkNotePicker(onSelect) {
+  // Remove existing picker
+  document.getElementById('note-link-picker')?.remove();
+
+  // Fetch all notes
+  const { data: notes } = await supabase.from('tasks')
+    .select('id, title, notes')
+    .eq('module', 'Personal')
+    .eq('status', 'open')
+    .like('notes', '%"is_note":true%')
+    .order('completed_at', { ascending: false });
+
+  const picker = document.createElement('div');
+  picker.id = 'note-link-picker';
+  picker.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:700;display:flex;align-items:flex-end;justify-content:center';
+
+  const rows = (notes || []).map(n => {
+    const safeTitle = (n.title || 'Untitled').replace(/</g,'&lt;');
+    let body = '';
+    try { body = JSON.parse(n.notes || '{}').body || ''; } catch {}
+    const div = document.createElement('div');
+    div.innerHTML = body;
+    const plainBody = (div.textContent || '').slice(0, 60);
+    return `<div class="note-link-row" data-id="${n.id}" data-title="${safeTitle}" onclick="_selectLinkedNote(${n.id}, this.dataset.title)">
+      <div style="font-weight:600;font-size:14px">${safeTitle}</div>
+      ${plainBody ? `<div style="font-size:12px;color:var(--gray-500);margin-top:2px">${plainBody}…</div>` : ''}
+    </div>`;
+  }).join('');
+
+  picker.innerHTML = `
+    <div style="background:var(--white);border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:600px;max-height:75vh;display:flex;flex-direction:column">
+      <div style="font-size:16px;font-weight:700;margin-bottom:12px">📝 Link a Note</div>
+      <div style="overflow-y:auto;flex:1">
+        ${rows || '<div style="color:var(--gray-400);text-align:center;padding:20px">No notes found</div>'}
+      </div>
+      <button class="btn btn-ghost" style="margin-top:12px" onclick="document.getElementById(\'note-link-picker\').remove()">Cancel</button>
+    </div>`;
+
+  // Inject quick CSS for rows
+  if (!document.getElementById('note-link-picker-style')) {
+    const style = document.createElement('style');
+    style.id = 'note-link-picker-style';
+    style.textContent = '.note-link-row{padding:10px 12px;border-radius:10px;cursor:pointer;margin-bottom:4px;border:1.5px solid var(--gray-100);}.note-link-row:hover{background:var(--gray-50);border-color:var(--blue);}';
+    document.head.appendChild(style);
+  }
+
+  // Store callback
+  window._noteLinkPickerCallback = onSelect;
+  picker.addEventListener('click', e => { if (e.target === picker) picker.remove(); });
+  document.body.appendChild(picker);
+}
+
+window._selectLinkedNote = (noteId, noteTitle) => {
+  document.getElementById('note-link-picker')?.remove();
+  if (window._noteLinkPickerCallback) window._noteLinkPickerCallback(noteId, noteTitle);
 };
 
 renderModuleTabs();
