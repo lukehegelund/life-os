@@ -1,4 +1,4 @@
-// notes.js — Life OS Notes (v9: fix delete persist + note_folders 403)
+// notes.js — Life OS Notes (v10: link task from note view)
 // Notes stored in `tasks` table with module='Personal' + notes JSON flag {is_note:true}
 // Folders stored in `note_folders` table; folder_id stored in note JSON
 
@@ -93,12 +93,14 @@ async function loadNotes() {
       color: meta.color || 'none',
       pinned: meta.pinned || false,
       folderId: meta.folder_id || null,
+      linkedTaskId: meta.linked_task_id || null,
       created_at: row.created_at,
       updated_at: row.completed_at || row.created_at,
     };
   });
 
   renderNotes();
+  loadLinkedTaskTitles();
 }
 
 // ── Folder bar render ─────────────────────────────────────────────
@@ -293,6 +295,16 @@ function noteCardHtml(note) {
             <button class="note-tool-btn note-done-btn" onclick="collapseCard('${note.id}')">
               ✓ Listo
             </button>
+          </div>
+          <!-- Linked task row -->
+          <div class="note-linked-task-row" id="note-linked-task-row-${note.id}" onclick="event.stopPropagation()">
+            ${note.linkedTaskId
+              ? `<div class="note-linked-task-badge" id="note-linked-task-badge-${note.id}">
+                   <span>🔗 Cargando tarea...</span>
+                   <button class="note-linked-task-clear" onclick="clearLinkedTask('${note.id}')">✕</button>
+                 </div>`
+              : `<button class="note-link-task-btn" onclick="openLinkTaskPicker('${note.id}')">🔗 Vincular tarea</button>`
+            }
           </div>
         </div>
       </div>
@@ -880,8 +892,10 @@ window.setNoteFolder = async function(noteId, folderIdStr) {
   const folderId = folderIdStr ? Number(folderIdStr) : null;
   note.folderId = folderId;
 
+  const folderMeta = { is_note: true, body: note.body || '', color: note.color || 'none', pinned: note.pinned || false, folder_id: folderId };
+  if (note.linkedTaskId) folderMeta.linked_task_id = note.linkedTaskId;
   await sb.from('tasks').update({
-    notes: JSON.stringify({ is_note: true, body: note.body || '', color: note.color || 'none', pinned: note.pinned || false, folder_id: folderId }),
+    notes: JSON.stringify(folderMeta),
   }).eq('id', noteId);
 
   renderFolderBar();
@@ -952,15 +966,19 @@ async function saveNote(noteId) {
   const bodyText = stripHtml(bodyHtml);
   if (!title && !bodyText) return;
 
-  const existing = allNotes.find(n => n.id === noteId);
-  const color    = existing?.color    || 'none';
-  const pinned   = existing?.pinned   || false;
-  const folderId = existing?.folderId ?? null;
-  const now      = new Date().toISOString();
+  const existing      = allNotes.find(n => n.id === noteId);
+  const color         = existing?.color        || 'none';
+  const pinned        = existing?.pinned        || false;
+  const folderId      = existing?.folderId      ?? null;
+  const linkedTaskId  = existing?.linkedTaskId  ?? null;
+  const now           = new Date().toISOString();
+
+  const metaJson = { is_note: true, body: bodyHtml, color, pinned, folder_id: folderId };
+  if (linkedTaskId) metaJson.linked_task_id = linkedTaskId;
 
   const { error } = await sb.from('tasks').update({
     title: title || 'Sin título',
-    notes: JSON.stringify({ is_note: true, body: bodyHtml, color, pinned, folder_id: folderId }),
+    notes: JSON.stringify(metaJson),
     completed_at: now,
   }).eq('id', noteId);
 
@@ -1027,9 +1045,9 @@ window.setNoteColor = async function(noteId, color) {
 
   note.color = color;
 
-  await sb.from('tasks').update({
-    notes: JSON.stringify({ is_note: true, body: note.body || '', color, pinned: note.pinned || false, folder_id: note.folderId ?? null }),
-  }).eq('id', noteId);
+  const colorMeta = { is_note: true, body: note.body || '', color, pinned: note.pinned || false, folder_id: note.folderId ?? null };
+  if (note.linkedTaskId) colorMeta.linked_task_id = note.linkedTaskId;
+  await sb.from('tasks').update({ notes: JSON.stringify(colorMeta) }).eq('id', noteId);
 
   const card = document.getElementById(`note-card-${noteId}`);
   if (card) {
@@ -1064,9 +1082,9 @@ window.toggleNotePin = async function(noteId) {
   const newPinned = !note.pinned;
   note.pinned = newPinned;
 
-  await sb.from('tasks').update({
-    notes: JSON.stringify({ is_note: true, body: note.body || '', color: note.color || 'none', pinned: newPinned, folder_id: note.folderId ?? null }),
-  }).eq('id', noteId);
+  const pinMeta = { is_note: true, body: note.body || '', color: note.color || 'none', pinned: newPinned, folder_id: note.folderId ?? null };
+  if (note.linkedTaskId) pinMeta.linked_task_id = note.linkedTaskId;
+  await sb.from('tasks').update({ notes: JSON.stringify(pinMeta) }).eq('id', noteId);
 
   renderNotes();
 };
@@ -1129,6 +1147,118 @@ window.filterNotes = function(q) {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && slashPopupActive) window.dismissSlashPopup();
 });
+
+// ── Link Task Picker ──────────────────────────────────────────────
+
+/** Load linked task title into badge after note cards render */
+async function loadLinkedTaskTitles() {
+  const notesWithLinks = allNotes.filter(n => n.linkedTaskId);
+  if (!notesWithLinks.length) return;
+  const ids = notesWithLinks.map(n => n.linkedTaskId);
+  // Fetch titles in one query
+  const { data: tasks } = await sb.from('tasks')
+    .select('id, title')
+    .in('id', ids);
+  const titleMap = {};
+  (tasks || []).forEach(t => { titleMap[t.id] = t.title; });
+
+  notesWithLinks.forEach(n => {
+    const badge = document.getElementById(`note-linked-task-badge-${n.id}`);
+    if (badge) {
+      const title = titleMap[n.linkedTaskId] || 'Tarea';
+      badge.innerHTML = `<span>🔗 ${title.replace(/</g,'&lt;').slice(0, 40)}</span><button class="note-linked-task-clear" onclick="clearLinkedTask('${n.id}')">✕</button>`;
+    }
+  });
+}
+
+/** Open task picker for a note */
+window.openLinkTaskPicker = async function(noteId) {
+  document.getElementById('task-link-picker')?.remove();
+
+  // Fetch open tasks (non-note)
+  const { data: tasks } = await sb.from('tasks')
+    .select('id, title, module, notes')
+    .eq('status', 'open')
+    .not('notes', 'like', '%"is_note":true%')
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  const rows = (tasks || []).map(t => {
+    const safeTitle = (t.title || 'Sin título').replace(/</g,'&lt;');
+    const mod = t.module || '';
+    return `<div class="task-link-row" onclick="_selectLinkedTask('${noteId}', ${t.id}, this.dataset.title)" data-title="${safeTitle}">
+      <span style="font-weight:600;font-size:14px">${safeTitle}</span>
+      ${mod ? `<span style="font-size:11px;color:var(--gray-400);margin-left:6px">${mod}</span>` : ''}
+    </div>`;
+  }).join('');
+
+  const picker = document.createElement('div');
+  picker.id = 'task-link-picker';
+  picker.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:700;display:flex;align-items:flex-end;justify-content:center';
+  picker.innerHTML = `
+    <div style="background:var(--white);border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:600px;max-height:75vh;display:flex;flex-direction:column">
+      <div style="font-size:16px;font-weight:700;margin-bottom:12px">🔗 Vincular una tarea</div>
+      <div style="overflow-y:auto;flex:1">${rows || '<div style="color:var(--gray-400);text-align:center;padding:20px">No hay tareas abiertas</div>'}</div>
+      <button class="btn btn-ghost" style="margin-top:12px" onclick="document.getElementById(\'task-link-picker\').remove()">Cancelar</button>
+    </div>`;
+
+  if (!document.getElementById('task-link-picker-style')) {
+    const s = document.createElement('style');
+    s.id = 'task-link-picker-style';
+    s.textContent = '.task-link-row{padding:10px 12px;border-radius:10px;cursor:pointer;margin-bottom:4px;border:1.5px solid var(--gray-100);}.task-link-row:hover{background:var(--gray-50);border-color:var(--blue);}';
+    document.head.appendChild(s);
+  }
+
+  picker.addEventListener('click', e => { if (e.target === picker) picker.remove(); });
+  document.body.appendChild(picker);
+};
+
+window._selectLinkedTask = async function(noteId, taskId, taskTitle) {
+  document.getElementById('task-link-picker')?.remove();
+  const note = allNotes.find(n => n.id == noteId);
+  if (!note) return;
+  note.linkedTaskId = taskId;
+
+  // Update note JSON in DB
+  const metaJson = { is_note: true, body: note.body || '', color: note.color || 'none', pinned: note.pinned || false, folder_id: note.folderId ?? null, linked_task_id: taskId };
+  await sb.from('tasks').update({ notes: JSON.stringify(metaJson) }).eq('id', note.id);
+
+  // Also update task's linked_note_id
+  const { data: taskRow } = await sb.from('tasks').select('notes').eq('id', taskId).single();
+  let taskMeta = {};
+  try { taskMeta = JSON.parse(taskRow?.notes || '{}'); } catch {}
+  taskMeta.linked_note_id = typeof note.id === 'number' ? note.id : parseInt(note.id);
+  await sb.from('tasks').update({ notes: JSON.stringify(taskMeta) }).eq('id', taskId);
+
+  // Update badge in DOM
+  const row = document.getElementById(`note-linked-task-row-${note.id}`);
+  if (row) {
+    row.innerHTML = `<div class="note-linked-task-badge" id="note-linked-task-badge-${note.id}"><span>🔗 ${(taskTitle||'Tarea').replace(/</g,'&lt;').slice(0,40)}</span><button class="note-linked-task-clear" onclick="clearLinkedTask('${note.id}')">✕</button></div>`;
+  }
+};
+
+window.clearLinkedTask = async function(noteId) {
+  const note = allNotes.find(n => n.id == noteId);
+  if (!note) return;
+  const oldTaskId = note.linkedTaskId;
+  note.linkedTaskId = null;
+
+  const metaJson = { is_note: true, body: note.body || '', color: note.color || 'none', pinned: note.pinned || false, folder_id: note.folderId ?? null };
+  await sb.from('tasks').update({ notes: JSON.stringify(metaJson) }).eq('id', note.id);
+
+  // Clear linked_note_id from old task
+  if (oldTaskId) {
+    const { data: taskRow } = await sb.from('tasks').select('notes').eq('id', oldTaskId).single();
+    let taskMeta = {};
+    try { taskMeta = JSON.parse(taskRow?.notes || '{}'); } catch {}
+    delete taskMeta.linked_note_id;
+    await sb.from('tasks').update({ notes: JSON.stringify(taskMeta) }).eq('id', oldTaskId);
+  }
+
+  // Reset to button
+  const row = document.getElementById(`note-linked-task-row-${note.id}`);
+  if (row) row.innerHTML = `<button class="note-link-task-btn" onclick="openLinkTaskPicker('${note.id}')">🔗 Vincular tarea</button>`;
+};
 
 // ── Init ──────────────────────────────────────────────────────────
 async function init() {
