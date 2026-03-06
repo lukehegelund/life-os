@@ -1,6 +1,6 @@
-// notes.js — Life OS Notes (v6: use secure db-proxy client to fix RLS errors)
+// notes.js — Life OS Notes (v8: folders system)
 // Notes stored in `tasks` table with module='Personal' + notes JSON flag {is_note:true}
-// body = HTML string (contenteditable), color/pinned in notes JSON
+// Folders stored in `note_folders` table; folder_id stored in note JSON
 
 import { supabase as sb } from './supabase.js';
 
@@ -17,7 +17,19 @@ const ACCENT_COLORS = {
   purple: { strip: '#7C3AED',      label: 'Purple' },
 };
 
-let allNotes = [];
+// Folder accent colors (for chip display)
+const FOLDER_COLORS = {
+  blue:   { bg: '#EFF6FF', text: '#2563EB', border: '#BFDBFE' },
+  green:  { bg: '#F0FDF4', text: '#1A5E3A', border: '#BBF7D0' },
+  orange: { bg: '#FFF7ED', text: '#D97706', border: '#FED7AA' },
+  coral:  { bg: '#FFF1EE', text: '#E8563A', border: '#FECACA' },
+  purple: { bg: '#F5F3FF', text: '#7C3AED', border: '#DDD6FE' },
+  gray:   { bg: '#F9FAFB', text: '#6B7280', border: '#E5E7EB' },
+};
+
+let allNotes   = [];
+let allFolders = [];
+let activeFolderId = null; // null = "All", 'none' = unfiled
 let searchQuery = '';
 let activeNoteId = null;
 const saveTimeouts = {};
@@ -27,7 +39,6 @@ function esc(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// Strip HTML tags to get plain text for preview
 function stripHtml(html) {
   const tmp = document.createElement('div');
   tmp.innerHTML = html || '';
@@ -48,6 +59,18 @@ function fmtDate(iso) {
   return d.toLocaleDateString('es', { month: 'short', day: 'numeric' });
 }
 
+// ── Load folders ──────────────────────────────────────────────────
+async function loadFolders() {
+  const { data, error } = await sb
+    .from('note_folders')
+    .select('*')
+    .order('sort_order', { ascending: true })
+    .order('created_at', { ascending: true });
+  if (error) { console.error('loadFolders error', error); return; }
+  allFolders = data || [];
+  renderFolderBar();
+}
+
 // ── Load notes ───────────────────────────────────────────────────
 async function loadNotes() {
   const { data, error } = await sb
@@ -66,9 +89,10 @@ async function loadNotes() {
     return {
       id: row.id,
       title: row.title || '',
-      body: meta.body || '',          // HTML string
+      body: meta.body || '',
       color: meta.color || 'none',
       pinned: meta.pinned || false,
+      folderId: meta.folder_id || null,
       created_at: row.created_at,
       updated_at: row.completed_at || row.created_at,
     };
@@ -77,20 +101,76 @@ async function loadNotes() {
   renderNotes();
 }
 
+// ── Folder bar render ─────────────────────────────────────────────
+function renderFolderBar() {
+  let bar = document.getElementById('folder-bar');
+  if (!bar) return;
+
+  const allCount    = allNotes.length;
+  const noneCount   = allNotes.filter(n => !n.folderId).length;
+
+  let html = `
+    <button class="folder-chip${activeFolderId === null ? ' active' : ''}"
+      onclick="setActiveFolder(null)">
+      🗂️ Todas <span class="folder-chip-count">${allCount}</span>
+    </button>`;
+
+  allFolders.forEach(f => {
+    const count = allNotes.filter(n => n.folderId === f.id).length;
+    const col = FOLDER_COLORS[f.color] || FOLDER_COLORS.gray;
+    const isActive = activeFolderId === f.id;
+    html += `
+      <button class="folder-chip${isActive ? ' active' : ''}"
+        style="${isActive ? `background:${col.bg};color:${col.text};border-color:${col.border}` : ''}"
+        onclick="setActiveFolder(${f.id})"
+        oncontextmenu="event.preventDefault();openFolderMenu(event,${f.id})">
+        ${esc(f.icon)} ${esc(f.name)} <span class="folder-chip-count">${count}</span>
+      </button>`;
+  });
+
+  if (noneCount > 0 || allFolders.length > 0) {
+    html += `
+      <button class="folder-chip${activeFolderId === 'none' ? ' active' : ''}"
+        onclick="setActiveFolder('none')">
+        📄 Sin carpeta <span class="folder-chip-count">${noneCount}</span>
+      </button>`;
+  }
+
+  html += `
+    <button class="folder-chip folder-chip-add" onclick="openCreateFolderModal()" title="Nueva carpeta">
+      + Carpeta
+    </button>`;
+
+  bar.innerHTML = html;
+}
+
 // ── Render (full list rebuild) ────────────────────────────────────
 function renderNotes() {
   const container = document.getElementById('notes-list');
   const countEl   = document.getElementById('notes-count');
 
   const q = searchQuery.toLowerCase();
-  const visible = q
-    ? allNotes.filter(n => n.title.toLowerCase().includes(q) || stripHtml(n.body).toLowerCase().includes(q))
-    : allNotes;
+  let visible = allNotes;
+
+  // Filter by folder
+  if (activeFolderId === null) {
+    // show all
+  } else if (activeFolderId === 'none') {
+    visible = visible.filter(n => !n.folderId);
+  } else {
+    visible = visible.filter(n => n.folderId === activeFolderId);
+  }
+
+  // Filter by search
+  if (q) {
+    visible = visible.filter(n => n.title.toLowerCase().includes(q) || stripHtml(n.body).toLowerCase().includes(q));
+  }
 
   countEl.textContent = visible.length ? `${visible.length} nota${visible.length !== 1 ? 's' : ''}` : '';
 
   if (!visible.length) {
     container.innerHTML = `<div class="notes-empty"><div class="empty-icon">📝</div><p>Toca + para crear tu primera nota</p></div>`;
+    renderFolderBar();
     return;
   }
 
@@ -108,8 +188,8 @@ function renderNotes() {
   }
 
   container.innerHTML = html;
+  renderFolderBar();
 
-  // Re-expand active note
   if (activeNoteId) expandCardDOM(activeNoteId);
 }
 
@@ -117,6 +197,18 @@ function noteCardHtml(note) {
   const accentColor = ACCENT_COLORS[note.color]?.strip || 'transparent';
   const bodyText = stripHtml(note.body);
   const bodyPreview = bodyText ? bodyText.substring(0, 90) + (bodyText.length > 90 ? '…' : '') : '';
+
+  // Folder badge for collapsed view
+  const folder = note.folderId ? allFolders.find(f => f.id === note.folderId) : null;
+  const folderBadge = folder
+    ? `<span class="note-folder-badge" style="background:${(FOLDER_COLORS[folder.color]||FOLDER_COLORS.gray).bg};color:${(FOLDER_COLORS[folder.color]||FOLDER_COLORS.gray).text}">${esc(folder.icon)} ${esc(folder.name)}</span>`
+    : '';
+
+  // Build folder selector options
+  const folderOptions = [
+    `<option value="">Sin carpeta</option>`,
+    ...allFolders.map(f => `<option value="${f.id}" ${note.folderId === f.id ? 'selected' : ''}>${esc(f.icon)} ${esc(f.name)}</option>`)
+  ].join('');
 
   return `
     <div class="note-card${note.pinned ? ' pinned-card' : ''}"
@@ -130,6 +222,7 @@ function noteCardHtml(note) {
         <div class="note-collapsed-text">
           <div class="note-collapsed-title">${note.title ? esc(note.title) : '<span style="color:var(--gray-400);font-style:italic">Sin título</span>'}</div>
           ${bodyPreview ? `<div class="note-collapsed-body">${esc(bodyPreview)}</div>` : ''}
+          ${folderBadge ? `<div style="margin-top:4px">${folderBadge}</div>` : ''}
         </div>
         <div class="note-collapsed-meta">
           ${note.pinned ? '<span class="note-pin-badge">📌</span>' : ''}
@@ -178,6 +271,14 @@ function noteCardHtml(note) {
             `).join('')}
           </div>
           <div class="note-toolbar-actions">
+            <!-- Folder selector -->
+            <select class="note-folder-select"
+              id="note-folder-sel-${note.id}"
+              onchange="setNoteFolder('${note.id}', this.value)"
+              onclick="event.stopPropagation()"
+              title="Mover a carpeta">
+              ${folderOptions}
+            </select>
             <button class="note-tool-btn" onclick="toggleNotePin('${note.id}')" title="${note.pinned ? 'Desfijar' : 'Fijar'}">
               ${note.pinned ? '📌' : '📍'}
             </button>
@@ -210,7 +311,6 @@ window.fmtFontSize = function(size) {
 };
 
 // ── Auto bullet detection ─────────────────────────────────────────
-// When user types "- " (dash + space) at the start of a line, auto-convert to bullet list
 function tryAutoBullet(noteId, event) {
   const bodyEl = document.getElementById(`note-body-${noteId}`);
   if (!bodyEl) return false;
@@ -224,26 +324,18 @@ function tryAutoBullet(noteId, event) {
   const text = node.textContent || '';
   const offset = range.startOffset;
 
-  // The user just typed a space — check if the text up to cursor ends with "- "
-  // We check for "- " pattern: the char just before cursor is space, before that is "-"
-  // and that "-" is at the start of the line (no other text before it on this line)
   if (offset < 2) return false;
   const before = text.slice(0, offset);
-  // Find the start of the current line
   const lineStart = before.lastIndexOf('\n') + 1;
   const lineText = before.slice(lineStart);
 
   if (lineText === '- ') {
-    // Remove the "- " we just typed
     node.textContent = text.slice(0, offset - 2) + text.slice(offset);
-    // Move cursor back 2
     const r = document.createRange();
     r.setStart(node, Math.max(0, offset - 2));
     r.collapse(true);
     sel.removeAllRanges();
     sel.addRange(r);
-
-    // Insert an unordered list item
     document.execCommand('insertUnorderedList', false, null);
     scheduleSaveNote(noteId);
     return true;
@@ -252,24 +344,20 @@ function tryAutoBullet(noteId, event) {
 }
 
 // ── Slash Command Detection ───────────────────────────────────────
-// When user types /task or /note at start of a line, show action popup
 let slashPopupActive = false;
 
 function getCurrentLineText(el) {
-  // Get the text content of the current cursor line
   const sel = window.getSelection();
   if (!sel.rangeCount) return '';
   const range = sel.getRangeAt(0);
   const node = range.startContainer;
   const text = node.textContent || '';
   const offset = range.startOffset;
-  // Find start of line
   const lineStart = text.lastIndexOf('\n', offset - 1) + 1;
   return text.slice(lineStart, offset);
 }
 
 function removeSlashCommand(el, cmd) {
-  // Remove /task or /note from the current line in the contenteditable
   const sel = window.getSelection();
   if (!sel.rangeCount) return '';
   const range = sel.getRangeAt(0).cloneRange();
@@ -281,18 +369,15 @@ function removeSlashCommand(el, cmd) {
   const cmdIdx = lineText.lastIndexOf(cmd);
   if (cmdIdx === -1) return lineText.replace(cmd, '').trim();
 
-  // Replace the command text in the node
   const newText = text.slice(0, lineStart + cmdIdx) + text.slice(lineStart + cmdIdx + cmd.length);
   const remainder = lineText.slice(0, cmdIdx) + lineText.slice(cmdIdx + cmd.length);
   node.textContent = newText;
-  // Restore cursor position
   const newOffset = lineStart + cmdIdx;
   const newRange = document.createRange();
   newRange.setStart(node, Math.min(newOffset, node.textContent.length));
   newRange.collapse(true);
   sel.removeAllRanges();
   sel.addRange(newRange);
-
   return remainder.trim();
 }
 
@@ -308,8 +393,6 @@ function showSlashPopup(cmd, lineText, bodyEl) {
     box-shadow:0 4px 20px rgba(0,0,0,0.15);padding:14px;
     width:min(320px, 90vw);
   `;
-
-  // Position near center of screen (simplest for mobile)
   popup.style.left = '50%';
   popup.style.transform = 'translateX(-50%)';
   popup.style.bottom = '120px';
@@ -370,15 +453,12 @@ function showSlashPopup(cmd, lineText, bodyEl) {
         <button class="btn btn-sm btn-ghost" id="slash-note-cancel-btn">Cancelar</button>
       </div>`;
 
-    // Use event listeners (not inline onclick) to safely pass noteContent string
     popup.querySelectorAll('.slash-note-type-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         window.openSlashNoteFlow(btn.dataset.type, noteContent);
       });
     });
     popup.querySelector('#slash-note-cancel-btn').addEventListener('click', () => dismissSlashPopup());
-
-    // Remove the command from the editor
     setTimeout(() => removeSlashCommand(bodyEl, cmd), 0);
   }
 
@@ -390,20 +470,17 @@ window.dismissSlashPopup = function() {
   slashPopupActive = false;
 };
 
-// Listen for slash commands on oninput in note body
 window.detectSlashCommand = function(noteId, event) {
   const bodyEl = document.getElementById(`note-body-${noteId}`);
   if (!bodyEl) return;
 
-  // Auto bullet: "- " at start of line → unordered list
-  // Only check on input events where a space was typed (inputType = insertText with ' ')
   if (event && event.inputType === 'insertText' && event.data === ' ') {
-    if (tryAutoBullet(noteId, event)) return; // bullet inserted, don't run slash check
+    if (tryAutoBullet(noteId, event)) return;
   }
 
   scheduleSaveNote(noteId);
 
-  if (slashPopupActive) return; // already showing one
+  if (slashPopupActive) return;
 
   const line = getCurrentLineText(bodyEl);
 
@@ -422,7 +499,6 @@ async function createTaskFromNote(title, category) {
     title, module: storeMod, notes: notesJson, status: 'open', priority: 'normal',
   });
   if (error) { alert('Error creating task: ' + error.message); return; }
-  // Show a brief confirmation toast in the note
   const toast = document.createElement('div');
   toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1a5e3a;color:white;padding:8px 16px;border-radius:20px;font-size:13px;font-weight:600;z-index:900;pointer-events:none';
   toast.textContent = `✅ Tarea "${title}" → ${category}`;
@@ -435,7 +511,6 @@ window.openSlashNoteFlow = async function(type, content) {
   dismissSlashPopup();
 
   if (type === 'universal') {
-    // Create universal class note immediately
     const now = new Date().toISOString();
     const { error } = await sb.from('tasks').insert({
       title: content.slice(0, 80) || 'Nota universal',
@@ -451,7 +526,6 @@ window.openSlashNoteFlow = async function(type, content) {
     return;
   }
 
-  // Class or student note — need to pick a class first
   const { data: classes } = await sb.from('classes').select('id,name').order('name');
   if (!classes?.length) { alert('No classes found'); return; }
 
@@ -472,7 +546,6 @@ window.openSlashNoteFlow = async function(type, content) {
         <button class="btn btn-sm btn-ghost" style="width:100%;margin-top:4px" onclick="document.getElementById('slash-note-modal').remove()">Cancelar</button>
       </div>`;
   } else {
-    // Student note
     modal.innerHTML = `
       <div style="background:var(--white);border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:600px;max-height:70vh;overflow-y:auto">
         <div style="font-size:16px;font-weight:700;margin-bottom:4px">👤 Selecciona una clase</div>
@@ -492,10 +565,7 @@ window.openSlashNoteFlow = async function(type, content) {
 
 window.saveSlashClassNote = async function(classId, content) {
   document.getElementById('slash-note-modal')?.remove();
-  const { error } = await sb.from('class_overview_notes').insert({
-    class_id: Number(classId),
-    note: content,
-  });
+  const { error } = await sb.from('class_overview_notes').insert({ class_id: Number(classId), note: content });
   if (error) { alert('Error: ' + error.message); return; }
   const t = document.createElement('div');
   t.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1a5e3a;color:white;padding:8px 16px;border-radius:20px;font-size:13px;font-weight:600;z-index:900;pointer-events:none';
@@ -555,21 +625,13 @@ window.submitSlashStudentNote = async function(classId, content) {
   const isOverview = document.getElementById('slash-cat-overview')?.checked;
   const isTodo = document.getElementById('slash-cat-todo')?.checked;
   const isParent = document.getElementById('slash-cat-parent')?.checked;
-
   const category = isTodo ? 'To-Do' : isParent ? 'Parent Contact' : 'Overview';
-  const now = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' }); // PST date
+  const now = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
 
   const { error } = await sb.from('student_notes').insert({
-    student_id: studentId,
-    class_id: Number(classId),
-    note: content,
-    date: now,
-    category,
-    followup_needed: false,
-    show_in_overview: isOverview || true,
-    is_todo: isTodo || false,
-    tell_parent: isParent || false,
-    logged: false,
+    student_id: studentId, class_id: Number(classId), note: content, date: now, category,
+    followup_needed: false, show_in_overview: isOverview || true,
+    is_todo: isTodo || false, tell_parent: isParent || false, logged: false,
   });
 
   document.getElementById('slash-note-modal')?.remove();
@@ -579,6 +641,248 @@ window.submitSlashStudentNote = async function(classId, content) {
   t.textContent = '👤 Nota de alumno guardada';
   document.body.appendChild(t);
   setTimeout(() => t.remove(), 2500);
+};
+
+// ── Folder management ─────────────────────────────────────────────
+
+window.setActiveFolder = function(folderId) {
+  activeFolderId = folderId;
+  renderNotes();
+};
+
+window.openCreateFolderModal = function() {
+  const existingModal = document.getElementById('folder-modal');
+  if (existingModal) existingModal.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'folder-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:850;display:flex;align-items:center;justify-content:center;padding:16px';
+
+  const colorOpts = Object.entries(FOLDER_COLORS).map(([key, col]) => `
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+      <input type="radio" name="fcolor" value="${key}" ${key==='blue'?'checked':''} style="accent-color:${col.text}">
+      <span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:${col.bg};border:2px solid ${col.border}"></span>
+      <span style="font-size:12px;color:var(--gray-700)">${key}</span>
+    </label>`).join('');
+
+  const quickEmojis = ['📁','📂','⭐','🎯','💡','📚','🎵','💼','🏠','🔥','✨','🌿','💜','🎨','📌','🧠'];
+
+  modal.innerHTML = `
+    <div style="background:var(--white);border-radius:16px;padding:24px;width:100%;max-width:360px;box-shadow:0 8px 32px rgba(0,0,0,0.18)">
+      <div style="font-size:17px;font-weight:700;color:var(--gray-800);margin-bottom:18px">📁 Nueva carpeta</div>
+
+      <div style="margin-bottom:14px">
+        <label style="font-size:12px;font-weight:600;color:var(--gray-600);display:block;margin-bottom:6px">Nombre</label>
+        <input id="folder-name-input" type="text" placeholder="Ej: Trabajo, Personal, Ideas…"
+          style="width:100%;border:1.5px solid var(--gray-200);border-radius:10px;padding:9px 12px;font-size:14px;outline:none;box-sizing:border-box"
+          maxlength="40">
+      </div>
+
+      <div style="margin-bottom:14px">
+        <label style="font-size:12px;font-weight:600;color:var(--gray-600);display:block;margin-bottom:6px">Ícono</label>
+        <div id="folder-emoji-val" style="font-size:24px;margin-bottom:6px;text-align:center;cursor:pointer" title="Clic para cambiar">📁</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          ${quickEmojis.map(e => `<button class="emoji-pick-btn" data-emoji="${e}"
+            style="font-size:20px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:8px;padding:4px 6px;cursor:pointer;line-height:1"
+            onclick="pickEmoji('${e}')">${e}</button>`).join('')}
+        </div>
+      </div>
+
+      <div style="margin-bottom:20px">
+        <label style="font-size:12px;font-weight:600;color:var(--gray-600);display:block;margin-bottom:8px">Color</label>
+        <div style="display:flex;flex-wrap:wrap;gap:10px">${colorOpts}</div>
+      </div>
+
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-primary" style="flex:1" onclick="submitCreateFolder()">Crear</button>
+        <button class="btn btn-ghost" onclick="document.getElementById('folder-modal').remove()">Cancelar</button>
+      </div>
+    </div>`;
+
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.body.appendChild(modal);
+  document.getElementById('folder-name-input')?.focus();
+};
+
+window.pickEmoji = function(emoji) {
+  const display = document.getElementById('folder-emoji-val');
+  if (display) {
+    display.textContent = emoji;
+    display.dataset.selected = emoji;
+  }
+  // Highlight selected
+  document.querySelectorAll('.emoji-pick-btn').forEach(b => {
+    b.style.borderColor = b.dataset.emoji === emoji ? 'var(--blue)' : 'var(--gray-200)';
+    b.style.background  = b.dataset.emoji === emoji ? 'var(--blue-light)' : 'var(--gray-50)';
+  });
+};
+
+window.submitCreateFolder = async function() {
+  const nameEl  = document.getElementById('folder-name-input');
+  const emojiEl = document.getElementById('folder-emoji-val');
+  const colorEl = document.querySelector('input[name="fcolor"]:checked');
+
+  const name  = nameEl?.value?.trim();
+  const icon  = emojiEl?.dataset.selected || emojiEl?.textContent?.trim() || '📁';
+  const color = colorEl?.value || 'blue';
+
+  if (!name) { nameEl?.focus(); return; }
+
+  const sort_order = allFolders.length;
+  const { data, error } = await sb.from('note_folders').insert({ name, icon, color, sort_order }).select().single();
+  if (error) { alert('Error creando carpeta: ' + error.message); return; }
+
+  document.getElementById('folder-modal')?.remove();
+  allFolders.push(data);
+  activeFolderId = data.id;
+  renderFolderBar();
+  renderNotes();
+};
+
+window.openFolderMenu = function(event, folderId) {
+  // Context menu to edit/delete folder (right-click on chip)
+  const existing = document.getElementById('folder-ctx-menu');
+  if (existing) existing.remove();
+
+  const folder = allFolders.find(f => f.id === folderId);
+  if (!folder) return;
+
+  const menu = document.createElement('div');
+  menu.id = 'folder-ctx-menu';
+  menu.style.cssText = `
+    position:fixed;z-index:900;background:var(--white);
+    border:1px solid var(--gray-200);border-radius:12px;
+    box-shadow:0 4px 20px rgba(0,0,0,0.15);padding:6px;
+    min-width:160px;
+  `;
+  menu.style.left = Math.min(event.clientX, window.innerWidth - 180) + 'px';
+  menu.style.top  = Math.min(event.clientY, window.innerHeight - 120) + 'px';
+
+  menu.innerHTML = `
+    <button class="folder-menu-item" onclick="openEditFolderModal(${folderId})">✏️ Editar carpeta</button>
+    <button class="folder-menu-item" style="color:var(--coral)" onclick="deleteFolder(${folderId})">🗑️ Eliminar carpeta</button>`;
+
+  const close = (e) => { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', close); } };
+  setTimeout(() => document.addEventListener('click', close), 10);
+  document.body.appendChild(menu);
+};
+
+window.openEditFolderModal = function(folderId) {
+  document.getElementById('folder-ctx-menu')?.remove();
+  const folder = allFolders.find(f => f.id === folderId);
+  if (!folder) return;
+
+  const quickEmojis = ['📁','📂','⭐','🎯','💡','📚','🎵','💼','🏠','🔥','✨','🌿','💜','🎨','📌','🧠'];
+  const colorOpts = Object.entries(FOLDER_COLORS).map(([key, col]) => `
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+      <input type="radio" name="fcolor-edit" value="${key}" ${folder.color===key?'checked':''} style="accent-color:${col.text}">
+      <span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:${col.bg};border:2px solid ${col.border}"></span>
+      <span style="font-size:12px;color:var(--gray-700)">${key}</span>
+    </label>`).join('');
+
+  const modal = document.createElement('div');
+  modal.id = 'folder-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:850;display:flex;align-items:center;justify-content:center;padding:16px';
+
+  modal.innerHTML = `
+    <div style="background:var(--white);border-radius:16px;padding:24px;width:100%;max-width:360px;box-shadow:0 8px 32px rgba(0,0,0,0.18)">
+      <div style="font-size:17px;font-weight:700;color:var(--gray-800);margin-bottom:18px">✏️ Editar carpeta</div>
+
+      <div style="margin-bottom:14px">
+        <label style="font-size:12px;font-weight:600;color:var(--gray-600);display:block;margin-bottom:6px">Nombre</label>
+        <input id="folder-name-input" type="text" value="${esc(folder.name)}"
+          style="width:100%;border:1.5px solid var(--gray-200);border-radius:10px;padding:9px 12px;font-size:14px;outline:none;box-sizing:border-box"
+          maxlength="40">
+      </div>
+
+      <div style="margin-bottom:14px">
+        <label style="font-size:12px;font-weight:600;color:var(--gray-600);display:block;margin-bottom:6px">Ícono</label>
+        <div id="folder-emoji-val" data-selected="${esc(folder.icon)}" style="font-size:24px;margin-bottom:6px;text-align:center">${esc(folder.icon)}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          ${quickEmojis.map(e => `<button class="emoji-pick-btn" data-emoji="${e}"
+            style="font-size:20px;background:${e===folder.icon?'var(--blue-light)':'var(--gray-50)'};border:1.5px solid ${e===folder.icon?'var(--blue)':'var(--gray-200)'};border-radius:8px;padding:4px 6px;cursor:pointer;line-height:1"
+            onclick="pickEmoji('${e}')">${e}</button>`).join('')}
+        </div>
+      </div>
+
+      <div style="margin-bottom:20px">
+        <label style="font-size:12px;font-weight:600;color:var(--gray-600);display:block;margin-bottom:8px">Color</label>
+        <div style="display:flex;flex-wrap:wrap;gap:10px">${colorOpts}</div>
+      </div>
+
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-primary" style="flex:1" onclick="submitEditFolder(${folderId})">Guardar</button>
+        <button class="btn btn-ghost" onclick="document.getElementById('folder-modal').remove()">Cancelar</button>
+      </div>
+    </div>`;
+
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.body.appendChild(modal);
+};
+
+window.submitEditFolder = async function(folderId) {
+  const nameEl  = document.getElementById('folder-name-input');
+  const emojiEl = document.getElementById('folder-emoji-val');
+  const colorEl = document.querySelector('input[name="fcolor-edit"]:checked');
+
+  const name  = nameEl?.value?.trim();
+  const icon  = emojiEl?.dataset.selected || emojiEl?.textContent?.trim() || '📁';
+  const color = colorEl?.value || 'blue';
+
+  if (!name) { nameEl?.focus(); return; }
+
+  const { error } = await sb.from('note_folders').update({ name, icon, color }).eq('id', folderId);
+  if (error) { alert('Error: ' + error.message); return; }
+
+  document.getElementById('folder-modal')?.remove();
+  const f = allFolders.find(f => f.id === folderId);
+  if (f) { f.name = name; f.icon = icon; f.color = color; }
+  renderFolderBar();
+  renderNotes();
+};
+
+window.deleteFolder = async function(folderId) {
+  document.getElementById('folder-ctx-menu')?.remove();
+  const folder = allFolders.find(f => f.id === folderId);
+  if (!folder) return;
+
+  const noteCount = allNotes.filter(n => n.folderId === folderId).length;
+  const msg = noteCount
+    ? `¿Eliminar la carpeta "${folder.name}"? Las ${noteCount} notas dentro quedarán sin carpeta.`
+    : `¿Eliminar la carpeta "${folder.name}"?`;
+  if (!confirm(msg)) return;
+
+  // Remove folder_id from notes in this folder
+  const affectedNotes = allNotes.filter(n => n.folderId === folderId);
+  for (const note of affectedNotes) {
+    note.folderId = null;
+    await sb.from('tasks').update({
+      notes: JSON.stringify({ is_note: true, body: note.body || '', color: note.color || 'none', pinned: note.pinned || false, folder_id: null }),
+    }).eq('id', note.id);
+  }
+
+  const { error } = await sb.from('note_folders').delete().eq('id', folderId);
+  if (error) { alert('Error: ' + error.message); return; }
+
+  allFolders = allFolders.filter(f => f.id !== folderId);
+  if (activeFolderId === folderId) activeFolderId = null;
+  renderFolderBar();
+  renderNotes();
+};
+
+// ── Set folder on a note ──────────────────────────────────────────
+window.setNoteFolder = async function(noteId, folderIdStr) {
+  const note = allNotes.find(n => n.id === noteId);
+  if (!note) return;
+
+  const folderId = folderIdStr ? Number(folderIdStr) : null;
+  note.folderId = folderId;
+
+  await sb.from('tasks').update({
+    notes: JSON.stringify({ is_note: true, body: note.body || '', color: note.color || 'none', pinned: note.pinned || false, folder_id: folderId }),
+  }).eq('id', noteId);
+
+  renderFolderBar();
 };
 
 // ── Expand / collapse ─────────────────────────────────────────────
@@ -621,7 +925,7 @@ window.collapseCard = async function(noteId) {
 document.addEventListener('click', async (e) => {
   if (!activeNoteId) return;
   const activeCard = document.getElementById(`note-card-${activeNoteId}`);
-  if (activeCard && !activeCard.contains(e.target) && !e.target.closest('.fab')) {
+  if (activeCard && !activeCard.contains(e.target) && !e.target.closest('.fab') && !e.target.closest('#folder-bar')) {
     clearTimeout(saveTimeouts[activeNoteId]);
     await saveNote(activeNoteId);
     activeCard.classList.remove('expanded');
@@ -647,13 +951,14 @@ async function saveNote(noteId) {
   if (!title && !bodyText) return;
 
   const existing = allNotes.find(n => n.id === noteId);
-  const color  = existing?.color  || 'none';
-  const pinned = existing?.pinned || false;
-  const now    = new Date().toISOString();
+  const color    = existing?.color    || 'none';
+  const pinned   = existing?.pinned   || false;
+  const folderId = existing?.folderId ?? null;
+  const now      = new Date().toISOString();
 
   const { error } = await sb.from('tasks').update({
     title: title || 'Sin título',
-    notes: JSON.stringify({ is_note: true, body: bodyHtml, color, pinned }),
+    notes: JSON.stringify({ is_note: true, body: bodyHtml, color, pinned, folder_id: folderId }),
     completed_at: now,
   }).eq('id', noteId);
 
@@ -663,18 +968,21 @@ async function saveNote(noteId) {
     existing.title = title;
     existing.body  = bodyHtml;
     existing.updated_at = now;
-    // Keep color and pinned in sync (they may have been updated separately)
     existing.color  = color;
     existing.pinned = pinned;
+    existing.folderId = folderId;
   }
 }
 
 // ── Create new note ───────────────────────────────────────────────
 window.createNewNote = async function() {
   const now = new Date().toISOString();
+  // Pre-assign to active folder if one is selected
+  const folderId = (activeFolderId !== null && activeFolderId !== 'none') ? activeFolderId : null;
+
   const { data, error } = await sb.from('tasks').insert({
     title: '',
-    notes: JSON.stringify({ is_note: true, body: '', color: 'none', pinned: false }),
+    notes: JSON.stringify({ is_note: true, body: '', color: 'none', pinned: false, folder_id: folderId }),
     module: NOTE_MODULE,
     priority: 'normal',
     status: 'open',
@@ -685,7 +993,7 @@ window.createNewNote = async function() {
   if (error) { console.error('createNewNote error', error); return; }
 
   const newNote = {
-    id: data.id, title: '', body: '', color: 'none', pinned: false,
+    id: data.id, title: '', body: '', color: 'none', pinned: false, folderId,
     created_at: data.created_at, updated_at: data.completed_at,
   };
   allNotes.unshift(newNote);
@@ -710,7 +1018,6 @@ window.setNoteColor = async function(noteId, color) {
   const note = allNotes.find(n => n.id === noteId);
   if (!note) return;
 
-  // Flush any pending save first so we don't lose body edits
   if (saveTimeouts[noteId]) {
     clearTimeout(saveTimeouts[noteId]);
     await saveNote(noteId);
@@ -718,9 +1025,8 @@ window.setNoteColor = async function(noteId, color) {
 
   note.color = color;
 
-  // Await the DB update so collapse/reload doesn't race with it
   await sb.from('tasks').update({
-    notes: JSON.stringify({ is_note: true, body: note.body || '', color, pinned: note.pinned || false }),
+    notes: JSON.stringify({ is_note: true, body: note.body || '', color, pinned: note.pinned || false, folder_id: note.folderId ?? null }),
   }).eq('id', noteId);
 
   const card = document.getElementById(`note-card-${noteId}`);
@@ -748,7 +1054,6 @@ window.toggleNotePin = async function(noteId) {
   const note = allNotes.find(n => n.id === noteId);
   if (!note) return;
 
-  // Flush any pending save first so we don't lose body edits
   if (saveTimeouts[noteId]) {
     clearTimeout(saveTimeouts[noteId]);
     await saveNote(noteId);
@@ -757,9 +1062,8 @@ window.toggleNotePin = async function(noteId) {
   const newPinned = !note.pinned;
   note.pinned = newPinned;
 
-  // Await the DB update so collapse/reload doesn't race with it
   await sb.from('tasks').update({
-    notes: JSON.stringify({ is_note: true, body: note.body || '', color: note.color || 'none', pinned: newPinned }),
+    notes: JSON.stringify({ is_note: true, body: note.body || '', color: note.color || 'none', pinned: newPinned, folder_id: note.folderId ?? null }),
   }).eq('id', noteId);
 
   renderNotes();
@@ -770,13 +1074,11 @@ window.copyNote = function(noteId) {
   const note = allNotes.find(n => n.id === noteId);
   if (!note) return;
 
-  // Build plain text: title + body text
   const titlePart = note.title ? note.title + '\n' + '─'.repeat(Math.min(note.title.length, 40)) + '\n' : '';
   const bodyPart = stripHtml(note.body);
   const fullText = (titlePart + bodyPart).trim();
 
   navigator.clipboard.writeText(fullText).then(() => {
-    // Show feedback on the button briefly
     const btn = document.querySelector(`#note-card-${noteId} .note-tool-btn[title="Copiar nota"]`);
     if (btn) {
       const orig = btn.textContent;
@@ -784,7 +1086,6 @@ window.copyNote = function(noteId) {
       setTimeout(() => { btn.textContent = orig; }, 1500);
     }
   }).catch(() => {
-    // Fallback: show toast
     const t = document.createElement('div');
     t.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#e8563a;color:white;padding:8px 16px;border-radius:20px;font-size:13px;font-weight:600;z-index:900;pointer-events:none';
     t.textContent = '⚠️ No se pudo copiar';
@@ -796,16 +1097,14 @@ window.copyNote = function(noteId) {
 // ── Delete note (instant DOM removal) ────────────────────────────
 window.deleteNote = async function(noteId) {
   if (!confirm('¿Eliminar esta nota?')) return;
-  // Remove from DOM immediately
   const card = document.getElementById(`note-card-${noteId}`);
   if (card) card.remove();
   allNotes = allNotes.filter(n => n.id !== noteId);
   if (activeNoteId === noteId) activeNoteId = null;
-  // Update count
   const countEl = document.getElementById('notes-count');
   if (countEl) countEl.textContent = allNotes.length ? `${allNotes.length} nota${allNotes.length !== 1 ? 's' : ''}` : '';
   if (!allNotes.length) renderNotes();
-  // DB delete in background
+  renderFolderBar();
   sb.from('tasks').delete().eq('id', noteId);
 };
 
@@ -815,10 +1114,14 @@ window.filterNotes = function(q) {
   renderNotes();
 };
 
-// ── Global: dismiss slash popup on Escape ─────────────────────────
+// ── Global: dismiss popups on Escape ─────────────────────────────
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && slashPopupActive) window.dismissSlashPopup();
 });
 
 // ── Init ──────────────────────────────────────────────────────────
-loadNotes();
+async function init() {
+  await loadFolders();
+  await loadNotes();
+}
+init();
