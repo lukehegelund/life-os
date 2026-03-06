@@ -260,6 +260,100 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
 .notes-empty .empty-icon { font-size: 48px; margin-bottom: 12px; }
 .notes-empty p { font-size: 15px; }
 
+/* ── Folder bar ──────────────────────────────────────────────── */
+.folder-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 0 0 12px 0;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  margin-bottom: 4px;
+}
+.folder-bar::-webkit-scrollbar { display: none; }
+
+.folder-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  border: 1.5px solid var(--gray-200);
+  background: var(--gray-50);
+  color: var(--gray-600);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  flex-shrink: 0;
+}
+.folder-chip:hover { border-color: var(--gray-400); background: var(--gray-100); }
+.folder-chip.active {
+  background: var(--blue-light);
+  border-color: var(--blue);
+  color: var(--blue);
+  font-weight: 600;
+}
+.folder-chip-add {
+  border-style: dashed;
+  color: var(--gray-400);
+}
+.folder-chip-add:hover { border-color: var(--blue); color: var(--blue); }
+.folder-chip-count {
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(0,0,0,0.07);
+  border-radius: 10px;
+  padding: 1px 6px;
+  margin-left: 2px;
+}
+.folder-chip.active .folder-chip-count { background: rgba(37,99,235,0.12); }
+
+/* Folder badge on collapsed card */
+.note-folder-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+/* Folder selector in toolbar */
+.note-folder-select {
+  font-size: 12px;
+  border: 1.5px solid var(--gray-200);
+  border-radius: 8px;
+  padding: 4px 6px;
+  background: var(--gray-50);
+  color: var(--gray-700);
+  cursor: pointer;
+  outline: none;
+  max-width: 120px;
+}
+.note-folder-select:hover { border-color: var(--gray-400); }
+
+/* Folder context menu item */
+.folder-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 12px;
+  border: none;
+  background: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--gray-700);
+  cursor: pointer;
+  border-radius: 8px;
+  text-align: left;
+}
+.folder-menu-item:hover { background: var(--gray-100); }
+
 /* FAB */
 .fab {
   position: fixed;
@@ -299,6 +393,7 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
 </header>
 
 <main class="content">
+  <div id="folder-bar" class="folder-bar"></div>
   <div id="notes-list"></div>
 </main>
 
@@ -344,7 +439,7 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
 </nav>
 
 <script type="module" src="js/auth-guard.js"></script>
-<script type="module" src="js/notes.js?v=7"></script>
+<script type="module" src="js/notes.js?v=8"></script>
 <script type="module" src="js/error-reporter.js?v=1"></script>
 <script type="module" src="js/topbar.js?v=6"></script>
 </body>
