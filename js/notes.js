@@ -1,4 +1,4 @@
-// notes.js — Life OS Notes (v8: folders system)
+// notes.js — Life OS Notes (v9: fix delete persist + note_folders 403)
 // Notes stored in `tasks` table with module='Personal' + notes JSON flag {is_note:true}
 // Folders stored in `note_folders` table; folder_id stored in note JSON
 
@@ -1101,6 +1101,7 @@ window.copyNote = function(noteId, refBtn) {
 // ── Delete note (instant DOM removal) ────────────────────────────
 window.deleteNote = async function(noteId) {
   if (!confirm('¿Eliminar esta nota?')) return;
+  // Remove from DOM immediately for snappy UX
   const card = document.getElementById(`note-card-${noteId}`);
   if (card) card.remove();
   allNotes = allNotes.filter(n => n.id !== noteId);
@@ -1109,7 +1110,13 @@ window.deleteNote = async function(noteId) {
   if (countEl) countEl.textContent = allNotes.length ? `${allNotes.length} nota${allNotes.length !== 1 ? 's' : ''}` : '';
   if (!allNotes.length) renderNotes();
   renderFolderBar();
-  sb.from('tasks').delete().eq('id', noteId);
+  // Persist deletion — await so errors are caught and the note doesn't ghost back
+  const { error } = await sb.from('tasks').delete().eq('id', noteId);
+  if (error) {
+    console.error('deleteNote error', error);
+    // Re-add note to allNotes and re-render so it isn't silently lost
+    await loadNotes();
+  }
 };
 
 // ── Search ────────────────────────────────────────────────────────
