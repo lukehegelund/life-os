@@ -1136,12 +1136,21 @@ function openCreateModal(dateStr, startTime, endTime) {
         </div>
       </div>
       <select id="cev-color" style="width:100%;border:1.5px solid var(--gray-200);border-radius:8px;padding:9px 12px;font-size:14px;margin-bottom:10px;outline:none;box-sizing:border-box;background:var(--white)">
-        <option value="#0F9D58">🟢 Green</option>
         <option value="#2563EB">🔵 Blue</option>
+        <option value="#0F9D58">🟢 Green</option>
         <option value="#7C3AED">🟣 Purple</option>
-        <option value="#D97706">🟡 Amber</option>
         <option value="#DC2626">🔴 Red</option>
+        <option value="#D97706">🟡 Amber</option>
         <option value="#0891B2">🩵 Teal</option>
+        <option value="#DB2777">🩷 Pink</option>
+        <option value="#EA580C">🟠 Orange</option>
+        <option value="#65A30D">🫛 Lime</option>
+        <option value="#0284C7">🩵 Sky</option>
+        <option value="#9333EA">💜 Violet</option>
+        <option value="#14B8A6">🩵 Cyan</option>
+        <option value="#854D0E">🤎 Brown</option>
+        <option value="#475569">🩶 Slate</option>
+        <option value="#111827">⬛ Charcoal</option>
       </select>
       <select id="cev-recur" style="width:100%;border:1.5px solid var(--gray-200);border-radius:8px;padding:9px 12px;font-size:14px;margin-bottom:14px;outline:none;box-sizing:border-box;background:var(--white)">
         <option value="none">🔂 Doesn't repeat</option>
@@ -1354,12 +1363,21 @@ function openEditModal(id, title, evDate, startTime, endTime, currentRecur = 'no
   ).join('');
 
   const colorOptions = [
-    { val: '#0F9D58', label: '🟢 Green' },
     { val: '#2563EB', label: '🔵 Blue' },
+    { val: '#0F9D58', label: '🟢 Green' },
     { val: '#7C3AED', label: '🟣 Purple' },
-    { val: '#D97706', label: '🟡 Amber' },
     { val: '#DC2626', label: '🔴 Red' },
+    { val: '#D97706', label: '🟡 Amber' },
     { val: '#0891B2', label: '🩵 Teal' },
+    { val: '#DB2777', label: '🩷 Pink' },
+    { val: '#EA580C', label: '🟠 Orange' },
+    { val: '#65A30D', label: '🫛 Lime' },
+    { val: '#0284C7', label: '🩵 Sky' },
+    { val: '#9333EA', label: '💜 Violet' },
+    { val: '#14B8A6', label: '🩵 Cyan' },
+    { val: '#854D0E', label: '🤎 Brown' },
+    { val: '#475569', label: '🩶 Slate' },
+    { val: '#111827', label: '⬛ Charcoal' },
   ];
   const colorSelectHTML = colorOptions.map(c =>
     `<option value="${c.val}"${c.val === currentColor ? ' selected' : ''}>${c.label}</option>`
