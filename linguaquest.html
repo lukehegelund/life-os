@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LinguaQuest</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #1a1a2e; overflow: hidden; font-family: 'Georgia', serif; image-rendering: pixelated; }
+
+/* ── MENU ── */
+#menu {
+  position: fixed; inset: 0; z-index: 200;
+  background: radial-gradient(ellipse at center, #1a2a1a 0%, #0a0f0a 100%);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+}
+#menu h1 {
+  font-size: 56px; color: #7ec850; letter-spacing: 8px;
+  text-shadow: 0 0 40px rgba(100,200,60,.5), 0 2px 0 #1a4008;
+  image-rendering: auto;
+}
+#menu p  { color: #4a7a30; font-size: 12px; letter-spacing: 4px; text-transform: uppercase; }
+#menu-start {
+  margin-top: 28px; padding: 13px 52px; font-family: Georgia, serif; font-size: 16px;
+  background: linear-gradient(180deg, #2a5010, #1a3408); border: 2px solid #5a9030;
+  color: #a8e060; cursor: pointer; letter-spacing: 4px; border-radius: 3px; transition: all .2s;
+}
+#menu-start:hover { background: linear-gradient(180deg, #3a6018, #2a4410); transform: translateY(-1px); }
+.menu-hint { font-size: 11px; color: #2a4a18; letter-spacing: 2px; }
+
+/* ── PROMPT BAR ── */
+#prompt-bar {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+  background: linear-gradient(0deg, #080e06ee, #0e180aee);
+  border-top: 2px solid #2a4018; padding: 9px 14px;
+  display: none; align-items: center; gap: 10px;
+  backdrop-filter: blur(4px);
+}
+#prompt-bar label { color: #4a7a28; font-size: 10px; letter-spacing: 2px; text-transform: uppercase; white-space: nowrap; }
+#world-prompt {
+  flex: 1; padding: 8px 14px; background: rgba(255,255,255,.04);
+  border: 1px solid #2a5018; color: #b0e060; font-family: Georgia, serif; font-size: 14px;
+  outline: none; border-radius: 3px;
+}
+#world-prompt::placeholder { color: #2a4a18; font-size: 13px; }
+#gen-btn {
+  padding: 8px 22px; background: linear-gradient(180deg, #2a5010, #1a3408);
+  border: 1px solid #5a9030; color: #a0d850; font-family: Georgia, serif; font-size: 13px;
+  cursor: pointer; border-radius: 3px; letter-spacing: 1px; white-space: nowrap; transition: all .15s;
+}
+#gen-btn:hover { background: linear-gradient(180deg, #3a6018, #2a4410); }
+#gen-btn:disabled { opacity: .35; cursor: default; }
+
+/* ── DIALOGUE BOX ── */
+#dialogue-box {
+  position: fixed; bottom: 62px; left: 50%; transform: translateX(-50%);
+  width: min(580px, 90vw); z-index: 100;
+  background: rgba(4, 8, 4, .96); border: 2px solid #3a6020;
+  border-radius: 5px; padding: 14px 18px;
+  display: none; box-shadow: 0 4px 24px rgba(0,0,0,.7), inset 0 1px 0 rgba(100,200,50,.08);
+}
+#dialogue-npc-name {
+  color: #80d050; font-size: 13px; letter-spacing: 3px; margin-bottom: 9px;
+  font-weight: bold; text-transform: uppercase; border-bottom: 1px solid #1a3010; padding-bottom: 7px;
+}
+#dialogue-text { color: #c8dca8; font-size: 15px; line-height: 1.65; min-height: 38px; }
+#dialogue-input-row { display: flex; gap: 8px; margin-top: 11px; }
+#dialogue-input {
+  flex: 1; padding: 7px 12px; background: rgba(255,255,255,.04);
+  border: 1px solid #2a5018; color: #c0e080; font-family: Georgia, serif; font-size: 13px;
+  outline: none; border-radius: 3px; display: none;
+}
+#dialogue-input::placeholder { color: #2a4a18; }
+#dialogue-send {
+  padding: 7px 18px; background: #162808; border: 1px solid #4a8020;
+  color: #90c850; font-family: Georgia, serif; font-size: 12px;
+  cursor: pointer; border-radius: 3px; display: none; transition: all .15s;
+}
+#dialogue-send:hover { background: #1e3a0a; }
+#dialogue-hint { font-size: 10px; color: #2a4a18; margin-top: 8px; letter-spacing: 1px; }
+#dialogue-close {
+  margin-top: 9px; background: none; border: 1px solid #1a3010; color: #3a5a28;
+  font-family: Georgia, serif; font-size: 10px; padding: 4px 12px; cursor: pointer;
+  border-radius: 3px; letter-spacing: 2px; transition: all .15s;
+}
+#dialogue-close:hover { border-color: #3a5018; color: #6a8a48; }
+
+/* ── TOP HUD ── */
+#top-hud {
+  position: fixed; top: 0; left: 0; right: 0; height: 42px; z-index: 90;
+  background: linear-gradient(180deg, #080e06cc, transparent);
+  display: none; align-items: center; padding: 0 14px; gap: 12px; pointer-events: none;
+}
+#world-name { color: #7ec850; font-size: 12px; letter-spacing: 3px; text-transform: uppercase; text-shadow: 0 1px 4px #000; }
+#lang-badge {
+  background: rgba(100,200,50,.12); border: 1px solid #2a5018;
+  color: #7ec850; font-size: 9px; padding: 2px 9px; border-radius: 10px;
+  letter-spacing: 3px; text-transform: uppercase;
+}
+#vocab-pill {
+  margin-left: auto; color: #3a6028; font-size: 10px; letter-spacing: 1px;
+  background: rgba(0,0,0,.3); padding: 3px 10px; border-radius: 10px;
+}
+#controls-hint {
+  position: fixed; bottom: 62px; right: 14px; z-index: 90;
+  color: #2a4a18; font-size: 10px; letter-spacing: 1px; text-align: right;
+  display: none; line-height: 1.8; pointer-events: none;
+}
+
+/* ── STATUS TOAST ── */
+#status {
+  position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+  background: rgba(4,8,4,.94); border: 1px solid #4a8020; color: #90d050;
+  padding: 6px 18px; font-size: 12px; border-radius: 4px; z-index: 150;
+  opacity: 0; transition: opacity .3s; pointer-events: none; letter-spacing: 1px;
+  white-space: nowrap; max-width: 90vw; text-overflow: ellipsis; overflow: hidden;
+}
+
+/* ── LOADING OVERLAY ── */
+#loading {
+  position: fixed; inset: 0; z-index: 180; background: rgba(4,8,4,.85);
+  display: none; align-items: center; justify-content: center; flex-direction: column; gap: 16px;
+}
+#loading p { color: #7ec850; font-size: 14px; letter-spacing: 4px; text-transform: uppercase; }
+.spinner {
+  width: 32px; height: 32px; border: 3px solid #1a3010;
+  border-top-color: #7ec850; border-radius: 50%; animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<!-- MENU -->
+<div id="menu">
+  <h1>LinguaQuest</h1>
+  <p>An AI-Powered Language RPG</p>
+  <input id="key-input" type="password" placeholder="Claude API key (sk-ant-...)"
+    style="padding:8px 14px;background:rgba(255,255,255,.04);border:1px solid #2a5018;color:#90d050;font-family:monospace;font-size:13px;border-radius:3px;width:320px;outline:none">
+  <button id="menu-start" onclick="startGame()">Begin Adventure</button>
+  <span class="menu-hint">WASD to move · E to interact</span>
+</div>
+
+<!-- TOP HUD -->
+<div id="top-hud">
+  <span id="world-name">World</span>
+  <span id="lang-badge">ES</span>
+  <span id="vocab-pill">loading vocab...</span>
+</div>
+
+<!-- GAME CANVAS -->
+<div id="game-container"></div>
+
+<!-- DIALOGUE -->
+<div id="dialogue-box">
+  <div id="dialogue-npc-name">NPC</div>
+  <div id="dialogue-text">...</div>
+  <div id="dialogue-input-row">
+    <input id="dialogue-input" type="text" placeholder="Respond in Spanish...">
+    <button id="dialogue-send" onclick="sendDialogue()">Send</button>
+  </div>
+  <div id="dialogue-hint">Press Enter to send · Escape to close</div>
+  <button id="dialogue-close" onclick="closeDialogue()">[ CLOSE ]</button>
+</div>
+
+<!-- PROMPT BAR -->
+<div id="prompt-bar">
+  <label>Generate →</label>
+  <input id="world-prompt" type="text"
+    placeholder="e.g. a rainy Spanish fishing village · a Tokyo market · a medieval castle courtyard"
+    maxlength="200">
+  <button id="gen-btn" onclick="generateWorld()">✦ Generate</button>
+</div>
+
+<!-- CONTROLS HINT -->
+<div id="controls-hint">
+  WASD / ↑↓←→ move<br>
+  E &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; talk to NPC
+</div>
+
+<!-- LOADING -->
+<div id="loading">
+  <div class="spinner"></div>
+  <p>Designing your world...</p>
+</div>
+
+<!-- STATUS -->
+<div id="status"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  LINGUAQUEST — Phase 1 + Pixel Art Sprites
+//  Cute Fantasy Free asset pack (16px tiles, 32x32 sprites)
+// ═══════════════════════════════════════════════════════════
+
+// ── ASSET PATHS (relative to this HTML file) ────────────────
+const ASSETS = 'Cute_Fantasy_Free/';
+
+// ── CONFIG ──────────────────────────────────────────────────
+const TILE_SIZE    = 48;   // display size (we scale 16px tiles up 3x)
+const SPRITE_SCALE = 2;    // 32px sprites drawn at 2x = 64px on screen
+const FRAME_W      = 32;   // player/NPC sprite frame width
+const FRAME_H      = 32;   // player/NPC sprite frame height
+
+// Supabase — fill in from LifeOS keys
+const SUPABASE_URL = 'https://kxsuzgpnvtepsyhkezin.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4c3V6Z3BudnRlcHN5aGtlemluIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MTc3NzUwMCwiZXhwIjoyMDg3MzUzNTAwfQ.1cFNP2QOL7-qlNLAcKwGW11sHs9nyIMcIXqe_XD81Mc';
+// Claude API key loaded from LifeOS config (injected by LifeOS app shell, or enter below for standalone use)
+const CLAUDE_KEY   = window.LIFEOS_CLAUDE_KEY || '';
+
+// ── STATE ────────────────────────────────────────────────────
+let currentWorld    = null;
+let currentNPC      = null;
+let dialogueHistory = {};
+let phaserGame      = null;
+let gameScene       = null;
+let srsVocab        = [];
+
+// ─────────────────────────────────────────────────────────────
+//  SAMPLE WORLD
+// ─────────────────────────────────────────────────────────────
+const SAMPLE_WORLD = {
+  world: {
+    theme: "spanish_village",
+    tileset: "town",
+    size: [22, 16],
+    ambient: "sunset",
+    language: "es",
+    description: "Un pequeño pueblo pesquero al atardecer.",
+    tiles: [
+      ["water","water","water","water","beach","beach","grass","grass","grass","grass","grass","grass","grass","grass","tree","tree","grass","grass","grass","grass","grass","grass"],
+      ["water","water","water","beach","beach","grass","grass","path","path","path","path","path","path","grass","tree","grass","grass","building","building","grass","grass","grass"],
+      ["water","water","beach","beach","grass","grass","grass","path","grass","grass","grass","grass","path","grass","grass","grass","grass","building","building","grass","grass","grass"],
+      ["water","beach","beach","grass","grass","grass","grass","path","grass","grass","grass","grass","path","grass","tree","tree","grass","grass","grass","grass","grass","grass"],
+      ["beach","beach","grass","grass","grass","tree","grass","path","grass","grass","grass","grass","path","grass","grass","tree","grass","grass","grass","grass","tree","grass"],
+      ["beach","grass","grass","grass","grass","grass","grass","path","path","path","path","path","path","path","path","path","path","path","grass","grass","grass","grass"],
+      ["grass","grass","grass","grass","tree","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","path","grass","grass","grass","grass","grass"],
+      ["grass","path","path","path","path","path","path","path","grass","building","building","grass","grass","grass","grass","grass","path","tree","grass","grass","grass","grass"],
+      ["grass","path","grass","grass","grass","grass","grass","path","grass","building","building","grass","grass","grass","grass","grass","path","grass","grass","grass","grass","grass"],
+      ["grass","path","grass","grass","grass","grass","grass","path","grass","grass","grass","grass","grass","building","building","grass","path","grass","tree","grass","grass","grass"],
+      ["grass","path","grass","tree","grass","grass","grass","path","grass","grass","grass","grass","grass","building","building","grass","path","path","path","path","path","grass"],
+      ["grass","path","path","path","path","path","path","path","grass","grass","tree","grass","grass","grass","grass","grass","grass","grass","grass","grass","path","grass"],
+      ["grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","path","grass"],
+      ["grass","grass","tree","grass","grass","grass","grass","grass","grass","tree","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","path","grass"],
+      ["grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass"],
+      ["grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass"]
+    ]
+  },
+  npcs: [
+    {
+      id: "carlos", name: "Carlos",
+      position: [4, 8], sprite: "skeleton",
+      personality: "amigable, cansado, ama el mar",
+      ai_context: "Eres Carlos, un pescador retirado de 68 años. Extrañas tus días en el mar. Solo hablas español y eres paciente con los que aprenden.",
+      greeting: "¡Buenas tardes, viajero! ¿Estás disfrutando nuestro pueblo?",
+      vocab_focus: ["el mar","pescar","la red","el barco","las olas"]
+    },
+    {
+      id: "maria", name: "María",
+      position: [15, 3], sprite: "player",
+      personality: "curiosa, amistosa, estudiante",
+      ai_context: "Eres María, 22 años, estudiante universitaria que regresa al pueblo en verano. Te encanta conocer gente nueva pero insistes en que el viajero practique español.",
+      greeting: "¡Hola! ¿De dónde eres? ¡Qué interesante!",
+      vocab_focus: ["la ciudad","estudiar","aprender","hablar","practicar"]
+    },
+    {
+      id: "tendero", name: "Don Miguel",
+      position: [10, 8], sprite: "slime",
+      personality: "serio, honesto, comerciante de pocas palabras",
+      ai_context: "Eres Don Miguel, el tendero. 30 años vendiendo provisiones. Eres justo pero breve. Solo español.",
+      greeting: "¿En qué le puedo ayudar?",
+      vocab_focus: ["comprar","vender","el precio","las provisiones","la tienda"]
+    }
+  ],
+  items: [],
+  quests: [],
+  player_start: [8, 6]
+};
+
+// ── TILE DEFINITIONS ─────────────────────────────────────────
+const TILE_DEFS = {
+  grass:         { key: 'grass',    walkable: true  },
+  path:          { key: 'path',     walkable: true  },
+  water:         { key: 'water',    walkable: false },
+  beach:         { key: 'beach',    walkable: true  },
+  sand:          { key: 'beach',    walkable: true  },
+  snow:          { key: 'grass',    walkable: true  },
+  stone:         { key: 'path',     walkable: true  },
+  dark_stone:    { key: 'path',     walkable: true  },
+  void:          { key: 'water',    walkable: false },
+  building:      { key: 'building', walkable: false },
+  building_door: { key: 'path',     walkable: true  },
+  tree:          { key: 'grass',    walkable: false },
+  mountain:      { key: 'cliff',    walkable: false },
+  chest:         { key: 'grass',    walkable: true  },
+  wall:          { key: 'cliff',    walkable: false },
+  farmland:      { key: 'farmland', walkable: true  },
+};
+
+// ─────────────────────────────────────────────────────────────
+//  PHASER SCENE
+// ─────────────────────────────────────────────────────────────
+class GameScene extends Phaser.Scene {
+  constructor() {
+    super({ key: 'GameScene' });
+    this.player      = null;
+    this.playerSprite= null;
+    this.cursors     = null;
+    this.wasd        = null;
+    this.npcObjects  = [];
+    this.worldData   = null;
+    this.tileLayer   = null;
+    this.decorLayer  = null;
+    this.npcLayer    = null;
+    this.dialogueCooldown = false;
+    this.playerFacing= 'down';
+    this.playerMoving= false;
+  }
+
+  preload() {
+    // Tiles (16x16 each, tiled into sheets)
+    this.load.image('grass',    ASSETS + 'Tiles/Grass_Middle.png');
+    this.load.image('path',     ASSETS + 'Tiles/Path_Middle.png');
+    this.load.image('water',    ASSETS + 'Tiles/Water_Middle.png');
+    this.load.image('beach',    ASSETS + 'Tiles/Sand_Middle.png');
+    this.load.image('farmland', ASSETS + 'Tiles/FarmLand_Tile.png');
+    this.load.image('cliff',    ASSETS + 'Tiles/Cliff_Tile.png');
+
+    // Decorations
+    this.load.image('oak_tree',      ASSETS + 'Outdoor decoration/Oak_Tree.png');
+    this.load.image('oak_tree_small',ASSETS + 'Outdoor decoration/Oak_Tree_Small.png');
+    this.load.image('house',         ASSETS + 'Outdoor decoration/House_1_Wood_Base_Blue.png');
+    this.load.image('chest_sprite',  ASSETS + 'Outdoor decoration/Chest.png');
+    this.load.image('decor_sheet',   ASSETS + 'Outdoor decoration/Outdoor_Decor_Free.png');
+
+    // Characters — all are 6-col × 10-row, 32x32 frames
+    this.load.spritesheet('player_ss',   ASSETS + 'Player/Player.png',
+      { frameWidth: FRAME_W, frameHeight: FRAME_H });
+    this.load.spritesheet('skeleton_ss', ASSETS + 'Enemies/Skeleton.png',
+      { frameWidth: FRAME_W, frameHeight: FRAME_H });
+
+    // Slime: 512x192, frames appear to be 64x64
+    this.load.spritesheet('slime_ss', ASSETS + 'Enemies/Slime_Green.png',
+      { frameWidth: 64, frameHeight: 64 });
+
+    // Animals
+    this.load.spritesheet('chicken_ss', ASSETS + 'Animals/Chicken/Chicken.png',
+      { frameWidth: 32, frameHeight: 32 });
+    this.load.spritesheet('cow_ss',     ASSETS + 'Animals/Cow/Cow.png',
+      { frameWidth: 32, frameHeight: 32 });
+  }
+
+  create() {
+    gameScene = this;
+
+    // ── Define animations ──
+    // Player: row 0=down idle, row1=left walk, row2=up walk, row3=right walk, row4=down walk, row5=up walk alt
+    // Each row = 6 frames. Frame index = row*6 + col
+    this._createAnim('player_ss', 'player_idle_down',  [0,1,2],        5);
+    this._createAnim('player_ss', 'player_walk_down',  [24,25,26,27,28,29], 8);
+    this._createAnim('player_ss', 'player_walk_left',  [6,7,8,9,10,11],    8);
+    this._createAnim('player_ss', 'player_walk_right', [18,19,20,21,22,23],8);
+    this._createAnim('player_ss', 'player_walk_up',    [12,13,14,15,16,17],8);
+    this._createAnim('player_ss', 'player_idle_left',  [6],  4);
+    this._createAnim('player_ss', 'player_idle_right', [18], 4);
+    this._createAnim('player_ss', 'player_idle_up',    [12], 4);
+
+    // Skeleton NPC: same layout as player
+    this._createAnim('skeleton_ss', 'skel_idle', [0,1,2], 4);
+    this._createAnim('skeleton_ss', 'skel_walk', [6,7,8,9,10,11], 6);
+
+    // Slime: 3 rows of idle/bounce/splat (64px frames)
+    this._createAnim('slime_ss', 'slime_idle', [0,1,2,3], 5);
+
+    // Chicken
+    this._createAnim('chicken_ss', 'chicken_idle', [0,1], 3);
+
+    // Cow
+    this._createAnim('cow_ss', 'cow_idle', [0,1], 2);
+
+    // Input
+    this.cursors = this.input.keyboard.createCursorKeys();
+    this.wasd = this.input.keyboard.addKeys({
+      up: Phaser.Input.Keyboard.KeyCodes.W,
+      down: Phaser.Input.Keyboard.KeyCodes.S,
+      left: Phaser.Input.Keyboard.KeyCodes.A,
+      right: Phaser.Input.Keyboard.KeyCodes.D,
+      interact: Phaser.Input.Keyboard.KeyCodes.E,
+    });
+
+    this.loadWorld(SAMPLE_WORLD);
+  }
+
+  _createAnim(key, name, frames, frameRate, repeat = -1) {
+    if (this.anims.exists(name)) return;
+    if (!this.textures.exists(key)) return;
+    try {
+      this.anims.create({
+        key: name,
+        frames: this.anims.generateFrameNumbers(key, { frames }),
+        frameRate,
+        repeat,
+      });
+    } catch(e) {
+      console.warn(`Anim "${name}" skipped:`, e.message);
+    }
+  }
+
+  _safePlay(sprite, animKey, ignoreIfPlaying = false) {
+    if (!sprite) return;
+    if (this.anims.exists(animKey)) {
+      sprite.play(animKey, ignoreIfPlaying);
+    }
+  }
+
+  loadWorld(worldDef) {
+    // Clear scene
+    this.children.removeAll(true);
+    this.npcObjects = [];
+
+    this.worldData = worldDef;
+    const { tiles, size } = worldDef.world;
+    const cols = size[0];
+    const rows = size[1];
+
+    // ── TILE LAYER ──
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const tileType = (tiles[row] && tiles[row][col]) || 'grass';
+        const def = TILE_DEFS[tileType] || TILE_DEFS.grass;
+        const x = col * TILE_SIZE;
+        const y = row * TILE_SIZE;
+
+        // Base tile — scale 16px → 48px (3x)
+        const tile = this.add.image(x, y, def.key).setOrigin(0, 0).setDisplaySize(TILE_SIZE, TILE_SIZE);
+        tile.setDepth(0);
+
+        // Water: subtle wave overlay
+        if (tileType === 'water') {
+          const g = this.add.graphics().setDepth(1);
+          g.fillStyle(0x4090d0, 0.15);
+          g.fillRect(x + 4, y + TILE_SIZE * 0.4, TILE_SIZE - 8, 4);
+        }
+      }
+    }
+
+    // ── DECORATION LAYER (trees, buildings, chests) ──
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const tileType = (tiles[row] && tiles[row][col]) || 'grass';
+        const cx = col * TILE_SIZE + TILE_SIZE / 2;
+        const cy = row * TILE_SIZE + TILE_SIZE / 2;
+
+        if (tileType === 'tree') {
+          const tree = this.add.image(cx, cy + 4, 'oak_tree_small')
+            .setOrigin(0.5, 0.5)
+            .setScale(1.2)
+            .setDepth(row * 10 + 5);
+          // Shadow
+          const g = this.add.graphics().setDepth(row * 10 + 4);
+          g.fillStyle(0x000000, 0.18);
+          g.fillEllipse(cx, cy + 16, 28, 10);
+        }
+
+        if (tileType === 'building' || tileType === 'building_door') {
+          // Only draw house once per building cluster — check if top-left corner
+          const above = row > 0 ? (tiles[row-1][col] || '') : '';
+          const left  = col > 0 ? (tiles[row][col-1] || '') : '';
+          const aboveIsBuilding = (above === 'building' || above === 'building_door');
+          const leftIsBuilding  = (left  === 'building' || left  === 'building_door');
+          if (!aboveIsBuilding && !leftIsBuilding) {
+            const house = this.add.image(cx + TILE_SIZE/2, cy - TILE_SIZE * 0.1, 'house')
+              .setOrigin(0.5, 0.5)
+              .setScale(1.4)
+              .setDepth(row * 10 + 6);
+          }
+        }
+
+        if (tileType === 'chest') {
+          const chest = this.add.image(cx, cy, 'chest_sprite')
+            .setOrigin(0.5, 0.5)
+            .setScale(2.5)
+            .setDepth(row * 10 + 5);
+        }
+      }
+    }
+
+    // ── PHYSICS BOUNDS ──
+    this.physics.world.setBounds(0, 0, cols * TILE_SIZE, rows * TILE_SIZE);
+    this.cameras.main.setBounds(0, 0, cols * TILE_SIZE, rows * TILE_SIZE);
+
+    // ── SPAWN PLAYER ──
+    const [pCol, pRow] = worldDef.player_start;
+    const px = pCol * TILE_SIZE + TILE_SIZE / 2;
+    const py = pRow * TILE_SIZE + TILE_SIZE / 2;
+
+    this.playerSprite = this.add.sprite(px, py, 'player_ss', 0)
+      .setScale(SPRITE_SCALE)
+      .setDepth(pRow * 10 + 8);
+    this._safePlay(this.playerSprite, 'player_idle_down');
+
+    // Physics body on an invisible rect synced to sprite
+    this.player = this.physics.add.image(px, py + 8, null)
+      .setDisplaySize(20, 12)
+      .setCollideWorldBounds(true);
+    this.player.setVisible(false);
+
+    // Camera follow sprite
+    this.cameras.main.startFollow(this.playerSprite, true, 0.12, 0.12);
+
+    // ── SPAWN NPCs ──
+    for (const npcDef of worldDef.npcs) {
+      const [nc, nr] = npcDef.position;
+      const nx = nc * TILE_SIZE + TILE_SIZE / 2;
+      const ny = nr * TILE_SIZE + TILE_SIZE / 2;
+
+      let spriteKey, defaultAnim, scale;
+      switch (npcDef.sprite) {
+        case 'skeleton':
+          spriteKey = 'skeleton_ss'; defaultAnim = 'skel_idle'; scale = SPRITE_SCALE; break;
+        case 'slime':
+          spriteKey = 'slime_ss'; defaultAnim = 'slime_idle'; scale = 1.2; break;
+        case 'chicken':
+          spriteKey = 'chicken_ss'; defaultAnim = 'chicken_idle'; scale = 2.0; break;
+        case 'cow':
+          spriteKey = 'cow_ss'; defaultAnim = 'cow_idle'; scale = 1.8; break;
+        default: // player sprite variant
+          spriteKey = 'player_ss'; defaultAnim = 'player_idle_down'; scale = SPRITE_SCALE; break;
+      }
+
+      const npcSprite = this.add.sprite(nx, ny, spriteKey)
+        .setScale(scale)
+        .setDepth(nr * 10 + 7)
+        ;
+      this._safePlay(npcSprite, defaultAnim);
+
+      // Floating name label
+      const label = this.add.text(nx, ny - FRAME_H * scale * 0.6, npcDef.name, {
+        fontSize: '11px',
+        color: '#d0f890',
+        stroke: '#000000',
+        strokeThickness: 3,
+        fontFamily: 'Georgia, serif',
+      }).setOrigin(0.5, 1).setDepth(nr * 10 + 9);
+
+      // Interaction range indicator (invisible)
+      const range = TILE_SIZE * 1.5;
+
+      this.npcObjects.push({
+        def: npcDef,
+        sprite: npcSprite,
+        label,
+        nx, ny,
+        range,
+      });
+    }
+
+    // ── UPDATE HUD ──
+    const wname = worldDef.world.theme.replace(/_/g, ' ');
+    document.getElementById('world-name').textContent = wname.toUpperCase();
+    document.getElementById('lang-badge').textContent = (worldDef.world.language || 'es').toUpperCase();
+    if (worldDef.world.description) showStatus(worldDef.world.description, 5000);
+  }
+
+  update() {
+    if (!this.player || !this.playerSprite || !this.cursors) return;
+
+    const dialogueOpen = document.getElementById('dialogue-box').style.display !== 'none' &&
+                         document.getElementById('dialogue-box').style.display !== '';
+
+    const speed = 120;
+    let vx = 0, vy = 0;
+
+    if (!dialogueOpen) {
+      if (this.cursors.left.isDown  || this.wasd.left.isDown)  vx = -speed;
+      if (this.cursors.right.isDown || this.wasd.right.isDown) vx =  speed;
+      if (this.cursors.up.isDown    || this.wasd.up.isDown)    vy = -speed;
+      if (this.cursors.down.isDown  || this.wasd.down.isDown)  vy =  speed;
+    }
+
+    // Diagonal normalization
+    if (vx !== 0 && vy !== 0) { vx *= 0.707; vy *= 0.707; }
+
+    // Tile collision (manual)
+    if (vx !== 0 || vy !== 0) {
+      const nx = this.player.x + vx * (1/60) * 1.5;
+      const ny = this.player.y + vy * (1/60) * 1.5;
+      const col = Math.floor(nx / TILE_SIZE);
+      const row = Math.floor(ny / TILE_SIZE);
+      const tiles = this.worldData?.world?.tiles;
+      if (tiles) {
+        const tileType = (tiles[row] && tiles[row][col]) || 'grass';
+        const def = TILE_DEFS[tileType] || TILE_DEFS.grass;
+        if (!def.walkable) { vx = 0; vy = 0; }
+      }
+    }
+
+    this.player.setVelocity(vx, vy);
+
+    // Sync sprite to physics body
+    this.playerSprite.x = this.player.x;
+    this.playerSprite.y = this.player.y - 8;
+
+    // Update depth based on row
+    const pRow = Math.floor(this.player.y / TILE_SIZE);
+    this.playerSprite.setDepth(pRow * 10 + 8);
+
+    // ── Animations ──
+    const moving = (vx !== 0 || vy !== 0);
+    if (moving) {
+      if (Math.abs(vx) > Math.abs(vy)) {
+        if (vx < 0) { this._safePlay(this.playerSprite,'player_walk_left',true);  this.playerFacing='left'; }
+        else         { this._safePlay(this.playerSprite,'player_walk_right',true); this.playerFacing='right'; }
+      } else {
+        if (vy < 0) { this._safePlay(this.playerSprite,'player_walk_up',true);    this.playerFacing='up'; }
+        else         { this._safePlay(this.playerSprite,'player_walk_down',true);  this.playerFacing='down'; }
+      }
+    } else if (this.playerMoving) {
+      this._safePlay(this.playerSprite, `player_idle_${this.playerFacing}`, true);
+    }
+    this.playerMoving = moving;
+
+    // ── NPC proximity ──
+    if (!dialogueOpen && !this.dialogueCooldown) {
+      for (const npc of this.npcObjects) {
+        const dist = Phaser.Math.Distance.Between(
+          this.player.x, this.player.y, npc.nx, npc.ny
+        );
+        const inRange = dist < npc.range;
+
+        // Highlight label when in range
+        npc.label.setStyle({
+          fontSize: inRange ? '12px' : '11px',
+          color: inRange ? '#f0ff80' : '#d0f890',
+          stroke: '#000000',
+          strokeThickness: 3,
+          fontFamily: 'Georgia, serif',
+        });
+
+        // E to interact
+        if (inRange && Phaser.Input.Keyboard.JustDown(this.wasd.interact)) {
+          this.openNPCDialogue(npc.def);
+          break;
+        }
+      }
+    }
+  }
+
+  openNPCDialogue(npcDef) {
+    if (this.dialogueCooldown) return;
+    currentNPC = npcDef;
+    this.player.setVelocity(0, 0);
+    this._safePlay(this.playerSprite, `player_idle_${this.playerFacing}`, true);
+
+    if (!dialogueHistory[npcDef.id]) dialogueHistory[npcDef.id] = [];
+
+    document.getElementById('dialogue-npc-name').textContent = npcDef.name;
+    document.getElementById('dialogue-text').textContent = npcDef.greeting;
+    document.getElementById('dialogue-input').style.display = 'flex';
+    document.getElementById('dialogue-send').style.display = 'flex';
+    document.getElementById('dialogue-input').value = '';
+    document.getElementById('dialogue-box').style.display = 'block';
+    setTimeout(() => document.getElementById('dialogue-input').focus(), 80);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  GAME INIT
+// ─────────────────────────────────────────────────────────────
+function startGame() {
+  // If no key from LifeOS, grab from the input box
+  if (!window.LIFEOS_CLAUDE_KEY) {
+    const k = document.getElementById('key-input').value.trim();
+    if (k) window.LIFEOS_CLAUDE_KEY = k;
+  }
+  document.getElementById('menu').style.display = 'none';
+  document.getElementById('prompt-bar').style.display = 'flex';
+  document.getElementById('top-hud').style.display = 'flex';
+  document.getElementById('controls-hint').style.display = 'block';
+
+  const config = {
+    type: Phaser.AUTO,
+    width: window.innerWidth,
+    height: window.innerHeight,
+    parent: 'game-container',
+    backgroundColor: '#1a2a1a',
+    physics: { default: 'arcade', arcade: { gravity: { y: 0 }, debug: false } },
+    scene: GameScene,
+    pixelArt: true,
+    antialias: false,
+    scale: {
+      mode: Phaser.Scale.RESIZE,
+      autoCenter: Phaser.Scale.CENTER_BOTH,
+      width: '100%',
+      height: '100%',
+    },
+  };
+
+  phaserGame = new Phaser.Game(config);
+  window.addEventListener('resize', () => {
+    if (phaserGame) phaserGame.scale.resize(window.innerWidth, window.innerHeight);
+  });
+
+  fetchSRSVocab();
+}
+
+// ─────────────────────────────────────────────────────────────
+//  WORLD GENERATION
+// ─────────────────────────────────────────────────────────────
+async function generateWorld() {
+  const prompt = document.getElementById('world-prompt').value.trim();
+  if (!prompt) { showStatus('Type a world description first.', 2000); return; }
+
+  document.getElementById('gen-btn').disabled = true;
+  document.getElementById('gen-btn').textContent = '⟳ Thinking...';
+  document.getElementById('loading').style.display = 'flex';
+
+  const vocabContext = srsVocab.length > 0
+    ? `\n\nThe player is currently studying these words — prioritize them in NPC vocab_focus: ${srsVocab.slice(0,15).map(w=>w.word).join(', ')}`
+    : '';
+
+  const systemPrompt = `You are a world designer for LinguaQuest, a language-learning RPG.
+
+Return ONLY raw valid JSON — no markdown, no code fences, no explanation.
+
+RULES:
+- Match this exact structure (adapt content to the prompt):
+${JSON.stringify(SAMPLE_WORLD, null, 2)}
+- tiles must be exactly size[1] rows, each row exactly size[0] items
+- Valid tile values: grass, path, water, beach, sand, tree, building, building_door, farmland, stone, cliff, chest
+- 60%+ of tiles must be walkable (grass, path, beach, sand, farmland, stone, building_door)
+- player_start must be on a walkable tile, not a tree or building
+- NPC positions must be on walkable tiles
+- 2–4 NPCs
+- NPC sprite must be one of: player, skeleton, slime, chicken, cow
+- NPC greetings and vocab_focus must be in the target language
+- ai_context: 2–3 sentence character backstory
+- Choose language based on prompt context (es=Spanish default unless another is implied)
+- tileset options: town, nature, coastal, dungeon, farm, snow, desert, space${vocabContext}`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': CLAUDE_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 4096,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: `Design a world for: "${prompt}"` }],
+      }),
+    });
+
+    if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || 'API error'); }
+    const data = await res.json();
+    const raw = data.content[0].text.trim().replace(/^```json?\n?/, '').replace(/\n?```$/, '');
+
+    let worldDef;
+    try { worldDef = JSON.parse(raw); }
+    catch { throw new Error('Claude returned invalid JSON — try again.'); }
+
+    if (!worldDef.world?.tiles || !worldDef.npcs) throw new Error('Missing required fields — try again.');
+
+    currentWorld = worldDef;
+    dialogueHistory = {};
+    gameScene.loadWorld(worldDef);
+
+  } catch (err) {
+    showStatus('⚠ ' + err.message, 5000);
+    console.error(err);
+  }
+
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('gen-btn').disabled = false;
+  document.getElementById('gen-btn').textContent = '✦ Generate';
+}
+
+// ─────────────────────────────────────────────────────────────
+//  NPC DIALOGUE
+// ─────────────────────────────────────────────────────────────
+async function sendDialogue() {
+  const input = document.getElementById('dialogue-input');
+  const playerText = input.value.trim();
+  if (!playerText || !currentNPC) return;
+  input.value = '';
+
+  const textEl = document.getElementById('dialogue-text');
+  textEl.textContent = '...';
+
+  if (!dialogueHistory[currentNPC.id]) dialogueHistory[currentNPC.id] = [];
+  dialogueHistory[currentNPC.id].push({ role: 'user', content: playerText });
+
+  const world = currentWorld || SAMPLE_WORLD;
+  const lang = world.world.language || 'es';
+  const langName = { es:'Spanish', ru:'Russian', fr:'French', de:'German', it:'Italian', pt:'Portuguese', ja:'Japanese', zh:'Chinese', ko:'Korean' }[lang] || lang;
+  const vocabLine = (currentNPC.vocab_focus||[]).length > 0
+    ? `Vocabulary you naturally use: ${currentNPC.vocab_focus.join(', ')}.` : '';
+
+  const systemPrompt = `You are ${currentNPC.name}, an NPC in a language RPG.
+Backstory: ${currentNPC.ai_context}
+Personality: ${currentNPC.personality}
+${vocabLine}
+Rules: respond ONLY in ${langName}. Stay in character. 1–3 sentences max. Use vocab naturally. If the player writes in English, warmly redirect them to ${langName}. Be patient and encouraging.`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': CLAUDE_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 200,
+        system: systemPrompt,
+        messages: dialogueHistory[currentNPC.id],
+      }),
+    });
+
+    if (!res.ok) throw new Error('Dialogue error');
+    const data = await res.json();
+    const reply = data.content[0].text.trim();
+    dialogueHistory[currentNPC.id].push({ role: 'assistant', content: reply });
+    if (dialogueHistory[currentNPC.id].length > 20)
+      dialogueHistory[currentNPC.id] = dialogueHistory[currentNPC.id].slice(-20);
+    textEl.textContent = reply;
+
+  } catch (err) {
+    textEl.textContent = '(Connection error — check your API key)';
+    console.error(err);
+  }
+}
+
+function closeDialogue() {
+  document.getElementById('dialogue-box').style.display = 'none';
+  currentNPC = null;
+  if (gameScene) {
+    gameScene.dialogueCooldown = true;
+    setTimeout(() => { if (gameScene) gameScene.dialogueCooldown = false; }, 400);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  SUPABASE VOCAB SYNC
+// ─────────────────────────────────────────────────────────────
+async function fetchSRSVocab() {
+  if (!SUPABASE_URL) {
+    document.getElementById('vocab-pill').textContent = 'vocab: not configured';
+    return;
+  }
+  try {
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/vocab_words?select=word,translation,stage&next_review=lte.${today}&order=stage.asc&limit=20`,
+      { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+    );
+    if (!res.ok) throw new Error();
+    srsVocab = await res.json();
+    document.getElementById('vocab-pill').textContent = `${srsVocab.length} words due`;
+  } catch {
+    document.getElementById('vocab-pill').textContent = 'vocab: offline';
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  UTILS
+// ─────────────────────────────────────────────────────────────
+let _statusTimer;
+function showStatus(msg, dur = 3000) {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.style.opacity = '1';
+  clearTimeout(_statusTimer);
+  _statusTimer = setTimeout(() => { el.style.opacity = '0'; }, dur);
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    const dBox   = document.getElementById('dialogue-box');
+    const dInput = document.getElementById('dialogue-input');
+    if (dBox.style.display !== 'none' && document.activeElement === dInput) {
+      sendDialogue(); return;
+    }
+    if (document.activeElement === document.getElementById('world-prompt')) {
+      generateWorld();
+    }
+  }
+  if (e.key === 'Escape') closeDialogue();
+});
+
+// Pause game input when typing
+['world-prompt','dialogue-input'].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener('focus', () => { if (phaserGame) phaserGame.input.keyboard.enabled = false; });
+  el.addEventListener('blur',  () => { if (phaserGame) phaserGame.input.keyboard.enabled = true; });
+});
+</script>
+</body>
+</html>
