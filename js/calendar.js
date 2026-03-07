@@ -25,13 +25,15 @@ window._calToggleColor = (color) => {
   } else {
     hiddenColors.add(color);
   }
-  // Update swatch UI
+  // Update swatch UI — dim hidden, show active with ring
   document.querySelectorAll('.cal-filter-swatch').forEach(sw => {
     const c = sw.dataset.color;
     const hidden = hiddenColors.has(c);
-    sw.style.opacity = hidden ? '0.3' : '1';
-    sw.style.transform = hidden ? 'scale(0.85)' : 'scale(1)';
-    sw.style.outline = hidden ? 'none' : '2px solid rgba(255,255,255,0.6)';
+    sw.style.opacity = hidden ? '0.25' : '1';
+    sw.style.transform = hidden ? 'scale(0.8)' : 'scale(1)';
+    sw.style.boxShadow = hidden
+      ? 'none'
+      : '0 0 0 2px white,0 0 0 3px rgba(0,0,0,0.15)';
   });
   render();
 };
@@ -1827,31 +1829,43 @@ window.calFabClick = () => {
   openCreateModal(todayStr, startTime, endTime);
 };
 
-// ── Color filter swatches init ────────────────────────────────────────────────
+// ── Color filter panel ───────────────────────────────────────────────────────
 function _initFilterSwatches() {
   const container = document.getElementById('cal-filter-swatches');
   if (!container) return;
   container.innerHTML = EVENT_COLORS.map(c => `
     <div class="cal-filter-swatch" data-color="${c.val}" title="${c.label}"
       onclick="window._calToggleColor('${c.val}')"
-      style="width:22px;height:22px;border-radius:50%;background:${c.val};cursor:pointer;
-        transition:opacity 0.15s,transform 0.15s;outline:2px solid rgba(255,255,255,0.6);
-        box-shadow:0 1px 3px rgba(0,0,0,0.2)">
+      style="width:26px;height:26px;border-radius:50%;background:${c.val};cursor:pointer;
+        transition:opacity 0.15s,transform 0.15s,box-shadow 0.15s;
+        box-shadow:0 0 0 2px white,0 0 0 3px rgba(0,0,0,0.15);
+        flex-shrink:0">
     </div>`).join('');
 }
+
+window._calToggleFilterPanel = () => {
+  const panel = document.getElementById('cal-filter-panel');
+  const btn   = document.getElementById('cal-filter-btn');
+  if (!panel) return;
+  const isOpen = panel.style.display === 'flex';
+  panel.style.display = isOpen ? 'none' : 'flex';
+  if (btn) btn.style.background = isOpen ? 'white' : 'rgba(37,99,235,0.06)';
+  if (btn) btn.style.borderColor = isOpen ? 'var(--gray-200)' : 'var(--blue)';
+  if (btn) btn.style.color = isOpen ? 'var(--gray-600)' : 'var(--blue)';
+};
 
 window._calResetFilter = () => {
   hiddenColors.clear();
   document.querySelectorAll('.cal-filter-swatch').forEach(sw => {
     sw.style.opacity = '1';
     sw.style.transform = 'scale(1)';
-    sw.style.outline = '2px solid rgba(255,255,255,0.6)';
+    sw.style.boxShadow = '0 0 0 2px white,0 0 0 3px rgba(0,0,0,0.15)';
   });
   document.getElementById('cal-filter-btn')?.classList.remove('has-filter');
   render();
 };
 
-// Patch _calToggleColor to also update filter button state
+// Patch _calToggleColor to also update filter button badge
 const _origToggle = window._calToggleColor;
 window._calToggleColor = (color) => {
   _origToggle(color);
