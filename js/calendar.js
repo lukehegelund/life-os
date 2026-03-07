@@ -16,6 +16,33 @@ let selectedDate = T;
 // Event cache keyed by 'YYYY-MM-DD'
 const eventCache = {};
 
+// ── Color filter — set of hex colors currently hidden ──────────────────────
+const hiddenColors = new Set();
+
+window._calToggleColor = (color) => {
+  if (hiddenColors.has(color)) {
+    hiddenColors.delete(color);
+  } else {
+    hiddenColors.add(color);
+  }
+  // Update swatch UI
+  document.querySelectorAll('.cal-filter-swatch').forEach(sw => {
+    const c = sw.dataset.color;
+    const hidden = hiddenColors.has(c);
+    sw.style.opacity = hidden ? '0.3' : '1';
+    sw.style.transform = hidden ? 'scale(0.85)' : 'scale(1)';
+    sw.style.outline = hidden ? 'none' : '2px solid rgba(255,255,255,0.6)';
+  });
+  render();
+};
+
+// Filter events from cache applying hiddenColors
+function getVisibleEvents(dateKey) {
+  const evs = eventCache[dateKey] || [];
+  if (hiddenColors.size === 0) return evs;
+  return evs.filter(e => !hiddenColors.has(e.color));
+}
+
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const DAYS_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
@@ -301,7 +328,7 @@ function renderMonthGrid() {
       : null;
     const isToday = ds === T;
     const isSelected = ds === selectedDate;
-    const events = ds ? (eventCache[ds] || []) : [];
+    const events = ds ? getVisibleEvents(ds) : [];
     const dots = [...new Set(events.map(e => e.color))].slice(0, 4);
 
     html += `<div class="cal-day${!inMonth ? ' other-month' : ''}${isToday ? ' today' : ''}${isSelected ? ' selected' : ''}"
@@ -459,22 +486,20 @@ function renderDayGrid() {
 
   const gutterW = 36;
   const isToday = ds === T;
-  const timedEvents = (eventCache[ds] || []).filter(e => e.timeStart);
-  const allDayEvents = (eventCache[ds] || []).filter(e => !e.timeStart);
+  const timedEvents = getVisibleEvents(ds).filter(e => e.timeStart);
+  const allDayEvents = getVisibleEvents(ds).filter(e => !e.timeStart);
 
   let html = `<div class="week-gcal-wrap" style="overflow-x:auto">
   <div class="week-gcal" style="min-width:300px">`;
 
-  // All-day section
-  if (allDayEvents.length > 0) {
-    html += `<div class="wgcal-allday" style="display:flex;align-items:flex-start;border-bottom:1px solid var(--gray-100);min-height:28px">
+  // All-day section — always show so user can click to add
+  html += `<div class="wgcal-allday" style="display:flex;align-items:flex-start;border-bottom:1px solid var(--gray-100);min-height:28px">
       <div style="width:${gutterW}px;flex-shrink:0;font-size:10px;color:var(--gray-400);padding-top:6px;text-align:right;padding-right:4px">all-day</div>
-      <div style="flex:1;padding:2px;min-height:28px">`;
-    for (const e of allDayEvents) {
-      html += `<a href="${e.link}" onclick="event.stopPropagation()" class="week-event" style="background:${e.color};display:block;border-radius:3px;padding:1px 4px;font-size:10px;font-weight:500;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px;text-decoration:none">${e.title}</a>`;
-    }
-    html += `</div></div>`;
+      <div class="wgcal-allday-cell" data-date="${ds}" style="flex:1;padding:2px;min-height:28px;cursor:pointer;" title="Click to add all-day event">`;
+  for (const e of allDayEvents) {
+    html += `<a href="${e.link}" onclick="event.stopPropagation()" class="week-event" style="background:${e.color};display:block;border-radius:3px;padding:1px 4px;font-size:10px;font-weight:500;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px;text-decoration:none">${e.title}</a>`;
   }
+  html += `</div></div>`;
 
   html += `<div id="wgcal-body" style="display:flex;overflow-y:auto;max-height:${TOTAL_HEIGHT + 20}px">
       <div style="width:${gutterW}px;flex-shrink:0;position:relative;height:${TOTAL_HEIGHT}px">`;
@@ -591,8 +616,8 @@ function renderWeekGrid() {
     <div class="wgcal-allday" style="display:flex;align-items:flex-start;border-bottom:1px solid var(--gray-100);min-height:28px">
       <div style="width:${gutterW}px;flex-shrink:0;font-size:10px;color:var(--gray-400);padding-top:6px;text-align:right;padding-right:4px">all-day</div>`;
   for (const { str } of days) {
-    const allDayEvents = (eventCache[str] || []).filter(e => !e.timeStart);
-    html += `<div style="flex:1;padding:2px;min-height:28px">`;
+    const allDayEvents = getVisibleEvents(str).filter(e => !e.timeStart);
+    html += `<div class="wgcal-allday-cell" data-date="${str}" style="flex:1;padding:2px;min-height:28px;cursor:pointer;" title="Click to add all-day event">`;
     for (const e of allDayEvents) {
       html += `<a href="${e.link}" onclick="event.stopPropagation()" class="week-event" style="background:${e.color};display:block;border-radius:3px;padding:1px 4px;font-size:10px;font-weight:500;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px;text-decoration:none">${e.title}</a>`;
     }
@@ -618,7 +643,7 @@ function renderWeekGrid() {
   for (let di = 0; di < days.length; di++) {
     const { str } = days[di];
     const isToday = str === T;
-    const timedEvents = (eventCache[str] || []).filter(e => e.timeStart);
+    const timedEvents = getVisibleEvents(str).filter(e => e.timeStart);
     html += `<div class="wgcal-day-col" data-date="${str}" style="flex:1;position:relative;height:${TOTAL_HEIGHT}px;border-left:1px solid var(--gray-100);${isToday ? 'background:rgba(37,99,235,0.03)' : ''}">`;
 
     // Current time indicator
@@ -812,6 +837,14 @@ function _cancelDragSafely() {
 // ── Week view interactions ────────────────────────────────────────────────────
 function attachWeekInteractions() {
   _ensureGlobalDragListeners();
+
+  // ── All-day row cells → click to add all-day event ─────────────────────────
+  document.querySelectorAll('.wgcal-allday-cell').forEach(cell => {
+    cell.addEventListener('click', (e) => {
+      if (e.target.closest('a')) return; // don't intercept existing event links
+      openCreateModal(cell.dataset.date, '09:00', '10:00', true);
+    });
+  });
 
   const dayCols = document.querySelectorAll('.wgcal-day-col');
 
@@ -1125,7 +1158,7 @@ function openClassEditModal(classId, className, startTime, endTime) {
 }
 
 // ── Create event modal (with recurrence) ──────────────────────────────────────
-function openCreateModal(dateStr, startTime, endTime) {
+function openCreateModal(dateStr, startTime, endTime, allDay = false) {
   removeModal();
   const d = new Date(dateStr + 'T00:00:00');
   const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
@@ -1140,7 +1173,19 @@ function openCreateModal(dateStr, startTime, endTime) {
       <input id="cev-title" type="text" placeholder="Event title" autocomplete="off"
         style="width:100%;border:1.5px solid var(--gray-200);border-radius:8px;padding:9px 12px;font-size:14px;margin-bottom:10px;outline:none;box-sizing:border-box"
         onfocus="this.style.borderColor='var(--blue)'" onblur="this.style.borderColor='var(--gray-200)'" />
-      <div style="display:flex;gap:8px;margin-bottom:10px">
+      <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;cursor:pointer;user-select:none">
+        <div id="cev-allday-toggle" style="
+          width:36px;height:20px;border-radius:10px;
+          background:${allDay ? 'var(--blue)' : 'var(--gray-200)'};
+          position:relative;transition:background 0.15s;flex-shrink:0">
+          <div id="cev-allday-knob" style="
+            position:absolute;top:2px;left:${allDay ? '18px' : '2px'};
+            width:16px;height:16px;border-radius:50%;background:white;
+            transition:left 0.15s;box-shadow:0 1px 3px rgba(0,0,0,0.2)"></div>
+        </div>
+        <span style="font-size:13px;color:var(--gray-600)">All day</span>
+      </label>
+      <div id="cev-time-row" style="display:${allDay ? 'none' : 'flex'};gap:8px;margin-bottom:10px">
         <div style="flex:1">
           <label style="font-size:11px;color:var(--gray-400);margin-bottom:3px;display:block">Start</label>
           <input id="cev-start" type="time" value="${startTime}"
@@ -1185,6 +1230,18 @@ function openCreateModal(dateStr, startTime, endTime) {
   const titleEl = document.getElementById('cev-title');
   titleEl.focus();
 
+  // Wire up all-day toggle
+  let isAllDay = allDay;
+  document.getElementById('cev-allday-toggle').addEventListener('click', () => {
+    isAllDay = !isAllDay;
+    const toggle = document.getElementById('cev-allday-toggle');
+    const knob = document.getElementById('cev-allday-knob');
+    const timeRow = document.getElementById('cev-time-row');
+    toggle.style.background = isAllDay ? 'var(--blue)' : 'var(--gray-200)';
+    knob.style.left = isAllDay ? '18px' : '2px';
+    timeRow.style.display = isAllDay ? 'none' : 'flex';
+  });
+
   // Wire up color swatches for create modal
   _attachSwatchListeners('cev-color-swatches', 'cev-color');
 
@@ -1206,12 +1263,12 @@ function openCreateModal(dateStr, startTime, endTime) {
 
     const rows = dates.map(ds => ({
       title,
-      start_time: `${ds}T${start}:00+00:00`,
-      end_time:   `${ds}T${end}:00+00:00`,
-      all_day: false,
+      start_time: isAllDay ? `${ds}T00:00:00+00:00` : `${ds}T${start}:00+00:00`,
+      end_time:   isAllDay ? null : `${ds}T${end}:00+00:00`,
+      all_day: isAllDay,
       color,
       calendar_name: 'LifeOS',
-      is_busy: true,
+      is_busy: !isAllDay,
       recurrence: recur,
       recurrence_group_id: groupId,
     }));
@@ -1625,7 +1682,7 @@ function renderDayPanel(ds) {
   const d = new Date(ds + 'T00:00:00');
   headerEl.textContent = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
-  const events = eventCache[ds] || [];
+  const events = getVisibleEvents(ds);
   if (!events.length) {
     eventsEl.innerHTML = '<div class="no-events">No events on this day</div>';
     return;
@@ -1699,5 +1756,38 @@ window.calFabClick = () => {
   openCreateModal(todayStr, startTime, endTime);
 };
 
+// ── Color filter swatches init ────────────────────────────────────────────────
+function _initFilterSwatches() {
+  const container = document.getElementById('cal-filter-swatches');
+  if (!container) return;
+  container.innerHTML = EVENT_COLORS.map(c => `
+    <div class="cal-filter-swatch" data-color="${c.val}" title="${c.label}"
+      onclick="window._calToggleColor('${c.val}')"
+      style="width:22px;height:22px;border-radius:50%;background:${c.val};cursor:pointer;
+        transition:opacity 0.15s,transform 0.15s;outline:2px solid rgba(255,255,255,0.6);
+        box-shadow:0 1px 3px rgba(0,0,0,0.2)">
+    </div>`).join('');
+}
+
+window._calResetFilter = () => {
+  hiddenColors.clear();
+  document.querySelectorAll('.cal-filter-swatch').forEach(sw => {
+    sw.style.opacity = '1';
+    sw.style.transform = 'scale(1)';
+    sw.style.outline = '2px solid rgba(255,255,255,0.6)';
+  });
+  document.getElementById('cal-filter-btn')?.classList.remove('has-filter');
+  render();
+};
+
+// Patch _calToggleColor to also update filter button state
+const _origToggle = window._calToggleColor;
+window._calToggleColor = (color) => {
+  _origToggle(color);
+  const btn = document.getElementById('cal-filter-btn');
+  if (btn) btn.classList.toggle('has-filter', hiddenColors.size > 0);
+};
+
 // ── Init ──────────────────────────────────────────────────────────────────────
+_initFilterSwatches();
 render();
