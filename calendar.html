@@ -268,24 +268,24 @@
       <span><span class="cal-legend-dot" style="background:var(--red)"></span>Recordatorio</span>
       <span><span class="cal-legend-dot" style="background:var(--green)"></span>Boda</span>
     </div>
-    <button id="cal-filter-btn" onclick="document.getElementById('cal-filter-panel').classList.toggle('hidden')"
+    <button id="cal-filter-btn" onclick="window._calToggleFilterPanel()"
       style="display:flex;align-items:center;gap:4px;padding:4px 10px;border:1.5px solid var(--gray-200);border-radius:20px;background:white;font-size:11px;font-weight:600;color:var(--gray-600);cursor:pointer;white-space:nowrap">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
       Filter
     </button>
   </div>
+
+  <!-- Color filter panel — inside header so it sticks with it -->
+  <div id="cal-filter-panel" style="display:none;border-top:1px solid var(--gray-100);padding:10px 16px;align-items:center;gap:10px;flex-wrap:wrap;background:white;">
+    <span style="font-size:11px;font-weight:600;color:var(--gray-500);white-space:nowrap">Show colors:</span>
+    <div id="cal-filter-swatches" style="display:flex;gap:8px;flex-wrap:wrap">
+      <!-- filled by JS -->
+    </div>
+    <button onclick="window._calResetFilter()" style="margin-left:auto;font-size:11px;color:var(--blue);background:none;border:none;cursor:pointer;font-weight:600;padding:2px 6px">Reset</button>
+  </div>
 </header>
 
-<!-- Color filter panel -->
-<div id="cal-filter-panel" class="hidden" style="background:white;border-bottom:1px solid var(--gray-100);padding:10px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-  <span style="font-size:11px;font-weight:600;color:var(--gray-500);white-space:nowrap">Show colors:</span>
-  <div id="cal-filter-swatches" style="display:flex;gap:6px;flex-wrap:wrap">
-    <!-- filled by JS after EVENT_COLORS loads -->
-  </div>
-  <button onclick="window._calResetFilter()" style="margin-left:auto;font-size:11px;color:var(--blue);background:none;border:none;cursor:pointer;font-weight:600;padding:2px 6px">Reset</button>
-</div>
 <style>
-  #cal-filter-panel.hidden { display:none !important; }
   #cal-filter-btn.has-filter { border-color:var(--blue);color:var(--blue);background:rgba(37,99,235,0.06); }
 </style>
 
