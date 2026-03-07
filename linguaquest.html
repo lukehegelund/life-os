@@ -206,8 +206,9 @@ const FRAME_H      = 32;   // player/NPC sprite frame height
 // Supabase — fill in from LifeOS keys
 const SUPABASE_URL = 'https://kxsuzgpnvtepsyhkezin.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4c3V6Z3BudnRlcHN5aGtlemluIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MTc3NzUwMCwiZXhwIjoyMDg3MzUzNTAwfQ.1cFNP2QOL7-qlNLAcKwGW11sHs9nyIMcIXqe_XD81Mc';
-// Claude API key loaded from LifeOS config (injected by LifeOS app shell, or enter below for standalone use)
-const CLAUDE_KEY   = window.LIFEOS_CLAUDE_KEY || '';
+// Claude API key — stored in sessionStorage by LifeOS, or entered manually on menu
+const CLAUDE_KEY_STORE = 'lq_claude_key';
+let CLAUDE_KEY = sessionStorage.getItem(CLAUDE_KEY_STORE) || window.LIFEOS_CLAUDE_KEY || '';
 
 // ── STATE ────────────────────────────────────────────────────
 let currentWorld    = null;
@@ -669,10 +670,10 @@ class GameScene extends Phaser.Scene {
 //  GAME INIT
 // ─────────────────────────────────────────────────────────────
 function startGame() {
-  // If no key from LifeOS, grab from the input box
-  if (!window.LIFEOS_CLAUDE_KEY) {
+  // Grab key from input if not already loaded
+  if (!CLAUDE_KEY) {
     const k = document.getElementById('key-input').value.trim();
-    if (k) window.LIFEOS_CLAUDE_KEY = k;
+    if (k) { CLAUDE_KEY = k; sessionStorage.setItem(CLAUDE_KEY_STORE, k); }
   }
   document.getElementById('menu').style.display = 'none';
   document.getElementById('prompt-bar').style.display = 'flex';
