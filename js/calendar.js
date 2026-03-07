@@ -179,7 +179,7 @@ async function fetchEvents() {
       .lte('wedding_date', endStr),
     supabase.from('classes').select('id, name, day_of_week, time_start, time_end, subject'),
     supabase.from('calendar_events')
-      .select('id, title, start_time, end_time, all_day, calendar_name, color, is_busy')
+      .select('id, title, start_time, end_time, all_day, calendar_name, color, is_busy, notes')
       .gte('start_time', startStr)
       .lte('start_time', endStr + 'T23:59:59'),
     supabase.from('time_blocks')
@@ -263,6 +263,7 @@ async function fetchEvents() {
       timeEnd:   ev.all_day ? null : endLocal,
       isBusy: ev.is_busy,
       editable: true,
+      notes: ev.notes || null,
     });
   }
 
@@ -548,7 +549,7 @@ function renderDayGrid() {
     const evTypeAttr = `data-ev-type="${e.type}"`;
 
     html += `<div class="wcal-ev${isEditable ? ' wcal-ev-editable' : ''}" ${evId} ${classIdAttr} ${evTypeAttr}
-      data-date="${ds}" data-start="${e.timeStart}" data-end="${e.timeEnd || ''}" data-title="${(e.title||'').replace(/"/g,'&quot;')}"
+      data-date="${ds}" data-start="${e.timeStart}" data-end="${e.timeEnd || ''}" data-title="${(e.title||'').replace(/"/g,'&quot;')}" data-notes="${(e.notes||'').replace(/"/g,'&quot;')}"
       style="position:absolute;top:${topPct}%;left:2px;right:2px;
         min-height:${heightPx}px;background:${e.color};border-radius:4px;
         padding:2px 5px;font-size:10px;font-weight:600;color:white;
@@ -676,7 +677,7 @@ function renderWeekGrid() {
       const evTypeAttr = `data-ev-type="${e.type}"`;
 
       html += `<div class="wcal-ev${isEditable ? ' wcal-ev-editable' : ''}" ${evId} ${classIdAttr} ${evTypeAttr}
-        data-date="${str}" data-start="${e.timeStart}" data-end="${e.timeEnd || ''}" data-title="${(e.title||'').replace(/"/g,'&quot;')}"
+        data-date="${str}" data-start="${e.timeStart}" data-end="${e.timeEnd || ''}" data-title="${(e.title||'').replace(/"/g,'&quot;')}" data-notes="${(e.notes||'').replace(/"/g,'&quot;')}"
         style="position:absolute;top:${topPct}%;left:2px;right:2px;
           min-height:${heightPx}px;background:${e.color};border-radius:4px;
           padding:2px 5px;font-size:10px;font-weight:600;color:white;
@@ -1006,7 +1007,7 @@ function attachWeekInteractions() {
         const evEnd   = evEl.dataset.end;
         const evDate  = evEl.dataset.date || colDateStr;
         if (evType === 'gcal') {
-          openEventPopup(evId, evStart, evEnd, evEl.dataset.title || evEl.title, evDate, evEl);
+          openEventPopup(evId, evStart, evEnd, evEl.dataset.title || evEl.title, evDate, evEl, evEl.dataset.notes || '');
         } else if (evType === 'class' && classId) {
           const className = evEl.dataset.title || evEl.title;
           openClassEditModal(classId, className, evStart, evEnd);
@@ -1370,7 +1371,7 @@ function _attachSwatchListeners(gridId, inputId) {
 }
 
 // ── Event detail popup (title + color swatches + edit + delete) ───────────────
-function openEventPopup(id, startTime, endTime, title, evDate, anchorEl) {
+function openEventPopup(id, startTime, endTime, title, evDate, anchorEl, notes = '') {
   removeModal();
   const rect = anchorEl.getBoundingClientRect();
   const currentColor = anchorEl.style.background || '#2563EB';
@@ -1394,9 +1395,25 @@ function openEventPopup(id, startTime, endTime, title, evDate, anchorEl) {
     padding:14px 14px 12px;box-shadow:0 8px 28px rgba(0,0,0,0.18);width:220px;
     top:${top}px;left:${left}px;border:1px solid var(--gray-200)`;
 
+  // Notes area — show inline editable textarea or placeholder
+  const notesHTML = `
+    <div id="ev-notes-wrap" style="margin-bottom:10px">
+      <textarea id="ev-notes-area"
+        placeholder="Add a note…"
+        style="width:100%;min-height:56px;max-height:140px;border:1.5px solid var(--gray-200);border-radius:8px;
+          padding:7px 10px;font-size:12px;color:var(--gray-700);resize:vertical;
+          outline:none;box-sizing:border-box;font-family:inherit;line-height:1.4;
+          background:var(--gray-50,#f9fafb);"
+        onfocus="this.style.borderColor='var(--blue)';this.style.background='white'"
+        onblur="this.style.borderColor='var(--gray-200)';this.style.background='var(--gray-50,#f9fafb)'"
+      >${(notes||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+      <button id="ev-notes-save" style="display:none;margin-top:4px;padding:4px 10px;border:none;border-radius:6px;background:var(--blue);color:white;font-size:11px;font-weight:700;cursor:pointer">Save note</button>
+    </div>`;
+
   popup.innerHTML = `
     <div style="font-size:13px;font-weight:700;color:var(--gray-800);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px">${title}</div>
     <div style="font-size:11px;color:var(--gray-400);margin-bottom:10px">${fmt12Range(startTime, endTime)}</div>
+    ${notesHTML}
     <div id="ev-color-swatches" style="display:grid;grid-template-columns:repeat(6,26px);gap:7px;margin-bottom:12px">
       ${swatchesHTML}
     </div>
@@ -1430,6 +1447,47 @@ function openEventPopup(id, startTime, endTime, title, evDate, anchorEl) {
       if (error) { toast('Color update failed', 'error'); render(); }
     });
   });
+
+  // ── Notes auto-save logic ─────────────────────────────────────────────────
+  const notesArea = document.getElementById('ev-notes-area');
+  const notesSaveBtn = document.getElementById('ev-notes-save');
+  let notesSaveTimer = null;
+  let lastSavedNotes = notes || '';
+
+  if (notesArea) {
+    notesArea.addEventListener('input', () => {
+      notesSaveBtn.style.display = notesArea.value !== lastSavedNotes ? 'inline-block' : 'none';
+    });
+
+    const saveNotes = async () => {
+      const newNotes = notesArea.value;
+      if (newNotes === lastSavedNotes) return;
+      notesSaveBtn.textContent = 'Saving…';
+      notesSaveBtn.disabled = true;
+      const { error } = await supabase.from('calendar_events').update({ notes: newNotes }).eq('id', id);
+      if (error) {
+        toast('Note save failed', 'error');
+        notesSaveBtn.textContent = 'Save note';
+        notesSaveBtn.disabled = false;
+      } else {
+        lastSavedNotes = newNotes;
+        notesSaveBtn.style.display = 'none';
+        notesSaveBtn.textContent = 'Save note';
+        notesSaveBtn.disabled = false;
+        // Update the data-notes attr on the event block so next popup open has latest
+        if (anchorEl) anchorEl.dataset.notes = newNotes;
+        toast('Note saved ✓', 'success');
+      }
+    };
+
+    notesSaveBtn.addEventListener('click', (e) => { e.stopPropagation(); saveNotes(); });
+
+    // Auto-save on blur (500ms debounce)
+    notesArea.addEventListener('blur', () => {
+      clearTimeout(notesSaveTimer);
+      notesSaveTimer = setTimeout(saveNotes, 300);
+    });
+  }
 
   // Close on outside click
   setTimeout(() => document.addEventListener('click', () => removeModal(), { once: true }), 10);
@@ -1470,11 +1528,13 @@ function openEventPopup(id, startTime, endTime, title, evDate, anchorEl) {
     const recurrence = (rows && rows[0] && rows[0].recurrence) || 'none';
     const groupId    = (rows && rows[0] && rows[0].recurrence_group_id) || null;
     const color      = (rows && rows[0] && rows[0].color) || '#2563EB';
-    openEditModal(id, title, evDate, startTime, endTime, recurrence, groupId, color);
+    // Re-fetch notes (might have been edited inline in popup)
+    const currentNotes = anchorEl?.dataset?.notes || notes || '';
+    openEditModal(id, title, evDate, startTime, endTime, recurrence, groupId, color, currentNotes);
   });
 }
 
-function openEditModal(id, title, evDate, startTime, endTime, currentRecur = 'none', groupId = null, currentColor = '#2563EB') {
+function openEditModal(id, title, evDate, startTime, endTime, currentRecur = 'none', groupId = null, currentColor = '#2563EB', currentNotes = '') {
   removeModal();
   const modal = document.createElement('div');
   modal.id = 'cal-ev-modal';
@@ -1538,6 +1598,16 @@ function openEditModal(id, title, evDate, startTime, endTime, currentRecur = 'no
           <input type="radio" name="eev-scope" value="all" style="accent-color:var(--blue)"> All events in series
         </label>
       </div>` : ''}
+      <div style="margin-bottom:14px">
+        <label style="font-size:11px;color:var(--gray-400);margin-bottom:6px;display:block">Notes</label>
+        <textarea id="eev-notes" placeholder="Add a note…"
+          style="width:100%;min-height:64px;border:1.5px solid var(--gray-200);border-radius:8px;padding:9px 12px;
+            font-size:13px;color:var(--gray-700);resize:vertical;outline:none;box-sizing:border-box;
+            font-family:inherit;line-height:1.4;background:var(--gray-50,#f9fafb);"
+          onfocus="this.style.borderColor='var(--blue)';this.style.background='white'"
+          onblur="this.style.borderColor='var(--gray-200)';this.style.background='var(--gray-50,#f9fafb)'"
+        >${(currentNotes||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+      </div>
       <div style="display:flex;gap:8px">
         <button onclick="document.getElementById('cal-ev-modal').remove()"
           style="flex:1;padding:10px;border:1.5px solid var(--gray-200);border-radius:8px;background:var(--white);font-size:14px;font-weight:600;color:var(--gray-600);cursor:pointer">
@@ -1573,6 +1643,7 @@ function openEditModal(id, title, evDate, startTime, endTime, currentRecur = 'no
     const end       = document.getElementById('eev-end').value;
     const newRecur  = recurEl.value;
     const newColor  = document.getElementById('eev-color').value;
+    const newNotes  = (document.getElementById('eev-notes')?.value) ?? currentNotes;
     const scopeEl   = document.querySelector('input[name="eev-scope"]:checked');
     const scope     = scopeEl ? scopeEl.value : 'this';
 
@@ -1657,7 +1728,7 @@ function openEditModal(id, title, evDate, startTime, endTime, currentRecur = 'no
     // Plain single-event update
     const { error } = await supabase.from('calendar_events').update({
       title: newTitle, start_time: startISO, end_time: endISO,
-      color: newColor, recurrence: newRecur,
+      color: newColor, recurrence: newRecur, notes: newNotes,
       recurrence_group_id: newRecur === 'none' ? null : newGroupId,
     }).eq('id', id);
     if (error) { toast('Error: ' + error.message, 'error'); if (btn) btn.disabled = false; return; }
