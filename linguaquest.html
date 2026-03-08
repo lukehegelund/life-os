@@ -9,6 +9,19 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { background: #1a1a2e; overflow: hidden; font-family: 'Georgia', serif; image-rendering: pixelated; }
 
+/* ── GAME CONTAINER (FULLSCREEN) ── */
+#game-container {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+#game-container canvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}
+
 /* ── MENU ── */
 #menu {
   position: fixed; inset: 0; z-index: 200;
@@ -21,12 +34,31 @@ body { background: #1a1a2e; overflow: hidden; font-family: 'Georgia', serif; ima
   image-rendering: auto;
 }
 #menu p  { color: #4a7a30; font-size: 12px; letter-spacing: 4px; text-transform: uppercase; }
+#key-input {
+  padding: 8px 14px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid #2a5018;
+  color: #90d050;
+  font-family: monospace;
+  font-size: 13px;
+  border-radius: 3px;
+  width: 320px;
+  outline: none;
+  display: none;
+}
+#key-input.visible { display: block; }
 #menu-start {
   margin-top: 28px; padding: 13px 52px; font-family: Georgia, serif; font-size: 16px;
   background: linear-gradient(180deg, #2a5010, #1a3408); border: 2px solid #5a9030;
   color: #a8e060; cursor: pointer; letter-spacing: 4px; border-radius: 3px; transition: all .2s;
 }
 #menu-start:hover { background: linear-gradient(180deg, #3a6018, #2a4410); transform: translateY(-1px); }
+#loading-menu {
+  display: none;
+  font-size: 12px;
+  color: #7ec850;
+  letter-spacing: 2px;
+}
 .menu-hint { font-size: 11px; color: #2a4a18; letter-spacing: 2px; }
 
 /* ── PROMPT BAR ── */
@@ -136,8 +168,9 @@ body { background: #1a1a2e; overflow: hidden; font-family: 'Georgia', serif; ima
 <div id="menu">
   <h1>LinguaQuest</h1>
   <p>An AI-Powered Language RPG</p>
+  <div id="loading-menu">Loading configuration...</div>
   <input id="key-input" type="password" placeholder="Claude API key (sk-ant-...)"
-    style="padding:8px 14px;background:rgba(255,255,255,.04);border:1px solid #2a5018;color:#90d050;font-family:monospace;font-size:13px;border-radius:3px;width:320px;outline:none">
+    style="">
   <button id="menu-start" onclick="startGame()">Begin Adventure</button>
   <span class="menu-hint">WASD to move · E to interact</span>
 </div>
@@ -190,11 +223,11 @@ body { background: #1a1a2e; overflow: hidden; font-family: 'Georgia', serif; ima
 
 <script>
 // ═══════════════════════════════════════════════════════════
-//  LINGUAQUEST — Phase 1 + Pixel Art Sprites
-//  Cute Fantasy Free asset pack (16px tiles, 32x32 sprites)
+//  LINGUAQUEST — Phase 2
+//  Upgraded with fullscreen fix, Supabase config loading, and beautiful world generation
 // ═══════════════════════════════════════════════════════════
 
-// ── ASSET PATHS (relative to this HTML file) ────────────────
+// ── ASSET PATHS ────────────────────────────────────────────────
 const ASSETS = 'Cute_Fantasy_Free/';
 
 // ── CONFIG ──────────────────────────────────────────────────
@@ -205,10 +238,12 @@ const FRAME_H      = 32;   // player/NPC sprite frame height
 
 // Supabase — fill in from LifeOS keys
 const SUPABASE_URL = 'https://kxsuzgpnvtepsyhkezin.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4c3V6Z3BudnRlcHN5aGtlemluIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MTc3NzUwMCwiZXhwIjoyMDg3MzUzNTAwfQ.1cFNP2QOL7-qlNLAcKwGW11sHs9nyIMcIXqe_XD81Mc';
-// Claude API key — stored in sessionStorage by LifeOS, or entered manually on menu
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4c3V6Z3BudnRlcHN5aGtlemluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3Nzc1MDAsImV4cCI6MjA4NzM1MzUwMH0.oKtpiH63heyK-wJ87ZRvkhUzRqy6NT6Z2XWF1xjbtxA';
+const SUPABASE_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4c3V6Z3BudnRlcHN5aGtlemluIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MTc3NzUwMCwiZXhwIjoyMDg3MzUzNTAwfQ.1cFNP2QOL7-qlNLAcKwGW11sHs9nyIMcIXqe_XD81Mc';
+
+// Claude API key — fetched from Supabase or entered manually
 const CLAUDE_KEY_STORE = 'lq_claude_key';
-let CLAUDE_KEY = sessionStorage.getItem(CLAUDE_KEY_STORE) || window.LIFEOS_CLAUDE_KEY || '';
+let CLAUDE_KEY = '';
 
 // ── STATE ────────────────────────────────────────────────────
 let currentWorld    = null;
@@ -253,7 +288,7 @@ const SAMPLE_WORLD = {
       id: "carlos", name: "Carlos",
       position: [4, 8], sprite: "skeleton",
       personality: "amigable, cansado, ama el mar",
-      ai_context: "Eres Carlos, un pescador retirado de 68 años. Extrañas tus días en el mar. Solo hablas español y eres paciente con los que aprenden.",
+      ai_context: "Eres Carlos, un pescador retirado de 68 años. Pasas las mañanas mirando el océano, rememorando tus años en el mar. Solo hablas español y eres paciente con los que aprenden, pero tu corazón siempre está en las olas.",
       greeting: "¡Buenas tardes, viajero! ¿Estás disfrutando nuestro pueblo?",
       vocab_focus: ["el mar","pescar","la red","el barco","las olas"]
     },
@@ -261,7 +296,7 @@ const SAMPLE_WORLD = {
       id: "maria", name: "María",
       position: [15, 3], sprite: "player",
       personality: "curiosa, amistosa, estudiante",
-      ai_context: "Eres María, 22 años, estudiante universitaria que regresa al pueblo en verano. Te encanta conocer gente nueva pero insistes en que el viajero practique español.",
+      ai_context: "Eres María, 22 años, estudiante universitaria que regresa al pueblo en verano. Te encanta conocer gente nueva pero insistes en que el viajero practique español. Tu secreto es que consideras dejar la ciudad para enseñar idiomas aquí.",
       greeting: "¡Hola! ¿De dónde eres? ¡Qué interesante!",
       vocab_focus: ["la ciudad","estudiar","aprender","hablar","practicar"]
     },
@@ -269,7 +304,7 @@ const SAMPLE_WORLD = {
       id: "tendero", name: "Don Miguel",
       position: [10, 8], sprite: "slime",
       personality: "serio, honesto, comerciante de pocas palabras",
-      ai_context: "Eres Don Miguel, el tendero. 30 años vendiendo provisiones. Eres justo pero breve. Solo español.",
+      ai_context: "Eres Don Miguel, el tendero desde hace 30 años. Eres justo pero breve. La mayoría piensa que eres serio, pero te complace ayudar a los viajeros inteligentes. Siempre hablas solo español.",
       greeting: "¿En qué le puedo ayudar?",
       vocab_focus: ["comprar","vender","el precio","las provisiones","la tienda"]
     }
@@ -300,6 +335,41 @@ const TILE_DEFS = {
 };
 
 // ─────────────────────────────────────────────────────────────
+//  CONFIG LOADING FROM SUPABASE
+// ─────────────────────────────────────────────────────────────
+async function loadConfig() {
+  document.getElementById('loading-menu').textContent = 'Loading configuration...';
+
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/app_secrets?key=eq.anthropic_api_key&select=value`,
+      {
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        }
+      }
+    );
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.length > 0 && data[0].value) {
+        CLAUDE_KEY = data[0].value;
+        sessionStorage.setItem(CLAUDE_KEY_STORE, CLAUDE_KEY);
+        document.getElementById('loading-menu').style.display = 'none';
+        return;
+      }
+    }
+  } catch (err) {
+    console.warn('Supabase config fetch failed, will prompt for key:', err);
+  }
+
+  // Fallback: show key input if Supabase fetch fails
+  document.getElementById('loading-menu').style.display = 'none';
+  document.getElementById('key-input').classList.add('visible');
+}
+
+// ─────────────────────────────────────────────────────────────
 //  PHASER SCENE
 // ─────────────────────────────────────────────────────────────
 class GameScene extends Phaser.Scene {
@@ -327,6 +397,7 @@ class GameScene extends Phaser.Scene {
     this.load.image('beach',    ASSETS + 'Tiles/Sand_Middle.png');
     this.load.image('farmland', ASSETS + 'Tiles/FarmLand_Tile.png');
     this.load.image('cliff',    ASSETS + 'Tiles/Cliff_Tile.png');
+    this.load.image('building', ASSETS + 'Tiles/Wood_Tile_1.png');
 
     // Decorations
     this.load.image('oak_tree',      ASSETS + 'Outdoor decoration/Oak_Tree.png');
@@ -675,6 +746,12 @@ function startGame() {
     const k = document.getElementById('key-input').value.trim();
     if (k) { CLAUDE_KEY = k; sessionStorage.setItem(CLAUDE_KEY_STORE, k); }
   }
+
+  if (!CLAUDE_KEY) {
+    showStatus('Please enter your Claude API key', 3000);
+    return;
+  }
+
   document.getElementById('menu').style.display = 'none';
   document.getElementById('prompt-bar').style.display = 'flex';
   document.getElementById('top-hud').style.display = 'flex';
@@ -690,12 +767,6 @@ function startGame() {
     scene: GameScene,
     pixelArt: true,
     antialias: false,
-    scale: {
-      mode: Phaser.Scale.RESIZE,
-      autoCenter: Phaser.Scale.CENTER_BOTH,
-      width: '100%',
-      height: '100%',
-    },
   };
 
   phaserGame = new Phaser.Game(config);
@@ -721,24 +792,97 @@ async function generateWorld() {
     ? `\n\nThe player is currently studying these words — prioritize them in NPC vocab_focus: ${srsVocab.slice(0,15).map(w=>w.word).join(', ')}`
     : '';
 
-  const systemPrompt = `You are a world designer for LinguaQuest, a language-learning RPG.
+  const systemPrompt = `You are an expert world designer for LinguaQuest, a language-learning RPG. You create beautiful, organic, immersive game worlds.
 
 Return ONLY raw valid JSON — no markdown, no code fences, no explanation.
 
-RULES:
-- Match this exact structure (adapt content to the prompt):
+CRITICAL DESIGN PRINCIPLES — encode these into every world you create:
+
+1. CLUSTERED DECORATION
+   - Trees always appear in natural clusters of 2–5, never isolated singles
+   - Rocks and flowers cluster together in natural groupings
+   - Decorations follow organic patterns, not grids
+
+2. ORGANIC PATHS
+   - Paths wind and curve naturally, never straight lines
+   - Use irregular, meandering shapes that guide players through zones
+   - Paths should feel discovered, not engineered
+
+3. ZONE VARIETY & STRUCTURE
+   - Every world must have 3–4 distinct, visually separate zones
+   - Examples: dense forest + clearing + settlement + water feature
+   - Each zone should feel purposeful and interconnected
+   - Think neighborhood blocks, forest sections, market areas
+
+4. TRANSITION TILES & NATURAL BORDERS
+   - Water must be bordered by beach/sand tiles (never water directly next to buildings)
+   - Forest areas fade from trees to grass at edges
+   - Sand/beach appears between water and grassland
+   - Transitions create natural visual flow
+
+5. BUILDING PLACEMENT
+   - Buildings cluster in 2–3 groups (not spread out)
+   - Buildings face paths and open areas
+   - Never place buildings isolated in wilderness
+   - Use 2x2 or 2x3 clusters (4–6 tiles) for substantial structures
+   - Space between clusters creates natural neighborhoods
+
+6. NATURAL LANDMARKS & FOCAL POINTS
+   - Every world needs ONE "heart" — a focal point players notice
+   - Examples: a well in the town center, a large ancient tree, a market square, a bridge, a pond
+   - Place this landmark where paths naturally converge
+   - It should feel like the world's most important location
+
+7. NPC PLACEMENT LOGIC
+   - Fisherman near water/boats
+   - Merchants near buildings/markets
+   - Farmers near farmland patches
+   - Guard/warrior near tall structures
+   - Each NPC contextually belongs to their location
+
+8. OPTIMAL TILE RATIOS
+   - ~60% open walkable ground (grass/path/sand)
+   - ~25% features (trees/buildings/rocks)
+   - ~15% water or impassable terrain (mountains/cliffs)
+
+9. WORLD SIZE
+   - Minimum: 22x16 tiles
+   - Maximum recommended: 28x20 tiles
+   - Larger worlds allow more interesting zone separation
+
+10. DEPTH & LAYERING
+    - Use 2x2 building clusters (4 tiles minimum) to make structures feel substantial
+    - Layer zones from background (forest) → middle (paths) → foreground (buildings)
+    - Vary tree sizes: mix oak_tree and oak_tree_small for natural appearance
+
+DESIGN PROCESS FOR EVERY WORLD:
+1. First, decide on 3–4 distinct zone themes (e.g., "forest section", "village square", "riverside dock", "rolling meadow")
+2. Sketch where paths connect these zones using winding routes
+3. Place building clusters (2–3 per zone) along major paths
+4. Fill zone edges and corners with tree clusters (groups of 2–5)
+5. Add water features in one section, bordered by sand
+6. Scatter small decorations: isolated farmland patches, chests, markers
+7. Place NPCs in contextually meaningful spots (fisherman by water, merchant by buildings, etc)
+8. Verify walkability: 60%+ of world must be grass/path/sand/farmland
+
+TECHNICAL REQUIREMENTS:
+- Match this exact structure (customize content to match the prompt):
 ${JSON.stringify(SAMPLE_WORLD, null, 2)}
 - tiles must be exactly size[1] rows, each row exactly size[0] items
 - Valid tile values: grass, path, water, beach, sand, tree, building, building_door, farmland, stone, cliff, chest
 - 60%+ of tiles must be walkable (grass, path, beach, sand, farmland, stone, building_door)
 - player_start must be on a walkable tile, not a tree or building
 - NPC positions must be on walkable tiles
-- 2–4 NPCs
+- 3–4 NPCs (more NPCs = richer world)
 - NPC sprite must be one of: player, skeleton, slime, chicken, cow
 - NPC greetings and vocab_focus must be in the target language
-- ai_context: 2–3 sentence character backstory
-- Choose language based on prompt context (es=Spanish default unless another is implied)
-- tileset options: town, nature, coastal, dungeon, farm, snow, desert, space${vocabContext}`;
+- ai_context: 3–4 rich sentences. Include: what they're doing RIGHT NOW (not just who they are), what they want, one secret or interesting fact, and their opinion of travelers/the player
+
+LANGUAGE & TONE:
+- Choose language based on prompt context (Spanish default unless another is implied)
+- NPC names should match language/culture
+- Vocabulary focus should reflect zone activities and NPC context
+- Create diverse, memorable personalities${vocabContext}`;
 
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -750,10 +894,10 @@ ${JSON.stringify(SAMPLE_WORLD, null, 2)}
         'anthropic-dangerous-direct-browser-access': 'true',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 4096,
+        model: 'claude-opus-4-6',
+        max_tokens: 6000,
         system: systemPrompt,
-        messages: [{ role: 'user', content: `Design a world for: "${prompt}"` }],
+        messages: [{ role: 'user', content: `Design a beautiful, organic world for: "${prompt}"\n\nRemember: think in zones, use natural clusters, create a focal landmark, and make NPCs contextually placed. Every element should feel like it belongs.` }],
       }),
     });
 
@@ -860,7 +1004,7 @@ async function fetchSRSVocab() {
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/vocab_words?select=word,translation,stage&next_review=lte.${today}&order=stage.asc&limit=20`,
-      { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+      { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
     );
     if (!res.ok) throw new Error();
     srsVocab = await res.json();
@@ -903,6 +1047,11 @@ document.addEventListener('keydown', e => {
   el.addEventListener('focus', () => { if (phaserGame) phaserGame.input.keyboard.enabled = false; });
   el.addEventListener('blur',  () => { if (phaserGame) phaserGame.input.keyboard.enabled = true; });
 });
+
+// ─────────────────────────────────────────────────────────────
+//  STARTUP
+// ─────────────────────────────────────────────────────────────
+loadConfig();
 </script>
 </body>
 </html>
