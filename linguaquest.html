@@ -15,10 +15,10 @@ body { background: #1a1a2e; overflow: hidden; font-family: 'Georgia', serif; ima
   inset: 0;
   width: 100%;
   height: 100%;
+  overflow: hidden;
 }
+/* Let Phaser Scale.RESIZE manage canvas dimensions — don't force-override with CSS */
 #game-container canvas {
-  width: 100% !important;
-  height: 100% !important;
   display: block;
 }
 
@@ -403,6 +403,9 @@ const SAMPLE_WORLD = {
 };
 
 // ── TILE DEFINITIONS ─────────────────────────────────────────
+// 'key' is the Phaser texture key for the BASE ground tile.
+// Trees/buildings/cliff are drawn as decorations ON TOP of the base tile.
+// 'tint' is an optional hex tint to apply to the base tile.
 const TILE_DEFS = {
   grass:         { key: 'grass',    walkable: true  },
   path:          { key: 'path',     walkable: true  },
@@ -410,12 +413,15 @@ const TILE_DEFS = {
   beach:         { key: 'beach',    walkable: true  },
   sand:          { key: 'beach',    walkable: true  },
   farmland:      { key: 'farmland', walkable: true  },
-  stone:         { key: 'path',     walkable: true  },
-  cliff:         { key: 'cliff',    walkable: false },
+  stone:         { key: 'path',     walkable: true,  tint: 0xaaaaaa },
+  cliff:         { key: 'grass',    walkable: false, tint: 0x888870 }, // dark grass base, cliff drawn on top
   tree:          { key: 'grass',    walkable: false },
-  building:      { key: 'building', walkable: false },
+  building:      { key: 'grass',    walkable: false, tint: 0xb8c8a0 }, // slightly different grass under building footprint
   building_door: { key: 'path',     walkable: true  },
   chest:         { key: 'grass',    walkable: true  },
+  mountain:      { key: 'grass',    walkable: false, tint: 0x888870 },
+  rock:          { key: 'grass',    walkable: false },
+  water_deep:    { key: 'water',    walkable: false, tint: 0x2266aa },
 };
 
 // ── NPC WANDER CONFIG ────────────────────────────────────────
@@ -469,30 +475,41 @@ class GameScene extends Phaser.Scene {
 
   preload() {
     // Tiles (16x16 each)
+    // ── Base tiles (all 16x16 single images) ──
     this.load.image('grass',    ASSETS + 'Tiles/Grass_Middle.png');
     this.load.image('path',     ASSETS + 'Tiles/Path_Middle.png');
     this.load.image('water',    ASSETS + 'Tiles/Water_Middle.png');
     this.load.image('beach',    ASSETS + 'Tiles/Sand_Middle.png');
     this.load.image('farmland', ASSETS + 'Tiles/FarmLand_Tile.png');
-    this.load.image('cliff',    ASSETS + 'Tiles/Cliff_Tile.png');
-    this.load.image('building', ASSETS + 'Tiles/Wood_Tile_1.png');
+    // NOTE: 'building' and 'cliff' tiles are drawn via Phaser graphics (no texture file), not loaded here
 
-    // Decorations
-    this.load.image('oak_tree',      ASSETS + 'Outdoor decoration/Oak_Tree.png');
-    this.load.image('oak_tree_small',ASSETS + 'Outdoor decoration/Oak_Tree_Small.png');
-    this.load.image('house',         ASSETS + 'Outdoor decoration/House_1_Wood_Base_Blue.png');
-    this.load.image('chest_sprite',  ASSETS + 'Outdoor decoration/Chest.png');
+    // ── Decoration sprites ──
+    this.load.image('oak_tree',        ASSETS + 'Outdoor decoration/Oak_Tree.png');        // 64x80 single tree
+    this.load.image('oak_tree_medium', ASSETS + 'Outdoor decoration/Oak_Tree_Medium.png'); // 32x48 cropped
+    this.load.image('oak_tree_large',  ASSETS + 'Outdoor decoration/Oak_Tree_Large.png');  // 32x48 cropped
+    this.load.image('house',           ASSETS + 'Outdoor decoration/House_1_Wood_Base_Blue.png'); // 96x128
+    this.load.image('chest_sprite',    ASSETS + 'Outdoor decoration/Chest.png');
+    this.load.image('rock_small',      ASSETS + 'Outdoor decoration/Rock_Small.png');      // 16x16 cropped
+    this.load.image('flower',          ASSETS + 'Outdoor decoration/Flower.png');          // 16x16 cropped
+    this.load.image('bridge',          ASSETS + 'Outdoor decoration/Bridge_Wood.png');     // 144x64
 
-    // Characters — 6-col × 10-row, 32x32 frames
+    // ── Characters — Player/Skeleton: 192x320, 6 cols x 10 rows, 32x32 frames ──
     this.load.spritesheet('player_ss',   ASSETS + 'Player/Player.png',
-      { frameWidth: FRAME_W, frameHeight: FRAME_H });
+      { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('skeleton_ss', ASSETS + 'Enemies/Skeleton.png',
-      { frameWidth: FRAME_W, frameHeight: FRAME_H });
+      { frameWidth: 32, frameHeight: 32 });
+    // Slime: 512x192, 64x64 frames
     this.load.spritesheet('slime_ss', ASSETS + 'Enemies/Slime_Green.png',
       { frameWidth: 64, frameHeight: 64 });
+    // Chicken/Cow: 32x32 frames
     this.load.spritesheet('chicken_ss', ASSETS + 'Animals/Chicken/Chicken.png',
       { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('cow_ss', ASSETS + 'Animals/Cow/Cow.png',
+      { frameWidth: 32, frameHeight: 32 });
+    // Pig/Sheep: 64x64 spritesheets, 2x2 grid of 32x32 frames
+    this.load.spritesheet('pig_ss',   ASSETS + 'Animals/Pig/Pig.png',
+      { frameWidth: 32, frameHeight: 32 });
+    this.load.spritesheet('sheep_ss', ASSETS + 'Animals/Sheep/Sheep.png',
       { frameWidth: 32, frameHeight: 32 });
   }
 
@@ -521,6 +538,12 @@ class GameScene extends Phaser.Scene {
     this._createAnim('chicken_ss', 'chicken_walk',  [6,7,8,9], 6);
     this._createAnim('cow_ss',     'cow_idle',      [0,1],     2);
     this._createAnim('cow_ss',     'cow_walk',      [6,7,8,9], 5);
+    // Pig: 2x2 grid of 32x32 = frames [0,1,2,3]
+    this._createAnim('pig_ss',     'pig_idle',      [0,1],     3);
+    this._createAnim('pig_ss',     'pig_walk',      [2,3],     5);
+    // Sheep: same layout
+    this._createAnim('sheep_ss',   'sheep_idle',    [0,1],     2);
+    this._createAnim('sheep_ss',   'sheep_walk',    [2,3],     4);
 
     // ── Input ──
     this.cursors = this.input.keyboard.createCursorKeys();
@@ -567,18 +590,20 @@ class GameScene extends Phaser.Scene {
     // ── TILE LAYER ──
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
-        const tileType = (tiles[row] && tiles[row][col]) || 'grass';
+        const tileType = (tiles[row]?.[col]) || 'grass';
         const def = TILE_DEFS[tileType] || TILE_DEFS.grass;
         const x = col * TILE_SIZE;
         const y = row * TILE_SIZE;
 
-        this.add.image(x, y, def.key).setOrigin(0, 0).setDisplaySize(TILE_SIZE, TILE_SIZE).setDepth(0);
+        const tile = this.add.image(x, y, def.key)
+          .setOrigin(0, 0).setDisplaySize(TILE_SIZE, TILE_SIZE).setDepth(0);
+        if (def.tint) tile.setTint(def.tint);
 
-        // Water shimmer
-        if (tileType === 'water') {
-          const g = this.add.graphics().setDepth(1);
-          g.fillStyle(0x4090d0, 0.12);
-          g.fillRect(x + 6, y + TILE_SIZE * 0.45, TILE_SIZE - 12, 3);
+        // Water shimmer stripe
+        if (tileType === 'water' || tileType === 'water_deep') {
+          this.add.graphics().setDepth(1)
+            .fillStyle(0x60b0e8, 0.15)
+            .fillRect(x + 6, y + TILE_SIZE * 0.42, TILE_SIZE - 12, 3);
         }
       }
     }
@@ -586,46 +611,110 @@ class GameScene extends Phaser.Scene {
     // ── DECORATION LAYER ──
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
-        const tileType = (tiles[row] && tiles[row][col]) || 'grass';
+        const tileType = (tiles[row]?.[col]) || 'grass';
         const cx = col * TILE_SIZE + TILE_SIZE / 2;
         const cy = row * TILE_SIZE + TILE_SIZE / 2;
+        const x  = col * TILE_SIZE;
+        const y  = row * TILE_SIZE;
 
+        // ── TREE ──
         if (tileType === 'tree') {
-          // Alternate oak / oak_small for variety
-          const isSmall = (row + col) % 3 === 0;
-          const treeKey = isSmall ? 'oak_tree_small' : 'oak_tree_small';
-          this.add.graphics().setDepth(row * 10 + 3).fillStyle(0x000000, 0.15)
-              .fillEllipse(cx, cy + TILE_SIZE * 0.35, 30, 10);
-          this.add.image(cx, cy, treeKey)
-            .setOrigin(0.5, 0.6).setScale(isSmall ? 1.1 : 1.3).setDepth(row * 10 + 5);
+          // Pick tree size based on position for variety
+          const variant = (row * 3 + col) % 4;
+          // shadow
+          this.add.graphics().setDepth(row * 10 + 3)
+            .fillStyle(0x000000, 0.14)
+            .fillEllipse(cx, cy + TILE_SIZE * 0.32, 34, 11);
+
+          if (variant === 0) {
+            // Large oak (64x80) — anchored at bottom-center
+            this.add.image(cx, cy + TILE_SIZE * 0.2, 'oak_tree')
+              .setOrigin(0.5, 0.85).setScale(0.95).setDepth(row * 10 + 5);
+          } else if (variant === 1) {
+            // Medium extracted tree (32x48)
+            this.add.image(cx, cy + TILE_SIZE * 0.18, 'oak_tree_medium')
+              .setOrigin(0.5, 0.85).setScale(1.35).setDepth(row * 10 + 5);
+          } else if (variant === 2) {
+            // Large extracted variant (32x48)
+            this.add.image(cx, cy + TILE_SIZE * 0.18, 'oak_tree_large')
+              .setOrigin(0.5, 0.85).setScale(1.45).setDepth(row * 10 + 5);
+          } else {
+            // Medium oak again, slightly different scale
+            this.add.image(cx, cy + TILE_SIZE * 0.18, 'oak_tree_medium')
+              .setOrigin(0.5, 0.85).setScale(1.15).setDepth(row * 10 + 5);
+          }
         }
 
+        // ── BUILDING CLUSTER ── draw house once per cluster (top-left corner only)
         if (tileType === 'building' || tileType === 'building_door') {
           const above = row > 0 ? (tiles[row-1]?.[col] || '') : '';
           const left  = col > 0 ? (tiles[row]?.[col-1] || '') : '';
           const aboveIsBldg = above === 'building' || above === 'building_door';
           const leftIsBldg  = left  === 'building' || left  === 'building_door';
           if (!aboveIsBldg && !leftIsBldg) {
-            this.add.graphics().setDepth(row * 10 + 3).fillStyle(0x000000, 0.2)
-                .fillEllipse(cx + TILE_SIZE/2, cy + TILE_SIZE * 0.9, 48, 14);
-            this.add.image(cx + TILE_SIZE / 2, cy - TILE_SIZE * 0.05, 'house')
-              .setOrigin(0.5, 0.5).setScale(1.4).setDepth(row * 10 + 6);
+            // How wide is this building cluster? count rightward
+            let clusterW = 1;
+            while (col + clusterW < cols) {
+              const right = tiles[row]?.[col + clusterW] || '';
+              if (right === 'building' || right === 'building_door') clusterW++;
+              else break;
+            }
+            // Center house over the cluster footprint
+            const hcx = x + (clusterW * TILE_SIZE) / 2;
+            // House is 96x128. Scale so it fits over cluster tiles visually
+            const hScale = Math.max(0.9, Math.min(1.6, clusterW * 0.8));
+            // Shadow under house
+            this.add.graphics().setDepth(row * 10 + 3)
+              .fillStyle(0x000000, 0.18)
+              .fillEllipse(hcx, cy + TILE_SIZE * 0.85, clusterW * TILE_SIZE * 0.8, 16);
+            this.add.image(hcx, cy - TILE_SIZE * 0.15, 'house')
+              .setOrigin(0.5, 0.75).setScale(hScale).setDepth(row * 10 + 6);
           }
         }
 
+        // ── CLIFF / MOUNTAIN ── draw as dark rocky mass
+        if (tileType === 'cliff' || tileType === 'mountain') {
+          const g = this.add.graphics().setDepth(row * 10 + 5);
+          g.fillStyle(0x6a6a58, 1);
+          g.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+          g.fillStyle(0x888878, 1);
+          g.fillRect(x + 4, y + 4, TILE_SIZE - 8, TILE_SIZE / 2 - 4);
+          g.fillStyle(0xaaaaaa, 0.5);
+          g.fillRect(x + 8, y + 6, 8, 4);
+        }
+
+        // ── ROCK ── draw small rock decoration
+        if (tileType === 'rock') {
+          const g = this.add.graphics().setDepth(row * 10 + 5);
+          g.fillStyle(0x000000, 0.12).fillEllipse(cx, cy + 8, 28, 9);
+          this.add.image(cx, cy, 'rock_small')
+            .setOrigin(0.5, 0.5).setDisplaySize(TILE_SIZE * 0.7, TILE_SIZE * 0.7)
+            .setDepth(row * 10 + 5);
+        }
+
+        // ── CHEST ──
         if (tileType === 'chest') {
+          this.add.graphics().setDepth(row * 10 + 4).fillStyle(0x000000, 0.15)
+            .fillEllipse(cx, cy + 10, 24, 8);
           this.add.image(cx, cy, 'chest_sprite')
             .setOrigin(0.5, 0.5).setScale(2.5).setDepth(row * 10 + 5);
         }
 
-        // Farmland row marks
+        // ── FARMLAND ROWS ──
         if (tileType === 'farmland') {
           const g = this.add.graphics().setDepth(1);
-          g.lineStyle(1, 0x8B6914, 0.35);
+          g.lineStyle(1, 0x8B6914, 0.40);
           for (let i = 0; i < 3; i++) {
             const fy = y + (i + 1) * (TILE_SIZE / 4);
             g.lineBetween(x + 4, fy, x + TILE_SIZE - 4, fy);
           }
+        }
+
+        // ── STONE VARIANT ── add subtle texture marks
+        if (tileType === 'stone') {
+          const g = this.add.graphics().setDepth(1);
+          g.lineStyle(1, 0x888888, 0.25);
+          g.strokeRect(x + 4, y + 4, TILE_SIZE - 8, TILE_SIZE - 8);
         }
       }
     }
@@ -663,11 +752,15 @@ class GameScene extends Phaser.Scene {
         case 'skeleton':
           spriteKey = 'skeleton_ss'; idleAnim = 'skel_idle'; walkAnim = 'skel_walk_down'; scale = SPRITE_SCALE; break;
         case 'slime':
-          spriteKey = 'slime_ss'; idleAnim = 'slime_idle'; walkAnim = 'slime_idle'; scale = 1.2; break;
+          spriteKey = 'slime_ss'; idleAnim = 'slime_idle'; walkAnim = 'slime_idle'; scale = 1.0; break;
         case 'chicken':
           spriteKey = 'chicken_ss'; idleAnim = 'chicken_idle'; walkAnim = 'chicken_walk'; scale = 2.0; break;
         case 'cow':
           spriteKey = 'cow_ss'; idleAnim = 'cow_idle'; walkAnim = 'cow_walk'; scale = 1.8; break;
+        case 'pig':
+          spriteKey = 'pig_ss'; idleAnim = 'pig_idle'; walkAnim = 'pig_walk'; scale = 1.8; break;
+        case 'sheep':
+          spriteKey = 'sheep_ss'; idleAnim = 'sheep_idle'; walkAnim = 'sheep_walk'; scale = 1.8; break;
         default:
           spriteKey = 'player_ss'; idleAnim = 'player_idle_down'; walkAnim = 'player_walk_down'; scale = SPRITE_SCALE; break;
       }
@@ -932,6 +1025,8 @@ function renderNPCPortrait(spriteType, npcId) {
     slime:    'slime_ss',
     chicken:  'chicken_ss',
     cow:      'cow_ss',
+    pig:      'pig_ss',
+    sheep:    'sheep_ss',
   }[spriteType] || 'player_ss';
 
   try {
@@ -951,7 +1046,8 @@ function renderNPCPortrait(spriteType, npcId) {
     ctx.font = '28px serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(spriteType === 'skeleton' ? '💀' : spriteType === 'slime' ? '🟢' : spriteType === 'chicken' ? '🐔' : spriteType === 'cow' ? '🐄' : '🧑', 24, 24);
+    const emoji = { skeleton:'💀', slime:'🟢', chicken:'🐔', cow:'🐄', pig:'🐷', sheep:'🐑' }[spriteType] || '🧑';
+    ctx.fillText(emoji, 24, 24);
   }
 }
 
@@ -1002,6 +1098,10 @@ function startGame() {
     height: window.innerHeight,
     parent: 'game-container',
     backgroundColor: '#1a2a1a',
+    scale: {
+      mode: Phaser.Scale.RESIZE,   // always fills the container
+      autoCenter: Phaser.Scale.CENTER_BOTH,
+    },
     physics: { default: 'arcade', arcade: { gravity: { y: 0 }, debug: false } },
     scene: GameScene,
     pixelArt: true,
@@ -1009,9 +1109,6 @@ function startGame() {
   };
 
   phaserGame = new Phaser.Game(config);
-  window.addEventListener('resize', () => {
-    if (phaserGame) phaserGame.scale.resize(window.innerWidth, window.innerHeight);
-  });
 
   fetchSRSVocab();
 }
@@ -1098,12 +1195,12 @@ TECHNICAL REQUIREMENTS:
 - Match this exact JSON structure (customize content to match prompt):
 ${JSON.stringify(SAMPLE_WORLD, null, 2)}
 - tiles must be exactly size[1] rows, each row exactly size[0] columns
-- Valid tile values: grass, path, water, beach, sand, tree, building, building_door, farmland, stone, cliff, chest
+- Valid tile values: grass, path, water, beach, sand, tree, building, building_door, farmland, stone, cliff, chest, rock, mountain
 - 60%+ of tiles must be walkable (grass, path, beach, sand, farmland, stone, building_door)
 - player_start must be on a walkable tile
-- NPC positions must be on walkable tiles
+- NPC positions must be on walkable tiles, not on tree/building/water/cliff/mountain/rock tiles
 - 3–4 NPCs
-- NPC sprite must be one of: player, skeleton, slime, chicken, cow
+- NPC sprite must be one of: player, skeleton, slime, chicken, cow, pig, sheep
 - NPC greetings and vocab_focus must be in the target language
 - ai_context: 3–4 rich sentences: what they're doing RIGHT NOW, what they want, one secret, opinion of travelers
 - personality: one vivid sentence
