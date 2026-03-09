@@ -7,7 +7,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js"></script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { background: #1a1a2e; overflow: hidden; font-family: 'Georgia', serif; image-rendering: pixelated; }
+html, body { background: #1a2a1a; overflow: hidden; font-family: 'Georgia', serif; image-rendering: pixelated; width: 100%; height: 100%; }
 
 /* ── GAME CONTAINER (FULLSCREEN) ── */
 #game-container {
@@ -17,9 +17,11 @@ body { background: #1a1a2e; overflow: hidden; font-family: 'Georgia', serif; ima
   height: 100%;
   overflow: hidden;
 }
-/* Let Phaser Scale.RESIZE manage canvas dimensions — don't force-override with CSS */
+/* Force canvas to fill the container completely */
 #game-container canvas {
   display: block;
+  width: 100% !important;
+  height: 100% !important;
 }
 
 /* ── MENU ── */
@@ -736,10 +738,7 @@ class GameScene extends Phaser.Scene {
         if (tileType === 'tree') {
           // Pick tree size based on position for variety
           const variant = (row * 3 + col) % 4;
-          // shadow
-          this.add.graphics().setDepth(row * 10 + 3)
-            .fillStyle(0x000000, 0.14)
-            .fillEllipse(cx, cy + TILE_SIZE * 0.32, 34, 11);
+          // (no manual shadow — sprite art includes its own shadow)
 
           if (variant === 0) {
             // Large oak (64x80) — anchored at bottom-center
@@ -778,10 +777,7 @@ class GameScene extends Phaser.Scene {
             const hcx = x + (clusterW * TILE_SIZE) / 2;
             // House is 96x128. Scale so it fits over cluster tiles visually
             const hScale = Math.max(0.9, Math.min(1.6, clusterW * 0.8));
-            // Shadow under house
-            this.add.graphics().setDepth(row * 10 + 3)
-              .fillStyle(0x000000, 0.18)
-              .fillEllipse(hcx, cy + TILE_SIZE * 0.85, clusterW * TILE_SIZE * 0.8, 16);
+            // (no manual shadow — house sprite has its own shadow baked in)
             this.add.image(hcx, cy - TILE_SIZE * 0.15, 'house')
               .setOrigin(0.5, 0.75).setScale(hScale).setDepth(row * 10 + 6);
           }
@@ -800,8 +796,6 @@ class GameScene extends Phaser.Scene {
 
         // ── ROCK ── draw small rock decoration
         if (tileType === 'rock') {
-          const g = this.add.graphics().setDepth(row * 10 + 5);
-          g.fillStyle(0x000000, 0.12).fillEllipse(cx, cy + 8, 28, 9);
           this.add.image(cx, cy, 'rock_small')
             .setOrigin(0.5, 0.5).setDisplaySize(TILE_SIZE * 0.7, TILE_SIZE * 0.7)
             .setDepth(row * 10 + 5);
@@ -809,8 +803,6 @@ class GameScene extends Phaser.Scene {
 
         // ── CHEST ──
         if (tileType === 'chest') {
-          this.add.graphics().setDepth(row * 10 + 4).fillStyle(0x000000, 0.15)
-            .fillEllipse(cx, cy + 10, 24, 8);
           this.add.image(cx, cy, 'chest_sprite')
             .setOrigin(0.5, 0.5).setScale(2.5).setDepth(row * 10 + 5);
         }
@@ -942,10 +934,6 @@ class GameScene extends Phaser.Scene {
         const aType = animalTypes[i % animalTypes.length];
         if (!this.textures.exists(aType.key)) continue;
 
-        // Shadow
-        this.add.graphics().setDepth(ar * 10 + 4)
-          .fillStyle(0x000000, 0.15).fillEllipse(ax, ay + 10, 22, 7);
-
         const aSprite = this.add.sprite(ax, ay, aType.key)
           .setScale(aType.scale).setDepth(ar * 10 + 6);
         this._safePlay(aSprite, aType.idle);
@@ -989,6 +977,11 @@ class GameScene extends Phaser.Scene {
     this.cameras.main.startFollow(this.playerSprite, true, 0.10, 0.10);
     this.cameras.main.setZoom(1.0);
 
+    // Keep camera bounds correct on window resize
+    this.scale.on('resize', (gameSize) => {
+      this.cameras.main.setViewport(0, 0, gameSize.width, gameSize.height);
+    });
+
     // ── SPAWN NPCs ──
     for (const npcDef of worldDef.npcs) {
       const [nc, nr] = npcDef.position;
@@ -1012,10 +1005,6 @@ class GameScene extends Phaser.Scene {
         default:
           spriteKey = 'player_ss'; idleAnim = 'player_idle_down'; walkAnim = 'player_walk_down'; scale = SPRITE_SCALE; break;
       }
-
-      // Shadow
-      this.add.graphics().setDepth(nr * 10 + 4)
-          .fillStyle(0x000000, 0.18).fillEllipse(nx, ny + FRAME_H * scale * 0.3, 28, 9);
 
       const npcSprite = this.add.sprite(nx, ny, spriteKey)
         .setScale(scale).setDepth(nr * 10 + 7);
@@ -1348,8 +1337,7 @@ function startGame() {
     parent: 'game-container',
     backgroundColor: '#1a2a1a',
     scale: {
-      mode: Phaser.Scale.RESIZE,   // always fills the container
-      autoCenter: Phaser.Scale.CENTER_BOTH,
+      mode: Phaser.Scale.RESIZE,   // canvas resizes to fill the container
     },
     physics: { default: 'arcade', arcade: { gravity: { y: 0 }, debug: false } },
     input: {
