@@ -787,7 +787,10 @@ window.toggleGoldCheck = (id, checked) => {
 };
 window.selectAll = () => {
   document.querySelectorAll('.gold-bulk-check').forEach(cb => {
-    cb.checked = true; goldChecked.add(Number(cb.id.replace('gc-', '')));
+    const sid = Number(cb.id.replace('gc-', ''));
+    const isPresent = attMap[sid] === 'Present';
+    cb.checked = isPresent;
+    if (isPresent) goldChecked.add(sid); else goldChecked.delete(sid);
   });
 };
 window.selectNone = () => {
