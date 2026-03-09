@@ -15,8 +15,20 @@ body{background:#1a2430;overflow:hidden;font-family:'Cinzel',Georgia,serif;user-
 .menu-sub{font-size:clamp(10px,1.4vw,13px);color:#7a9860;letter-spacing:6px;text-transform:uppercase;margin-top:10px;text-align:center;}
 .menu-tag{font-size:10px;color:#4a6838;letter-spacing:3px;text-transform:uppercase;margin-top:6px;text-align:center;}
 .menu-div{width:200px;height:1px;background:linear-gradient(90deg,transparent,#3a6820,transparent);margin:18px auto;}
-.start-btn{margin-top:36px;background:linear-gradient(180deg,#3a6818,#1e4008);border:2px solid #6aac30;border-radius:4px;color:#c8f080;font-family:'Cinzel',serif;font-size:18px;font-weight:600;padding:14px 60px;cursor:pointer;letter-spacing:4px;text-transform:uppercase;box-shadow:0 4px 20px rgba(80,160,40,.3),inset 0 1px 0 rgba(160,255,80,.2);transition:all .2s;}
+/* World prompt input */
+#world-prompt-wrap{margin-top:24px;display:flex;flex-direction:column;align-items:center;gap:8px;width:min(480px,90vw);}
+#world-prompt-label{font-size:10px;color:#4a6838;letter-spacing:3px;text-transform:uppercase;font-family:sans-serif;}
+#world-prompt{width:100%;background:rgba(0,0,0,.45);border:1px solid #3a6820;border-radius:4px;color:#c8f080;font-family:'Cinzel',serif;font-size:13px;padding:10px 14px;letter-spacing:1px;outline:none;transition:border-color .2s;resize:none;line-height:1.5;}
+#world-prompt:focus{border-color:#6aac30;box-shadow:0 0 0 2px rgba(106,172,48,.18);}
+#world-prompt::placeholder{color:#3a5828;font-family:sans-serif;font-size:12px;letter-spacing:0;}
+.prompt-chips{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;}
+.chip{background:rgba(40,80,20,.5);border:1px solid #3a6020;border-radius:20px;color:#78b848;font-size:10px;font-family:sans-serif;padding:4px 12px;cursor:pointer;letter-spacing:.5px;transition:all .15s;}
+.chip:hover{background:rgba(60,120,30,.6);border-color:#5a9030;color:#a8e870;}
+.start-btn{margin-top:20px;background:linear-gradient(180deg,#3a6818,#1e4008);border:2px solid #6aac30;border-radius:4px;color:#c8f080;font-family:'Cinzel',serif;font-size:18px;font-weight:600;padding:14px 60px;cursor:pointer;letter-spacing:4px;text-transform:uppercase;box-shadow:0 4px 20px rgba(80,160,40,.3),inset 0 1px 0 rgba(160,255,80,.2);transition:all .2s;}
 .start-btn:hover{background:linear-gradient(180deg,#4a8020,#2a5010);transform:translateY(-1px);box-shadow:0 4px 30px rgba(80,160,40,.5);}
+/* New world button in top bar */
+#new-world-btn{background:rgba(30,50,20,.7);border:1px solid #3a6020;border-radius:4px;color:#78b048;font-family:'Cinzel',serif;font-size:11px;padding:5px 14px;cursor:pointer;letter-spacing:1px;transition:all .15s;}
+#new-world-btn:hover{background:rgba(50,90,25,.8);border-color:#5a9030;color:#a8d860;}
 #top-bar{position:fixed;top:0;left:0;right:0;height:52px;background:linear-gradient(180deg,#111e0e,#0e180a);border-bottom:2px solid #3a6820;display:none;align-items:center;padding:0 16px;gap:12px;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,.6);}
 .empire-name{font-size:14px;font-weight:700;color:#a8d860;letter-spacing:3px;text-transform:uppercase;}
 .rpill{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.04);border:1px solid rgba(100,180,50,.2);border-radius:4px;padding:5px 12px;}
@@ -43,6 +55,18 @@ body{background:#1a2430;overflow:hidden;font-family:'Cinzel',Georgia,serif;user-
     <div class="menu-sub">Phaser Isometric</div>
     <div class="menu-tag">2.5D Polytopia-Style</div>
   </div>
+  <div id="world-prompt-wrap">
+    <div id="world-prompt-label">Describe your world</div>
+    <textarea id="world-prompt" rows="2" placeholder="e.g. &quot;icy arctic wasteland with frozen rivers&quot; or &quot;tropical island with jungles and volcanoes&quot;"></textarea>
+    <div class="prompt-chips">
+      <span class="chip" onclick="setPrompt('vast frozen tundra with blizzards and glaciers')">❄ Arctic</span>
+      <span class="chip" onclick="setPrompt('lush tropical jungle with rivers and rainforest')">🌴 Jungle</span>
+      <span class="chip" onclick="setPrompt('scorching desert empire with oases and dunes')">🏜 Desert</span>
+      <span class="chip" onclick="setPrompt('misty mountain kingdom with deep forests and rivers')">🏔 Highland</span>
+      <span class="chip" onclick="setPrompt('island archipelago with coasts and shallow seas')">🏝 Islands</span>
+      <span class="chip" onclick="setPrompt('mixed temperate land with forests plains and hills')">🌿 Classic</span>
+    </div>
+  </div>
   <button class="start-btn" onclick="startGame()">Begin</button>
 </div>
 <div id="top-bar">
@@ -50,6 +74,7 @@ body{background:#1a2430;overflow:hidden;font-family:'Cinzel',Georgia,serif;user-
   <div class="rpill"><span class="i">🏙</span><span class="v" id="res-cities">0</span><span class="l">CITIES</span></div>
   <div class="rpill"><span class="i">⚔</span><span class="v" id="res-units">1</span><span class="l">UNITS</span></div>
   <div class="spacer"></div>
+  <button id="new-world-btn" onclick="returnToMenu()">🗺 New World</button>
   <span id="turn-info">Turn 1</span>
   <button class="turn-btn" onclick="endTurn()">End Turn ▶</button>
 </div>
@@ -113,19 +138,8 @@ const TERRAIN = {
   snow:     {label:'Snow',     passable:false, top:'#d8eec8',lt:'#eef8e0',side:'#8ab880',dark:'#609858',water:false},
 };
 
-const MAP_DATA=[
-  ['ocean','ocean','ocean','coast','coast','plains','plains','forest','forest','hill','hill','mountain','mountain','tundra','tundra','ocean','ocean','ocean'],
-  ['ocean','ocean','coast','coast','plains','plains','grassland','forest','forest','forest','hill','mountain','tundra','tundra','snow','snow','ocean','ocean'],
-  ['ocean','coast','coast','plains','plains','grassland','grassland','river','plains','forest','forest','hill','hill','tundra','snow','snow','tundra','ocean'],
-  ['ocean','coast','plains','plains','grassland','grassland','river','river','plains','plains','forest','forest','hill','hill','tundra','tundra','ocean','ocean'],
-  ['coast','plains','plains','grassland','grassland','plains','plains','river','plains','plains','plains','forest','forest','desert','desert','tundra','ocean','ocean'],
-  ['coast','plains','grassland','grassland','plains','plains','plains','plains','hill','hill','plains','plains','desert','desert','desert','desert','coast','ocean'],
-  ['coast','plains','plains','grassland','plains','plains','hill','hill','hill','mountain','mountain','desert','desert','desert','hill','coast','coast','ocean'],
-  ['ocean','coast','plains','plains','forest','forest','forest','hill','mountain','mountain','desert','desert','hill','hill','coast','coast','ocean','ocean'],
-  ['ocean','coast','coast','plains','plains','forest','forest','forest','hill','hill','desert','desert','coast','coast','ocean','ocean','ocean','ocean'],
-  ['ocean','ocean','coast','coast','plains','plains','forest','forest','grassland','grassland','coast','coast','ocean','ocean','ocean','ocean','ocean','ocean'],
-  ['ocean','ocean','ocean','coast','coast','plains','plains','grassland','coast','coast','ocean','ocean','ocean','ocean','ocean','ocean','ocean','ocean'],
-];
+// MAP_DATA is now generated procedurally — see generateMap() below
+let MAP_DATA = [];
 
 // ── ISO POSITION ──
 // Returns the screen coordinate of the diamond TOP VERTEX for tile (col,row)
@@ -142,6 +156,127 @@ function hexDist(c1,r1,c2,r2){const t=(c,r)=>{const x=c-(r-(r&1))/2,z=r;return{x
 function getNeighbors(col,row){const d=row%2===0?[[-1,-1],[0,-1],[-1,0],[1,0],[-1,1],[0,1]]:[[0,-1],[1,-1],[-1,0],[1,0],[0,1],[1,1]];return d.map(([dc,dr])=>({col:col+dc,row:row+dr})).filter(n=>n.col>=0&&n.col<COLS&&n.row>=0&&n.row<ROWS);}
 function getMovable(unit,r=2){const res=[];for(let row=0;row<ROWS;row++)for(let col=0;col<COLS;col++){if(col===unit.col&&row===unit.row)continue;if(hexDist(unit.col,unit.row,col,row)<=r&&TERRAIN[MAP_DATA[row][col]].passable&&!GS.units.some(u=>u.col===col&&u.row===row))res.push({col,row});}return res;}
 function seededRng(s){let n=s;return()=>{n=(n*1664525+1013904223)&0xffffffff;return(n>>>0)/0xffffffff;};}
+
+// ── PROMPT → WORLD THEME ──
+// Parse the user's text prompt into terrain weights
+function promptToTheme(prompt) {
+  const p = (prompt||'').toLowerCase();
+  // Defaults: balanced temperate world
+  const w = {ocean:14,coast:10,plains:18,grassland:16,forest:14,hill:10,mountain:6,desert:4,tundra:4,river:4,snow:0};
+
+  if (/arctic|frozen|ice|snow|blizzard|glacier|polar|tundra/.test(p)) {
+    Object.assign(w,{ocean:8,coast:6,plains:4,grassland:2,forest:4,hill:8,mountain:10,desert:0,tundra:24,river:4,snow:30});
+  } else if (/desert|sand|dune|arid|sahara|scorching|dry/.test(p)) {
+    Object.assign(w,{ocean:4,coast:6,plains:12,grassland:4,forest:2,hill:10,mountain:6,desert:42,tundra:0,river:6,snow:0});
+  } else if (/jungle|tropical|rainforest|lush|humid|amazon/.test(p)) {
+    Object.assign(w,{ocean:10,coast:8,plains:8,grassland:14,forest:34,hill:8,mountain:4,desert:0,tundra:0,river:14,snow:0});
+  } else if (/island|archipelago|sea|coast|marine|ocean/.test(p)) {
+    Object.assign(w,{ocean:28,coast:20,plains:14,grassland:10,forest:10,hill:6,mountain:4,desert:2,tundra:0,river:4,snow:0});
+  } else if (/mountain|highland|alpine|peak|ridge|volcano/.test(p)) {
+    Object.assign(w,{ocean:6,coast:6,plains:10,grassland:8,forest:14,hill:18,mountain:24,desert:2,tundra:6,river:6,snow:8});
+  } else if (/swamp|marsh|wetland|bog|fen/.test(p)) {
+    Object.assign(w,{ocean:6,coast:10,plains:10,grassland:16,forest:18,hill:4,mountain:2,desert:0,tundra:0,river:28,snow:0});
+  } else if (/plains|prairie|steppe|grassland|meadow/.test(p)) {
+    Object.assign(w,{ocean:6,coast:8,plains:30,grassland:28,forest:10,hill:8,mountain:4,desert:4,tundra:0,river:10,snow:0});
+  }
+  // Normalize to array of [type, weight] pairs
+  return w;
+}
+
+// ── PROCEDURAL MAP GENERATOR ──
+// Uses OpenSimplex-style noise via a seeded approach to create continent shapes,
+// then biases terrain type by the theme weights.
+function generateMap(prompt) {
+  const seed = [...(prompt||'random world')].reduce((a,c)=>((a<<5)-a+c.charCodeAt(0))|0, 0) + Date.now();
+  const rng = seededRng(Math.abs(seed) % 0x7fffffff);
+
+  // Theme weights
+  const themeW = promptToTheme(prompt);
+  const totalW = Object.values(themeW).reduce((a,b)=>a+b,0);
+
+  // Weighted random terrain picker
+  function pickTerrain(extraOcean) {
+    let r = rng() * totalW;
+    if (extraOcean) r = rng() * totalW * 0.5; // bias toward ocean/coast near edges
+    for (const [type, w] of Object.entries(themeW)) {
+      r -= w; if (r <= 0) return type;
+    }
+    return 'ocean';
+  }
+
+  // Simple noise: sum of several offset seeded rngs = smooth-ish values
+  const noiseSeeds = Array.from({length:8},()=>Math.floor(rng()*0x7fffffff));
+  function noise(c, r) {
+    let v = 0;
+    for (let i=0; i<noiseSeeds.length; i++) {
+      const freq = 0.18 + i*0.09;
+      const rngN = seededRng((noiseSeeds[i]+c*7+r*13)%0x7fffffff);
+      v += rngN() * (1/(i+1));
+    }
+    return v / noiseSeeds.reduce((a,_,i)=>a+1/(i+1),0);
+  }
+
+  // Distance from center (0–1) — used for ocean border shaping
+  const cx = COLS/2, cy = ROWS/2;
+  function edgeFactor(c, r) {
+    const dx = Math.abs(c - cx) / (COLS/2), dy = Math.abs(r - cy) / (ROWS/2);
+    return Math.max(dx, dy); // 0=center, 1=corner
+  }
+
+  const map = [];
+  for (let r = 0; r < ROWS; r++) {
+    const row = [];
+    for (let c = 0; c < COLS; c++) {
+      const n = noise(c, r);
+      const edge = edgeFactor(c, r);
+
+      // Force ocean border
+      if (edge > 0.82) { row.push('ocean'); continue; }
+      if (edge > 0.70 && n < 0.55) { row.push(rng() < 0.6 ? 'ocean' : 'coast'); continue; }
+      if (edge > 0.60 && n < 0.45) { row.push(rng() < 0.45 ? 'coast' : pickTerrain(false)); continue; }
+
+      // Use noise to decide base terrain, then bias by theme
+      let type;
+      if (n < 0.30) {
+        type = 'ocean';
+      } else if (n < 0.38) {
+        type = 'coast';
+      } else {
+        // Inner land — fully theme-driven
+        type = pickTerrain(false);
+        // Prevent ocean/coast from appearing deep inland
+        if ((type === 'ocean' || type === 'coast') && edge < 0.45) {
+          type = pickTerrain(false);
+          if (type === 'ocean' || type === 'coast') type = 'plains';
+        }
+      }
+      row.push(type);
+    }
+    map.push(row);
+  }
+
+  // Post-pass: smooth isolated 1-tile singletons (prevents total chaos)
+  for (let r = 1; r < ROWS-1; r++) {
+    for (let c = 1; c < COLS-1; c++) {
+      const neighbors = [map[r-1][c],map[r+1][c],map[r][c-1],map[r][c+1]];
+      const cur = map[r][c];
+      const same = neighbors.filter(t=>t===cur).length;
+      if (same === 0) {
+        // Completely isolated — blend with most common neighbor
+        const freq = {};
+        neighbors.forEach(t=>{ freq[t]=(freq[t]||0)+1; });
+        map[r][c] = Object.entries(freq).sort((a,b)=>b[1]-a[1])[0][0];
+      }
+    }
+  }
+
+  return map;
+}
+
+// Quick-fill prompt textarea from chip click
+function setPrompt(text) {
+  document.getElementById('world-prompt').value = text;
+}
 
 // ── COLOR UTILS ──
 function hexToRgb(h){const n=parseInt(h.slice(1),16);return{r:(n>>16)&255,g:(n>>8)&255,b:n&255};}
@@ -1222,10 +1357,44 @@ function showStatus(msg,d=2500){const el=document.getElementById('status-msg');e
 
 // ── INIT ──
 let phaserGame=null;
+
+function returnToMenu(){
+  // Fully destroy the Phaser instance so the old world is gone
+  if(phaserGame){
+    phaserGame.destroy(true);  // true = remove canvas from DOM
+    phaserGame=null;
+    scene_ref=null;
+  }
+  // Reset game state
+  GS.turn=1; GS.cities=[]; GS.units=[]; GS.selectedUnit=null; GS.moveHighlights=[]; GS.nextCityId=1; GS.nextUnitId=1;
+  // Clear the game container (Phaser.destroy should do it, but belt+suspenders)
+  const gc=document.getElementById('game-container');
+  gc.innerHTML='';
+  // Show menu, hide HUD
+  document.getElementById('menu-overlay').style.display='flex';
+  document.getElementById('top-bar').style.display='none';
+  document.getElementById('bot-panel').style.display='none';
+  document.getElementById('turn-info').textContent='Turn 1';
+}
+
 function startGame(){
+  // Generate fresh map from prompt
+  const prompt = (document.getElementById('world-prompt')||{}).value || '';
+  MAP_DATA = generateMap(prompt);
+
+  // Hide menu, show HUD
   document.getElementById('menu-overlay').style.display='none';
   document.getElementById('top-bar').style.display='flex';
   document.getElementById('bot-panel').style.display='flex';
+
+  // Destroy any existing game first (handles "New World" → menu → Begin flow)
+  if(phaserGame){
+    phaserGame.destroy(true);
+    phaserGame=null;
+    scene_ref=null;
+    document.getElementById('game-container').innerHTML='';
+  }
+
   phaserGame=new Phaser.Game({
     type:Phaser.AUTO, width:window.innerWidth, height:window.innerHeight-TOP_H-BOT_H,
     parent:'game-container', backgroundColor:'#1a2430', scene:[GameScene],
