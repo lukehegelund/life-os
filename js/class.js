@@ -72,7 +72,6 @@ async function load() {
     loadTodayNotes(),
     loadRoster(cls),
     loadGoldBulk(),
-    loadRecentNotes(),
     loadAttendanceGrid(),
     cls.track_pages !== 'None' ? loadAnalytics() : Promise.resolve(),
   ]);
@@ -848,79 +847,6 @@ window.submitBulkGold = async () => {
   document.getElementById('gold-amount').value = '';
   document.getElementById('gold-reason').value = '';
   loadGoldBulk();
-};
-
-// ── Recent Notes (class-level) — show notes logged as of selectedDate ─────
-async function loadRecentNotes() {
-  const el = document.getElementById('recent-notes');
-  const res = await supabase.from('student_notes')
-    .select('*, students(id, name), classes(name)')
-    .eq('class_id', classId)
-    .eq('logged', false)
-    .lte('date', selectedDate)
-    .order('date', { ascending: false })
-    .limit(20);
-  const notes = res.data || [];
-
-  // Fetch all classes for the class-change dropdown
-  const classesRes = await supabase.from('classes').select('id, name').order('name');
-  const allClasses = classesRes.data || [];
-
-  if (!notes.length) { showEmpty(el, '📝', 'No active notes for this class'); return; }
-
-  el.innerHTML = notes.map(n => `
-    <div class="note-row-desktop" data-id="${n.id}" id="note-${n.id}">
-      <div style="flex:1">
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-          <strong style="font-size:14px">${n.students?.name || '—'}</strong>
-          ${n.show_in_overview ? '<span class="flag-badge flag-overview">👁</span>' : ''}
-          ${n.is_todo ? '<span class="flag-badge flag-todo">✅</span>' : ''}
-          ${n.tell_parent ? '<span class="flag-badge flag-parent">📞</span>' : ''}
-        </div>
-        <div style="font-size:13px;color:var(--gray-600);margin-top:2px">${n.note || '—'}</div>
-        <div style="font-size:12px;color:var(--gray-400);margin-top:2px;display:flex;align-items:center;gap:6px">
-          ${fmtDate(n.date)}
-          <select class="note-class-select" onchange="changeNoteClass('${n.id}', this.value)" style="font-size:11px;border:1px solid var(--gray-200);border-radius:4px;padding:1px 4px;color:var(--gray-600)">
-            ${allClasses.map(c => `<option value="${c.id}" ${c.id === n.class_id ? 'selected' : ''}>${c.name}</option>`).join('')}
-          </select>
-        </div>
-      </div>
-      <div style="display:flex;gap:4px;flex-shrink:0;align-items:flex-start">
-        <button class="btn btn-sm" style="background:var(--green-light);color:var(--green);border:none;font-size:11px;padding:3px 7px" onclick="logRecentNote('${n.id}')">✓ Log</button>
-        <button class="btn btn-sm" style="background:var(--coral-light);color:var(--red);border:none;font-size:11px;padding:3px 7px" onclick="deleteRecentNote('${n.id}')">✕ Del</button>
-      </div>
-    </div>`).join('');
-
-  // Also attach swipe for mobile
-  el.querySelectorAll('.note-row-desktop').forEach(item => {
-    const noteId = item.dataset.id;
-    initSwipe(item,
-      async () => { await deleteRecentNoteById(noteId); loadRecentNotes(); },
-      async () => { await logRecentNoteById(noteId); loadRecentNotes(); }
-    );
-  });
-}
-
-async function logRecentNoteById(noteId) {
-  await supabase.from('student_notes').update({ logged: true, logged_at: new Date().toISOString() }).eq('id', noteId);
-  toast('Note logged ✓', 'success');
-}
-async function deleteRecentNoteById(noteId) {
-  await supabase.from('student_notes').delete().eq('id', noteId);
-  toast('Note deleted', 'info');
-}
-
-window.logRecentNote = async (noteId) => {
-  await logRecentNoteById(noteId);
-  loadRecentNotes();
-};
-window.deleteRecentNote = async (noteId) => {
-  await deleteRecentNoteById(noteId);
-  loadRecentNotes();
-};
-window.changeNoteClass = async (noteId, newClassId) => {
-  await supabase.from('student_notes').update({ class_id: Number(newClassId) }).eq('id', noteId);
-  toast('Note moved', 'success');
 };
 
 // ── Attendance Grid — relative to selectedDate ────────────────────────────
