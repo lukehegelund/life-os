@@ -561,7 +561,16 @@ class GameScene extends Phaser.Scene {
       interact: Phaser.Input.Keyboard.KeyCodes.E,
     });
 
+    // Pre-bake autotile textures so loadWorld can use simple images instead of per-tile quads
+    this._prebakeAutotiles('path_tiles',  'at_path_');
+    this._prebakeAutotiles('water_tiles', 'at_water_');
+
     this.loadWorld(SAMPLE_WORLD);
+  }
+
+  // No pre-baking needed — autotile is drawn per-tile in _drawAutotile
+  _prebakeAutotiles(texKey, prefix) {
+    // (intentionally empty — keeping method for forward compatibility)
   }
 
   _createAnim(key, name, frames, frameRate, repeat = -1) {
@@ -583,40 +592,32 @@ class GameScene extends Phaser.Scene {
   }
 
   // ─────────────────────────────────────────────────────────────
-  //  AUTOTILE RENDERER
+  //  AUTOTILE RENDERER  (RPG-Maker 4-quadrant style)
   //
-  //  Tileset layout (Path_Tile.png / Water_Tile.png — 48×96, 16px cells):
-  //  Frame numbers (col + row*3):
+  //  Draws one TILE_SIZE×TILE_SIZE tile by compositing 4 quadrants.
+  //  Each quadrant crops 8×8 from the correct 16×16 frame, scaled 3× to 24px.
+  //  A single RenderTexture per tile ensures no seams between quadrants.
   //
-  //    [0] TL-outer  [1] T-edge   [2] TR-outer
-  //    [3] L-edge    [4] fill     [5] R-edge
-  //    [6] BL-outer  [7] B-edge   [8] BR-outer
-  //    [9] TL-inner  [10] TR-inner  —
-  //    [12] BL-inner [13] BR-inner  —
-  //    [15] center-a [16] center-b [17] center-c
-  //
-  //  Autotile renderer — 4-quadrant RPG-Maker style
-  //
-  //  The asset (Path_Tile.png / Water_Tile.png) is a 48×96 spritesheet of
-  //  18 frames (3 cols × 6 rows, each 16×16px) encoding every connectivity
-  //  variant: outer corners, edges, inner corners, and fill.
-  //
-  //  For each rendered tile we output 4 sub-images (quadrants, each 24×24px).
-  //  Each quadrant checks 2 cardinal neighbors + 1 diagonal to pick the right
-  //  frame, then uses setCrop to extract the correct 8×8 half of that frame,
-  //  and setDisplaySize to stretch it to 24×24px.
+  //  Spritesheet frames (row*3+col from Path_Tile.png / Water_Tile.png):
+  //    F0 TL-outer  F1 T-edge   F2 TR-outer
+  //    F3 L-edge    F4 fill     F5 R-edge
+  //    F6 BL-outer  F7 B-edge   F8 BR-outer
+  //    F9 TL-inner  F10 TR-inner
+  //    F12 BL-inner F13 BR-inner
   // ─────────────────────────────────────────────────────────────
   _drawAutotile(texKey, x, y, depth, tiles, col, row, cols, rows, matchFn) {
-    const QS = TILE_SIZE / 2;  // 24px per quadrant
+    if (!this.textures.exists(texKey)) return;
 
-    // Is the neighbor tile the same autotile type?
+    const TS = TILE_SIZE;
+    const QS = TS / 2;   // 24px per quadrant
+    const SC = 3;         // 8px source → 24px = QS
+
     const same = (dc, dr) => {
       const nc = col + dc, nr = row + dr;
       if (nc < 0 || nc >= cols || nr < 0 || nr >= rows) return true;
       return matchFn(tiles[nr]?.[nc] || 'grass');
     };
 
-    // Frame index = row * 3 + col in the spritesheet
     const F = {
       TL_out:0, T_edge:1, TR_out:2,
       L_edge:3, fill:4,   R_edge:5,
@@ -625,53 +626,35 @@ class GameScene extends Phaser.Scene {
       BL_in:12, BR_in:13,
     };
 
-    // 4 quadrants: each picks a frame then crops the relevant 8×8 half.
-    // sx/sy = top-left corner of the 8×8 crop inside the 16×16 frame.
-    //
-    //   TL quad → bottom-right 8px of frame: crop (8,8)
-    //   TR quad → bottom-left  8px of frame: crop (0,8)
-    //   BL quad → top-right    8px of frame: crop (8,0)
-    //   BR quad → top-left     8px of frame: crop (0,0)
+    // Each quadrant: world offset (dx,dy), crop offset in frame (sx,sy), and its 3 neighbors
     const quads = [
-      { dx:0,  dy:0,  sx:8, sy:8,
-        N:same(0,-1), E:same(-1,0), D:same(-1,-1),
+      { dx:0,  dy:0,  sx:8, sy:8, N:same(0,-1), E:same(-1,0), D:same(-1,-1),
         Fout:F.TL_out, FedgeN:F.T_edge, FedgeE:F.L_edge, Fin:F.TL_in },
-      { dx:QS, dy:0,  sx:0, sy:8,
-        N:same(0,-1), E:same(1,0),  D:same(1,-1),
+      { dx:QS, dy:0,  sx:0, sy:8, N:same(0,-1), E:same(1,0),  D:same(1,-1),
         Fout:F.TR_out, FedgeN:F.T_edge, FedgeE:F.R_edge, Fin:F.TR_in },
-      { dx:0,  dy:QS, sx:8, sy:0,
-        N:same(0,1),  E:same(-1,0), D:same(-1,1),
+      { dx:0,  dy:QS, sx:8, sy:0, N:same(0,1),  E:same(-1,0), D:same(-1,1),
         Fout:F.BL_out, FedgeN:F.B_edge, FedgeE:F.L_edge, Fin:F.BL_in },
-      { dx:QS, dy:QS, sx:0, sy:0,
-        N:same(0,1),  E:same(1,0),  D:same(1,1),
+      { dx:QS, dy:QS, sx:0, sy:0, N:same(0,1),  E:same(1,0),  D:same(1,1),
         Fout:F.BR_out, FedgeN:F.B_edge, FedgeE:F.R_edge, Fin:F.BR_in },
     ];
 
-    // scale: each source pixel = 3 rendered pixels (16px frame → 48px, 8px crop → 24px = QS)
-    const scale = 3;
+    // Composite all 4 quadrants into one RenderTexture to avoid inter-quadrant seams
+    const rt = this.add.renderTexture(x, y, TS, TS).setOrigin(0, 0).setDepth(depth);
 
     for (const q of quads) {
       let frame;
-      if      (!q.N && !q.E)            frame = q.Fout;   // outer corner
-      else if (!q.N &&  q.E)            frame = q.FedgeN; // perpendicular edge (N open)
-      else if ( q.N && !q.E)            frame = q.FedgeE; // perpendicular edge (E open)
-      else if ( q.N &&  q.E && !q.D)   frame = q.Fin;    // inner concave corner
-      else                               frame = F.fill;   // fully enclosed
+      if      (!q.N && !q.E)           frame = q.Fout;
+      else if (!q.N &&  q.E)           frame = q.FedgeN;
+      else if ( q.N && !q.E)           frame = q.FedgeE;
+      else if ( q.N &&  q.E && !q.D)  frame = q.Fin;
+      else                              frame = F.fill;
 
-      // setCrop(sx, sy, 8, 8) extracts the right 8×8 region in TEXTURE SPACE.
-      // With setScale(3), each source pixel = 3 rendered pixels, so:
-      //   16px frame → 48px rendered
-      //   8px crop   → 24px = QS rendered  ✓
-      //
-      // But the crop appears at (sx*3, sy*3) FROM the image's world anchor.
-      // To land the crop at (x+dx, y+dy), we shift the image left/up by (sx*3, sy*3):
-      //   imgX = x + dx - sx*scale
-      //   imgY = y + dy - sy*scale
-      this.add.image(x + q.dx - q.sx * scale, y + q.dy - q.sy * scale, texKey, frame)
-        .setOrigin(0, 0)
-        .setScale(scale)
-        .setCrop(q.sx, q.sy, 8, 8)
-        .setDepth(depth);
+      // tmp is the full 16px frame scaled 3× = 48px.
+      // Drawing it into the RT at offset (-sx*SC, -sy*SC) puts the desired 8px crop at (0,0).
+      // We pass (dx - sx*SC, dy - sy*SC) as the draw position to land the crop at (dx, dy).
+      const tmp = this.add.image(0, 0, texKey, frame).setOrigin(0,0).setScale(SC).setVisible(false);
+      rt.draw(tmp, q.dx - q.sx * SC, q.dy - q.sy * SC);
+      tmp.destroy();
     }
   }
 
