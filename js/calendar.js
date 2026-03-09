@@ -1503,14 +1503,9 @@ function openEventPopup(id, startTime, endTime, title, evDate, anchorEl, notes =
     const grpId = row && row.recurrence_group_id;
 
     if (grpId) {
-      // Recurring event — ask scope
-      const delAll = confirm('This is a recurring event.\n\nOK = Delete ALL events in this series\nCancel = Delete this event only');
-      if (delAll) {
-        const { error } = await supabase.from('calendar_events').delete().eq('recurrence_group_id', grpId);
-        if (error) { toast('Delete failed: ' + error.message, 'error'); return; }
-        toast('All recurring events deleted', 'success');
-        render(); return;
-      }
+      // Recurring event — ask scope with 3-option modal
+      await openDeleteScopeModal(id, evDate, grpId, row);
+      return;
     }
 
     const { error } = await supabase.from('calendar_events').delete().eq('id', id);
@@ -1596,6 +1591,9 @@ function openEditModal(id, title, evDate, startTime, endTime, currentRecur = 'no
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:4px">
           <input type="radio" name="eev-scope" value="this" checked style="accent-color:var(--blue)"> This event only
         </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:4px">
+          <input type="radio" name="eev-scope" value="following" style="accent-color:var(--blue)"> This and all following
+        </label>
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
           <input type="radio" name="eev-scope" value="all" style="accent-color:var(--blue)"> All events in series
         </label>
@@ -1657,6 +1655,43 @@ function openEditModal(id, title, evDate, startTime, endTime, currentRecur = 'no
 
     // If recurrence changed and scope === 'all' and there's a group, rebuild the series
     const recurChanged = newRecur !== currentRecur;
+
+    // ── scope === 'following' — update this event and all after it ──────────────
+    if (scope === 'following' && groupId) {
+      if (recurChanged) {
+        // Delete all occurrences from evDate forward, re-create with new recurrence
+        const { error: delErr } = await supabase.from('calendar_events')
+          .delete().eq('recurrence_group_id', groupId)
+          .gte('start_time', `${evDate}T00:00:00+00:00`);
+        if (delErr) { toast('Error: ' + delErr.message, 'error'); if (btn) btn.disabled = false; return; }
+        const newGroupId = crypto.randomUUID();
+        const dates = buildRecurDates(evDate, newRecur);
+        const rows = dates.map(ds => ({
+          title: newTitle,
+          start_time: `${ds}T${start}:00+00:00`,
+          end_time: end ? `${ds}T${end}:00+00:00` : null,
+          all_day: false,
+          color: newColor,
+          calendar_name: 'LifeOS',
+          is_busy: true,
+          recurrence: newRecur,
+          recurrence_group_id: newGroupId,
+          notes: newNotes,
+        }));
+        const { error: insErr } = await supabase.from('calendar_events').insert(rows);
+        if (insErr) { toast('Error: ' + insErr.message, 'error'); if (btn) btn.disabled = false; return; }
+        toast(`Updated this + all following — ${dates.length} events ✅`, 'success');
+        modal.remove(); render(); return;
+      }
+      // Title/color/notes update for this and all following
+      const { error } = await supabase.from('calendar_events').update({
+        title: newTitle, color: newColor, recurrence: newRecur, notes: newNotes,
+      }).eq('recurrence_group_id', groupId)
+        .gte('start_time', `${evDate}T00:00:00+00:00`);
+      if (error) { toast('Error: ' + error.message, 'error'); if (btn) btn.disabled = false; return; }
+      toast('This event and all following updated ✅', 'success');
+      modal.remove(); render(); return;
+    }
 
     if (recurChanged && scope === 'all' && groupId) {
       // Delete old group, re-create from this event's date forward with new recurrence
@@ -1737,6 +1772,67 @@ function openEditModal(id, title, evDate, startTime, endTime, currentRecur = 'no
     toast('Event updated ✅', 'success');
     modal.remove();
     render();
+  });
+}
+
+async function openDeleteScopeModal(id, evDate, grpId, row) {
+  removeModal();
+  return new Promise(resolve => {
+    const modal = document.createElement('div');
+    modal.id = 'cal-ev-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:500;display:flex;align-items:center;justify-content:center';
+    modal.innerHTML = `
+      <div style="background:var(--white);border-radius:12px;padding:20px;width:90%;max-width:320px;box-shadow:0 8px 32px rgba(0,0,0,0.2)" onclick="event.stopPropagation()">
+        <div style="font-size:15px;font-weight:700;color:var(--gray-800);margin-bottom:6px">Delete recurring event</div>
+        <div style="font-size:13px;color:var(--gray-500);margin-bottom:16px">Which events do you want to delete?</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <button id="del-this" style="padding:10px 14px;border:1.5px solid var(--gray-200);border-radius:8px;background:var(--white);font-size:13px;font-weight:600;color:var(--gray-700);cursor:pointer;text-align:left">
+            🗂 This event only
+          </button>
+          <button id="del-following" style="padding:10px 14px;border:1.5px solid var(--gray-200);border-radius:8px;background:var(--white);font-size:13px;font-weight:600;color:var(--gray-700);cursor:pointer;text-align:left">
+            ⏩ This and all following
+          </button>
+          <button id="del-all" style="padding:10px 14px;border:1.5px solid #FEE2E2;border-radius:8px;background:#FEF2F2;font-size:13px;font-weight:600;color:var(--red,#DC2626);cursor:pointer;text-align:left">
+            🗑 All events in series
+          </button>
+          <button id="del-cancel" style="padding:8px 14px;border:none;border-radius:8px;background:transparent;font-size:13px;color:var(--gray-400);cursor:pointer">
+            Cancel
+          </button>
+        </div>
+      </div>`;
+    modal.addEventListener('click', () => { modal.remove(); resolve(); });
+    document.body.appendChild(modal);
+
+    document.getElementById('del-cancel').addEventListener('click', (e) => {
+      e.stopPropagation(); modal.remove(); resolve();
+    });
+
+    document.getElementById('del-this').addEventListener('click', async (e) => {
+      e.stopPropagation(); modal.remove();
+      const { error } = await supabase.from('calendar_events').delete().eq('id', id);
+      if (error) { toast('Delete failed: ' + error.message, 'error'); resolve(); return; }
+      if (row) { const { id: _, created_at, ...rowData } = row; pushUndo({ type: 'delete', row: rowData }); }
+      toast('Event deleted — Cmd+Z to undo', 'success');
+      render(); resolve();
+    });
+
+    document.getElementById('del-following').addEventListener('click', async (e) => {
+      e.stopPropagation(); modal.remove();
+      const { error } = await supabase.from('calendar_events').delete()
+        .eq('recurrence_group_id', grpId)
+        .gte('start_time', `${evDate}T00:00:00+00:00`);
+      if (error) { toast('Delete failed: ' + error.message, 'error'); resolve(); return; }
+      toast('This event and all following deleted', 'success');
+      render(); resolve();
+    });
+
+    document.getElementById('del-all').addEventListener('click', async (e) => {
+      e.stopPropagation(); modal.remove();
+      const { error } = await supabase.from('calendar_events').delete().eq('recurrence_group_id', grpId);
+      if (error) { toast('Delete failed: ' + error.message, 'error'); resolve(); return; }
+      toast('All events in series deleted', 'success');
+      render(); resolve();
+    });
   });
 }
 
