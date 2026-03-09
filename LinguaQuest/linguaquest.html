@@ -645,6 +645,9 @@ class GameScene extends Phaser.Scene {
         Fout:F.BR_out, FedgeN:F.B_edge, FedgeE:F.R_edge, Fin:F.BR_in },
     ];
 
+    // scale: each source pixel = 3 rendered pixels (16px frame → 48px, 8px crop → 24px = QS)
+    const scale = 3;
+
     for (const q of quads) {
       let frame;
       if      (!q.N && !q.E)            frame = q.Fout;   // outer corner
@@ -653,13 +656,19 @@ class GameScene extends Phaser.Scene {
       else if ( q.N &&  q.E && !q.D)   frame = q.Fin;    // inner concave corner
       else                               frame = F.fill;   // fully enclosed
 
-      // Place image at the world position of this quadrant, origin top-left.
-      // setCrop(sx, sy, 8, 8) extracts the right 8×8 region from the 16×16 frame.
-      // setDisplaySize(QS, QS) stretches that 8px crop to fill 24×24px on screen.
-      this.add.image(x + q.dx, y + q.dy, texKey, frame)
+      // setCrop(sx, sy, 8, 8) extracts the right 8×8 region in TEXTURE SPACE.
+      // With setScale(3), each source pixel = 3 rendered pixels, so:
+      //   16px frame → 48px rendered
+      //   8px crop   → 24px = QS rendered  ✓
+      //
+      // But the crop appears at (sx*3, sy*3) FROM the image's world anchor.
+      // To land the crop at (x+dx, y+dy), we shift the image left/up by (sx*3, sy*3):
+      //   imgX = x + dx - sx*scale
+      //   imgY = y + dy - sy*scale
+      this.add.image(x + q.dx - q.sx * scale, y + q.dy - q.sy * scale, texKey, frame)
         .setOrigin(0, 0)
+        .setScale(scale)
         .setCrop(q.sx, q.sy, 8, 8)
-        .setDisplaySize(QS, QS)
         .setDepth(depth);
     }
   }
