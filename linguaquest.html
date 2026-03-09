@@ -497,6 +497,10 @@ class GameScene extends Phaser.Scene {
     this.load.image('rock_small',      ASSETS + 'Outdoor decoration/Rock_Small.png');      // 16x16 cropped
     this.load.image('flower',          ASSETS + 'Outdoor decoration/Flower.png');          // 16x16 cropped
     this.load.image('bridge',          ASSETS + 'Outdoor decoration/Bridge_Wood.png');     // 144x64
+    // Outdoor decor spritesheet: 112x192, 7 cols x 12 rows, 16x16 frames
+    // F0-F2: grass tufts  F7-F9: flowers  F14: stump  F15-F16: rocks
+    // F21-F23: large rocks  F27: leaf  F49: log  F51: mushroom
+    this.load.spritesheet('decor', ASSETS + 'Outdoor decoration/Outdoor_Decor_Free.png', { frameWidth: 16, frameHeight: 16 });
 
     // ── Characters — Player/Skeleton: 192x320, 6 cols x 10 rows, 32x32 frames ──
     this.load.spritesheet('player_ss',   ASSETS + 'Player/Player.png',
@@ -830,6 +834,139 @@ class GameScene extends Phaser.Scene {
       }
     }
 
+    // ── GROUND SCATTER PASS ──
+    // Sprinkle flowers, grass tufts, stumps, rocks, mushrooms on grass tiles.
+    // Uses a seeded-ish deterministic random so the same world always looks the same.
+    if (this.textures.exists('decor')) {
+      // Decor frame groups (from Outdoor_Decor_Free.png, 7 cols × 12 rows):
+      const GRASS_TUFTS  = [0, 1, 2];          // small green grass tufts
+      const FLOWERS      = [7, 8, 9];           // yellow/white flowers
+      const STUMPS       = [14];                 // tree stump
+      const SMALL_ROCKS  = [15, 16];             // small grey rocks
+      const MUSHROOM     = [51];                 // red mushroom
+      const LOG          = [49];                 // log / branch
+
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          const tileType = (tiles[row]?.[col]) || 'grass';
+          const cx = col * TILE_SIZE + TILE_SIZE / 2;
+          const cy = row * TILE_SIZE + TILE_SIZE / 2;
+          // Simple deterministic hash so scatter is stable per-tile
+          const h = (col * 2654435761 + row * 2246822519) >>> 0;
+          const roll = (h % 100);            // 0–99
+          const jx = ((h >> 8) % TILE_SIZE) - TILE_SIZE / 2;  // ±24 offset
+          const jy = ((h >> 16) % TILE_SIZE) - TILE_SIZE / 2;
+          const depth = row * 10 + 2;        // below trees/NPCs
+
+          if (tileType === 'grass') {
+            if (roll < 12) {
+              // Flowers (12% chance)
+              const frame = FLOWERS[h % FLOWERS.length];
+              this.add.image(cx + jx * 0.6, cy + jy * 0.6, 'decor', frame)
+                .setOrigin(0.5, 0.8).setScale(2.5).setDepth(depth);
+            } else if (roll < 22) {
+              // Grass tufts (10%)
+              const frame = GRASS_TUFTS[h % GRASS_TUFTS.length];
+              this.add.image(cx + jx * 0.7, cy + jy * 0.7, 'decor', frame)
+                .setOrigin(0.5, 0.8).setScale(2.2).setDepth(depth);
+            } else if (roll < 27) {
+              // Small rocks (5%)
+              const frame = SMALL_ROCKS[h % SMALL_ROCKS.length];
+              this.add.image(cx + jx * 0.5, cy + jy * 0.5, 'decor', frame)
+                .setOrigin(0.5, 0.8).setScale(2.5).setDepth(depth);
+            } else if (roll < 30) {
+              // Stump (3%)
+              this.add.image(cx + jx * 0.4, cy + jy * 0.4, 'decor', STUMPS[0])
+                .setOrigin(0.5, 0.8).setScale(2.8).setDepth(depth);
+            } else if (roll < 32) {
+              // Mushroom (2%)
+              this.add.image(cx + jx * 0.5, cy + jy * 0.5, 'decor', MUSHROOM[0])
+                .setOrigin(0.5, 0.8).setScale(2.5).setDepth(depth);
+            } else if (roll < 34) {
+              // Log (2%)
+              this.add.image(cx + jx * 0.4, cy + jy * 0.4, 'decor', LOG[0])
+                .setOrigin(0.5, 0.8).setScale(2.5).setDepth(depth);
+            }
+          }
+
+          // ── WATER SCATTER ── rocks at water's edge & in open water
+          if (tileType === 'water' || tileType === 'water_deep') {
+            const isWater = (t) => t === 'water' || t === 'water_deep';
+            const above = isWater(tiles[row-1]?.[col]);
+            const below = isWater(tiles[row+1]?.[col]);
+            const left  = isWater(tiles[row]?.[col-1]);
+            const right = isWater(tiles[row]?.[col+1]);
+            const surrounded = above && below && left && right;
+            if (roll < 6 && surrounded) {
+              // Small rock cluster in open water (6%)
+              const frame = SMALL_ROCKS[h % SMALL_ROCKS.length];
+              this.add.image(cx + jx * 0.5, cy + jy * 0.5, 'decor', frame)
+                .setOrigin(0.5, 0.8).setScale(2.2).setDepth(depth).setAlpha(0.85);
+            }
+          }
+        }
+      }
+    }
+
+    // ── AMBIENT ANIMALS PASS ──
+    // Spawn a handful of wandering animals on open grass tiles.
+    // These are purely decorative — not NPCs, no dialogue.
+    {
+      const animalTypes = [
+        { key: 'chicken_ss', idle: 'chicken_idle', walk: 'chicken_walk', scale: 1.8 },
+        { key: 'pig_ss',     idle: 'pig_idle',     walk: 'pig_walk',     scale: 1.6 },
+        { key: 'sheep_ss',   idle: 'sheep_idle',   walk: 'sheep_walk',   scale: 1.6 },
+        { key: 'cow_ss',     idle: 'cow_idle',     walk: 'cow_walk',     scale: 1.7 },
+      ];
+      // Collect grass tiles far from the player start
+      const [pStartCol, pStartRow] = worldDef.player_start;
+      const grassTiles = [];
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          if ((tiles[row]?.[col] || 'grass') !== 'grass') continue;
+          const dist = Math.abs(col - pStartCol) + Math.abs(row - pStartRow);
+          if (dist > 3) grassTiles.push([col, row]);
+        }
+      }
+      // Shuffle deterministically and pick ~6–10 animals
+      grassTiles.sort((a, b) => {
+        const ha = (a[0] * 2654435761 + a[1] * 2246822519) >>> 0;
+        const hb = (b[0] * 2654435761 + b[1] * 2246822519) >>> 0;
+        return ha - hb;
+      });
+      const animalCount = Math.min(8, Math.floor(grassTiles.length * 0.04));
+      for (let i = 0; i < animalCount; i++) {
+        const [ac, ar] = grassTiles[i];
+        const ax = ac * TILE_SIZE + TILE_SIZE / 2;
+        const ay = ar * TILE_SIZE + TILE_SIZE / 2;
+        const aType = animalTypes[i % animalTypes.length];
+        if (!this.textures.exists(aType.key)) continue;
+
+        // Shadow
+        this.add.graphics().setDepth(ar * 10 + 4)
+          .fillStyle(0x000000, 0.15).fillEllipse(ax, ay + 10, 22, 7);
+
+        const aSprite = this.add.sprite(ax, ay, aType.key)
+          .setScale(aType.scale).setDepth(ar * 10 + 6);
+        this._safePlay(aSprite, aType.idle);
+
+        // Simple wander — reuse same wander logic as NPCs via the npcObjects list
+        // but mark them as ambient (no dialogue, no label)
+        const wander = {
+          homeX: ax, homeY: ay,
+          targetX: ax, targetY: ay,
+          moving: false,
+          timer: Math.random() * 4000 + 1000,
+          idleAnim: aType.idle, walkAnim: aType.walk,
+        };
+        this.npcObjects.push({
+          def: { name: '', dialogue: [], type: 'ambient' },
+          sprite: aSprite, label: null,
+          nx: ax, ny: ay, range: TILE_SIZE * 2, wander,
+        });
+      }
+    }
+
     // ── PHYSICS & CAMERA BOUNDS ──
     this.physics.world.setBounds(0, 0, cols * TILE_SIZE, rows * TILE_SIZE);
     this.cameras.main.setBounds(0, 0, cols * TILE_SIZE, rows * TILE_SIZE);
@@ -981,15 +1118,15 @@ class GameScene extends Phaser.Scene {
     for (const npc of this.npcObjects) {
       const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, npc.nx, npc.ny);
 
-      // Proximity highlight
+      // Proximity highlight (only for named NPCs, not ambient animals)
       const inRange = dist < npc.range;
-      npc.label.setStyle({
+      if (npc.label) npc.label.setStyle({
         fontSize: inRange ? '12px' : '11px',
         color: inRange ? '#f0ff80' : '#d0f890',
         stroke: '#000000', strokeThickness: 3, fontFamily: 'Georgia, serif',
       });
 
-      if (inRange && dist < nearestDist) {
+      if (inRange && dist < nearestDist && npc.def.type !== 'ambient') {
         nearestDist = dist;
         nearestNPC = npc;
       }
@@ -1011,8 +1148,7 @@ class GameScene extends Phaser.Scene {
             npc.sprite.y = w.targetY;
             npc.nx = w.targetX;
             npc.ny = w.targetY;
-            npc.label.x = npc.nx;
-            npc.label.y = npc.ny - FRAME_H * (npc.sprite.scaleX) * 0.7;
+            if (npc.label) { npc.label.x = npc.nx; npc.label.y = npc.ny - FRAME_H * (npc.sprite.scaleX) * 0.7; }
             w.moving = false;
             w.timer = WANDER_INTERVAL_MS[0] + Math.random() * (WANDER_INTERVAL_MS[1] - WANDER_INTERVAL_MS[0]);
             this._safePlay(npc.sprite, w.idleAnim, true);
@@ -1023,8 +1159,7 @@ class GameScene extends Phaser.Scene {
             npc.sprite.y = ny2;
             npc.nx = nx2;
             npc.ny = ny2;
-            npc.label.x = nx2;
-            npc.label.y = ny2 - FRAME_H * (npc.sprite.scaleX) * 0.7;
+            if (npc.label) { npc.label.x = nx2; npc.label.y = ny2 - FRAME_H * (npc.sprite.scaleX) * 0.7; }
           }
         } else if (w.timer <= 0) {
           // Pick a new wander target
@@ -1066,7 +1201,7 @@ class GameScene extends Phaser.Scene {
         // Update NPC sprite depth
         const npcRow = Math.floor(npc.ny / TILE_SIZE);
         npc.sprite.setDepth(npcRow * 10 + 7);
-        npc.label.setDepth(npcRow * 10 + 9);
+        if (npc.label) npc.label.setDepth(npcRow * 10 + 9);
       }
     }
 
