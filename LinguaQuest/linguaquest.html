@@ -282,14 +282,16 @@ body { background: #1a1a2e; overflow: hidden; font-family: 'Georgia', serif; ima
   <label>Generate →</label>
   <input id="world-prompt" type="text"
     placeholder="e.g. a rainy Spanish fishing village · a Tokyo market · a medieval castle courtyard"
-    maxlength="200">
+    maxlength="200"
+    onkeydown="if(event.key==='Enter')generateWorld(); if(event.key==='Escape')this.blur();">
   <button id="gen-btn" onclick="generateWorld()">✦ Generate</button>
 </div>
 
 <!-- CONTROLS HINT -->
 <div id="controls-hint">
   WASD / ↑↓←→ move<br>
-  E &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; talk to NPC
+  E &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; talk to NPC<br>
+  T &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; type new world
 </div>
 
 <!-- LOADING -->
@@ -928,10 +930,13 @@ class GameScene extends Phaser.Scene {
     const dialogueOpen = document.getElementById('dialogue-box').style.display !== 'none'
                       && document.getElementById('dialogue-box').style.display !== '';
 
+    // Don't move player while any text input has keyboard focus
+    const inputFocused = ['INPUT','TEXTAREA'].includes(document.activeElement?.tagName);
+
     const speed = 120;
     let vx = 0, vy = 0;
 
-    if (!dialogueOpen) {
+    if (!dialogueOpen && !inputFocused) {
       if (this.cursors.left.isDown  || this.wasd.left.isDown)  vx = -speed;
       if (this.cursors.right.isDown || this.wasd.right.isDown) vx =  speed;
       if (this.cursors.up.isDown    || this.wasd.up.isDown)    vy = -speed;
@@ -1221,6 +1226,12 @@ function startGame() {
       autoCenter: Phaser.Scale.CENTER_BOTH,
     },
     physics: { default: 'arcade', arcade: { gravity: { y: 0 }, debug: false } },
+    input: {
+      keyboard: {
+        // Allow HTML inputs to receive keyboard events without Phaser intercepting them
+        capture: [],
+      },
+    },
     scene: GameScene,
     pixelArt: true,
     antialias: false,
@@ -1364,6 +1375,10 @@ ${JSON.stringify(SAMPLE_WORLD, null, 2)}
   document.getElementById('loading').style.display = 'none';
   document.getElementById('gen-btn').disabled = false;
   document.getElementById('gen-btn').textContent = '✦ Generate';
+
+  // Return focus to game canvas so WASD works immediately after generation
+  document.getElementById('world-prompt').blur();
+  document.querySelector('#game-container canvas')?.focus();
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -1520,15 +1535,37 @@ function showStatus(msg, dur = 3000) {
 //  KEYBOARD SHORTCUTS
 // ─────────────────────────────────────────────────────────────
 document.addEventListener('keydown', e => {
+  const active = document.activeElement;
+  const inInput = active?.tagName === 'INPUT' || active?.tagName === 'TEXTAREA';
+
   if (e.key === 'Enter') {
     const dBox   = document.getElementById('dialogue-box');
     const dInput = document.getElementById('dialogue-input');
-    if (dBox.style.display !== 'none' && document.activeElement === dInput) {
+    if (dBox.style.display !== 'none' && active === dInput) {
       sendDialogue(); return;
     }
-    if (document.activeElement === document.getElementById('world-prompt')) generateWorld();
+    if (active === document.getElementById('world-prompt')) generateWorld();
   }
-  if (e.key === 'Escape') closeDialogue();
+
+  if (e.key === 'Escape') {
+    closeDialogue();
+    // Also dismiss focus from prompt bar so WASD resumes
+    document.getElementById('world-prompt')?.blur();
+  }
+
+  // T key = focus the world prompt bar (only when not already in an input)
+  if ((e.key === 't' || e.key === 'T') && !inInput) {
+    const wp = document.getElementById('world-prompt');
+    if (wp && document.getElementById('prompt-bar')?.style.display !== 'none') {
+      e.preventDefault();
+      wp.focus();
+    }
+  }
+});
+
+// Clicking the game canvas returns focus to game (dismisses prompt focus)
+document.getElementById('game-container').addEventListener('pointerdown', () => {
+  document.getElementById('world-prompt')?.blur();
 });
 
 // Pause Phaser keyboard when typing in HTML inputs
