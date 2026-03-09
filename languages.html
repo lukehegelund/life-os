@@ -1895,7 +1895,7 @@ window.fcSetLang = (lang) => {
   fcInit();
 };
 
-function fcSpeakCurrent() {
+window.fcSpeakCurrent = function() {
   if (fcCurrentIdx >= fcQueue.length) return;
   const w = fcQueue[fcCurrentIdx];
   const locale = FC_TTS_LOCALE[w.language] || 'en-US';
