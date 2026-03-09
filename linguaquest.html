@@ -534,10 +534,11 @@ class GameScene extends Phaser.Scene {
     this._createAnim('skeleton_ss', 'skel_walk_up',   [12,13,14,15],  6);
 
     this._createAnim('slime_ss',   'slime_idle',    [0,1,2,3], 5);
-    this._createAnim('chicken_ss', 'chicken_idle',  [0,1],     3);
-    this._createAnim('chicken_ss', 'chicken_walk',  [6,7,8,9], 6);
-    this._createAnim('cow_ss',     'cow_idle',      [0,1],     2);
-    this._createAnim('cow_ss',     'cow_walk',      [6,7,8,9], 5);
+    // Chicken/Cow spritesheets are 64x64px = 2 cols x 2 rows = frames 0-3 only
+    this._createAnim('chicken_ss', 'chicken_idle',  [0,1],   3);
+    this._createAnim('chicken_ss', 'chicken_walk',  [2,3],   6);
+    this._createAnim('cow_ss',     'cow_idle',      [0,1],   2);
+    this._createAnim('cow_ss',     'cow_walk',      [2,3],   5);
     // Pig: 2x2 grid of 32x32 = frames [0,1,2,3]
     this._createAnim('pig_ss',     'pig_idle',      [0,1],     3);
     this._createAnim('pig_ss',     'pig_walk',      [2,3],     5);
@@ -577,7 +578,22 @@ class GameScene extends Phaser.Scene {
   }
 
   loadWorld(worldDef) {
-    // Clear scene
+    // ── Tear down old player objects BEFORE clearing children ──
+    // Physics bodies from physics.add.image() survive children.removeAll(true)
+    // and must be destroyed explicitly, otherwise old bodies keep running.
+    if (this.player) {
+      this.player.destroy();
+      this.player = null;
+    }
+    if (this.playerSprite) {
+      this.playerSprite.destroy();
+      this.playerSprite = null;
+    }
+
+    // Stop camera follow so it re-latches to the new sprite below
+    this.cameras.main.stopFollow();
+
+    // Clear all display objects (tiles, decorations, NPC sprites, labels)
     this.children.removeAll(true);
     this.npcObjects = [];
     this._nearestNPC = null;
