@@ -481,6 +481,9 @@ class GameScene extends Phaser.Scene {
     this.load.image('water',    ASSETS + 'Tiles/Water_Middle.png');
     this.load.image('beach',    ASSETS + 'Tiles/Sand_Middle.png');
     this.load.image('farmland', ASSETS + 'Tiles/FarmLand_Tile.png');
+    // Autotile tilesets (48x96, 16px cells = 3 cols x 6 rows)
+    this.load.spritesheet('path_tiles',  ASSETS + 'Tiles/Path_Tile.png',  { frameWidth: 16, frameHeight: 16 });
+    this.load.spritesheet('water_tiles', ASSETS + 'Tiles/Water_Tile.png', { frameWidth: 16, frameHeight: 16 });
     // NOTE: 'building' and 'cliff' tiles are drawn via Phaser graphics (no texture file), not loaded here
 
     // ── Decoration sprites ──
@@ -577,6 +580,111 @@ class GameScene extends Phaser.Scene {
     if (this.anims.exists(animKey)) sprite.play(animKey, ignoreIfPlaying);
   }
 
+  // ─────────────────────────────────────────────────────────────
+  //  AUTOTILE RENDERER
+  //
+  //  Tileset layout (Path_Tile.png / Water_Tile.png — 48×96, 16px cells):
+  //  Frame numbers (col + row*3):
+  //
+  //    [0] TL-outer  [1] T-edge   [2] TR-outer
+  //    [3] L-edge    [4] fill     [5] R-edge
+  //    [6] BL-outer  [7] B-edge   [8] BR-outer
+  //    [9] TL-inner  [10] TR-inner  —
+  //    [12] BL-inner [13] BR-inner  —
+  //    [15] center-a [16] center-b [17] center-c
+  //
+  //  For each game tile we render 4 quadrants (each 24px = half of TILE_SIZE=48).
+  //  Each quadrant is a 8px crop from the correct 16px sub-tile.
+  //  We check N/E/S/W neighbors to decide which frame each quadrant uses.
+  //
+  //  Bitmask per quadrant (which neighbors are the SAME type):
+  //    Top-Left quadrant    checks: N=north, W=west, NW=north-west (diagonal)
+  //    Top-Right quadrant   checks: N=north, E=east, NE
+  //    Bottom-Left quadrant checks: S=south, W=west, SW
+  //    Bottom-Right quadrant checks: S=south, E=east, SE
+  //
+  //  Result → pick one of: outer-corner, edge, inner-corner, or fill
+  // ─────────────────────────────────────────────────────────────
+  _drawAutotile(texKey, x, y, depth, tiles, col, row, cols, rows, matchFn) {
+    const TS = TILE_SIZE;   // 48px rendered tile
+    const QS = TS / 2;      // 24px per quadrant
+
+    // Helper: is neighbor the same autotile type?
+    const same = (dc, dr) => {
+      const nc = col + dc, nr = row + dr;
+      if (nc < 0 || nc >= cols || nr < 0 || nr >= rows) return true; // OOB = treat as same
+      return matchFn(tiles[nr]?.[nc] || 'grass');
+    };
+
+    // Frame numbers in the 3×6 spritesheet (3 cols × 6 rows, row-major)
+    // Row 0: outer corners + top edge
+    // Row 1: side edges + fill
+    // Row 2: outer corners + bottom edge
+    // Row 3: inner corners (TL, TR)
+    // Row 4: inner corners (BL, BR)
+    // Row 5: fill variants
+    const F = {
+      TL_out:0,  T_edge:1,  TR_out:2,
+      L_edge:3,  fill:4,    R_edge:5,
+      BL_out:6,  B_edge:7,  BR_out:8,
+      TL_in:9,   TR_in:10,
+      BL_in:12,  BR_in:13,
+    };
+
+    // Each game tile = 4 quadrants (each QS×QS = 24px).
+    // For each quadrant we check 2 cardinal neighbors + 1 diagonal.
+    // N = neighbor in the "north" direction FOR THIS QUADRANT
+    // E = neighbor in the "east" direction FOR THIS QUADRANT
+    // D = diagonal neighbor
+    const quads = [
+      // Top-Left quadrant: north=up, east=left, diag=up-left
+      // crops the bottom-right 8px of a 16px frame → srcOffset (8,8)
+      { dx:0,  dy:0,  sx:8, sy:8, N:same(0,-1), E:same(-1,0), D:same(-1,-1),
+        Fout:F.TL_out, FedgeN:F.T_edge, FedgeE:F.L_edge, Fin:F.TL_in },
+      // Top-Right quadrant: north=up, east=right, diag=up-right
+      // crops the bottom-left 8px → srcOffset (0,8)
+      { dx:QS, dy:0,  sx:0, sy:8, N:same(0,-1), E:same(1,0),  D:same(1,-1),
+        Fout:F.TR_out, FedgeN:F.T_edge, FedgeE:F.R_edge, Fin:F.TR_in },
+      // Bottom-Left quadrant: north=down, east=left, diag=down-left
+      // crops the top-right 8px → srcOffset (8,0)
+      { dx:0,  dy:QS, sx:8, sy:0, N:same(0,1),  E:same(-1,0), D:same(-1,1),
+        Fout:F.BL_out, FedgeN:F.B_edge, FedgeE:F.L_edge, Fin:F.BL_in },
+      // Bottom-Right quadrant: north=down, east=right, diag=down-right
+      // crops the top-left 8px → srcOffset (0,0)
+      { dx:QS, dy:QS, sx:0, sy:0, N:same(0,1),  E:same(1,0),  D:same(1,1),
+        Fout:F.BR_out, FedgeN:F.B_edge, FedgeE:F.R_edge, Fin:F.BR_in },
+    ];
+
+    // Scale: each source 8px half-cell → QS=24px rendered  →  scale = 3
+    const scale = QS / 8;
+
+    for (const q of quads) {
+      // Pick frame based on neighbor connectivity
+      let frame;
+      if (!q.N && !q.E)        frame = q.Fout;   // isolated corner
+      else if (!q.N &&  q.E)   frame = q.FedgeN; // open on N-axis only
+      else if ( q.N && !q.E)   frame = q.FedgeE; // open on E-axis only
+      else if ( q.N &&  q.E && !q.D) frame = q.Fin; // inner concave corner
+      else                     frame = F.fill;    // fully enclosed
+
+      // Use a RenderTexture to blit only the correct 8×8 crop of the 16×16 frame.
+      // We create a temp image at the right frame, scale it 3×, then draw it into
+      // a QS×QS RenderTexture with an offset that places exactly our 8px crop at (0,0).
+      const rt = this.add.renderTexture(x + q.dx, y + q.dy, QS, QS)
+        .setOrigin(0, 0).setDepth(depth);
+
+      const tmp = this.add.image(-9999, -9999, texKey, frame)
+        .setScale(scale)
+        .setOrigin(0, 0)
+        .setVisible(false);
+
+      // tmp is 16*scale = 48px. We want the 8px block starting at (sx, sy) source
+      // = (sx*scale, sy*scale) on the scaled image to land at (0,0) in the RT.
+      rt.draw(tmp, -q.sx * scale, -q.sy * scale);
+      tmp.destroy();
+    }
+  }
+
   loadWorld(worldDef) {
     // ── Tear down old player objects BEFORE clearing children ──
     // Physics bodies from physics.add.image() survive children.removeAll(true)
@@ -611,15 +719,21 @@ class GameScene extends Phaser.Scene {
         const x = col * TILE_SIZE;
         const y = row * TILE_SIZE;
 
-        const tile = this.add.image(x, y, def.key)
-          .setOrigin(0, 0).setDisplaySize(TILE_SIZE, TILE_SIZE).setDepth(0);
-        if (def.tint) tile.setTint(def.tint);
+        const isPath  = (t) => t === 'path' || t === 'stone' || t === 'building_door' || t === 'farmland' || t === 'sand' || t === 'beach';
+        const isWater = (t) => t === 'water' || t === 'water_deep';
 
-        // Water shimmer stripe
-        if (tileType === 'water' || tileType === 'water_deep') {
-          this.add.graphics().setDepth(1)
-            .fillStyle(0x60b0e8, 0.15)
-            .fillRect(x + 6, y + TILE_SIZE * 0.42, TILE_SIZE - 12, 3);
+        if (isPath(tileType) && this.textures.exists('path_tiles')) {
+          // Draw grass base first, then autotile path on top
+          this.add.image(x, y, 'grass').setOrigin(0,0).setDisplaySize(TILE_SIZE, TILE_SIZE).setDepth(0);
+          this._drawAutotile('path_tiles', x, y, 1, tiles, col, row, cols, rows, isPath);
+        } else if (isWater(tileType) && this.textures.exists('water_tiles')) {
+          // Draw grass base first, then autotile water on top
+          this.add.image(x, y, 'grass').setOrigin(0,0).setDisplaySize(TILE_SIZE, TILE_SIZE).setDepth(0);
+          this._drawAutotile('water_tiles', x, y, 1, tiles, col, row, cols, rows, isWater);
+        } else {
+          const tile = this.add.image(x, y, def.key)
+            .setOrigin(0, 0).setDisplaySize(TILE_SIZE, TILE_SIZE).setDepth(0);
+          if (def.tint) tile.setTint(def.tint);
         }
       }
     }
