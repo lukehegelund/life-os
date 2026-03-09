@@ -31,11 +31,6 @@ body{background:#1a2430;overflow:hidden;font-family:'Cinzel',Georgia,serif;user-
 #action-btns{display:flex;gap:10px;}
 .abtn{background:linear-gradient(180deg,#2a3520,#1a2212);border:1px solid #4a6830;border-radius:4px;color:#90c850;font-family:'Cinzel',serif;font-size:11px;padding:10px 18px;cursor:pointer;letter-spacing:1px;transition:all .15s;white-space:nowrap;}
 .abtn:hover{background:linear-gradient(180deg,#3a4530,#2a3220);border-color:#6aac50;}
-.bbtn{background:linear-gradient(180deg,#1e2c14,#141e0c);border:1px solid #3a5820;border-radius:3px;color:#90c850;font-size:10px;padding:5px 10px;cursor:pointer;letter-spacing:.5px;white-space:nowrap;}
-.bbtn:hover{border-color:#5a8830;color:#b0e870;}
-.bbtn:disabled{opacity:.4;cursor:default;}
-.cpill{background:rgba(255,255,255,.05);border:1px solid rgba(100,180,50,.15);border-radius:3px;padding:3px 8px;font-size:11px;color:#a8d860;display:flex;align-items:center;gap:4px;}
-.bldg-badge{background:rgba(60,100,30,.3);border:1px solid #3a6020;border-radius:3px;padding:3px 8px;font-size:10px;color:#90c850;}
 #status-msg{position:fixed;top:64px;left:50%;transform:translateX(-50%);background:rgba(8,14,5,.94);border:1px solid #5a9030;border-radius:4px;padding:7px 18px;font-size:13px;color:#a8d860;letter-spacing:1px;z-index:150;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;}
 </style>
 </head>
@@ -51,72 +46,18 @@ body{background:#1a2430;overflow:hidden;font-family:'Cinzel',Georgia,serif;user-
   <button class="start-btn" onclick="startGame()">Begin</button>
 </div>
 <div id="top-bar">
-  <span class="empire-name">⚔ Empire</span>
-  <div class="rpill"><span class="i">🍎</span><span class="v" id="res-food">0</span><span class="l">FOOD</span></div>
-  <div class="rpill"><span class="i">⚒</span><span class="v" id="res-prod">0</span><span class="l">PROD</span></div>
-  <div class="rpill"><span class="i">💰</span><span class="v" id="res-gold">0</span><span class="l">GOLD</span></div>
-  <div class="rpill"><span class="i">📚</span><span class="v" id="res-sci">0</span><span class="l">SCI</span></div>
-  <div class="rpill"><span class="i">🎭</span><span class="v" id="res-cult">0</span><span class="l">CULT</span></div>
-  <div class="spacer"></div>
+  <span class="empire-name">⚔ Your Empire</span>
   <div class="rpill"><span class="i">🏙</span><span class="v" id="res-cities">0</span><span class="l">CITIES</span></div>
+  <div class="rpill"><span class="i">⚔</span><span class="v" id="res-units">1</span><span class="l">UNITS</span></div>
+  <div class="spacer"></div>
   <span id="turn-info">Turn 1</span>
   <button class="turn-btn" onclick="endTurn()">End Turn ▶</button>
-</div>
-<div id="tile-tooltip" style="position:fixed;display:none;background:rgba(10,18,8,.96);border:1px solid #4a8030;border-radius:6px;padding:8px 14px;font-family:sans-serif;font-size:12px;color:#c8e890;z-index:200;pointer-events:none;min-width:140px;">
-  <div id="tt-title" style="font-weight:700;font-size:13px;margin-bottom:4px;color:#a8d860;"></div>
-  <div id="tt-yields" style="display:flex;gap:8px;font-size:11px;margin-bottom:4px;"></div>
-  <div id="tt-resource" style="font-size:11px;color:#f0d060;"></div>
 </div>
 <div id="bot-panel">
   <div style="flex:1"><div id="unit-name">Select a unit</div><div id="unit-desc">Click your settler to begin.</div></div>
   <div id="action-btns"></div>
 </div>
 <div id="status-msg"></div>
-
-<!-- City Panel (Chunk 2) -->
-<div id="city-panel" style="display:none;position:fixed;top:52px;right:0;width:300px;height:calc(100vh - 162px);background:linear-gradient(180deg,#0d180a,#091008);border-left:2px solid #3a6820;z-index:120;overflow-y:auto;font-family:sans-serif;font-size:12px;color:#c8e890;">
-  <div style="background:linear-gradient(180deg,#1a2e10,#0e1a08);padding:12px 16px;border-bottom:1px solid #2a4818;display:flex;align-items:center;justify-content:space-between;">
-    <div>
-      <div id="cp-name" style="font-family:'Cinzel',serif;font-size:16px;font-weight:700;color:#a8d860;letter-spacing:2px;"></div>
-      <div id="cp-pop" style="font-size:11px;color:#6a8a50;margin-top:2px;"></div>
-    </div>
-    <button onclick="closeCity()" style="background:none;border:1px solid #4a6830;border-radius:3px;color:#6a8a50;padding:4px 10px;cursor:pointer;font-size:11px;">✕</button>
-  </div>
-  <!-- Yields row -->
-  <div id="cp-yields" style="display:flex;gap:6px;padding:10px 16px;border-bottom:1px solid #1a2e10;flex-wrap:wrap;"></div>
-  <!-- Food bar -->
-  <div style="padding:8px 16px;border-bottom:1px solid #1a2e10;">
-    <div style="font-size:10px;color:#6a8a50;margin-bottom:4px;letter-spacing:1px;">GROWTH</div>
-    <div style="background:#0c140a;border-radius:3px;height:8px;overflow:hidden;">
-      <div id="cp-food-bar" style="height:100%;background:linear-gradient(90deg,#4a9820,#78c840);width:0%;transition:width .3s;"></div>
-    </div>
-    <div id="cp-food-label" style="font-size:10px;color:#5a7840;margin-top:3px;"></div>
-  </div>
-  <!-- Production queue -->
-  <div style="padding:10px 16px;border-bottom:1px solid #1a2e10;">
-    <div style="font-size:10px;color:#6a8a50;letter-spacing:1px;margin-bottom:8px;">PRODUCTION</div>
-    <div id="cp-prod-queue" style="margin-bottom:8px;"></div>
-    <div style="font-size:10px;color:#4a6838;margin-bottom:6px;">Build:</div>
-    <div id="cp-build-options" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
-  </div>
-  <!-- Buildings -->
-  <div style="padding:10px 16px;border-bottom:1px solid #1a2e10;">
-    <div style="font-size:10px;color:#6a8a50;letter-spacing:1px;margin-bottom:8px;">BUILDINGS</div>
-    <div id="cp-buildings" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
-  </div>
-  <!-- Worked tiles -->
-  <div style="padding:10px 16px;">
-    <div style="font-size:10px;color:#6a8a50;letter-spacing:1px;margin-bottom:8px;">WORKED TILES</div>
-    <div id="cp-worked" style="line-height:1.8;"></div>
-  </div>
-</div>
-
-<!-- Worker improvement picker -->
-<div id="improve-panel" style="display:none;position:fixed;bottom:120px;left:50%;transform:translateX(-50%);background:rgba(10,18,8,.98);border:1px solid #4a8030;border-radius:6px;padding:14px 20px;z-index:250;font-family:sans-serif;font-size:12px;color:#c8e890;min-width:260px;">
-  <div style="font-size:13px;font-weight:700;color:#a8d860;margin-bottom:10px;">Build Improvement</div>
-  <div id="imp-options" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;"></div>
-  <button onclick="document.getElementById('improve-panel').style.display='none'" style="background:none;border:1px solid #3a5820;border-radius:3px;color:#5a7840;padding:4px 12px;cursor:pointer;font-size:11px;">Cancel</button>
-</div>
 
 <script>
 // ══════════════════════════════════════════════════════
@@ -138,10 +79,10 @@ body{background:#1a2430;overflow:hidden;font-family:'Cinzel',Georgia,serif;user-
 //  → placing sprite at isoPos(col,row) pins the top vertex there.
 // ══════════════════════════════════════════════════════
 
-const TW     = 192;   // tile diamond width (increased for sharper resolution)
-const TH     = 96;    // tile diamond height  (TW/2 for 2:1 iso)
-const DEPTH  = 14;    // side-face depth — thin bottom edge only
-const ABOVE  = 72;    // canvas pixels above the diamond top vertex (for features)
+const TW     = 128;   // tile diamond width
+const TH     = 64;    // tile diamond height  (TW/2 for 2:1 iso)
+const DEPTH  = 10;    // side-face depth — thin bottom edge only
+const ABOVE  = 48;    // canvas pixels above the diamond top vertex (for features)
 
 // Canvas dimensions for a standard terrain tile
 const TC_W   = TW;
@@ -158,193 +99,33 @@ const COLS = 18, ROWS = 11;
 const TOP_H = 52, BOT_H = 110;
 
 // ── TERRAIN — Forest Kingdom palette ──
-// yields: {f=food, p=production, g=gold, s=science, c=culture}
 const TERRAIN = {
-  ocean:    {label:'Ocean',    passable:false, top:'#1e4060',lt:'#2c5c88',side:'#102838',dark:'#081820',water:true,  yields:{f:1,p:0,g:1,s:0,c:0}},
-  coast:    {label:'Coast',    passable:false, top:'#246080',lt:'#3880a8',side:'#143850',dark:'#0a2030',water:true,  yields:{f:1,p:0,g:2,s:0,c:0}},
-  plains:   {label:'Plains',   passable:true,  top:'#7ecf3e',lt:'#98e050',side:'#4a9820',dark:'#2e6010',water:false, yields:{f:1,p:1,g:0,s:0,c:0}},
-  grassland:{label:'Grassland',passable:true,  top:'#5cae28',lt:'#78cc3c',side:'#386814',dark:'#20420a',water:false, yields:{f:2,p:0,g:0,s:0,c:0}},
-  forest:   {label:'Forest',   passable:true,  top:'#3a8014',lt:'#52a020',side:'#22500a',dark:'#123006',water:false, yields:{f:1,p:1,g:0,s:0,c:0}},
-  hill:     {label:'Hills',    passable:true,  top:'#8a7448',lt:'#a89060',side:'#5c4c28',dark:'#3c3018',water:false, yields:{f:0,p:2,g:0,s:0,c:0}},
-  mountain: {label:'Mountain', passable:false, top:'#908880',lt:'#b0a898',side:'#585048',dark:'#383028',water:false, yields:{f:0,p:0,g:0,s:0,c:0}},
-  desert:   {label:'Desert',   passable:true,  top:'#a8d860',lt:'#c0f070',side:'#688a30',dark:'#405618',water:false, yields:{f:0,p:0,g:0,s:0,c:0}},
-  tundra:   {label:'Tundra',   passable:true,  top:'#78a058',lt:'#98c070',side:'#4a6838',dark:'#2e4020',water:false, yields:{f:1,p:0,g:0,s:0,c:0}},
-  river:    {label:'River',    passable:true,  top:'#60b830',lt:'#7ad040',side:'#3a7018',dark:'#20480a',water:false, yields:{f:2,p:1,g:1,s:0,c:0}},
-  snow:     {label:'Snow',     passable:false, top:'#d8eec8',lt:'#eef8e0',side:'#8ab880',dark:'#609858',water:false, yields:{f:0,p:0,g:0,s:0,c:0}},
+  ocean:    {label:'Ocean',    passable:false, top:'#1e4060',lt:'#2c5c88',side:'#102838',dark:'#081820',water:true },
+  coast:    {label:'Coast',    passable:false, top:'#246080',lt:'#3880a8',side:'#143850',dark:'#0a2030',water:true },
+  plains:   {label:'Plains',   passable:true,  top:'#7ecf3e',lt:'#98e050',side:'#4a9820',dark:'#2e6010',water:false},
+  grassland:{label:'Grassland',passable:true,  top:'#5cae28',lt:'#78cc3c',side:'#386814',dark:'#20420a',water:false},
+  forest:   {label:'Forest',   passable:true,  top:'#3a8014',lt:'#52a020',side:'#22500a',dark:'#123006',water:false},
+  hill:     {label:'Hills',    passable:true,  top:'#8a7448',lt:'#a89060',side:'#5c4c28',dark:'#3c3018',water:false},
+  mountain: {label:'Mountain', passable:false, top:'#908880',lt:'#b0a898',side:'#585048',dark:'#383028',water:false},
+  desert:   {label:'Desert',   passable:true,  top:'#a8d860',lt:'#c0f070',side:'#688a30',dark:'#405618',water:false},
+  tundra:   {label:'Tundra',   passable:true,  top:'#78a058',lt:'#98c070',side:'#4a6838',dark:'#2e4020',water:false},
+  river:    {label:'River',    passable:true,  top:'#60b830',lt:'#7ad040',side:'#3a7018',dark:'#20480a',water:false},
+  snow:     {label:'Snow',     passable:false, top:'#d8eec8',lt:'#eef8e0',side:'#8ab880',dark:'#609858',water:false},
 };
 
-// ── RESOURCES ──
-// Each resource: {label, emoji, type (bonus/luxury/strategic), tileBonus {f,p,g,s}, validOn:[terrain types]}
-const RESOURCES = {
-  wheat:   {label:'Wheat',   emoji:'🌾', type:'bonus',    bonus:{f:1,p:0,g:0,s:0}, validOn:['plains','grassland','river']},
-  deer:    {label:'Deer',    emoji:'🦌', type:'bonus',    bonus:{f:1,p:1,g:0,s:0}, validOn:['forest','tundra']},
-  fish:    {label:'Fish',    emoji:'🐟', type:'bonus',    bonus:{f:1,p:0,g:1,s:0}, validOn:['coast','ocean']},
-  stone:   {label:'Stone',   emoji:'🪨', type:'bonus',    bonus:{f:0,p:1,g:1,s:0}, validOn:['grassland','plains','hill']},
-  gems:    {label:'Gems',    emoji:'💎', type:'luxury',   bonus:{f:0,p:0,g:3,s:0}, validOn:['desert','hill']},
-  gold_r:  {label:'Gold',    emoji:'🥇', type:'luxury',   bonus:{f:0,p:0,g:2,s:0}, validOn:['hill','desert','plains']},
-  silk:    {label:'Silk',    emoji:'🧵', type:'luxury',   bonus:{f:0,p:0,g:2,s:0}, validOn:['forest']},
-  spices:  {label:'Spices',  emoji:'🌶', type:'luxury',   bonus:{f:1,p:0,g:1,s:0}, validOn:['forest','grassland']},
-  iron:    {label:'Iron',    emoji:'⚙',  type:'strategic',bonus:{f:0,p:2,g:0,s:0}, validOn:['hill','plains','tundra']},
-  horses:  {label:'Horses',  emoji:'🐎', type:'strategic',bonus:{f:1,p:1,g:0,s:0}, validOn:['plains','grassland','tundra']},
-  coal:    {label:'Coal',    emoji:'⬛', type:'strategic',bonus:{f:0,p:2,g:0,s:0}, validOn:['hill']},
-};
-
-// ── PROCEDURAL MAP GENERATION ──
-function generateMap(seed) {
-  const rng = seededRng(seed || 42);
-  const map = [];
-  // Initialize with ocean
-  for (let r = 0; r < ROWS; r++) {
-    map.push([]);
-    for (let c = 0; c < COLS; c++) map[r].push('ocean');
-  }
-
-  // Place continent seeds (2 main land masses)
-  const seeds = [
-    {c: Math.floor(COLS * 0.25), r: Math.floor(ROWS * 0.5)},
-    {c: Math.floor(COLS * 0.72), r: Math.floor(ROWS * 0.45)},
-  ];
-
-  // Noise-based height map
-  const height = [];
-  for (let r = 0; r < ROWS; r++) {
-    height.push([]);
-    for (let c = 0; c < COLS; c++) {
-      // Distance from nearest continent seed
-      let minD = Infinity;
-      for (const s of seeds) {
-        const d = Math.sqrt((c-s.c)**2 + (r-s.r)**2);
-        minD = Math.min(minD, d);
-      }
-      const maxD = Math.sqrt(COLS**2 + ROWS**2) * 0.5;
-      // Height = inverse distance + noise
-      const base = 1 - (minD / maxD);
-      const noise = (rng() - 0.5) * 0.4;
-      height[r].push(Math.max(0, Math.min(1, base + noise)));
-    }
-  }
-
-  // Terrain from height
-  for (let r = 0; r < ROWS; r++) {
-    for (let c = 0; c < COLS; c++) {
-      const h = height[r][c];
-      const n = rng();
-      if (h < 0.28) {
-        map[r][c] = 'ocean';
-      } else if (h < 0.38) {
-        map[r][c] = 'coast';
-      } else if (h > 0.82) {
-        // High elevation
-        map[r][c] = n < 0.6 ? 'mountain' : 'hill';
-      } else if (h > 0.68) {
-        // Upper land
-        if (n < 0.35) map[r][c] = 'hill';
-        else if (n < 0.55) map[r][c] = 'forest';
-        else map[r][c] = 'plains';
-      } else {
-        // Mid land
-        const lat = r / ROWS; // 0=top, 1=bottom
-        if (lat < 0.15 || lat > 0.88) {
-          map[r][c] = n < 0.5 ? 'snow' : 'tundra';
-        } else if (lat > 0.55 && lat < 0.80 && n < 0.28) {
-          map[r][c] = 'desert';
-        } else if (n < 0.32) {
-          map[r][c] = 'grassland';
-        } else if (n < 0.55) {
-          map[r][c] = 'plains';
-        } else if (n < 0.70) {
-          map[r][c] = 'forest';
-        } else {
-          map[r][c] = 'tundra';
-        }
-      }
-    }
-  }
-
-  // Add rivers (connect hills to coast)
-  let riverCount = 0;
-  for (let r = 1; r < ROWS-1 && riverCount < 3; r++) {
-    for (let c = 1; c < COLS-1 && riverCount < 3; c++) {
-      if (map[r][c] === 'plains' && rng() < 0.03) {
-        // Carve a short river
-        let cr = r, cc = c;
-        for (let step = 0; step < 4; step++) {
-          if (cr >= 0 && cr < ROWS && cc >= 0 && cc < COLS && map[cr][cc] !== 'ocean' && map[cr][cc] !== 'coast') {
-            map[cr][cc] = 'river';
-          }
-          cr += rng() < 0.5 ? 1 : 0;
-          cc += rng() < 0.5 ? 1 : -1;
-        }
-        riverCount++;
-      }
-    }
-  }
-
-  return map;
-}
-
-// ── RESOURCE PLACEMENT ──
-function generateResources(mapData, seed) {
-  const rng = seededRng((seed || 42) + 7777);
-  const resourceMap = {}; // key: "col_row" → resource key
-
-  for (const [resKey, res] of Object.entries(RESOURCES)) {
-    // Place 2-4 of each resource type
-    const count = 2 + Math.floor(rng() * 3);
-    let placed = 0;
-    let attempts = 0;
-    while (placed < count && attempts < 200) {
-      attempts++;
-      const c = Math.floor(rng() * COLS);
-      const r = Math.floor(rng() * ROWS);
-      const key = `${c}_${r}`;
-      const tType = mapData[r]?.[c];
-      if (tType && res.validOn.includes(tType) && !resourceMap[key]) {
-        resourceMap[key] = resKey;
-        placed++;
-      }
-    }
-  }
-  return resourceMap;
-}
-
-// Compute tile yield including resource bonus
-function getTileYield(col, row, mapData, resourceMap) {
-  const tType = mapData[row]?.[col];
-  if (!tType) return {f:0,p:0,g:0,s:0,c:0};
-  const base = {...TERRAIN[tType].yields};
-  const rKey = resourceMap[`${col}_${row}`];
-  if (rKey && RESOURCES[rKey]) {
-    const rb = RESOURCES[rKey].bonus;
-    base.f += rb.f || 0;
-    base.p += rb.p || 0;
-    base.g += rb.g || 0;
-    base.s += rb.s || 0;
-  }
-  return base;
-}
-
-// Compute empire-wide per-turn income (from all revealed tiles in city ranges)
-function computeIncome(mapData, resourceMap, cities) {
-  const total = {f:0,p:0,g:0,s:0,c:1}; // base 1 culture
-  for (const city of cities) {
-    total.g += 2; // base gold per city
-    total.s += 1; // base science per city
-    total.c += 1; // base culture per city
-    // Work surrounding tiles (pop = 1 for now, just the city tile + 2 neighbors)
-    const worked = [{col:city.col, row:city.row}];
-    for (const n of getNeighbors(city.col, city.row).slice(0, city.pop || 1)) worked.push(n);
-    for (const t of worked) {
-      const y = getTileYield(t.col, t.row, mapData, resourceMap);
-      total.f += y.f; total.p += y.p; total.g += y.g; total.s += y.s; total.c += (y.c||0);
-    }
-  }
-  return total;
-}
-
-const MAP_SEED = 42;
-const MAP_DATA = generateMap(MAP_SEED);
-const RESOURCE_MAP = generateResources(MAP_DATA, MAP_SEED);
+const MAP_DATA=[
+  ['ocean','ocean','ocean','coast','coast','plains','plains','forest','forest','hill','hill','mountain','mountain','tundra','tundra','ocean','ocean','ocean'],
+  ['ocean','ocean','coast','coast','plains','plains','grassland','forest','forest','forest','hill','mountain','tundra','tundra','snow','snow','ocean','ocean'],
+  ['ocean','coast','coast','plains','plains','grassland','grassland','river','plains','forest','forest','hill','hill','tundra','snow','snow','tundra','ocean'],
+  ['ocean','coast','plains','plains','grassland','grassland','river','river','plains','plains','forest','forest','hill','hill','tundra','tundra','ocean','ocean'],
+  ['coast','plains','plains','grassland','grassland','plains','plains','river','plains','plains','plains','forest','forest','desert','desert','tundra','ocean','ocean'],
+  ['coast','plains','grassland','grassland','plains','plains','plains','plains','hill','hill','plains','plains','desert','desert','desert','desert','coast','ocean'],
+  ['coast','plains','plains','grassland','plains','plains','hill','hill','hill','mountain','mountain','desert','desert','desert','hill','coast','coast','ocean'],
+  ['ocean','coast','plains','plains','forest','forest','forest','hill','mountain','mountain','desert','desert','hill','hill','coast','coast','ocean','ocean'],
+  ['ocean','coast','coast','plains','plains','forest','forest','forest','hill','hill','desert','desert','coast','coast','ocean','ocean','ocean','ocean'],
+  ['ocean','ocean','coast','coast','plains','plains','forest','forest','grassland','grassland','coast','coast','ocean','ocean','ocean','ocean','ocean','ocean'],
+  ['ocean','ocean','ocean','coast','coast','plains','plains','grassland','coast','coast','ocean','ocean','ocean','ocean','ocean','ocean','ocean','ocean'],
+];
 
 // ── ISO POSITION ──
 // Returns the screen coordinate of the diamond TOP VERTEX for tile (col,row)
@@ -368,88 +149,8 @@ function lighten(h,a){const c=hexToRgb(h);return`rgb(${Math.min(255,c.r+a)},${Ma
 function darken(h,a){const c=hexToRgb(h);return`rgb(${Math.max(0,c.r-a)},${Math.max(0,c.g-a)},${Math.max(0,c.b-a)})`;}
 
 // ── GAME STATE ──
-const GS={
-  turn:1, cities:[], units:[], selectedUnit:null, moveHighlights:[],
-  nextCityId:1, nextUnitId:1,
-  revealed: new Set(),
-  income:{f:0,p:0,g:0,s:0,c:0},
-  science:0, culture:0, selectedCity:null,
-  improvements:{}, // key='col_row', value='farm'|'mine'|'lumbermill'|'tradingpost'
-};
+const GS={turn:1,cities:[],units:[],selectedUnit:null,moveHighlights:[],nextCityId:1,nextUnitId:1};
 const CITY_NAMES=['Aurum','Veridian','Solmere','Caelthon','Rivenmoor','Dunhallow','Ironspire','Thornwall','Eastmarch','Goldenveil'];
-
-// ── CHUNK 2: BUILDINGS ──
-const BUILDINGS = {
-  monument:    {label:'Monument',    cost:60,  desc:'+2 🎭 Culture',             effect:{c:2}},
-  granary:     {label:'Granary',     cost:80,  desc:'+2 🍎 Food storage, +1 🍎', effect:{f:1}},
-  library:     {label:'Library',     cost:90,  desc:'+2 📚 Science',             effect:{s:2}},
-  barracks:    {label:'Barracks',    cost:100, desc:'+15 XP to units, +1 ⚒',    effect:{p:1}},
-  market:      {label:'Market',      cost:120, desc:'+25% gold, +2 💰',          effect:{g:2}},
-  walls:       {label:'Walls',       cost:130, desc:'+5 city defense, +1 ⚒',    effect:{p:1}},
-};
-
-// ── CHUNK 2: TILE IMPROVEMENTS ──
-const IMPROVEMENTS = {
-  farm:        {label:'Farm',         turns:4, validOn:['plains','grassland','river'], bonus:{f:1}},
-  mine:        {label:'Mine',         turns:4, validOn:['hill','mountain','desert'],   bonus:{p:1}},
-  lumbermill:  {label:'Lumber Mill',  turns:5, validOn:['forest'],                    bonus:{p:1,g:1}},
-  tradingpost: {label:'Trading Post', turns:3, validOn:['plains','grassland','forest','tundra','desert'], bonus:{g:1}},
-};
-
-// ── CHUNK 2: UNIT CATALOG ──
-const UNIT_TYPES = {
-  settler: {label:'Settler', moves:2, strength:0, cost:0},
-  worker:  {label:'Worker',  moves:3, strength:0, cost:80, buildTurns:0},
-  warrior: {label:'Warrior', moves:2, strength:8, cost:60},
-};
-
-// ── CHUNK 2: Compute worked tiles for a city (auto-assign best N tiles) ──
-function getCityWorkedTiles(city){
-  const candidates=[{col:city.col,row:city.row}]; // city tile always worked
-  const neighbors=getNeighbors(city.col,city.row);
-  // Score each neighbor by total yield
-  const scored=neighbors.map(n=>{
-    const y=getTileYield(n.col,n.row,MAP_DATA,RESOURCE_MAP);
-    const imp=GS.improvements[`${n.col}_${n.row}`];
-    const ib=imp?IMPROVEMENTS[imp].bonus:{};
-    return {col:n.col,row:n.row,score:(y.f+y.p+y.g+y.s)+(ib.f||0)+(ib.p||0)+(ib.g||0)};
-  }).sort((a,b)=>b.score-a.score);
-  // Work best pop-1 neighbor tiles (city tile uses 1 pop slot)
-  for(let i=0;i<Math.min(city.pop-1, scored.length);i++) candidates.push(scored[i]);
-  return candidates;
-}
-
-// ── CHUNK 2: Compute yields for a single city ──
-function getCityYields(city){
-  const worked=getCityWorkedTiles(city);
-  const y={f:0,p:0,g:2,s:1,c:1}; // base: 2 gold, 1 sci, 1 culture per city
-  for(const t of worked){
-    const ty=getTileYield(t.col,t.row,MAP_DATA,RESOURCE_MAP);
-    y.f+=ty.f; y.p+=ty.p; y.g+=ty.g; y.s+=ty.s; y.c+=(ty.c||0);
-    // Add improvement bonuses
-    const imp=GS.improvements[`${t.col}_${t.row}`];
-    if(imp){const ib=IMPROVEMENTS[imp].bonus;y.f+=(ib.f||0);y.p+=(ib.p||0);y.g+=(ib.g||0);}
-  }
-  // Building bonuses
-  for(const bk of (city.buildings||[])){
-    const b=BUILDINGS[bk]; if(!b) continue;
-    y.f+=(b.effect.f||0); y.p+=(b.effect.p||0);
-    y.g+=(b.effect.g||0); y.s+=(b.effect.s||0); y.c+=(b.effect.c||0);
-  }
-  // Market bonus: +25% gold (rounded)
-  if(city.buildings?.includes('market')) y.g=Math.round(y.g*1.25);
-  return y;
-}
-
-// ── CHUNK 2: Recompute empire-wide income from all cities ──
-function computeIncome(mapData, resourceMap, cities) {
-  const total = {f:0,p:0,g:0,s:0,c:1};
-  for (const city of cities) {
-    const y=getCityYields(city);
-    total.f+=y.f; total.p+=y.p; total.g+=y.g; total.s+=y.s; total.c+=y.c;
-  }
-  return total;
-}
 
 // ══════════════════════════════════════════════════════
 //  TILE CANVAS BUILDER
@@ -483,29 +184,33 @@ function makeTile(type, t, featureFn) {
 
   // ── 1. Depth faces (drawn FIRST, behind the top face) ──
 
-  // SE face (right side)
+  // SE face (right side — darker, in shadow)
   ctx.beginPath();
   ctx.moveTo(botX, botY);
   ctx.lineTo(midRX, midY);
   ctx.lineTo(midRX, midY + DEPTH);
   ctx.lineTo(botX,  botY + DEPTH);
   ctx.closePath();
-  const seG = ctx.createLinearGradient(0, botY, 0, botY+DEPTH);
-  seG.addColorStop(0, t.side); seG.addColorStop(1, t.dark);
+  const seG = ctx.createLinearGradient(midRX, midY, botX, botY+DEPTH);
+  seG.addColorStop(0, t.side);
+  seG.addColorStop(0.5, darken(t.side, 8));
+  seG.addColorStop(1, t.dark);
   ctx.fillStyle = seG; ctx.fill();
-  ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.lineWidth = 1; ctx.stroke();
 
-  // SW face (left side, slightly lighter)
+  // SW face (left side — slightly lighter, catches ambient)
   ctx.beginPath();
   ctx.moveTo(botX, botY);
   ctx.lineTo(midLX, midY);
   ctx.lineTo(midLX, midY + DEPTH);
   ctx.lineTo(botX,  botY + DEPTH);
   ctx.closePath();
-  const swG = ctx.createLinearGradient(0, botY, 0, botY+DEPTH);
-  swG.addColorStop(0, lighten(t.side, 14)); swG.addColorStop(1, lighten(t.dark, 8));
+  const swG = ctx.createLinearGradient(midLX, midY, botX, botY+DEPTH);
+  swG.addColorStop(0, lighten(t.side, 18));
+  swG.addColorStop(0.5, lighten(t.side, 8));
+  swG.addColorStop(1, lighten(t.dark, 10));
   ctx.fillStyle = swG; ctx.fill();
-  ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.strokeStyle = 'rgba(0,0,0,0.28)'; ctx.lineWidth = 1; ctx.stroke();
 
   // ── 2. Top face ──
   ctx.beginPath();
@@ -515,12 +220,25 @@ function makeTile(type, t, featureFn) {
   ctx.lineTo(midLX, midY);
   ctx.closePath();
 
-  // Sun from top-left → shadow bottom-right
+  // Sun from top-left → shadow bottom-right — richer 3-stop gradient
   const tG = ctx.createLinearGradient(midLX, topY, midRX, botY);
-  tG.addColorStop(0,   t.lt);
-  tG.addColorStop(0.5, t.top);
-  tG.addColorStop(1,   darken(t.top, 22));
+  tG.addColorStop(0,    t.lt);
+  tG.addColorStop(0.35, t.top);
+  tG.addColorStop(0.75, darken(t.top, 14));
+  tG.addColorStop(1,    darken(t.top, 28));
   ctx.fillStyle = tG; ctx.fill();
+
+  // Subtle diagonal cross-lighting (adds depth)
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(topX, topY); ctx.lineTo(midRX, midY); ctx.lineTo(botX, botY); ctx.lineTo(midLX, midY);
+  ctx.closePath(); ctx.clip();
+  const xG = ctx.createLinearGradient(midLX, midY, midRX, midY);
+  xG.addColorStop(0, 'rgba(255,255,255,0.07)');
+  xG.addColorStop(0.5, 'rgba(0,0,0,0)');
+  xG.addColorStop(1, 'rgba(0,0,0,0.08)');
+  ctx.fillStyle = xG; ctx.fillRect(0,0,TC_W,TC_H);
+  ctx.restore();
 
   // ── 3. Terrain features (clipped to top face) ──
   ctx.save();
@@ -570,104 +288,269 @@ function isoDiamond(ctx, cx, topY, tw, th) {
 function featForest(ctx, tx, topY, botX, botY, mlx, mrx, midY, above) {
   if (above) {
     const rng = seededRng(7731);
-    // 4 trees rooted at midY (visual ground surface of tile), not topY
+    // 4 trees arranged around tile center, sized for TW=128
     const trees = [{ox:-20,s:14},{ox:18,s:12},{ox:-4,s:16},{ox:26,s:10}];
     for (const {ox,s} of trees) {
-      drawFlatTree(ctx, tx+ox, midY, s, rng);
+      drawFlatTree(ctx, tx+ox, topY+2, s, rng);
     }
   } else {
     const rng = seededRng(7731);
-    for (let i=0;i<8;i++) {
-      const x=tx+(rng()-.5)*(mrx-mlx)*.65, y=midY+(rng()-.5)*(botY-midY)*.65;
-      ctx.fillStyle=`rgba(15,50,15,${0.12+rng()*0.12})`;
-      ctx.beginPath(); ctx.ellipse(x,y,6+rng()*4,3+rng()*2,0,0,Math.PI*2); ctx.fill();
+    // Rich forest floor — dark dappled shadows
+    for (let i = 0; i < 10; i++) {
+      const x = tx+(rng()-.5)*(mrx-mlx)*.7, y = midY+(rng()-.5)*(botY-topY)*.5;
+      ctx.fillStyle = `rgba(10,35,10,${0.15+rng()*0.18})`;
+      ctx.beginPath(); ctx.ellipse(x,y,9+rng()*7,4+rng()*3,rng()*Math.PI,0,Math.PI*2); ctx.fill();
+    }
+    // Undergrowth ferns
+    for (let i = 0; i < 8; i++) {
+      const fx = tx+(rng()-.5)*(mrx-mlx)*.6, fy = midY+3+rng()*(botY-midY)*.6;
+      ctx.strokeStyle = `rgba(30,100,20,${0.5+rng()*.3})`; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(fx,fy); ctx.quadraticCurveTo(fx+(rng()-.5)*8, fy-5, fx+(rng()-.5)*12, fy-8); ctx.stroke();
+    }
+    // Tiny mushrooms
+    for (let i = 0; i < 3; i++) {
+      const mx = tx+(rng()-.5)*(mrx-mlx)*.55, my = midY+5+rng()*(botY-midY)*.55;
+      ctx.fillStyle = '#8B3010';
+      ctx.beginPath(); ctx.arc(mx, my-3, 3, Math.PI, 0); ctx.fill();
+      ctx.fillStyle = '#f0c080';
+      ctx.fillRect(mx-1, my-3, 2, 4);
     }
   }
 }
 
 function featMountain(ctx, tx, topY, botX, botY, mlx, mrx, midY, above) {
   if (!above) return;
-  // Two mountains rooted at midY (visual ground), not topY
-  drawFlatMountain(ctx, tx-10, midY, 26, 36);
-  drawFlatMountain(ctx, tx+14, midY+4, 18, 26);
+  // Two mountains centered on the tile, sized for TW=128
+  drawFlatMountain(ctx, tx-10, topY+4, 26, 36);
+  drawFlatMountain(ctx, tx+14, topY+10, 18, 26);
 }
 
 function featHill(ctx, tx, topY, botX, botY, mlx, mrx, midY, above) {
   if (!above) {
-    // Subtle hill bumps on ground surface
-    for (let i=0;i<2;i++) {
-      const hx=tx+(i===0?-14:14), hy=midY+4;
-      ctx.fillStyle=lighten('#988654',18);
-      ctx.beginPath(); ctx.ellipse(hx,hy,14,7,0,Math.PI,0); ctx.fill();
-      ctx.fillStyle='#988654';
-      ctx.beginPath(); ctx.ellipse(hx,hy,8,4,0,Math.PI,0); ctx.fill();
+    const rng = seededRng(6612);
+    // Layered grassy hill contours
+    for (let i = 0; i < 3; i++) {
+      const hx = tx+(rng()-.5)*18, hy = midY+(i-1)*8;
+      const wid = 18-i*3, hei = 8-i*2;
+      const hg = ctx.createRadialGradient(hx,hy,0,hx,hy,wid);
+      hg.addColorStop(0, `rgba(${165+i*10},${145+i*5},${85+i*5},${0.5+i*.1})`);
+      hg.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = hg;
+      ctx.beginPath(); ctx.ellipse(hx, hy, wid, hei, 0, Math.PI, 0); ctx.fill();
+    }
+    // Sparse grass tufts on hill
+    for (let i = 0; i < 8; i++) {
+      const gx = tx+(rng()-.5)*(mrx-mlx)*.6, gy = midY+3+rng()*(botY-midY)*.5;
+      ctx.strokeStyle = `rgba(90,140,40,${0.45+rng()*.3})`; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(gx, gy); ctx.quadraticCurveTo(gx+(rng()-.5)*4, gy-4, gx+(rng()-.5)*3, gy-6); ctx.stroke();
+    }
+    // Rock pebbles scattered
+    for (let i = 0; i < 4; i++) {
+      const rx = tx+(rng()-.5)*(mrx-mlx)*.55, ry = midY+4+rng()*(botY-midY)*.5;
+      ctx.fillStyle = `rgba(140,120,90,${0.45+rng()*.3})`;
+      ctx.beginPath(); ctx.ellipse(rx, ry, 3+rng()*3, 1.5+rng()*2, rng()*Math.PI, 0, Math.PI*2); ctx.fill();
     }
   }
 }
 
 function featDesert(ctx, tx, topY, botX, botY, mlx, mrx, midY, above) {
   if (!above) {
-    const rng=seededRng(4421);
-    for (let i=0;i<3;i++) {
-      const dy=midY+2+i*7+(rng()-.5)*2;
+    const rng = seededRng(4421);
+    // Sand dune ripples — layered bezier curves
+    for (let i = 0; i < 5; i++) {
+      const dy = topY + 8 + i*((botY-topY-8)/5);
+      const amp = 3+i*.5;
+      ctx.strokeStyle = `rgba(200,160,40,${0.12+i*0.05})`; ctx.lineWidth = 1+i*.2;
       ctx.beginPath();
       ctx.moveTo(mlx+8, dy);
-      ctx.bezierCurveTo(tx-TW*.08,dy-4, tx+TW*.08,dy-1, mrx-8,dy-3);
-      ctx.strokeStyle=`rgba(190,145,30,${0.18+i*0.06})`; ctx.lineWidth=1+i*.25; ctx.stroke();
+      ctx.bezierCurveTo(tx-TW*.10, dy-amp, tx+TW*.08, dy+amp*.8, mrx-8, dy-amp*.3);
+      ctx.stroke();
+    }
+    // Sandy color patches
+    for (let i = 0; i < 4; i++) {
+      const px = tx+(rng()-.5)*(mrx-mlx)*.6, py = midY+(rng()-.5)*(botY-topY)*.4;
+      const sg = ctx.createRadialGradient(px,py,0,px,py,14+rng()*10);
+      sg.addColorStop(0, `rgba(210,170,50,${0.15+rng()*.1})`);
+      sg.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = sg; ctx.beginPath(); ctx.ellipse(px,py,18+rng()*8,8+rng()*4,rng()*Math.PI,0,Math.PI*2); ctx.fill();
+    }
+    // Desert pebbles
+    for (let i = 0; i < 5; i++) {
+      const px = tx+(rng()-.5)*(mrx-mlx)*.6, py = midY+2+rng()*(botY-midY)*.6;
+      ctx.fillStyle = `rgba(180,140,70,${0.4+rng()*.3})`;
+      ctx.beginPath(); ctx.ellipse(px,py,2+rng()*2,1+rng(),rng()*Math.PI,0,Math.PI*2); ctx.fill();
+    }
+    // Tiny cactus spines/plant
+    if (rng() > 0.3) {
+      const cx = tx+(rng()-.5)*(mrx-mlx)*.4, cy = midY+5+rng()*(botY-midY)*.4;
+      ctx.strokeStyle='rgba(80,140,40,0.7)'; ctx.lineWidth=2; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(cx,cy+3); ctx.lineTo(cx,cy-6); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx,cy-2); ctx.lineTo(cx-4,cy-5); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx,cy-2); ctx.lineTo(cx+4,cy-5); ctx.stroke();
     }
   }
 }
 
 function featRiver(ctx, tx, topY, botX, botY, mlx, mrx, midY, above) {
   if (!above) {
-    ctx.strokeStyle='rgba(45,110,200,0.7)'; ctx.lineWidth=8; ctx.lineCap='round';
-    ctx.beginPath(); ctx.moveTo(mlx+6,midY+2); ctx.bezierCurveTo(tx-TW*.08,midY-3,tx+TW*.08,midY+5,mrx-6,midY+1); ctx.stroke();
-    ctx.strokeStyle='rgba(120,190,255,0.45)'; ctx.lineWidth=3;
-    ctx.beginPath(); ctx.moveTo(mlx+8,midY+1); ctx.bezierCurveTo(tx-TW*.08,midY-4,tx+TW*.08,midY+4,mrx-8,midY); ctx.stroke();
+    const rng = seededRng(8821);
+    // Grassy bank patches alongside the river
+    for (let i = 0; i < 6; i++) {
+      const bx = mlx+10 + rng()*(mrx-mlx-20), by = midY + 8 + (rng()-.5)*10;
+      ctx.fillStyle = `rgba(55,150,25,${0.2+rng()*.18})`;
+      ctx.beginPath(); ctx.ellipse(bx, by, 7+rng()*4, 3+rng()*2, rng()*Math.PI, 0, Math.PI*2); ctx.fill();
+    }
+    // River body — wide smooth bezier with gradient fill
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(mlx+6, midY+5);
+    ctx.bezierCurveTo(tx-TW*.10, midY-5, tx+TW*.10, midY+7, mrx-6, midY+2);
+    ctx.bezierCurveTo(tx+TW*.10, midY+12, tx-TW*.10, midY+4, mlx+6, midY+14);
+    ctx.closePath();
+    const riverGrad = ctx.createLinearGradient(mlx, midY-5, mlx, midY+14);
+    riverGrad.addColorStop(0, 'rgba(40,110,200,0.85)');
+    riverGrad.addColorStop(0.4, 'rgba(55,140,220,0.8)');
+    riverGrad.addColorStop(1, 'rgba(30,90,180,0.75)');
+    ctx.fillStyle = riverGrad; ctx.fill();
+    ctx.restore();
+    // Highlight — smooth flowing reflection strip
+    ctx.strokeStyle = 'rgba(160,220,255,0.55)'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(mlx+10, midY+1); ctx.bezierCurveTo(tx-TW*.07, midY-6, tx+TW*.06, midY+5, mrx-10, midY+1); ctx.stroke();
+    // Secondary subtle highlight
+    ctx.strokeStyle = 'rgba(200,240,255,0.3)'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(mlx+14, midY+3); ctx.bezierCurveTo(tx-TW*.05, midY-3, tx+TW*.04, midY+6, mrx-14, midY+3); ctx.stroke();
+    // Riverside wildflowers — tiny dots of color
+    for (let i = 0; i < 4; i++) {
+      const fx = mlx + 5 + rng()*18, fy = midY + 9 + rng()*7;
+      ctx.fillStyle = ['#ff88aa','#ffdd44','#ff9933'][Math.floor(rng()*3)];
+      ctx.beginPath(); ctx.arc(fx, fy, 1.5+rng(), 0, Math.PI*2); ctx.fill();
+    }
   }
 }
 
 function featGrass(ctx, tx, topY, botX, botY, mlx, mrx, midY, above) {
   if (!above) {
-    const rng=seededRng(1199);
-    for (let i=0;i<10;i++) {
-      const gx=tx+(rng()-.5)*(mrx-mlx)*.68, gy=midY+3+rng()*(botY-midY)*.65;
-      const h=5+rng()*6, lean=(rng()-.5)*4;
-      ctx.strokeStyle=`rgba(50,140,20,${0.55+rng()*.3})`; ctx.lineWidth=1.2;
-      ctx.beginPath(); ctx.moveTo(gx,gy); ctx.quadraticCurveTo(gx+lean,gy-h*.6,gx+lean*.6,gy-h); ctx.stroke();
+    const rng = seededRng(1199);
+    // Rich ground base — subtle color variation patches
+    for (let i = 0; i < 6; i++) {
+      const px = tx + (rng()-.5)*(mrx-mlx)*.7, py = midY + (rng()-.5)*(botY-topY)*.55;
+      const gr = ctx.createRadialGradient(px,py,0,px,py,16+rng()*10);
+      gr.addColorStop(0, `rgba(60,155,20,${0.18+rng()*.12})`);
+      gr.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = gr; ctx.beginPath(); ctx.ellipse(px,py,20+rng()*10,10+rng()*6,0,0,Math.PI*2); ctx.fill();
+    }
+    // Grass blades — more of them, slightly taller, varying greens
+    const bladeColors = ['rgba(50,140,20,0.8)','rgba(70,160,30,0.7)','rgba(40,120,15,0.75)','rgba(90,170,40,0.65)'];
+    for (let i = 0; i < 22; i++) {
+      const gx = tx + (rng()-.5)*(mrx-mlx)*.72, gy = midY + 2 + rng()*(botY-midY)*.7;
+      const h = 6 + rng()*8, lean = (rng()-.5)*5;
+      ctx.strokeStyle = bladeColors[Math.floor(rng()*bladeColors.length)];
+      ctx.lineWidth = 1 + rng()*.6;
+      ctx.beginPath(); ctx.moveTo(gx, gy); ctx.quadraticCurveTo(gx+lean, gy-h*.55, gx+lean*.7, gy-h); ctx.stroke();
+    }
+    // Flowers — small colorful dots with petals
+    const flowerColors = ['#ff88aa','#ffdd44','#ff6688','#cc44ff','#ff9922','#ffffff'];
+    for (let i = 0; i < 5; i++) {
+      const fx = tx + (rng()-.5)*(mrx-mlx)*.58, fy = midY + 4 + rng()*(botY-midY)*.6;
+      const col = flowerColors[Math.floor(rng()*flowerColors.length)];
+      const r = 2.2 + rng()*1.5;
+      // 5 petals
+      for (let p = 0; p < 5; p++) {
+        const ang = (p/5)*Math.PI*2;
+        ctx.fillStyle = col;
+        ctx.beginPath(); ctx.ellipse(fx+Math.cos(ang)*r*1.3, fy+Math.sin(ang)*r*.7, r, r*.65, ang, 0, Math.PI*2); ctx.fill();
+      }
+      // Center
+      ctx.fillStyle = '#ffee22';
+      ctx.beginPath(); ctx.arc(fx, fy, r*.65, 0, Math.PI*2); ctx.fill();
     }
   }
 }
 
 function featSnow(ctx, tx, topY, botX, botY, mlx, mrx, midY, above) {
   if (!above) {
-    const rng=seededRng(9902);
-    for (let i=0;i<4;i++) {
-      const sx=tx+(rng()-.5)*(mrx-mlx)*.6, sy=midY+3+rng()*(botY-midY)*.55;
-      const sg=ctx.createRadialGradient(sx,sy,0,sx,sy,12+rng()*8);
-      sg.addColorStop(0,'rgba(255,255,255,0.6)'); sg.addColorStop(1,'rgba(210,235,255,0)');
-      ctx.fillStyle=sg; ctx.beginPath(); ctx.ellipse(sx,sy,16+rng()*7,6+rng()*4,0,0,Math.PI*2); ctx.fill();
+    const rng = seededRng(9902);
+    // Layered snow drifts
+    for (let i = 0; i < 5; i++) {
+      const sx = tx+(rng()-.5)*(mrx-mlx)*.65, sy = midY+2+rng()*(botY-midY)*.6;
+      const sg = ctx.createRadialGradient(sx,sy,0,sx,sy,14+rng()*10);
+      sg.addColorStop(0, 'rgba(255,255,255,0.65)');
+      sg.addColorStop(0.6, 'rgba(220,238,255,0.35)');
+      sg.addColorStop(1, 'rgba(200,225,255,0)');
+      ctx.fillStyle = sg; ctx.beginPath(); ctx.ellipse(sx,sy,18+rng()*10,7+rng()*5,0,0,Math.PI*2); ctx.fill();
+    }
+    // Ice cracks — thin blue lines
+    for (let i = 0; i < 3; i++) {
+      const cx = tx+(rng()-.5)*(mrx-mlx)*.5, cy = midY+rng()*(botY-midY)*.5;
+      ctx.strokeStyle = `rgba(160,210,240,${0.25+rng()*.2})`; ctx.lineWidth = 0.8;
+      ctx.beginPath(); ctx.moveTo(cx, cy);
+      ctx.lineTo(cx+(rng()-.5)*14, cy+(rng()-.5)*8);
+      ctx.stroke();
+    }
+    // Sparkle dots
+    for (let i = 0; i < 6; i++) {
+      const px = tx+(rng()-.5)*(mrx-mlx)*.6, py = midY+rng()*(botY-midY)*.65;
+      ctx.fillStyle = `rgba(255,255,255,${0.5+rng()*.4})`;
+      ctx.beginPath(); ctx.arc(px, py, 1+rng(), 0, Math.PI*2); ctx.fill();
     }
   }
 }
 
 function featTundra(ctx, tx, topY, botX, botY, mlx, mrx, midY, above) {
   if (!above) {
-    const rng=seededRng(3318);
-    for (let i=0;i<5;i++) {
-      const px=tx+(rng()-.5)*(mrx-mlx)*.6, py=midY+3+rng()*(botY-midY)*.55;
-      ctx.fillStyle=`rgba(100,130,110,${0.28+rng()*.22})`;
-      ctx.beginPath(); ctx.ellipse(px,py,7+rng()*4,3+rng()*2,rng()*Math.PI,0,Math.PI*2); ctx.fill();
+    const rng = seededRng(3318);
+    // Patchy frozen ground
+    for (let i = 0; i < 6; i++) {
+      const px = tx+(rng()-.5)*(mrx-mlx)*.65, py = midY+3+rng()*(botY-midY)*.6;
+      ctx.fillStyle = `rgba(100,130,110,${0.22+rng()*.2})`;
+      ctx.beginPath(); ctx.ellipse(px,py,9+rng()*5,4+rng()*2,rng()*Math.PI,0,Math.PI*2); ctx.fill();
+    }
+    // Small hardy tundra wildflowers (purple/blue)
+    for (let i = 0; i < 4; i++) {
+      const fx = tx+(rng()-.5)*(mrx-mlx)*.5, fy = midY+4+rng()*(botY-midY)*.5;
+      ctx.fillStyle = `rgba(140,100,200,${0.7+rng()*.2})`;
+      ctx.beginPath(); ctx.arc(fx, fy, 2+rng(), 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#f0e0ff';
+      ctx.beginPath(); ctx.arc(fx, fy, 1, 0, Math.PI*2); ctx.fill();
+      // Small stem
+      ctx.strokeStyle = 'rgba(80,120,80,0.6)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(fx+(rng()-.5)*2, fy+4); ctx.stroke();
+    }
+    // Frost crystals / ice patches
+    for (let i = 0; i < 3; i++) {
+      const ix = tx+(rng()-.5)*(mrx-mlx)*.5, iy = midY+rng()*(botY-midY)*.5;
+      ctx.fillStyle = `rgba(200,230,255,${0.3+rng()*.25})`;
+      ctx.beginPath(); ctx.ellipse(ix, iy, 6+rng()*4, 2+rng()*2, rng()*Math.PI, 0, Math.PI*2); ctx.fill();
     }
   }
 }
 
 function featWater(ctx, tx, topY, botX, botY, mlx, mrx, midY, above) {
   if (!above) {
-    for (let i=0;i<3;i++) {
-      const wy = midY+2+i*7;
-      ctx.strokeStyle=`rgba(140,210,255,${0.14+i*.05})`; ctx.lineWidth=1.2;
-      ctx.beginPath(); ctx.moveTo(mlx+8,wy); ctx.bezierCurveTo(tx-TW*.06,wy-4,tx+TW*.06,wy+1,mrx-8,wy-2); ctx.stroke();
+    // Subtle deep water shimmer — radial light patches
+    const rng = seededRng(5512);
+    for (let i = 0; i < 3; i++) {
+      const wx = tx + (rng()-.5)*(mrx-mlx)*.5, wy = midY + (rng()-.5)*(botY-topY)*.35;
+      const sg = ctx.createRadialGradient(wx,wy,0,wx,wy,18+rng()*10);
+      sg.addColorStop(0, `rgba(120,200,255,${0.18+rng()*.1})`);
+      sg.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = sg; ctx.beginPath(); ctx.ellipse(wx,wy,24+rng()*12,10+rng()*5,0,0,Math.PI*2); ctx.fill();
+    }
+    // Ripple lines — gentle curves across the tile
+    for (let i = 0; i < 4; i++) {
+      const wy = topY + 14 + i * ((botY-topY-10)/4);
+      const amp = 2.5 + i*.5;
+      ctx.strokeStyle = `rgba(160,225,255,${0.12+i*.04})`; ctx.lineWidth = 1 + i*.2;
+      ctx.beginPath();
+      ctx.moveTo(mlx+10, wy);
+      ctx.bezierCurveTo(tx-TW*.12, wy-amp, tx+TW*.08, wy+amp*.6, mrx-10, wy-amp*.4);
+      ctx.stroke();
+    }
+    // Foam/sparkle dots near edges
+    for (let i = 0; i < 5; i++) {
+      const sx = mlx + 8 + rng()*(mrx-mlx-16), sy = topY + 8 + rng()*(botY-topY-10);
+      ctx.fillStyle = `rgba(230,250,255,${0.25+rng()*.2})`;
+      ctx.beginPath(); ctx.arc(sx, sy, 1+rng()*1.5, 0, Math.PI*2); ctx.fill();
     }
   }
 }
@@ -732,6 +615,44 @@ function drawFlatMountain(ctx, cx, baseY, w, h) {
   }
 }
 
+// Plains gets a slightly different grass (more yellow wildflowers, sparser)
+function featPlains(ctx, tx, topY, botX, botY, mlx, mrx, midY, above) {
+  if (!above) {
+    const rng = seededRng(2277);
+    // Lighter, more golden ground patches
+    for (let i = 0; i < 5; i++) {
+      const px = tx+(rng()-.5)*(mrx-mlx)*.68, py = midY+(rng()-.5)*(botY-topY)*.5;
+      const pg = ctx.createRadialGradient(px,py,0,px,py,15+rng()*8);
+      pg.addColorStop(0, `rgba(140,190,50,${0.15+rng()*.1})`);
+      pg.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = pg; ctx.beginPath(); ctx.ellipse(px,py,18+rng()*8,8+rng()*4,0,0,Math.PI*2); ctx.fill();
+    }
+    // Sparser grass blades, more golden
+    const bladeColors = ['rgba(110,160,30,0.8)','rgba(130,180,40,0.65)','rgba(90,140,20,0.7)'];
+    for (let i = 0; i < 16; i++) {
+      const gx = tx+(rng()-.5)*(mrx-mlx)*.72, gy = midY+2+rng()*(botY-midY)*.68;
+      const h = 5+rng()*7, lean = (rng()-.5)*5;
+      ctx.strokeStyle = bladeColors[Math.floor(rng()*bladeColors.length)];
+      ctx.lineWidth = 0.9+rng()*.5;
+      ctx.beginPath(); ctx.moveTo(gx,gy); ctx.quadraticCurveTo(gx+lean,gy-h*.5,gx+lean*.6,gy-h); ctx.stroke();
+    }
+    // Plains wildflowers — more yellow/orange, fewer pink
+    const flowerColors = ['#ffdd44','#ffcc22','#ff9922','#ffee88','#ffffff','#ff88aa'];
+    for (let i = 0; i < 6; i++) {
+      const fx = tx+(rng()-.5)*(mrx-mlx)*.6, fy = midY+3+rng()*(botY-midY)*.65;
+      const col = flowerColors[Math.floor(rng()*flowerColors.length)];
+      const r = 2+rng()*1.8;
+      for (let p = 0; p < 5; p++) {
+        const ang = (p/5)*Math.PI*2;
+        ctx.fillStyle = col;
+        ctx.beginPath(); ctx.ellipse(fx+Math.cos(ang)*r*1.4,fy+Math.sin(ang)*r*.75,r,r*.6,ang,0,Math.PI*2); ctx.fill();
+      }
+      ctx.fillStyle = '#ff8800';
+      ctx.beginPath(); ctx.arc(fx,fy,r*.6,0,Math.PI*2); ctx.fill();
+    }
+  }
+}
+
 // ── TILE FEATURE MAP ──
 const FEAT_MAP = {
   forest:    featForest,
@@ -739,7 +660,7 @@ const FEAT_MAP = {
   hill:      featHill,
   desert:    featDesert,
   river:     featRiver,
-  plains:    featGrass,
+  plains:    featPlains,
   grassland: featGrass,
   snow:      featSnow,
   tundra:    featTundra,
@@ -1077,48 +998,6 @@ function generateTextures(sc) {
   hctx.strokeStyle='rgba(180,255,180,0.35)'; hctx.lineWidth=1; hctx.stroke();
   sc.textures.addCanvas('tile_highlight', hlOC);
 
-  // ── Fog of war textures ──
-  // Helper to draw a Civ/Polytopia-style fog diamond
-  function makeFogCanvas(fillAlpha, edgeSoftness) {
-    const fc=document.createElement('canvas'); fc.width=TC_W; fc.height=TC_H;
-    const fx=fc.getContext('2d');
-    const cx=TC_W/2, ty=ABOVE, my=ABOVE+TH/2, by=ABOVE+TH;
-    // Radial gradient from center → edges makes a soft Civ-style fog
-    const grad=fx.createRadialGradient(cx, my, 0, cx, my, TW*.62);
-    grad.addColorStop(0,   `rgba(8,14,6,${fillAlpha})`);
-    grad.addColorStop(0.6, `rgba(8,14,6,${fillAlpha})`);
-    grad.addColorStop(1,   `rgba(8,14,6,${fillAlpha*edgeSoftness})`);
-    // Clip to diamond shape
-    fx.save();
-    fx.beginPath(); fx.moveTo(cx,ty); fx.lineTo(cx+TW/2,my); fx.lineTo(cx,by); fx.lineTo(cx-TW/2,my); fx.closePath();
-    fx.clip();
-    fx.fillStyle=grad; fx.fillRect(0,0,TC_W,TC_H);
-    fx.restore();
-    // Subtle border so tiles don't bleed into each other
-    fx.beginPath(); fx.moveTo(cx,ty); fx.lineTo(cx+TW/2,my); fx.lineTo(cx,by); fx.lineTo(cx-TW/2,my); fx.closePath();
-    fx.strokeStyle=`rgba(20,40,15,${fillAlpha*.5})`; fx.lineWidth=1; fx.stroke();
-    return fc;
-  }
-  // tile_fog = completely unexplored (very dark, nearly opaque)
-  sc.textures.addCanvas('tile_fog', makeFogCanvas(0.92, 0.25));
-  // tile_fog_seen = explored but not currently in sight range (darker tint, still shows terrain)
-  sc.textures.addCanvas('tile_fog_seen', makeFogCanvas(0.48, 0.1));
-
-  // Resource badge canvas (small, drawn on top of tile)
-  // We'll use a single 32x32 canvas per resource with emoji
-  for(const [rk, res] of Object.entries(RESOURCES)) {
-    const rc=document.createElement('canvas'); rc.width=32; rc.height=32;
-    const rctx=rc.getContext('2d');
-    // Badge background
-    rctx.fillStyle='rgba(10,18,8,0.75)';
-    rctx.beginPath(); rctx.arc(16,16,14,0,Math.PI*2); rctx.fill();
-    rctx.strokeStyle = res.type==='luxury' ? '#f0d060' : res.type==='strategic' ? '#e06030' : '#a0c860';
-    rctx.lineWidth=1.5; rctx.stroke();
-    rctx.font='16px serif'; rctx.textAlign='center'; rctx.textBaseline='middle';
-    rctx.fillText(res.emoji, 16, 17);
-    sc.textures.addCanvas('res_'+rk, rc);
-  }
-
   // City tile
   const {canvas:cityOC, originY:cityOY} = makeCityTile();
   sc.textures.addCanvas('tile_city', cityOC);
@@ -1143,11 +1022,9 @@ class GameScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor('#1a2430');
 
     this.terrainLayer   = this.add.container(0,0);
-    this.resourceLayer  = this.add.container(0,0);
     this.highlightLayer = this.add.container(0,0);
     this.unitLayer      = this.add.container(0,0);
     this.labelLayer     = this.add.container(0,0);
-    this.fogLayer       = this.add.container(0,0);
 
     // Build all tiles — back to front (row 0→N, col 0→N)
     this.tileSprites={};
@@ -1159,16 +1036,6 @@ class GameScene extends Phaser.Scene {
       this.tileSprites[`${c}_${r}`]=sp;
     }
 
-    // Resource sprites
-    this.resSp={};
-    for(const [key, rk] of Object.entries(RESOURCE_MAP)){
-      const [c,r]=key.split('_').map(Number);
-      const {x,y}=isoPos(c,r);
-      const sp=this.add.image(x+12, y+TH/2-8, 'res_'+rk).setOrigin(0.5,0.5).setScale(0.85).setAlpha(0);
-      this.resourceLayer.add(sp);
-      this.resSp[key]=sp;
-    }
-
     // Highlight overlay sprites (same origin)
     this.hlSprites={};
     for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
@@ -1178,88 +1045,32 @@ class GameScene extends Phaser.Scene {
       this.hlSprites[`${c}_${r}`]=sp;
     }
 
-    // Fog of war sprites (start all covered)
-    this.fogSprites={};
-    for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
-      const {x,y}=isoPos(c,r);
-      const sp=this.add.image(x, y, 'tile_fog').setOrigin(OX, OY);
-      this.fogLayer.add(sp);
-      this.fogSprites[`${c}_${r}`]=sp;
-    }
-
-    // Spawn settler — find a good passable starting tile
-    let SC=5, SR=5;
-    // Find a passable tile near center
-    for(let attempt=0;attempt<50;attempt++){
-      const tc=5+Math.floor(Math.random()*6), tr=4+Math.floor(Math.random()*4);
-      if(MAP_DATA[tr]&&TERRAIN[MAP_DATA[tr][tc]]&&TERRAIN[MAP_DATA[tr][tc]].passable){
-        SC=tc; SR=tr; break;
-      }
-    }
+    // Spawn settler
+    const SC=6, SR=5;
     GS.units.push({id:GS.nextUnitId++,type:'settler',col:SC,row:SR,movesLeft:2});
     this.unitSprites={};
     this.spawnUnit(GS.units[0]);
 
-    // Reveal area around starting settler
-    this.revealAround(SC, SR, 3);
-
-    // Camera center — start zoomed out to fit larger tiles on screen
+    // Camera center
     const {x:sx,y:sy}=isoPos(SC,SR);
-    this.cameras.main.setZoom(0.55);
     this.cameras.main.centerOn(sx, sy+TH/2);
-    this.cameras.main.setBounds(-ROWS*STEP_X - 300, -300, (COLS+ROWS)*STEP_X + 600, (COLS+ROWS)*STEP_Y + 300);
+    // True iso bounds: x from (0-ROWS)*STEP_X to (COLS-0)*STEP_X, y from 0 to (COLS+ROWS)*STEP_Y
+    this.cameras.main.setBounds(-ROWS*STEP_X - 200, -200, (COLS+ROWS)*STEP_X + 400, (COLS+ROWS)*STEP_Y + 200);
 
-    // ── Input: drag + pinch-to-zoom ──
+    // ── Input ──
     this._dragStartX=0; this._dragStartY=0; this._hasDragged=false;
-    this._prevPtrX=0; this._prevPtrY=0;
-    this._pinchDist=0; this._isPinching=false;
-
-    this.input.on('pointerdown', p=>{
-      // Only start drag on single-pointer down
-      if(this.input.pointer2 && this.input.pointer2.isDown) return;
-      this._dragStartX=p.x; this._dragStartY=p.y;
-      this._prevPtrX=p.x; this._prevPtrY=p.y;
-      this._hasDragged=false; this._isPinching=false;
-    });
-
+    this.input.on('pointerdown', p=>{this._dragStartX=p.x;this._dragStartY=p.y;this._hasDragged=false;});
     this.input.on('pointermove', p=>{
-      const p2=this.input.pointer2;
-      // ── Two-finger pinch zoom ──
-      if(p2 && p2.isDown && p.isDown){
-        this._isPinching=true; this._hasDragged=true;
-        const dist=Phaser.Math.Distance.Between(p.x,p.y,p2.x,p2.y);
-        if(this._pinchDist>0){
-          const scale=dist/this._pinchDist;
-          const z=Phaser.Math.Clamp(this.cameras.main.zoom*scale,0.2,2.5);
-          this.cameras.main.zoom=z;
-        }
-        this._pinchDist=dist;
-        return;
+      if(!p.isDown) return;
+      if(Math.abs(p.x-this._dragStartX)>6||Math.abs(p.y-this._dragStartY)>6) this._hasDragged=true;
+      if(this._hasDragged){
+        this.cameras.main.scrollX -= p.velocity.x/this.cameras.main.zoom*.75;
+        this.cameras.main.scrollY -= p.velocity.y/this.cameras.main.zoom*.75;
       }
-      this._pinchDist=0;
-      // ── Single-finger drag (delta-based, no extrapolation) ──
-      if(p.isDown && !this._isPinching){
-        const dx=p.x-this._prevPtrX, dy=p.y-this._prevPtrY;
-        if(Math.abs(p.x-this._dragStartX)>6||Math.abs(p.y-this._dragStartY)>6) this._hasDragged=true;
-        if(this._hasDragged){
-          this.cameras.main.scrollX -= dx/this.cameras.main.zoom;
-          this.cameras.main.scrollY -= dy/this.cameras.main.zoom;
-        }
-        this._prevPtrX=p.x; this._prevPtrY=p.y;
-      }
-      // Tooltip on hover (desktop only)
-      if(!p.isDown) this.showTileTooltip(p);
     });
-
-    this.input.on('pointerup', p=>{
-      this._pinchDist=0; this._isPinching=false;
-      if(!this._hasDragged) this.handleClick(p);
-      hideTileTooltip();
-    });
-    this.input.on('pointerout', ()=>hideTileTooltip());
-    // Mouse wheel zoom
+    this.input.on('pointerup', p=>{if(!this._hasDragged)this.handleClick(p);});
     this.input.on('wheel',(_p,_o,_dx,dy)=>{
-      this.cameras.main.zoom=Phaser.Math.Clamp(this.cameras.main.zoom-dy*.001,0.2,2.5);
+      this.cameras.main.zoom=Phaser.Math.Clamp(this.cameras.main.zoom-dy*.0009,0.3,2.5);
     });
 
     this._t=0;
@@ -1268,84 +1079,14 @@ class GameScene extends Phaser.Scene {
     showStatus('Your empire awaits. Select your settler to begin.',4000);
   }
 
-  revealAround(col, row, radius){
-    for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
-      const key=`${c}_${r}`;
-      const inSight = Math.abs(c-col)<=radius && Math.abs(r-row)<=radius;
-      const applyFog=(sp, tex, alpha)=>{
-        if(!sp) return;
-        if(tex && sp.texture.key!==tex) sp.setTexture(tex);
-        sp.setAlpha(alpha);
-      };
-      if(inSight){
-        GS.revealed.add(key);
-        applyFog(this.fogSprites[key], null, 0);
-        if(this.resSp[key]) this.resSp[key].setAlpha(1);
-      } else if(GS.revealed.has(key)){
-        applyFog(this.fogSprites[key], 'tile_fog_seen', 1);
-      }
-    }
-  }
-
-  showTileTooltip(p){
-    const wx=p.worldX, wy=p.worldY;
-    let best=null, bestD=Infinity;
-    for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
-      const pos=isoPos(c,r);
-      const cx=pos.x, cy=pos.y+TH/2;
-      const dx=Math.abs(wx-cx)/(TW*.52), dy=Math.abs(wy-cy)/(TH*.52);
-      const d=dx+dy;
-      if(d<bestD){bestD=d;best={col:c,row:r};}
-    }
-    if(!best||bestD>1.5) return hideTileTooltip();
-    const {col,row}=best;
-    const key=`${col}_${row}`;
-    if(!GS.revealed.has(key)) return hideTileTooltip();
-
-    const tType=MAP_DATA[row]?.[col];
-    if(!tType) return hideTileTooltip();
-    const t=TERRAIN[tType];
-    const yields=getTileYield(col,row,MAP_DATA,RESOURCE_MAP);
-    const rKey=RESOURCE_MAP[key];
-
-    const tt=document.getElementById('tile-tooltip');
-    document.getElementById('tt-title').textContent=t.label;
-    const yparts=[];
-    if(yields.f) yparts.push(`🍎 ${yields.f}`);
-    if(yields.p) yparts.push(`⚒ ${yields.p}`);
-    if(yields.g) yparts.push(`💰 ${yields.g}`);
-    if(yields.s) yparts.push(`📚 ${yields.s}`);
-    document.getElementById('tt-yields').textContent=yparts.join('  ') || 'No yield';
-    document.getElementById('tt-resource').textContent=rKey ? `${RESOURCES[rKey].emoji} ${RESOURCES[rKey].label}` : '';
-
-    tt.style.display='block';
-    tt.style.left=(p.x+18)+'px';
-    tt.style.top=(p.y-10)+'px';
-  }
-
   spawnUnit(unit){
     const {x,y}=isoPos(unit.col,unit.row);
+    // Place feet at the tile's visual center (midpoint of diamond, not bottom tip)
     const footX=x, footY=y+TH/2;
     const shadow=this.add.ellipse(footX, footY+2, 22, 8, 0x000000, 0.30);
     const sp=this.add.image(footX, footY, 'settler_normal').setOrigin(0.5,1.0);
     this.unitLayer.add(shadow); this.unitLayer.add(sp);
     this.unitSprites[unit.id]={sprite:sp, shadow, baseX:footX, baseY:footY};
-  }
-
-  // Spawn worker or warrior using settler sprite as fallback (Chunk 3 will add unique sprites)
-  spawnWorker(unit){
-    const {x,y}=isoPos(unit.col,unit.row);
-    const footX=x, footY=y+TH/2;
-    const col=unit.type==='warrior'?0xd04020:0x3080d0;
-    const shadow=this.add.ellipse(footX, footY+2, 20, 7, 0x000000, 0.28);
-    // Draw a simple colored circle as placeholder sprite
-    const g=this.add.graphics();
-    g.fillStyle(col,1); g.fillCircle(0,-18,10);
-    g.fillStyle(0x000000,0.3); g.fillCircle(2,-16,10);
-    g.fillStyle(col,1); g.fillRect(-6,-30,12,20);
-    g.x=footX; g.y=footY;
-    this.unitLayer.add(shadow); this.unitLayer.add(g);
-    this.unitSprites[unit.id]={sprite:g, shadow, baseX:footX, baseY:footY, isGraphics:true};
   }
 
   tick(){
@@ -1356,8 +1097,8 @@ class GameScene extends Phaser.Scene {
       const s=this.unitSprites[unit.id]; if(!s) continue;
 
       const isSel=GS.selectedUnit&&GS.selectedUnit.id===unit.id;
-      if(!s.isGraphics) s.sprite.setTexture(isSel?'settler_selected':'settler_normal');
-      s.sprite.y=s.baseY;
+      s.sprite.setTexture(isSel?'settler_selected':'settler_normal');
+      s.sprite.y=s.baseY; // no floating
 
       if(isSel){
         if(!s.selRing){s.selRing=this.add.ellipse(s.baseX,s.baseY,44,16,0,0).setStrokeStyle(2.5,0x78e040,1);this.unitLayer.add(s.selRing);}
@@ -1392,7 +1133,9 @@ class GameScene extends Phaser.Scene {
     let best=null, bestD=Infinity;
     for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
       const p=isoPos(c,r);
+      // Center of tile top face = (p.x, p.y + TH/2)
       const cx=p.x, cy=p.y+TH/2;
+      // Manhattan distance in iso space
       const dx=Math.abs(wx-cx)/(TW*.52), dy=Math.abs(wy-cy)/(TH*.52);
       const d=dx+dy;
       if(d<bestD){bestD=d;best={col:c,row:r};}
@@ -1404,15 +1147,8 @@ class GameScene extends Phaser.Scene {
     const isHL=GS.moveHighlights.some(h=>h.col===col&&h.row===row);
 
     if(isHL&&GS.selectedUnit){this.moveUnit(GS.selectedUnit,col,row);return;}
-    if(clickedUnit){
-      GS.selectedUnit=clickedUnit;
-      GS.moveHighlights=clickedUnit.movesLeft>0?getMovable(clickedUnit,clickedUnit.movesLeft):[];
-      closeCity(); updateHUD(); return;
-    }
-    // Click on city tile → open city panel
-    const clickedCity=GS.cities.find(c=>c.col===col&&c.row===row);
-    if(clickedCity){openCity(clickedCity); return;}
-    GS.selectedUnit=null; GS.moveHighlights=[]; updateHUD();
+    if(clickedUnit){GS.selectedUnit=clickedUnit;GS.moveHighlights=clickedUnit.movesLeft>0?getMovable(clickedUnit,clickedUnit.movesLeft):[];updateHUD();return;}
+    GS.selectedUnit=null;GS.moveHighlights=[];updateHUD();
   }
 
   moveUnit(unit,col,row){
@@ -1430,20 +1166,18 @@ class GameScene extends Phaser.Scene {
 
     unit.col=col; unit.row=row; unit.movesLeft--;
     s.baseX=newFX; s.baseY=newFY;
-    this.revealAround(col, row, 2);
     GS.moveHighlights=unit.movesLeft>0?getMovable(unit,unit.movesLeft):[];
     updateHUD();
   }
 
   foundCity(){
-    const u=GS.selectedUnit; if(!u||u.type!=='settler') return;
+    const u=GS.selectedUnit; if(!u) return;
     const type=MAP_DATA[u.row][u.col];
     if(!TERRAIN[type].passable){showStatus('Cannot found here!');return;}
     if(GS.cities.some(c=>hexDist(c.col,c.row,u.col,u.row)<3)){showStatus('Too close to another city!');return;}
     const name=CITY_NAMES[(GS.nextCityId-1)%CITY_NAMES.length];
     const territory=getNeighbors(u.col,u.row).filter(n=>TERRAIN[MAP_DATA[n.row][n.col]].passable).map(n=>({col:n.col,row:n.row}));
-    GS.cities.push({id:GS.nextCityId++,col:u.col,row:u.row,name,pop:1,territory,food:0,foodToGrow:10,prod:0,prodQueue:[],buildings:[],workedTiles:[]});
-    this.revealAround(u.col, u.row, 3);
+    GS.cities.push({id:GS.nextCityId++,col:u.col,row:u.row,name,pop:1,territory});
 
     const sp=this.tileSprites[`${u.col}_${u.row}`];
     if(sp){
@@ -1472,237 +1206,18 @@ class GameScene extends Phaser.Scene {
 }
 
 // ── HUD ──
-function hideTileTooltip(){const tt=document.getElementById('tile-tooltip');if(tt)tt.style.display='none';}
-
 function updateHUD(){
   const u=GS.selectedUnit;
-  GS.income=computeIncome(MAP_DATA,RESOURCE_MAP,GS.cities);
-  document.getElementById('res-food').textContent='+'+GS.income.f;
-  document.getElementById('res-prod').textContent='+'+GS.income.p;
-  document.getElementById('res-gold').textContent='+'+GS.income.g;
-  document.getElementById('res-sci').textContent='+'+GS.income.s;
-  document.getElementById('res-cult').textContent='+'+GS.income.c;
   document.getElementById('res-cities').textContent=GS.cities.length;
-  document.getElementById('turn-info').textContent=`Turn ${GS.turn}`;
-
-  // Refresh city panel if open
-  if(GS.selectedCity) renderCityPanel(GS.selectedCity);
-
-  if(!u){
-    document.getElementById('unit-name').textContent='No unit selected';
-    document.getElementById('unit-desc').textContent='Click a unit or city to manage it.';
-    document.getElementById('action-btns').innerHTML='';
-    return;
-  }
-  const tType=MAP_DATA[u.row]?.[u.col]||'plains';
-  const yields=getTileYield(u.col,u.row,MAP_DATA,RESOURCE_MAP);
-  const rKey=RESOURCE_MAP[`${u.col}_${u.row}`];
-  const uType=UNIT_TYPES[u.type]||UNIT_TYPES.settler;
-  const maxMoves=uType.moves;
-
-  document.getElementById('unit-name').textContent=`⚑ ${uType.label}`;
-  document.getElementById('unit-desc').textContent=
-    `${TERRAIN[tType].label}${rKey?' · '+RESOURCES[rKey].label:''} · Moves: ${u.movesLeft}/${maxMoves} · 🍎${yields.f} ⚒${yields.p} 💰${yields.g}`;
-
-  let btns='';
-  if(u.type==='settler'){
-    btns+=`<button class="abtn" onclick="scene_ref.foundCity()">🏙 Found City</button>`;
-  }
-  if(u.type==='worker'){
-    btns+=`<button class="abtn" onclick="openImprovePanel()">🔨 Build</button>`;
-    // Show build progress if active
-    if(u.buildTarget){
-      btns+=`<span style="font-size:10px;color:#6a8a50;margin-left:8px;">Building ${IMPROVEMENTS[u.buildType]?.label} (${u.buildLeft} turns)</span>`;
-    }
-  }
-  btns+=`<button class="abtn" onclick="GS.selectedUnit=null;GS.moveHighlights=[];updateHUD()">⏭ Skip</button>`;
-  document.getElementById('action-btns').innerHTML=btns;
+  document.getElementById('res-units').textContent=GS.units.length;
+  if(!u){document.getElementById('unit-name').textContent='No unit selected';document.getElementById('unit-desc').textContent='Click a unit to select it.';document.getElementById('action-btns').innerHTML='';return;}
+  document.getElementById('unit-name').textContent='⚑ Settler';
+  document.getElementById('unit-desc').textContent=`On: ${TERRAIN[MAP_DATA[u.row][u.col]].label} · Moves: ${u.movesLeft}/2`;
+  document.getElementById('action-btns').innerHTML=
+    `<button class="abtn" onclick="scene_ref.foundCity()">🏙 Found City</button>`+
+    `<button class="abtn" onclick="GS.selectedUnit=null;GS.moveHighlights=[];updateHUD()">⏭ Skip</button>`;
 }
-
-// ── CHUNK 2: City Panel ──
-function openCity(city){
-  GS.selectedCity=city;
-  GS.selectedUnit=null; GS.moveHighlights=[];
-  document.getElementById('city-panel').style.display='block';
-  renderCityPanel(city);
-  updateHUD();
-}
-function closeCity(){
-  GS.selectedCity=null;
-  document.getElementById('city-panel').style.display='none';
-  updateHUD();
-}
-function renderCityPanel(city){
-  const y=getCityYields(city);
-  document.getElementById('cp-name').textContent=`🏙 ${city.name}`;
-  document.getElementById('cp-pop').textContent=`Population ${city.pop} · Turn ${GS.turn}`;
-
-  // Yields row
-  document.getElementById('cp-yields').innerHTML=
-    `<div class="cpill">🍎 ${y.f}</div><div class="cpill">⚒ ${y.p}</div><div class="cpill">💰 ${y.g}</div><div class="cpill">📚 ${y.s}</div><div class="cpill">🎭 ${y.c}</div>`;
-
-  // Food bar
-  const foodNeeded=city.foodToGrow||10;
-  const foodPct=Math.min(100,Math.round((city.food||0)/foodNeeded*100));
-  const foodSurplus=y.f - city.pop*2;
-  document.getElementById('cp-food-bar').style.width=foodPct+'%';
-  document.getElementById('cp-food-label').textContent=
-    `${city.food||0}/${foodNeeded} (${foodSurplus>=0?'+':''}${foodSurplus} per turn)`;
-
-  // Production queue
-  const qEl=document.getElementById('cp-prod-queue');
-  if(city.prodQueue&&city.prodQueue.length>0){
-    const item=city.prodQueue[0];
-    const def=BUILDINGS[item]||UNIT_TYPES[item];
-    const cost=BUILDINGS[item]?.cost||UNIT_TYPES[item]?.cost||0;
-    const turnsLeft=cost>0?Math.ceil((cost-(city.prod||0))/Math.max(1,y.p)):1;
-    qEl.innerHTML=`<div style="background:rgba(60,100,30,.2);border:1px solid #3a6020;border-radius:3px;padding:6px 10px;">
-      <div style="color:#a8d860;font-size:11px;font-weight:700;">${def?.label||item}</div>
-      <div style="font-size:10px;color:#5a7840;margin-top:2px;">${city.prod||0}/${cost} · ~${turnsLeft} turn${turnsLeft!==1?'s':''}</div>
-      <div style="background:#0c140a;border-radius:2px;height:5px;margin-top:4px;overflow:hidden;">
-        <div style="height:100%;background:#5a9830;width:${Math.min(100,Math.round((city.prod||0)/Math.max(1,cost)*100))}%"></div>
-      </div>
-    </div>`;
-  } else {
-    qEl.innerHTML=`<div style="color:#3a5828;font-size:11px;font-style:italic;">Nothing queued</div>`;
-  }
-
-  // Build options
-  const bOpts=document.getElementById('cp-build-options');
-  let bHTML='';
-  // Buildings
-  for(const [bk,b] of Object.entries(BUILDINGS)){
-    const has=(city.buildings||[]).includes(bk);
-    const queued=(city.prodQueue||[]).includes(bk);
-    const turnsEst=Math.ceil(b.cost/Math.max(1,y.p));
-    bHTML+=`<button class="bbtn" onclick="queueBuild('${city.id}','${bk}')" ${has||queued?'disabled':''}>
-      ${b.label} (${turnsEst}t)<br><span style="font-size:9px;color:#4a6838;">${b.desc}</span>
-    </button>`;
-  }
-  // Worker unit
-  const wCost=UNIT_TYPES.worker.cost;
-  const wTurns=Math.ceil(wCost/Math.max(1,y.p));
-  bHTML+=`<button class="bbtn" onclick="queueBuild('${city.id}','worker')">
-    Worker (${wTurns}t)<br><span style="font-size:9px;color:#4a6838;">Builds tile improvements</span>
-  </button>`;
-  // Warrior
-  const wrCost=UNIT_TYPES.warrior.cost;
-  const wrTurns=Math.ceil(wrCost/Math.max(1,y.p));
-  bHTML+=`<button class="bbtn" onclick="queueBuild('${city.id}','warrior')">
-    Warrior (${wrTurns}t)<br><span style="font-size:9px;color:#4a6838;">Melee combat unit</span>
-  </button>`;
-  bOpts.innerHTML=bHTML;
-
-  // Buildings list
-  const bEl=document.getElementById('cp-buildings');
-  if(city.buildings&&city.buildings.length>0){
-    bEl.innerHTML=city.buildings.map(bk=>`<div class="bldg-badge">${BUILDINGS[bk]?.label||bk}</div>`).join('');
-  } else {
-    bEl.innerHTML=`<div style="color:#3a5828;font-size:11px;font-style:italic;">None yet</div>`;
-  }
-
-  // Worked tiles
-  const worked=getCityWorkedTiles(city);
-  const wEl=document.getElementById('cp-worked');
-  wEl.innerHTML=worked.map(t=>{
-    const ty=getTileYield(t.col,t.row,MAP_DATA,RESOURCE_MAP);
-    const imp=GS.improvements[`${t.col}_${t.row}`];
-    const tt=TERRAIN[MAP_DATA[t.row][t.col]];
-    return `<div style="color:#7a9860;">${tt.label}${imp?' + '+IMPROVEMENTS[imp].label:''} · 🍎${ty.f} ⚒${ty.p} 💰${ty.g}</div>`;
-  }).join('');
-}
-
-function queueBuild(cityId, itemKey){
-  const city=GS.cities.find(c=>c.id==cityId); if(!city) return;
-  if(!city.prodQueue) city.prodQueue=[];
-  if(!city.prodQueue.includes(itemKey)) city.prodQueue.push(itemKey);
-  renderCityPanel(city);
-}
-
-// ── CHUNK 2: Worker improvement panel ──
-function openImprovePanel(){
-  const u=GS.selectedUnit; if(!u||u.type!=='worker') return;
-  const tType=MAP_DATA[u.row]?.[u.col];
-  const panel=document.getElementById('improve-panel');
-  const opts=document.getElementById('imp-options');
-  let html='';
-  for(const [ik,imp] of Object.entries(IMPROVEMENTS)){
-    const valid=imp.validOn.includes(tType);
-    const exists=GS.improvements[`${u.col}_${u.row}`]===ik;
-    html+=`<button class="bbtn" onclick="startImprovement('${ik}')" ${!valid||exists?'disabled':''}>
-      ${imp.label} (${imp.turns}t)<br><span style="font-size:9px;color:#4a6838;">🍎${imp.bonus.f||0} ⚒${imp.bonus.p||0} 💰${imp.bonus.g||0}</span>
-    </button>`;
-  }
-  opts.innerHTML=html;
-  panel.style.display='block';
-}
-function startImprovement(impKey){
-  const u=GS.selectedUnit; if(!u) return;
-  u.buildType=impKey; u.buildLeft=IMPROVEMENTS[impKey].turns;
-  u.buildTarget={col:u.col,row:u.row};
-  document.getElementById('improve-panel').style.display='none';
-  showStatus(`🔨 Worker building ${IMPROVEMENTS[impKey].label} (${IMPROVEMENTS[impKey].turns} turns)…`);
-  updateHUD();
-}
-
-function endTurn(){
-  GS.turn++;
-  for(const u of GS.units){
-    u.movesLeft=UNIT_TYPES[u.type]?.moves||2;
-    // Worker build progress
-    if(u.buildLeft>0){
-      u.buildLeft--;
-      if(u.buildLeft===0&&u.buildTarget){
-        GS.improvements[`${u.buildTarget.col}_${u.buildTarget.row}`]=u.buildType;
-        showStatus(`✅ ${IMPROVEMENTS[u.buildType].label} complete!`);
-        u.buildTarget=null; u.buildType=null;
-      }
-    }
-  }
-  // City production + growth
-  for(const c of GS.cities){
-    const y=getCityYields(c);
-    // Production
-    if(c.prodQueue&&c.prodQueue.length>0){
-      const item=c.prodQueue[0];
-      const isBuilding=!!BUILDINGS[item];
-      const isUnit=!!UNIT_TYPES[item];
-      const cost=isBuilding?BUILDINGS[item].cost:UNIT_TYPES[item]?.cost||0;
-      c.prod=(c.prod||0)+y.p;
-      if(c.prod>=cost){
-        c.prod=0; c.prodQueue.shift();
-        if(isBuilding){
-          if(!(c.buildings||[]).includes(item)){c.buildings=c.buildings||[];c.buildings.push(item);}
-          showStatus(`🏛 ${c.name} built ${BUILDINGS[item].label}!`);
-        } else if(isUnit&&item==='worker'){
-          // Spawn worker at city tile
-          const wid=GS.nextUnitId++;
-          GS.units.push({id:wid,type:'worker',col:c.col,row:c.row,movesLeft:3,buildLeft:0,buildTarget:null,buildType:null});
-          if(scene_ref) scene_ref.spawnWorker(GS.units.find(u=>u.id===wid));
-          showStatus(`👷 ${c.name} trained a Worker!`);
-        } else if(isUnit&&item==='warrior'){
-          const wid=GS.nextUnitId++;
-          GS.units.push({id:wid,type:'warrior',col:c.col,row:c.row,movesLeft:2});
-          if(scene_ref) scene_ref.spawnWorker(GS.units.find(u=>u.id===wid)); // reuse spawn fn
-          showStatus(`⚔️ ${c.name} trained a Warrior!`);
-        }
-      }
-    }
-    // Food growth
-    const foodSurplus=y.f - c.pop*2;
-    c.food=(c.food||0)+foodSurplus;
-    if(c.food<0) c.food=0; // no starvation for now
-    if(c.food>=(c.foodToGrow||10)){
-      c.pop=Math.min(20,c.pop+1); c.food=0;
-      c.foodToGrow=Math.round((c.foodToGrow||10)*1.5);
-      showStatus(`🌱 ${c.name} grew to pop ${c.pop}!`);
-    }
-  }
-  GS.science+=(GS.income.s||0);
-  GS.culture+=(GS.income.c||0);
-  showStatus(`Turn ${GS.turn} begins`);
-  updateHUD();
-}
+function endTurn(){GS.turn++;for(const u of GS.units)u.movesLeft=2;document.getElementById('turn-info').textContent=`Turn ${GS.turn}`;showStatus(`Turn ${GS.turn} begins`);if(GS.turn%5===0)for(const c of GS.cities)c.pop=Math.min(10,c.pop+1);updateHUD();}
 function showStatus(msg,d=2500){const el=document.getElementById('status-msg');el.textContent=msg;el.style.opacity='1';clearTimeout(el._t);el._t=setTimeout(()=>el.style.opacity='0',d);}
 
 // ── INIT ──
