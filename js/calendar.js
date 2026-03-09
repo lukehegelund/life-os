@@ -164,7 +164,7 @@ async function fetchEvents() {
     d = addDays(d, 1);
   }
 
-  const [tasksRes, remindersRes, weddingsRes, classesRes, calEventsRes, timeBlocksRes] = await Promise.all([
+  const [tasksRes, remindersRes, weddingsRes, classesRes, calEventsRes, timeBlocksRes, classDailyNotesRes] = await Promise.all([
     supabase.from('tasks')
       .select('id, title, due_date, priority, module')
       .in('status', ['open', 'in_progress'])
@@ -188,7 +188,21 @@ async function fetchEvents() {
       .select('id, date, start_time, end_time, title, block_type, assigned_tasks, status, description')
       .gte('date', startStr)
       .lte('date', endStr),
+    supabase.from('class_daily_notes')
+      .select('class_id, date, note')
+      .gte('date', startStr)
+      .lte('date', endStr),
   ]);
+
+  // Build classDateNotes lookup: classId → date → note
+  const classDateNotes = {};
+  for (const n of (classDailyNotesRes.data || [])) {
+    if (!n.note) continue;
+    if (!classDateNotes[n.class_id]) classDateNotes[n.class_id] = {};
+    classDateNotes[n.class_id][n.date] = n.note;
+  }
+  // Make accessible globally for the class popup
+  window._classDateNotes = classDateNotes;
 
   for (const t of (tasksRes.data || [])) {
     if (!eventCache[t.due_date]) continue;
@@ -232,6 +246,7 @@ async function fetchEvents() {
     for (const cls of classes) {
       if (classMatchesDow(cls.day_of_week, dow)) {
         if (!eventCache[key]) eventCache[key] = [];
+        const classNote = (classDateNotes[cls.id] && classDateNotes[cls.id][key]) || null;
         eventCache[key].push({
           type: 'class', title: cls.name,
           meta: cls.time_start ? fmt12(cls.time_start.slice(0,5)) : cls.subject || '',
@@ -241,6 +256,7 @@ async function fetchEvents() {
           timeEnd: cls.time_end ? cls.time_end.slice(0,5) : null,
           classId: cls.id,
           editable: true,
+          notes: classNote,
         });
       }
     }
@@ -550,6 +566,7 @@ function renderDayGrid() {
     const classIdAttr = e.classId ? `data-class-id="${e.classId}"` : '';
     const evTypeAttr = `data-ev-type="${e.type}"`;
 
+    const hasNote1 = !!(e.notes);
     html += `<div class="wcal-ev${isEditable ? ' wcal-ev-editable' : ''}" ${evId} ${classIdAttr} ${evTypeAttr}
       data-date="${ds}" data-start="${e.timeStart}" data-end="${e.timeEnd || ''}" data-title="${(e.title||'').replace(/"/g,'&quot;')}" data-notes="${(e.notes||'').replace(/"/g,'&quot;')}"
       style="position:absolute;top:${topPct}%;left:2px;right:2px;
@@ -558,7 +575,8 @@ function renderDayGrid() {
         overflow:hidden;z-index:5;display:block;line-height:1.3;
         cursor:${cursor};user-select:none;box-sizing:border-box"
       title="${e.title} ${timeLabel}">
-      <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.title}</div>
+      ${hasNote1 ? '<div style="position:absolute;top:3px;right:4px;width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.95);box-shadow:0 0 0 1px rgba(0,0,0,0.15);z-index:2;pointer-events:none"></div>' : ''}
+      <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:${hasNote1 ? '10px' : '0'}">${e.title}</div>
       ${heightPx > 28 ? `<div class="wcal-time-lbl" style="font-size:9px;opacity:0.85">${timeLabel}</div>` : ''}
       ${isEditable ? `<div class="wcal-resize-handle" style="position:absolute;bottom:0;left:0;right:0;height:6px;cursor:s-resize;background:rgba(0,0,0,0.15);border-radius:0 0 4px 4px"></div>` : ''}
     </div>`;
@@ -678,6 +696,7 @@ function renderWeekGrid() {
       const classIdAttr = e.classId ? `data-class-id="${e.classId}"` : '';
       const evTypeAttr = `data-ev-type="${e.type}"`;
 
+      const hasNote2 = !!(e.notes);
       html += `<div class="wcal-ev${isEditable ? ' wcal-ev-editable' : ''}" ${evId} ${classIdAttr} ${evTypeAttr}
         data-date="${str}" data-start="${e.timeStart}" data-end="${e.timeEnd || ''}" data-title="${(e.title||'').replace(/"/g,'&quot;')}" data-notes="${(e.notes||'').replace(/"/g,'&quot;')}"
         style="position:absolute;top:${topPct}%;left:2px;right:2px;
@@ -686,7 +705,8 @@ function renderWeekGrid() {
           overflow:hidden;z-index:5;display:block;line-height:1.3;
           cursor:${cursor};user-select:none;box-sizing:border-box"
         title="${e.title} ${timeLabel}">
-        <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.title}</div>
+        ${hasNote2 ? '<div style="position:absolute;top:3px;right:4px;width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.95);box-shadow:0 0 0 1px rgba(0,0,0,0.15);z-index:2;pointer-events:none"></div>' : ''}
+        <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:${hasNote2 ? '10px' : '0'}">${e.title}</div>
         ${heightPx > 28 ? `<div class="wcal-time-lbl" style="font-size:9px;opacity:0.85">${timeLabel}</div>` : ''}
         ${isEditable ? `<div class="wcal-resize-handle" style="position:absolute;bottom:0;left:0;right:0;height:6px;cursor:s-resize;background:rgba(0,0,0,0.15);border-radius:0 0 4px 4px"></div>` : ''}
       </div>`;
@@ -1012,7 +1032,7 @@ function attachWeekInteractions() {
           openEventPopup(evId, evStart, evEnd, evEl.dataset.title || evEl.title, evDate, evEl, evEl.dataset.notes || '');
         } else if (evType === 'class' && classId) {
           const className = evEl.dataset.title || evEl.title;
-          openClassEditModal(classId, className, evStart, evEnd);
+          openClassEditModal(classId, className, evStart, evEnd, evDate);
         }
       });
 
@@ -1102,20 +1122,24 @@ async function saveClassTime(classId, startTime, endTime) {
   }
 }
 
-// ── Class edit modal (edit time; navigate to class page) ──────────────────────
-function openClassEditModal(classId, className, startTime, endTime) {
+// ── Class edit modal (edit time, today's note; navigate to class page) ────────
+function openClassEditModal(classId, className, startTime, endTime, evDate) {
   removeModal();
+
+  // Get current note from our in-memory cache
+  const existingNote = (window._classDateNotes?.[classId]?.[evDate]) || '';
+
   const modal = document.createElement('div');
   modal.id = 'cal-ev-modal';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:500;display:flex;align-items:center;justify-content:center';
   modal.innerHTML = `
-    <div style="background:var(--white);border-radius:12px;padding:20px;width:90%;max-width:360px;box-shadow:0 8px 32px rgba(0,0,0,0.2)" onclick="event.stopPropagation()">
+    <div style="background:var(--white);border-radius:12px;padding:20px;width:90%;max-width:380px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.2)" onclick="event.stopPropagation()">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
         <div style="width:10px;height:10px;border-radius:50%;background:#2563EB;flex-shrink:0"></div>
         <div style="font-size:16px;font-weight:700">${className}</div>
       </div>
-      <div style="font-size:12px;color:var(--gray-400);margin-bottom:16px">Recurring class · changes apply to all days</div>
-      <div style="display:flex;gap:8px;margin-bottom:16px">
+      <div style="font-size:12px;color:var(--gray-400);margin-bottom:14px">Recurring class · time changes apply to all days</div>
+      <div style="display:flex;gap:8px;margin-bottom:14px">
         <div style="flex:1">
           <label style="font-size:11px;color:var(--gray-400);margin-bottom:3px;display:block">Start</label>
           <input id="cem-start" type="time" value="${startTime || ''}"
@@ -1128,6 +1152,15 @@ function openClassEditModal(classId, className, startTime, endTime) {
             style="width:100%;border:1.5px solid var(--gray-200);border-radius:8px;padding:8px 10px;font-size:14px;outline:none;box-sizing:border-box"
             onfocus="this.style.borderColor='var(--blue)'" onblur="this.style.borderColor='var(--gray-200)'" />
         </div>
+      </div>
+      <div style="margin-bottom:14px">
+        <label style="font-size:11px;color:var(--gray-400);margin-bottom:4px;display:flex;align-items:center;gap:5px">
+          📝 Today's Notes <span style="font-size:10px;color:var(--gray-300)">(synced with class page)</span>
+        </label>
+        <textarea id="cem-note" rows="4" placeholder="Notes for this class on this day…"
+          style="width:100%;border:1.5px solid var(--gray-200);border-radius:8px;padding:9px 12px;font-size:13px;resize:vertical;line-height:1.5;outline:none;box-sizing:border-box;font-family:inherit"
+          onfocus="this.style.borderColor='var(--blue)'" onblur="this.style.borderColor='var(--gray-200)'">${existingNote.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+        <div id="cem-note-status" style="font-size:11px;color:var(--gray-400);text-align:right;min-height:14px;margin-top:2px"></div>
       </div>
       <div style="display:flex;gap:8px">
         <button id="cem-goto-btn"
@@ -1144,9 +1177,47 @@ function openClassEditModal(classId, className, startTime, endTime) {
   modal.addEventListener('click', () => modal.remove());
   document.body.appendChild(modal);
 
+  // ── Note auto-save ──
+  let _cemNoteSavedValue = existingNote;
+  let _cemNoteTimer = null;
+  const noteArea = document.getElementById('cem-note');
+  const noteStatus = document.getElementById('cem-note-status');
+
+  async function saveCemNote() {
+    if (!noteArea || !evDate) return;
+    const note = noteArea.value;
+    if (note === _cemNoteSavedValue) { if (noteStatus) noteStatus.textContent = ''; return; }
+    if (noteStatus) noteStatus.textContent = 'Saving…';
+    const { error } = await supabase
+      .from('class_daily_notes')
+      .upsert({ class_id: Number(classId), date: evDate, note, updated_at: new Date().toISOString() },
+              { onConflict: 'class_id,date' });
+    if (error) { if (noteStatus) noteStatus.textContent = '⚠️ Error'; return; }
+    _cemNoteSavedValue = note;
+    // Update in-memory cache so blue dot appears immediately
+    if (!window._classDateNotes) window._classDateNotes = {};
+    if (!window._classDateNotes[classId]) window._classDateNotes[classId] = {};
+    if (note) {
+      window._classDateNotes[classId][evDate] = note;
+    } else {
+      delete window._classDateNotes[classId][evDate];
+    }
+    if (noteStatus) { noteStatus.textContent = 'Saved ✓'; setTimeout(() => { if (noteStatus) noteStatus.textContent = ''; }, 1500); }
+    render();
+  }
+
+  if (noteArea) {
+    noteArea.addEventListener('input', () => {
+      clearTimeout(_cemNoteTimer);
+      if (noteStatus) noteStatus.textContent = 'Unsaved…';
+      _cemNoteTimer = setTimeout(saveCemNote, 900);
+    });
+    noteArea.addEventListener('blur', () => { clearTimeout(_cemNoteTimer); saveCemNote(); });
+  }
+
   document.getElementById('cem-goto-btn').addEventListener('click', () => {
     modal.remove();
-    window.location.href = `class.html?id=${classId}`;
+    window.location.href = `class.html?id=${classId}${evDate ? '&date=' + evDate : ''}`;
   });
 
   document.getElementById('cem-save-btn').addEventListener('click', async () => {
@@ -1155,6 +1226,8 @@ function openClassEditModal(classId, className, startTime, endTime) {
     if (!start) { document.getElementById('cem-start').focus(); return; }
     const btn = document.getElementById('cem-save-btn');
     if (btn) btn.disabled = true;
+    clearTimeout(_cemNoteTimer);
+    await saveCemNote();
     await saveClassTime(classId, start, end);
     modal.remove();
   });
@@ -1866,17 +1939,22 @@ function renderDayPanel(ds) {
         `<li>${typeof t === 'object' ? (t.title || t.name || JSON.stringify(t)) : t}</li>`
       ).join('')}</ul>`;
     }
+    const hasNote = !!(e.notes);
+    const noteDot = hasNote
+      ? `<div style="position:absolute;top:8px;right:8px;width:7px;height:7px;border-radius:50%;background:#2563EB;flex-shrink:0" title="Has note"></div>`
+      : '';
     const href = (e.link && e.link !== '#') ? e.link : null;
     const tag = href ? 'a' : 'div';
     const hrefAttr = href ? ` href="${href}"` : '';
-    return `<${tag}${hrefAttr} class="cal-event-item${e.isDone ? ' cal-event-done' : ''}">
+    return `<${tag}${hrefAttr} class="cal-event-item${e.isDone ? ' cal-event-done' : ''}" style="position:relative">
       <div class="cal-event-stripe" style="background:${e.color}"></div>
       <div class="cal-event-content">
-        <div class="cal-event-title">${e.title}</div>
+        <div class="cal-event-title" style="padding-right:${hasNote ? '16px' : '0'}">${e.title}</div>
         ${timeRange}
         ${e.meta ? `<div class="cal-event-meta">${e.meta}</div>` : ''}
         ${taskHtml}
       </div>
+      ${noteDot}
     </${tag}>`;
   }).join('');
 }

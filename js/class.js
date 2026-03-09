@@ -69,9 +69,9 @@ async function load() {
   await Promise.all([
     loadUniversalClassNotes(),
     loadOverviewNotesSection(),
+    loadTodayNotes(),
     loadRoster(cls),
     loadGoldBulk(),
-    loadLessonPlans(),
     loadRecentNotes(),
     loadAttendanceGrid(),
     cls.track_pages !== 'None' ? loadAnalytics() : Promise.resolve(),
@@ -1088,117 +1088,90 @@ window.saveClassSettings = async () => {
   load();
 };
 
-// ── Lesson Plans — show plans that existed as of selectedDate ─────────────
-async function loadLessonPlans() {
-  const el = document.getElementById('lesson-plans-content');
+// ── Today's Notes — one note per class per day, synced with calendar popup ────
+// This is stored in class_daily_notes (class_id, date, note)
+// The calendar popup for a class event also reads/writes this same note.
+
+let _todayNoteCurrentValue = ''; // track last saved value to avoid spurious saves
+let _todayNoteSaveTimer = null;
+
+async function loadTodayNotes() {
+  const el = document.getElementById('today-notes-content');
   if (!el) return;
-  showSpinner(el);
 
   const { data, error } = await supabase
-    .from('lesson_plans')
+    .from('class_daily_notes')
     .select('*')
     .eq('class_id', classId)
-    .lte('date', selectedDate)  // Only show plans up to selectedDate
-    .order('date', { ascending: false })
-    .limit(20);
+    .eq('date', selectedDate)
+    .maybeSingle();
 
-  if (error || !data) { el.innerHTML = '<div class="empty-state">Could not load plans</div>'; return; }
-  if (!data.length) {
-    el.innerHTML = '<div style="text-align:center;color:var(--gray-400);font-size:13px;padding:16px 0">No lesson plans yet. Tap + Plan to add one.</div>';
+  const note = data?.note || '';
+  _todayNoteCurrentValue = note;
+  renderTodayNotes(note);
+}
+
+function renderTodayNotes(note) {
+  const el = document.getElementById('today-notes-content');
+  if (!el) return;
+
+  const readOnly = isPast();
+  const dateLabel = isToday() ? 'hoy' : fmtDate(selectedDate);
+
+  el.innerHTML = `
+    <div style="position:relative">
+      <textarea id="today-note-textarea"
+        rows="4"
+        class="form-input"
+        placeholder="Notes for ${dateLabel}…"
+        style="resize:vertical;font-size:13px;line-height:1.6;width:100%;box-sizing:border-box;${readOnly ? 'background:var(--gray-50);color:var(--gray-500)' : ''}"
+        ${readOnly ? 'readonly' : ''}
+      >${escHtml(note)}</textarea>
+      <div id="today-note-status" style="font-size:11px;color:var(--gray-400);margin-top:4px;min-height:16px;text-align:right"></div>
+    </div>`;
+
+  if (!readOnly) {
+    const textarea = document.getElementById('today-note-textarea');
+    textarea.addEventListener('input', () => {
+      clearTimeout(_todayNoteSaveTimer);
+      document.getElementById('today-note-status').textContent = 'Unsaved…';
+      _todayNoteSaveTimer = setTimeout(saveTodayNote, 800);
+    });
+    textarea.addEventListener('blur', () => {
+      clearTimeout(_todayNoteSaveTimer);
+      saveTodayNote();
+    });
+  }
+}
+
+async function saveTodayNote() {
+  const textarea = document.getElementById('today-note-textarea');
+  if (!textarea) return;
+  const note = textarea.value;
+  if (note === _todayNoteCurrentValue) {
+    document.getElementById('today-note-status').textContent = '';
     return;
   }
 
-  el.innerHTML = data.map(p => {
-    const isSelectedDay = p.date === selectedDate;
-    const isPastPlan  = p.date < selectedDate;
-    const dateLabel = isSelectedDay ? (isToday() ? '📌 Today' : `📌 ${fmtDate(selectedDate)}`) : fmtDate(p.date);
-    const statusDot = p.completed
-      ? '<span style="display:inline-block;width:8px;height:8px;background:var(--green);border-radius:50%;margin-left:6px;vertical-align:middle" title="Completed"></span>'
-      : '';
-    return `<div class="lesson-plan-item${isSelectedDay ? ' lp-today' : ''}${isPastPlan && !p.completed ? ' lp-past' : ''}"
-      style="border-left:3px solid ${isSelectedDay ? 'var(--blue)' : p.completed ? 'var(--green)' : 'var(--gray-200)'};
-             padding:10px 12px;margin-bottom:8px;border-radius:0 6px 6px 0;background:${isSelectedDay ? 'var(--blue-light,#EFF6FF)' : 'var(--gray-50)'}">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
-        <div>
-          <span style="font-size:12px;font-weight:700;color:${isSelectedDay ? 'var(--blue)' : 'var(--gray-500)'}">${dateLabel}</span>${statusDot}
-          ${p.title ? `<div style="font-size:14px;font-weight:600;color:var(--gray-800);margin-top:2px">${p.title}</div>` : ''}
-        </div>
-        <div style="display:flex;gap:4px;flex-shrink:0">
-          ${!p.completed ? `<button onclick="markLessonDone('${p.id}')" style="padding:4px 8px;border:none;border-radius:5px;background:var(--green);color:white;font-size:11px;font-weight:600;cursor:pointer" title="Mark done">✓</button>` : ''}
-          <button onclick="editLessonPlan('${p.id}')" style="padding:4px 8px;border:1px solid var(--gray-200);border-radius:5px;background:var(--white);color:var(--gray-600);font-size:11px;cursor:pointer">✏️</button>
-          <button onclick="deleteLessonPlan('${p.id}')" style="padding:4px 8px;border:none;border-radius:5px;background:#FEF2F2;color:var(--red);font-size:11px;cursor:pointer">🗑</button>
-        </div>
-      </div>
-      ${p.objectives ? `<div style="font-size:12px;color:var(--gray-500);margin-top:4px"><strong>Objectives:</strong> ${p.objectives}</div>` : ''}
-      ${p.materials ? `<div style="font-size:12px;color:var(--gray-500);margin-top:2px"><strong>Materials:</strong> ${p.materials}</div>` : ''}
-      ${p.notes ? `<div style="font-size:12px;color:var(--gray-400);margin-top:2px;font-style:italic">${p.notes}</div>` : ''}
-    </div>`;
-  }).join('');
+  const statusEl = document.getElementById('today-note-status');
+  if (statusEl) statusEl.textContent = 'Saving…';
+
+  const { error } = await supabase
+    .from('class_daily_notes')
+    .upsert({ class_id: Number(classId), date: selectedDate, note, updated_at: new Date().toISOString() },
+            { onConflict: 'class_id,date' });
+
+  if (error) {
+    if (statusEl) statusEl.textContent = '⚠️ Error saving';
+    return;
+  }
+  _todayNoteCurrentValue = note;
+  if (statusEl) statusEl.textContent = 'Saved ✓';
+  setTimeout(() => { const s = document.getElementById('today-note-status'); if (s) s.textContent = ''; }, 1500);
 }
 
-window.openLessonPlanModal = (prefill = {}) => {
-  const modal = document.getElementById('lesson-plan-modal');
-  if (!modal) return;
-  modal.style.display = 'flex';
-  document.getElementById('lp-modal-title').textContent = prefill.id ? '✏️ Edit Lesson Plan' : '📋 New Lesson Plan';
-  document.getElementById('lp-edit-id').value = prefill.id || '';
-  document.getElementById('lp-date').value = prefill.date || selectedDate;
-  document.getElementById('lp-title').value = prefill.title || '';
-  document.getElementById('lp-objectives').value = prefill.objectives || '';
-  document.getElementById('lp-materials').value = prefill.materials || '';
-  document.getElementById('lp-notes').value = prefill.notes || '';
-  setTimeout(() => document.getElementById('lp-title').focus(), 80);
-};
-
-window.closeLessonPlanModal = () => {
-  const modal = document.getElementById('lesson-plan-modal');
-  if (modal) modal.style.display = 'none';
-};
-
-window.saveLessonPlan = async () => {
-  const editId  = document.getElementById('lp-edit-id').value;
-  const date    = document.getElementById('lp-date').value;
-  const title   = document.getElementById('lp-title').value.trim();
-  const objectives = document.getElementById('lp-objectives').value.trim() || null;
-  const materials  = document.getElementById('lp-materials').value.trim() || null;
-  const notes      = document.getElementById('lp-notes').value.trim() || null;
-
-  if (!date) { toast('Please pick a date', 'error'); return; }
-
-  const payload = { class_id: parseInt(classId), date, title: title || null, objectives, materials, notes };
-
-  let error;
-  if (editId) {
-    ({ error } = await supabase.from('lesson_plans').update(payload).eq('id', editId));
-  } else {
-    ({ error } = await supabase.from('lesson_plans').insert(payload));
-  }
-
-  if (error) { toast('Error saving plan: ' + error.message, 'error'); return; }
-  toast(editId ? 'Plan updated ✅' : 'Plan added ✅', 'success');
-  closeLessonPlanModal();
-  loadLessonPlans();
-};
-
-window.editLessonPlan = async (id) => {
-  const { data } = await supabase.from('lesson_plans').select('*').eq('id', id).single();
-  if (!data) return;
-  openLessonPlanModal(data);
-};
-
-window.markLessonDone = async (id) => {
-  const { error } = await supabase.from('lesson_plans').update({ completed: true }).eq('id', id);
-  if (error) { toast('Error', 'error'); return; }
-  toast('Marked done ✅', 'success');
-  loadLessonPlans();
-};
-
-window.deleteLessonPlan = async (id) => {
-  const { error } = await supabase.from('lesson_plans').delete().eq('id', id);
-  if (error) { toast('Error deleting plan', 'error'); return; }
-  toast('Plan deleted', 'success');
-  loadLessonPlans();
-};
+// Expose for calendar.js cross-page refresh (not needed since separate pages)
+window.loadTodayNotes = loadTodayNotes;
 
 // ── Universal Class Notes — show notes that existed as of selectedDate ─────
 const UNIVERSAL_NOTE_FLAG = '"is_universal_class_note":true';

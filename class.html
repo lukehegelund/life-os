@@ -54,13 +54,12 @@
     <div id="roster"></div>
   </div>
 
-  <!-- Lesson Plans -->
-  <div class="card" id="lesson-plans-card">
+  <!-- Today's Notes -->
+  <div class="card" id="today-notes-card">
     <div class="card-header">
-      <div class="card-title" style="margin:0">📋 Planes de Clase</div>
-      <button class="btn btn-sm btn-primary" onclick="openLessonPlanModal()">+ Plan</button>
+      <div class="card-title" style="margin:0">📝 Today's Notes</div>
     </div>
-    <div id="lesson-plans-content"></div>
+    <div id="today-notes-content"></div>
   </div>
 
   <!-- Recent class notes (with swipe) -->
@@ -89,38 +88,6 @@
   </div>
 
 </main>
-
-<!-- Lesson Plan Modal -->
-<div id="lesson-plan-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:500;align-items:flex-end;justify-content:center">
-  <div style="background:var(--white);border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:600px;max-height:90vh;overflow-y:auto">
-    <div style="font-size:17px;font-weight:700;margin-bottom:16px" id="lp-modal-title">📋 Nuevo Plan de Clase</div>
-    <input type="hidden" id="lp-edit-id" />
-    <div class="form-group">
-      <label class="form-label">Fecha</label>
-      <input type="date" class="form-input" id="lp-date" />
-    </div>
-    <div class="form-group">
-      <label class="form-label">Título de Clase</label>
-      <input type="text" class="form-input" id="lp-title" placeholder="e.g. Introduction to fractions" />
-    </div>
-    <div class="form-group">
-      <label class="form-label">Objetivos</label>
-      <textarea class="form-input" id="lp-objectives" rows="2" placeholder="What students will learn…" style="resize:vertical"></textarea>
-    </div>
-    <div class="form-group">
-      <label class="form-label">Materiales</label>
-      <input type="text" class="form-input" id="lp-materials" placeholder="e.g. Whiteboard, worksheets" />
-    </div>
-    <div class="form-group">
-      <label class="form-label">Notas</label>
-      <textarea class="form-input" id="lp-notes" rows="3" placeholder="Additional notes, homework, reminders…" style="resize:vertical"></textarea>
-    </div>
-    <div style="display:flex;gap:8px;margin-top:4px">
-      <button class="btn btn-primary" style="flex:1" onclick="saveLessonPlan()">Guardar Plan</button>
-      <button class="btn btn-ghost" onclick="closeLessonPlanModal()">Cancelar</button>
-    </div>
-  </div>
-</div>
 
 <!-- Class Settings Modal -->
 <div id="class-settings-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:500;align-items:flex-end;justify-content:center">
@@ -182,7 +149,7 @@
 </nav>
 
 <script type="module" src="js/auth-guard.js"></script>
-<script type="module" src="js/class.js?v=7"></script>
+<script type="module" src="js/class.js?v=8"></script>
 <script type="module" src="js/error-reporter.js?v=1"></script>
 <script type="module" src="js/topbar.js?v=6"></script>
 </body>
