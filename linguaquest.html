@@ -17,11 +17,9 @@ html, body { background: #1a2a1a; overflow: hidden; font-family: 'Georgia', seri
   height: 100%;
   overflow: hidden;
 }
-/* Force canvas to fill the container completely */
+/* Phaser Scale.RESIZE manages canvas size — no CSS override needed */
 #game-container canvas {
   display: block;
-  width: 100% !important;
-  height: 100% !important;
 }
 
 /* ── MENU ── */
@@ -973,8 +971,10 @@ class GameScene extends Phaser.Scene {
       .setDisplaySize(18, 12).setCollideWorldBounds(true);
     this.player.setVisible(false);
 
-    // Smooth camera follow
-    this.cameras.main.startFollow(this.playerSprite, true, 0.10, 0.10);
+    // Smooth camera follow — follow the physics body (source of truth for position)
+    // offsetY of -8 compensates for sprite being drawn 8px above the physics body
+    this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
+    this.cameras.main.setFollowOffset(0, -8);
     this.cameras.main.setZoom(1.0);
 
     // Keep camera bounds correct on window resize
@@ -1332,12 +1332,13 @@ function startGame() {
 
   const config = {
     type: Phaser.AUTO,
-    width:  window.innerWidth,
-    height: window.innerHeight,
     parent: 'game-container',
     backgroundColor: '#1a2a1a',
     scale: {
-      mode: Phaser.Scale.RESIZE,   // canvas resizes to fill the container
+      mode: Phaser.Scale.RESIZE,
+      parent: 'game-container',
+      width:  '100%',
+      height: '100%',
     },
     physics: { default: 'arcade', arcade: { gravity: { y: 0 }, debug: false } },
     input: {
