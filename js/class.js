@@ -8,11 +8,17 @@ if (!classId) { window.location.href = 'classes.html'; }
 
 // ── Date: from URL param or today ─────────────────────────────────────────────
 let selectedDate = qp('date') || today();
-// Clamp to today — never go into the future
-if (selectedDate > today()) selectedDate = today();
+// Allow up to 60 days in the future (no clamping to today)
+const _maxFutureDate = (() => {
+  const d = new Date();
+  d.setDate(d.getDate() + 60);
+  return d.toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+})();
+if (selectedDate > _maxFutureDate) selectedDate = today();
 
-const isToday = () => selectedDate === today();
-const isPast  = () => selectedDate < today();
+const isToday  = () => selectedDate === today();
+const isPast   = () => selectedDate < today();
+const isFuture = () => selectedDate > today();
 
 let cls = null;
 
@@ -20,11 +26,15 @@ let cls = null;
 let expandedStudent = null;
 
 // ── Date navigation helpers ───────────────────────────────────────────────────
-function dateNavOffsetDay(offset) {
+async function dateNavOffsetDay(offset) {
+  // Save any pending note before navigating away
+  clearTimeout(_todayNoteSaveTimer);
+  await saveTodayNote();
+
   const [y, m, d] = selectedDate.split('-').map(Number);
   const base = new Date(Date.UTC(y, m - 1, d + offset));
   const next = base.toISOString().split('T')[0];
-  if (next > today()) return; // don't go into future
+  if (next > _maxFutureDate) return; // don't go beyond 60-day future limit
   selectedDate = next;
   updateDateNav();
   load();
@@ -42,13 +52,17 @@ function updateDateNav() {
     el.style.fontWeight = '600';
     el.style.color = 'var(--gray-700)';
   }
-  // Update next button: disable if already at today
+  // Update next button: disable only if at max future limit
   const nextBtn = document.getElementById('class-date-next');
-  if (nextBtn) nextBtn.disabled = isToday();
+  if (nextBtn) nextBtn.disabled = selectedDate >= _maxFutureDate;
 
   // Show/hide past-day banner
   const banner = document.getElementById('past-day-banner');
   if (banner) banner.style.display = isPast() ? 'block' : 'none';
+
+  // Show/hide future-day banner
+  const futureBanner = document.getElementById('future-day-banner');
+  if (futureBanner) futureBanner.style.display = isFuture() ? 'block' : 'none';
 }
 
 async function load() {
@@ -1041,7 +1055,7 @@ function renderTodayNotes(note) {
   const el = document.getElementById('today-notes-content');
   if (!el) return;
 
-  const readOnly = isPast();
+  const readOnly = isPast();  // only past dates are read-only; today + future are editable
   const dateLabel = isToday() ? 'hoy' : fmtDate(selectedDate);
 
   el.innerHTML = `
@@ -1393,15 +1407,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (prevBtn)  prevBtn.addEventListener('click', () => dateNavOffsetDay(-1));
   if (nextBtn)  nextBtn.addEventListener('click', () => dateNavOffsetDay(1));
-  if (todayBtn) todayBtn.addEventListener('click', () => {
+  if (todayBtn) todayBtn.addEventListener('click', async () => {
+    clearTimeout(_todayNoteSaveTimer);
+    await saveTodayNote();
     selectedDate = today();
     updateDateNav();
     load();
   });
   if (dateInput) {
-    dateInput.addEventListener('change', () => {
+    dateInput.addEventListener('change', async () => {
       const val = dateInput.value;
-      if (val && val <= today()) {
+      if (val && val <= _maxFutureDate) {
+        clearTimeout(_todayNoteSaveTimer);
+        await saveTodayNote();
         selectedDate = val;
         updateDateNav();
         load();
