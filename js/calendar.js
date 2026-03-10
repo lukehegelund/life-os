@@ -1168,47 +1168,43 @@ async function saveEventTime(id, dateStr, startTime, endTime, oldDate, oldStart,
   const startISO = `${dateStr}T${startTime}:00+00:00`;
   const endISO   = `${dateStr}T${endTime}:00+00:00`;
 
-  // ── scope === 'all' — update time on ALL events in the group ───────────────
+  // ── scope === 'all' — update TIME on ALL events in the group ──────────────
+  // We can't do a single bulk UPDATE with per-row date-keeping via REST API,
+  // so we store only the time portion in two helper columns and reconstruct.
+  // FAST PATH: fetch all rows, batch-update times keeping each row's own date.
   if (scope === 'all' && groupId) {
-    // For 'all' scope on a time change, we update start/end time portion for every event in group
-    // First, fetch all events in the group
     const { data: groupRows, error: fetchErr } = await supabase
-      .from('calendar_events').select('id, start_time, end_time').eq('recurrence_group_id', groupId);
+      .from('calendar_events').select('id, start_time').eq('recurrence_group_id', groupId);
     if (fetchErr) { toast('Save failed: ' + fetchErr.message, 'error'); return; }
-    // Update each event keeping its date but using the new time
-    const updates = (groupRows || []).map(row => {
-      const rowDate = row.start_time ? row.start_time.slice(0, 10) : dateStr;
-      return supabase.from('calendar_events').update({
-        start_time: `${rowDate}T${startTime}:00+00:00`,
-        end_time:   `${rowDate}T${endTime}:00+00:00`,
-      }).eq('id', row.id);
-    });
-    const results = await Promise.all(updates);
-    const anyError = results.find(r => r.error);
-    if (anyError) { toast('Save failed: ' + anyError.error.message, 'error'); return; }
-    toast(`All ${results.length} events in series updated ✅`, 'success');
+    // Build upsert array — each row keeps its date, only time changes
+    const upserts = (groupRows || []).map(row => ({
+      id: row.id,
+      start_time: `${(row.start_time || startISO).slice(0, 10)}T${startTime}:00+00:00`,
+      end_time:   `${(row.start_time || startISO).slice(0, 10)}T${endTime}:00+00:00`,
+    }));
+    const { error: upErr } = await supabase.from('calendar_events').upsert(upserts, { onConflict: 'id' });
+    if (upErr) { toast('Save failed: ' + upErr.message, 'error'); return; }
+    toast('All events in series updated ✅', 'success');
     render();
     return;
   }
 
   // ── scope === 'following' — update time on this event and all after it ─────
   if (scope === 'following' && groupId) {
+    const fromDate = `${oldDate || dateStr}T00:00:00+00:00`;
     const { data: groupRows, error: fetchErr } = await supabase
-      .from('calendar_events').select('id, start_time, end_time')
+      .from('calendar_events').select('id, start_time')
       .eq('recurrence_group_id', groupId)
-      .gte('start_time', `${oldDate || dateStr}T00:00:00+00:00`);
+      .gte('start_time', fromDate);
     if (fetchErr) { toast('Save failed: ' + fetchErr.message, 'error'); return; }
-    const updates = (groupRows || []).map(row => {
-      const rowDate = row.start_time ? row.start_time.slice(0, 10) : dateStr;
-      return supabase.from('calendar_events').update({
-        start_time: `${rowDate}T${startTime}:00+00:00`,
-        end_time:   `${rowDate}T${endTime}:00+00:00`,
-      }).eq('id', row.id);
-    });
-    const results = await Promise.all(updates);
-    const anyError = results.find(r => r.error);
-    if (anyError) { toast('Save failed: ' + anyError.error.message, 'error'); return; }
-    toast(`This and ${results.length - 1} following events updated ✅`, 'success');
+    const upserts = (groupRows || []).map(row => ({
+      id: row.id,
+      start_time: `${(row.start_time || startISO).slice(0, 10)}T${startTime}:00+00:00`,
+      end_time:   `${(row.start_time || startISO).slice(0, 10)}T${endTime}:00+00:00`,
+    }));
+    const { error: upErr } = await supabase.from('calendar_events').upsert(upserts, { onConflict: 'id' });
+    if (upErr) { toast('Save failed: ' + upErr.message, 'error'); return; }
+    toast('This and all following events updated ✅', 'success');
     render();
     return;
   }
@@ -1396,11 +1392,11 @@ function openCreateModal(dateStr, startTime, endTime, allDay = false) {
       </div>
       <select id="cev-recur" style="width:100%;border:1.5px solid var(--gray-200);border-radius:8px;padding:9px 12px;font-size:14px;margin-bottom:14px;outline:none;box-sizing:border-box;background:var(--white)">
         <option value="none">🔂 Doesn't repeat</option>
-        <option value="daily">📅 Daily (indefinitely)</option>
-        <option value="weekdays">🗓 Weekdays Mon–Fri (indefinitely)</option>
-        <option value="weekly">📆 Weekly (indefinitely)</option>
-        <option value="biweekly">📆 Every 2 weeks (indefinitely)</option>
-        <option value="monthly">🗓 Monthly (indefinitely)</option>
+        <option value="daily">📅 Daily</option>
+        <option value="weekdays">🗓 Weekdays Mon–Fri</option>
+        <option value="weekly">📆 Weekly</option>
+        <option value="biweekly">📆 Every 2 weeks</option>
+        <option value="monthly">🗓 Monthly</option>
       </select>
       <div style="display:flex;gap:8px">
         <button onclick="document.getElementById('cal-ev-modal').remove()"
@@ -1778,11 +1774,11 @@ function openEditModal(id, title, evDate, startTime, endTime, currentRecur = 'no
   const recurOptions = ['none','daily','weekdays','weekly','biweekly','monthly'];
   const recurLabels  = {
     none: '🔂 Doesn\'t repeat',
-    daily: '📅 Daily (indefinitely)',
-    weekdays: '🗓 Weekdays Mon–Fri (indefinitely)',
-    weekly: '📆 Weekly (indefinitely)',
-    biweekly: '📆 Every 2 weeks (indefinitely)',
-    monthly: '🗓 Monthly (indefinitely)',
+    daily: '📅 Daily',
+    weekdays: '🗓 Weekdays Mon–Fri',
+    weekly: '📆 Weekly',
+    biweekly: '📆 Every 2 weeks',
+    monthly: '🗓 Monthly',
   };
   const recurSelectHTML = recurOptions.map(v =>
     `<option value="${v}"${v === currentRecur ? ' selected' : ''}>${recurLabels[v]}</option>`
