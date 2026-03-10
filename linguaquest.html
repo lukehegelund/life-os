@@ -958,8 +958,18 @@ class GameScene extends Phaser.Scene {
     }
 
     // ── PHYSICS & CAMERA BOUNDS ──
-    this.physics.world.setBounds(0, 0, cols * TILE_SIZE, rows * TILE_SIZE);
-    this.cameras.main.setBounds(0, 0, cols * TILE_SIZE, rows * TILE_SIZE);
+    const worldW = cols * TILE_SIZE;
+    const worldH = rows * TILE_SIZE;
+    this.physics.world.setBounds(0, 0, worldW, worldH);
+    // Camera bounds must be at least as large as the viewport, otherwise
+    // Phaser clamps scrollX/scrollY to 0 and startFollow can't center the player.
+    // We expand bounds outward so the camera can scroll freely and center on the player
+    // even when the world is smaller than the screen.
+    const camW = Math.max(worldW, this.scale.width * 2);
+    const camH = Math.max(worldH, this.scale.height * 2);
+    const camX = -(camW - worldW) / 2;
+    const camY = -(camH - worldH) / 2;
+    this.cameras.main.setBounds(camX, camY, camW, camH);
 
     // ── SPAWN PLAYER ──
     const [pCol, pRow] = worldDef.player_start;
@@ -984,6 +994,10 @@ class GameScene extends Phaser.Scene {
     // Keep camera bounds correct on window resize
     this.scale.on('resize', (gameSize) => {
       this.cameras.main.setViewport(0, 0, gameSize.width, gameSize.height);
+      // Recalculate camera bounds so player stays centerable
+      const rW = Math.max(worldW, gameSize.width * 2);
+      const rH = Math.max(worldH, gameSize.height * 2);
+      this.cameras.main.setBounds(-(rW - worldW) / 2, -(rH - worldH) / 2, rW, rH);
     });
 
     // ── SPAWN NPCs ──
