@@ -949,8 +949,10 @@ class GameScene extends Phaser.Scene {
           timer: Math.random() * 4000 + 1000,
           idleAnim: aType.idle, walkAnim: aType.walk,
         };
+        // Store which animal type this is so the wander AI uses the right walk anim
+        const animalName = ['chicken','pig','sheep','cow'][i % animalTypes.length];
         this.npcObjects.push({
-          def: { name: '', dialogue: [], type: 'ambient' },
+          def: { name: '', dialogue: [], type: 'ambient', sprite: animalName },
           sprite: aSprite, label: null,
           nx: ax, ny: ay, range: TILE_SIZE * 2, wander,
         });
@@ -1194,12 +1196,18 @@ class GameScene extends Phaser.Scene {
             const dx = tx - npc.sprite.x;
             const dy = ty - npc.sprite.y;
             let walkKey = w.walkAnim;
+            // Only override walk anim for sprites that have directional walk anims
             if (npc.def.sprite === 'skeleton') {
               if (Math.abs(dx) > Math.abs(dy)) walkKey = dx < 0 ? 'skel_walk_left' : 'skel_walk_right';
               else walkKey = dy < 0 ? 'skel_walk_up' : 'skel_walk_down';
-            } else if (npc.def.sprite === 'player' || !npc.def.sprite) {
+            } else if (npc.def.sprite === 'player') {
               if (Math.abs(dx) > Math.abs(dy)) walkKey = dx < 0 ? 'player_walk_left' : 'player_walk_right';
               else walkKey = dy < 0 ? 'player_walk_up' : 'player_walk_down';
+            }
+            // Animals (chicken, pig, sheep, cow, slime) and unknowns keep their stored w.walkAnim
+            // They flip horizontally based on direction instead
+            if (['chicken','pig','sheep','cow','slime'].includes(npc.def.sprite)) {
+              npc.sprite.setFlipX(dx < 0);
             }
             this._safePlay(npc.sprite, walkKey, true);
           } else {
