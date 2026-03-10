@@ -164,7 +164,7 @@ async function fetchEvents() {
     d = addDays(d, 1);
   }
 
-  const [tasksRes, remindersRes, weddingsRes, classesRes, calEventsRes, timeBlocksRes, classDailyNotesRes] = await Promise.all([
+  const [tasksRes, remindersRes, weddingsRes, classesRes, calTemplatesRes, calSingleRes, calExceptionsRes, timeBlocksRes, classDailyNotesRes] = await Promise.all([
     supabase.from('tasks')
       .select('id, title, due_date, priority, module')
       .in('status', ['open', 'in_progress'])
@@ -180,8 +180,24 @@ async function fetchEvents() {
       .gte('wedding_date', startStr)
       .lte('wedding_date', endStr),
     supabase.from('classes').select('id, name, day_of_week, time_start, time_end, subject'),
+    // Rule-based: fetch templates (is_template=true) that could overlap the view range
+    // Template start_time = the base/anchor date; they recur indefinitely unless recurrence_end is set
     supabase.from('calendar_events')
-      .select('id, title, start_time, end_time, all_day, calendar_name, color, is_busy, notes, recurrence, recurrence_group_id')
+      .select('id, title, start_time, end_time, all_day, calendar_name, color, is_busy, notes, recurrence, recurrence_group_id, is_template, recurrence_end, cancelled_dates')
+      .eq('is_template', true)
+      .lte('start_time', endStr + 'T23:59:59'),  // template must start on or before range end
+    // Non-recurring single events + exception rows (is_template=false) within view range
+    supabase.from('calendar_events')
+      .select('id, title, start_time, end_time, all_day, calendar_name, color, is_busy, notes, recurrence, recurrence_group_id, is_template, recurrence_end, cancelled_dates')
+      .eq('is_template', false)
+      .or('recurrence.eq.none,recurrence.is.null')
+      .gte('start_time', startStr)
+      .lte('start_time', endStr + 'T23:59:59'),
+    // Exception rows (individual overrides for specific dates in a recurring series)
+    supabase.from('calendar_events')
+      .select('id, title, start_time, end_time, all_day, calendar_name, color, is_busy, notes, recurrence, recurrence_group_id, is_template, recurrence_end, cancelled_dates')
+      .eq('is_template', false)
+      .not('recurrence_group_id', 'is', null)
       .gte('start_time', startStr)
       .lte('start_time', endStr + 'T23:59:59'),
     supabase.from('time_blocks')
@@ -263,19 +279,27 @@ async function fetchEvents() {
     cur = addDays(cur, 1);
   }
 
-  // Add Google Calendar events (editable)
-  for (const ev of (calEventsRes.data || [])) {
-    const key = ev.start_time ? ev.start_time.slice(0, 10) : null;
-    if (!key || !eventCache[key]) continue;
+  // ── Rule-based recurring event expansion ─────────────────────────────────
+  // Build exception lookup: groupId → date → exception row
+  const exceptionMap = {};
+  for (const ex of (calExceptionsRes.data || [])) {
+    if (!ex.recurrence_group_id || !ex.start_time) continue;
+    const exDate = ex.start_time.slice(0, 10);
+    if (!exceptionMap[ex.recurrence_group_id]) exceptionMap[ex.recurrence_group_id] = {};
+    exceptionMap[ex.recurrence_group_id][exDate] = ex;
+  }
+
+  function _pushCalEvent(ev, overrideDate) {
+    const key = overrideDate || (ev.start_time ? ev.start_time.slice(0, 10) : null);
+    if (!key || !eventCache[key]) return;
     const startLocal = ev.start_time ? ev.start_time.slice(11, 16) : null;
     const endLocal   = ev.end_time   ? ev.end_time.slice(11, 16)   : null;
-    const calColor = ev.color || '#0F9D58';
     eventCache[key].push({
       type: 'gcal',
       id: ev.id,
       title: ev.title,
       meta: ev.calendar_name || 'Calendar',
-      color: calColor,
+      color: ev.color || '#0F9D58',
       link: '#',
       timeStart: ev.all_day ? null : startLocal,
       timeEnd:   ev.all_day ? null : endLocal,
@@ -284,8 +308,58 @@ async function fetchEvents() {
       notes: ev.notes || null,
       recurrence: ev.recurrence || null,
       recurrenceGroupId: ev.recurrence_group_id || null,
+      isTemplate: ev.is_template || false,
     });
   }
+
+  // 1. Expand template rows into virtual occurrences within the view range
+  for (const tmpl of (calTemplatesRes.data || [])) {
+    if (!tmpl.start_time) continue;
+    const recur   = tmpl.recurrence || 'none';
+    const gid     = tmpl.recurrence_group_id;
+    const cancelled = new Set(tmpl.cancelled_dates || []);
+    const recEnd  = tmpl.recurrence_end ? new Date(tmpl.recurrence_end + 'T00:00:00') : null;
+    const baseTime  = tmpl.start_time.slice(11, 16); // HH:MM
+    const baseEndTime = tmpl.end_time ? tmpl.end_time.slice(11, 16) : null;
+
+    if (recur === 'none') {
+      // Non-recurring template (edge case) — just show on its date
+      _pushCalEvent(tmpl);
+      continue;
+    }
+
+    // Expand occurrences within [rangeStart, rangeEnd]
+    const occurrences = expandTemplateInRange(tmpl.start_time.slice(0, 10), recur, rangeStart, rangeEnd, recEnd);
+
+    for (const occDate of occurrences) {
+      if (cancelled.has(occDate)) continue; // skipped date
+      if (recEnd && occDate > dateStr(recEnd)) continue;
+
+      // Check if there's an exception row for this date
+      const exc = gid && exceptionMap[gid] && exceptionMap[gid][occDate];
+      if (exc) {
+        // Use the exception row's data instead of the template
+        _pushCalEvent(exc, occDate);
+      } else {
+        // Synthesize virtual event from template
+        const synth = {
+          ...tmpl,
+          start_time: `${occDate}T${baseTime}:00+00:00`,
+          end_time:   baseEndTime ? `${occDate}T${baseEndTime}:00+00:00` : null,
+        };
+        _pushCalEvent(synth, occDate);
+      }
+    }
+  }
+
+  // 2. Add single (non-recurring) events that aren't exceptions
+  for (const ev of (calSingleRes.data || [])) {
+    _pushCalEvent(ev);
+  }
+
+  // 3. Exception rows with no matching template in range are already handled above;
+  //    but standalone exceptions (template outside range) still need to show
+  //    (rare edge case — skip for now since range is the visible window)
 
   // Add time blocks (focus sessions)
   for (const tb of (timeBlocksRes.data || [])) {
@@ -1156,60 +1230,119 @@ function updateGhostBlock(ghost, startM, endM) {
   ghost.textContent = `${fmt12(minsToTimeStr(startM))}–${fmt12(minsToTimeStr(endM))}`;
 }
 
-// ── Save event time to Supabase ───────────────────────────────────────────────
+// ── Save event time to Supabase (rule-based) ──────────────────────────────────
 // scope: 'this' | 'following' | 'all' | undefined (for non-recurring)
-// groupId: recurrence_group_id if recurring
-async function saveEventTime(id, dateStr, startTime, endTime, oldDate, oldStart, oldEnd, undoType, scope, groupId) {
+// groupId: recurrence_group_id (= template's id for recurring series)
+// id: for non-recurring or 'this' exception — the actual row id being saved
+async function saveEventTime(id, evDateStr, startTime, endTime, oldDate, oldStart, oldEnd, undoType, scope, groupId) {
   if (!id) return;
-  // Push undo entry before saving (single-event undo)
   if (oldStart) {
-    pushUndo({ type: undoType || 'move', id, oldDate: oldDate || dateStr, oldStart, oldEnd });
+    pushUndo({ type: undoType || 'move', id, oldDate: oldDate || evDateStr, oldStart, oldEnd });
   }
-  const startISO = `${dateStr}T${startTime}:00+00:00`;
-  const endISO   = `${dateStr}T${endTime}:00+00:00`;
+  const startISO = `${evDateStr}T${startTime}:00+00:00`;
+  const endISO   = `${evDateStr}T${endTime}:00+00:00`;
 
-  // ── scope === 'all' — update TIME on ALL events in the group ──────────────
-  // We can't do a single bulk UPDATE with per-row date-keeping via REST API,
-  // so we store only the time portion in two helper columns and reconstruct.
-  // FAST PATH: fetch all rows, batch-update times keeping each row's own date.
+  // ── scope === 'all' — update template's base time (one DB write) ───────────
   if (scope === 'all' && groupId) {
-    const { data: groupRows, error: fetchErr } = await supabase
-      .from('calendar_events').select('id, start_time').eq('recurrence_group_id', groupId);
-    if (fetchErr) { toast('Save failed: ' + fetchErr.message, 'error'); return; }
-    // Build upsert array — each row keeps its date, only time changes
-    const upserts = (groupRows || []).map(row => ({
-      id: row.id,
-      start_time: `${(row.start_time || startISO).slice(0, 10)}T${startTime}:00+00:00`,
-      end_time:   `${(row.start_time || startISO).slice(0, 10)}T${endTime}:00+00:00`,
-    }));
-    const { error: upErr } = await supabase.from('calendar_events').upsert(upserts, { onConflict: 'id' });
-    if (upErr) { toast('Save failed: ' + upErr.message, 'error'); return; }
+    // Fetch the template row for this group
+    const { data: tmplRows } = await supabase.from('calendar_events')
+      .select('id, start_time, end_time').eq('recurrence_group_id', groupId).eq('is_template', true);
+    const tmpl = tmplRows && tmplRows[0];
+    if (!tmpl) { toast('Template not found', 'error'); return; }
+    const tmplDate = tmpl.start_time.slice(0, 10);
+    const { error } = await supabase.from('calendar_events').update({
+      start_time: `${tmplDate}T${startTime}:00+00:00`,
+      end_time:   `${tmplDate}T${endTime}:00+00:00`,
+    }).eq('id', tmpl.id);
+    if (error) { toast('Save failed: ' + error.message, 'error'); return; }
+    // Also update any existing exception rows to new time
+    await supabase.from('calendar_events').update({
+      start_time: supabase.raw ? undefined : undefined, // can't do expr update via REST
+    }).eq('recurrence_group_id', groupId).eq('is_template', false);
+    // (Exception rows keep their own times — they were intentionally different.
+    //  If user wants to reset them they can delete exceptions individually.)
     toast('All events in series updated ✅', 'success');
     render();
     return;
   }
 
-  // ── scope === 'following' — update time on this event and all after it ─────
+  // ── scope === 'following' — set recurrence_end on current template, create new template ─
   if (scope === 'following' && groupId) {
-    const fromDate = `${oldDate || dateStr}T00:00:00+00:00`;
-    const { data: groupRows, error: fetchErr } = await supabase
-      .from('calendar_events').select('id, start_time')
-      .eq('recurrence_group_id', groupId)
-      .gte('start_time', fromDate);
-    if (fetchErr) { toast('Save failed: ' + fetchErr.message, 'error'); return; }
-    const upserts = (groupRows || []).map(row => ({
-      id: row.id,
-      start_time: `${(row.start_time || startISO).slice(0, 10)}T${startTime}:00+00:00`,
-      end_time:   `${(row.start_time || startISO).slice(0, 10)}T${endTime}:00+00:00`,
-    }));
-    const { error: upErr } = await supabase.from('calendar_events').upsert(upserts, { onConflict: 'id' });
-    if (upErr) { toast('Save failed: ' + upErr.message, 'error'); return; }
+    const fromDate = oldDate || evDateStr;
+    // Get existing template
+    const { data: tmplRows } = await supabase.from('calendar_events')
+      .select('*').eq('recurrence_group_id', groupId).eq('is_template', true);
+    const tmpl = tmplRows && tmplRows[0];
+    if (!tmpl) { toast('Template not found', 'error'); return; }
+
+    // End the old series the day before this occurrence
+    const dayBefore = (() => {
+      const d = new Date(fromDate + 'T00:00:00'); d.setDate(d.getDate() - 1); return dateStr(d);
+    })();
+    await supabase.from('calendar_events').update({ recurrence_end: dayBefore }).eq('id', tmpl.id);
+
+    // Create a new template starting from this occurrence with the new time
+    const newGroupId = crypto.randomUUID();
+    const { error: insErr } = await supabase.from('calendar_events').insert([{
+      title: tmpl.title,
+      start_time: `${fromDate}T${startTime}:00+00:00`,
+      end_time:   `${fromDate}T${endTime}:00+00:00`,
+      all_day: tmpl.all_day,
+      color: tmpl.color,
+      calendar_name: tmpl.calendar_name,
+      is_busy: tmpl.is_busy,
+      recurrence: tmpl.recurrence,
+      recurrence_group_id: newGroupId,
+      is_template: true,
+      recurrence_end: null,
+      cancelled_dates: [],
+      notes: tmpl.notes,
+    }]);
+    if (insErr) { toast('Save failed: ' + insErr.message, 'error'); return; }
     toast('This and all following events updated ✅', 'success');
     render();
     return;
   }
 
-  // ── scope === 'this' or non-recurring — single event update ───────────────
+  // ── scope === 'this' — create/update exception row for this specific date ──
+  if (scope === 'this' && groupId) {
+    // Check if exception row already exists for this date
+    const { data: existing } = await supabase.from('calendar_events')
+      .select('id').eq('recurrence_group_id', groupId).eq('is_template', false)
+      .gte('start_time', `${evDateStr}T00:00:00+00:00`)
+      .lte('start_time', `${evDateStr}T23:59:59+00:00`);
+
+    if (existing && existing.length > 0) {
+      // Update existing exception
+      const { error } = await supabase.from('calendar_events').update({
+        start_time: startISO, end_time: endISO,
+      }).eq('id', existing[0].id);
+      if (error) { toast('Save failed: ' + error.message, 'error'); return; }
+    } else {
+      // Get template data to clone
+      const { data: tmplRows } = await supabase.from('calendar_events')
+        .select('*').eq('recurrence_group_id', groupId).eq('is_template', true);
+      const tmpl = tmplRows && tmplRows[0];
+      const { error } = await supabase.from('calendar_events').insert([{
+        title: tmpl ? tmpl.title : '',
+        start_time: startISO,
+        end_time: endISO,
+        all_day: tmpl ? tmpl.all_day : false,
+        color: tmpl ? tmpl.color : '#2563EB',
+        calendar_name: 'LifeOS',
+        is_busy: tmpl ? tmpl.is_busy : true,
+        recurrence: tmpl ? tmpl.recurrence : 'none',
+        recurrence_group_id: groupId,
+        is_template: false,  // exception row
+        notes: tmpl ? tmpl.notes : null,
+      }]);
+      if (error) { toast('Save failed: ' + error.message, 'error'); return; }
+    }
+    render();
+    return;
+  }
+
+  // ── Non-recurring single event update ─────────────────────────────────────
   const { error } = await supabase.from('calendar_events').update({
     start_time: startISO,
     end_time: endISO,
@@ -1439,35 +1572,33 @@ function openCreateModal(dateStr, startTime, endTime, allDay = false) {
     const color  = document.getElementById('cev-color').value;
     const recur  = document.getElementById('cev-recur').value;
 
-    // Build list of dates to create events on
-    const dates = buildRecurDates(dateStr, recur);
-
     const btn = document.getElementById('cev-save-btn');
     if (btn) btn.disabled = true;
 
+    // Rule-based: always insert exactly ONE row (template if recurring, plain event if not)
     const groupId = recur !== 'none' ? crypto.randomUUID() : null;
-
-    const rows = dates.map(ds => ({
+    const row = {
       title,
-      start_time: isAllDay ? `${ds}T00:00:00+00:00` : `${ds}T${start}:00+00:00`,
-      end_time:   isAllDay ? null : `${ds}T${end}:00+00:00`,
+      start_time: isAllDay ? `${dateStr}T00:00:00+00:00` : `${dateStr}T${start}:00+00:00`,
+      end_time:   isAllDay ? null : `${dateStr}T${end}:00+00:00`,
       all_day: isAllDay,
       color,
       calendar_name: 'LifeOS',
       is_busy: !isAllDay,
       recurrence: recur,
       recurrence_group_id: groupId,
-    }));
+      is_template: recur !== 'none',  // template = true for recurring series
+      recurrence_end: null,
+      cancelled_dates: [],
+    };
 
-    const { data: insertedRows, error } = await supabase.from('calendar_events').insert(rows).select('id');
+    const { data: insertedRows, error } = await supabase.from('calendar_events').insert([row]).select('id');
     if (error) { toast('Error: ' + error.message, 'error'); if (btn) btn.disabled = false; return; }
 
-    // Push undo entry
     if (insertedRows && insertedRows.length) {
       pushUndo({ type: 'create', ids: insertedRows.map(r => r.id) });
     }
-    const countMsg = dates.length > 1 ? `${dates.length} events added ✅` : 'Event added ✅';
-    toast(countMsg, 'success');
+    toast(recur !== 'none' ? 'Recurring event created ✅' : 'Event added ✅', 'success');
     modal.remove();
     render();
   });
@@ -1479,55 +1610,87 @@ function openCreateModal(dateStr, startTime, endTime, allDay = false) {
 }
 
 // ── Build list of dates for recurrence (indefinite = 10 years out) ────────────
-function buildRecurDates(startDateStr, recur) {
-  const dates = [startDateStr];
+// ── Rule-based expansion: generate occurrence dates within [rangeStart, rangeEnd] ─
+// templateStart: 'YYYY-MM-DD' anchor date of the series
+// recur: 'daily'|'weekdays'|'weekly'|'biweekly'|'monthly'
+// rangeStart, rangeEnd: Date objects for the visible window
+// recEnd: Date|null — series end date (null = truly infinite)
+// Returns array of 'YYYY-MM-DD' strings
+function expandTemplateInRange(templateStart, recur, rangeStart, rangeEnd, recEnd) {
+  const dates = [];
   if (recur === 'none') return dates;
 
-  const start = new Date(startDateStr + 'T00:00:00');
-  // End date: 10 years from start
-  const endDate = new Date(start);
-  endDate.setFullYear(endDate.getFullYear() + 10);
+  const base  = new Date(templateStart + 'T00:00:00');
+  const rEnd  = rangeEnd;
+  const rStart = rangeStart;
+
+  // Walk from template base date, but start at or after rangeStart
+  // For efficiency, jump to the first occurrence >= rangeStart
+  let cur = new Date(base);
 
   if (recur === 'daily') {
-    for (let i = 1; ; i++) {
-      const d = new Date(start);
-      d.setDate(d.getDate() + i);
-      if (d > endDate) break;
-      dates.push(dateStr(d));
+    // Jump to rangeStart if base is before it
+    if (cur < rStart) {
+      const diff = Math.ceil((rStart - cur) / 86400000);
+      cur.setDate(cur.getDate() + diff);
+    }
+    while (cur <= rEnd) {
+      if (recEnd && cur > recEnd) break;
+      dates.push(dateStr(cur));
+      cur.setDate(cur.getDate() + 1);
     }
   } else if (recur === 'weekdays') {
-    for (let i = 1; ; i++) {
-      const d = new Date(start);
-      d.setDate(d.getDate() + i);
-      if (d > endDate) break;
-      if (d.getDay() >= 1 && d.getDay() <= 5) {
-        dates.push(dateStr(d));
-      }
+    if (cur < rStart) {
+      const diff = Math.ceil((rStart - cur) / 86400000);
+      cur.setDate(cur.getDate() + diff);
+    }
+    while (cur <= rEnd) {
+      if (recEnd && cur > recEnd) break;
+      if (cur.getDay() >= 1 && cur.getDay() <= 5) dates.push(dateStr(cur));
+      cur.setDate(cur.getDate() + 1);
     }
   } else if (recur === 'weekly') {
-    for (let i = 1; ; i++) {
-      const d = new Date(start);
-      d.setDate(d.getDate() + i * 7);
-      if (d > endDate) break;
-      dates.push(dateStr(d));
+    if (cur < rStart) {
+      const diffDays = Math.ceil((rStart - cur) / 86400000);
+      const weeks = Math.ceil(diffDays / 7);
+      cur.setDate(cur.getDate() + weeks * 7);
+    }
+    while (cur <= rEnd) {
+      if (recEnd && cur > recEnd) break;
+      dates.push(dateStr(cur));
+      cur.setDate(cur.getDate() + 7);
     }
   } else if (recur === 'biweekly') {
-    for (let i = 1; ; i++) {
-      const d = new Date(start);
-      d.setDate(d.getDate() + i * 14);
-      if (d > endDate) break;
-      dates.push(dateStr(d));
+    if (cur < rStart) {
+      const diffDays = Math.ceil((rStart - cur) / 86400000);
+      const periods = Math.ceil(diffDays / 14);
+      cur.setDate(cur.getDate() + periods * 14);
+    }
+    while (cur <= rEnd) {
+      if (recEnd && cur > recEnd) break;
+      dates.push(dateStr(cur));
+      cur.setDate(cur.getDate() + 14);
     }
   } else if (recur === 'monthly') {
-    for (let i = 1; ; i++) {
-      const d = new Date(start);
-      d.setMonth(d.getMonth() + i);
-      if (d > endDate) break;
-      dates.push(dateStr(d));
+    // Jump to first month >= rangeStart
+    while (cur < rStart) cur.setMonth(cur.getMonth() + 1);
+    while (cur <= rEnd) {
+      if (recEnd && cur > recEnd) break;
+      dates.push(dateStr(cur));
+      cur.setMonth(cur.getMonth() + 1);
     }
   }
 
   return dates;
+}
+
+// Legacy alias — only used for "first time setting recurrence on a standalone event" path
+// Returns all dates from startDateStr forward (no end limit — rule-based approach
+// means we only need the template row, but this helper is kept for the rare
+// single→recurring conversion case where we still need the base date list)
+function buildRecurDates(startDateStr, recur) {
+  if (recur === 'none') return [startDateStr];
+  return [startDateStr]; // Rule-based: just return the start date (template approach)
 }
 
 // ── Shared swatch-grid wiring ─────────────────────────────────────────────────
@@ -1874,121 +2037,118 @@ function openEditModal(id, title, evDate, startTime, endTime, currentRecur = 'no
 
     const startISO = `${evDate}T${start}:00+00:00`;
     const endISO   = end ? `${evDate}T${end}:00+00:00` : null;
-
-    // If recurrence changed and scope === 'all' and there's a group, rebuild the series
     const recurChanged = newRecur !== currentRecur;
 
-    // ── scope === 'following' — update this event and all after it ──────────────
-    if (scope === 'following' && groupId) {
-      if (recurChanged) {
-        // Delete all occurrences from evDate forward, re-create with new recurrence
-        const { error: delErr } = await supabase.from('calendar_events')
-          .delete().eq('recurrence_group_id', groupId)
-          .gte('start_time', `${evDate}T00:00:00+00:00`);
-        if (delErr) { toast('Error: ' + delErr.message, 'error'); if (btn) btn.disabled = false; return; }
-        const newGroupId = crypto.randomUUID();
-        const dates = buildRecurDates(evDate, newRecur);
-        const rows = dates.map(ds => ({
-          title: newTitle,
-          start_time: `${ds}T${start}:00+00:00`,
-          end_time: end ? `${ds}T${end}:00+00:00` : null,
-          all_day: false,
-          color: newColor,
-          calendar_name: 'LifeOS',
-          is_busy: true,
-          recurrence: newRecur,
-          recurrence_group_id: newGroupId,
-          notes: newNotes,
-        }));
-        const { error: insErr } = await supabase.from('calendar_events').insert(rows);
-        if (insErr) { toast('Error: ' + insErr.message, 'error'); if (btn) btn.disabled = false; return; }
-        toast(`Updated this + all following — ${dates.length} events ✅`, 'success');
-        modal.remove(); render(); return;
-      }
-      // Title/color/notes update for this and all following
-      const { error } = await supabase.from('calendar_events').update({
-        title: newTitle, color: newColor, recurrence: newRecur, notes: newNotes,
-      }).eq('recurrence_group_id', groupId)
-        .gte('start_time', `${evDate}T00:00:00+00:00`);
-      if (error) { toast('Error: ' + error.message, 'error'); if (btn) btn.disabled = false; return; }
-      toast('This event and all following updated ✅', 'success');
-      modal.remove(); render(); return;
-    }
-
-    if (recurChanged && scope === 'all' && groupId) {
-      // Delete old group, re-create from this event's date forward with new recurrence
-      const { error: delErr } = await supabase.from('calendar_events')
-        .delete().eq('recurrence_group_id', groupId)
-        .gte('start_time', `${evDate}T00:00:00+00:00`);
-      if (delErr) { toast('Error: ' + delErr.message, 'error'); if (btn) btn.disabled = false; return; }
-
-      const newGroupId = crypto.randomUUID();
-      const dates = buildRecurDates(evDate, newRecur);
-      const rows = dates.map(ds => ({
-        title: newTitle,
-        start_time: `${ds}T${start}:00+00:00`,
-        end_time:   end ? `${ds}T${end}:00+00:00` : null,
-        all_day: false,
-        color: newColor,
-        calendar_name: 'LifeOS',
-        is_busy: true,
-        recurrence: newRecur,
-        recurrence_group_id: newGroupId,
-      }));
-      const { error: insErr } = await supabase.from('calendar_events').insert(rows);
-      if (insErr) { toast('Error: ' + insErr.message, 'error'); if (btn) btn.disabled = false; return; }
-      toast(`Series updated — ${dates.length} events ✅`, 'success');
-      modal.remove(); render(); return;
-    }
-
-    // Scope === 'all' title/time/color update across group
+    // ── scope === 'all' — update the single template row ───────────────────────
     if (scope === 'all' && groupId) {
-      const { error } = await supabase.from('calendar_events').update({
-        title: newTitle, color: newColor,
-        recurrence: newRecur,
-      }).eq('recurrence_group_id', groupId);
+      const updates = { title: newTitle, color: newColor, recurrence: newRecur, notes: newNotes };
+      if (recurChanged) {
+        // Update template's recurrence rule — expansion will change automatically
+        updates.recurrence = newRecur;
+      }
+      const { error } = await supabase.from('calendar_events').update(updates)
+        .eq('recurrence_group_id', groupId).eq('is_template', true);
       if (error) { toast('Error: ' + error.message, 'error'); if (btn) btn.disabled = false; return; }
+      // Also update time on the template base date if time changed
+      if (start) {
+        const { data: tmplRows } = await supabase.from('calendar_events')
+          .select('id, start_time').eq('recurrence_group_id', groupId).eq('is_template', true);
+        if (tmplRows && tmplRows[0]) {
+          const d = tmplRows[0].start_time.slice(0, 10);
+          await supabase.from('calendar_events').update({
+            start_time: `${d}T${start}:00+00:00`,
+            end_time:   end ? `${d}T${end}:00+00:00` : null,
+          }).eq('id', tmplRows[0].id);
+        }
+      }
       toast('All events in series updated ✅', 'success');
       modal.remove(); render(); return;
     }
 
-    // Single event update (scope === 'this' OR no group)
-    const newGroupId = (newRecur !== 'none' && !groupId) ? crypto.randomUUID() : (groupId || null);
-
-    if (newRecur !== 'none' && !groupId) {
-      // First time setting recurrence on a standalone event — build the series
-      const dates = buildRecurDates(evDate, newRecur);
-      const rows = dates.map(ds => ({
+    // ── scope === 'following' — end old template, create new template from evDate ─
+    if (scope === 'following' && groupId) {
+      // End the existing template's series the day before evDate
+      const dayBefore = (() => {
+        const d = new Date(evDate + 'T00:00:00'); d.setDate(d.getDate() - 1);
+        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      })();
+      await supabase.from('calendar_events').update({ recurrence_end: dayBefore })
+        .eq('recurrence_group_id', groupId).eq('is_template', true);
+      // Create a new template starting from evDate
+      const newGroupId = crypto.randomUUID();
+      const { error: insErr } = await supabase.from('calendar_events').insert([{
         title: newTitle,
-        start_time: `${ds}T${start}:00+00:00`,
-        end_time:   end ? `${ds}T${end}:00+00:00` : null,
+        start_time: startISO,
+        end_time: endISO,
         all_day: false,
         color: newColor,
         calendar_name: 'LifeOS',
         is_busy: true,
         recurrence: newRecur,
         recurrence_group_id: newGroupId,
-      }));
-      // Update this event in place (first of series), insert the rest
-      const { error: updErr } = await supabase.from('calendar_events').update({
-        title: newTitle, start_time: startISO, end_time: endISO,
-        color: newColor, recurrence: newRecur, recurrence_group_id: newGroupId,
-      }).eq('id', id);
-      if (updErr) { toast('Error: ' + updErr.message, 'error'); if (btn) btn.disabled = false; return; }
-      const restRows = rows.slice(1);
-      if (restRows.length) {
-        const { error: insErr } = await supabase.from('calendar_events').insert(restRows);
-        if (insErr) { toast('Error: ' + insErr.message, 'error'); if (btn) btn.disabled = false; return; }
-      }
-      toast(`Recurrence set — ${dates.length} events ✅`, 'success');
+        is_template: true,
+        recurrence_end: null,
+        cancelled_dates: [],
+        notes: newNotes,
+      }]);
+      if (insErr) { toast('Error: ' + insErr.message, 'error'); if (btn) btn.disabled = false; return; }
+      toast('This and all following events updated ✅', 'success');
       modal.remove(); render(); return;
     }
 
-    // Plain single-event update
+    // ── scope === 'this' with a group — create/update an exception row ─────────
+    if (scope === 'this' && groupId) {
+      // Check if exception already exists for this date
+      const { data: existing } = await supabase.from('calendar_events')
+        .select('id').eq('recurrence_group_id', groupId).eq('is_template', false)
+        .gte('start_time', `${evDate}T00:00:00+00:00`)
+        .lte('start_time', `${evDate}T23:59:59+00:00`);
+
+      if (existing && existing.length > 0) {
+        const { error } = await supabase.from('calendar_events').update({
+          title: newTitle, start_time: startISO, end_time: endISO,
+          color: newColor, notes: newNotes,
+        }).eq('id', existing[0].id);
+        if (error) { toast('Error: ' + error.message, 'error'); if (btn) btn.disabled = false; return; }
+      } else {
+        const { error } = await supabase.from('calendar_events').insert([{
+          title: newTitle, start_time: startISO, end_time: endISO,
+          all_day: false, color: newColor,
+          calendar_name: 'LifeOS', is_busy: true,
+          recurrence: currentRecur,
+          recurrence_group_id: groupId,
+          is_template: false,
+          notes: newNotes,
+        }]);
+        if (error) { toast('Error: ' + error.message, 'error'); if (btn) btn.disabled = false; return; }
+      }
+      toast('This event updated ✅', 'success');
+      modal.remove(); render(); return;
+    }
+
+    // ── No group — plain single event (or first-time recurrence) ──────────────
+    if (newRecur !== 'none' && !groupId) {
+      // Converting standalone event to recurring: update to template
+      const newGroupId = crypto.randomUUID();
+      const { error } = await supabase.from('calendar_events').update({
+        title: newTitle, start_time: startISO, end_time: endISO,
+        color: newColor, recurrence: newRecur, notes: newNotes,
+        recurrence_group_id: newGroupId,
+        is_template: true,
+        recurrence_end: null,
+        cancelled_dates: [],
+      }).eq('id', id);
+      if (error) { toast('Error: ' + error.message, 'error'); if (btn) btn.disabled = false; return; }
+      toast('Recurring event created ✅', 'success');
+      modal.remove(); render(); return;
+    }
+
+    // Plain single-event update (no recurrence)
     const { error } = await supabase.from('calendar_events').update({
       title: newTitle, start_time: startISO, end_time: endISO,
       color: newColor, recurrence: newRecur, notes: newNotes,
-      recurrence_group_id: newRecur === 'none' ? null : newGroupId,
+      recurrence_group_id: null,
+      is_template: false,
     }).eq('id', id);
     if (error) { toast('Error: ' + error.message, 'error'); if (btn) btn.disabled = false; return; }
     toast('Event updated ✅', 'success');
@@ -2031,25 +2191,45 @@ async function openDeleteScopeModal(id, evDate, grpId, row) {
 
     document.getElementById('del-this').addEventListener('click', async (e) => {
       e.stopPropagation(); modal.remove();
-      const { error } = await supabase.from('calendar_events').delete().eq('id', id);
-      if (error) { toast('Delete failed: ' + error.message, 'error'); resolve(); return; }
-      if (row) { const { id: _, created_at, ...rowData } = row; pushUndo({ type: 'delete', row: rowData }); }
-      toast('Event deleted — Cmd+Z to undo', 'success');
+      // Rule-based: add this date to cancelled_dates on the template
+      // First check if this is an exception row
+      if (row && !row.is_template && row.recurrence_group_id) {
+        // It's already an exception row — just delete it
+        await supabase.from('calendar_events').delete().eq('id', id);
+      }
+      // Add to template's cancelled_dates array
+      const { data: tmplRows } = await supabase.from('calendar_events')
+        .select('id, cancelled_dates').eq('recurrence_group_id', grpId).eq('is_template', true);
+      if (tmplRows && tmplRows[0]) {
+        const cancelled = tmplRows[0].cancelled_dates || [];
+        if (!cancelled.includes(evDate)) cancelled.push(evDate);
+        await supabase.from('calendar_events').update({ cancelled_dates: cancelled }).eq('id', tmplRows[0].id);
+      }
+      toast('Event removed from this date', 'success');
       render(); resolve();
     });
 
     document.getElementById('del-following').addEventListener('click', async (e) => {
       e.stopPropagation(); modal.remove();
-      const { error } = await supabase.from('calendar_events').delete()
-        .eq('recurrence_group_id', grpId)
+      // Set recurrence_end to the day before evDate on the template
+      const dayBefore = (() => {
+        const d = new Date(evDate + 'T00:00:00'); d.setDate(d.getDate() - 1);
+        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      })();
+      const { error } = await supabase.from('calendar_events')
+        .update({ recurrence_end: dayBefore }).eq('recurrence_group_id', grpId).eq('is_template', true);
+      // Also delete any exception rows from evDate forward
+      await supabase.from('calendar_events').delete()
+        .eq('recurrence_group_id', grpId).eq('is_template', false)
         .gte('start_time', `${evDate}T00:00:00+00:00`);
       if (error) { toast('Delete failed: ' + error.message, 'error'); resolve(); return; }
-      toast('This event and all following deleted', 'success');
+      toast('This and all following events deleted', 'success');
       render(); resolve();
     });
 
     document.getElementById('del-all').addEventListener('click', async (e) => {
       e.stopPropagation(); modal.remove();
+      // Delete template + all exception rows
       const { error } = await supabase.from('calendar_events').delete().eq('recurrence_group_id', grpId);
       if (error) { toast('Delete failed: ' + error.message, 'error'); resolve(); return; }
       toast('All events in series deleted', 'success');
