@@ -181,7 +181,7 @@ async function fetchEvents() {
       .lte('wedding_date', endStr),
     supabase.from('classes').select('id, name, day_of_week, time_start, time_end, subject'),
     supabase.from('calendar_events')
-      .select('id, title, start_time, end_time, all_day, calendar_name, color, is_busy, notes')
+      .select('id, title, start_time, end_time, all_day, calendar_name, color, is_busy, notes, recurrence, recurrence_group_id')
       .gte('start_time', startStr)
       .lte('start_time', endStr + 'T23:59:59'),
     supabase.from('time_blocks')
@@ -282,6 +282,8 @@ async function fetchEvents() {
       isBusy: ev.is_busy,
       editable: true,
       notes: ev.notes || null,
+      recurrence: ev.recurrence || null,
+      recurrenceGroupId: ev.recurrence_group_id || null,
     });
   }
 
@@ -567,7 +569,8 @@ function renderDayGrid() {
     const evTypeAttr = `data-ev-type="${e.type}"`;
 
     const hasNote1 = !!(e.notes);
-    html += `<div class="wcal-ev${isEditable ? ' wcal-ev-editable' : ''}" ${evId} ${classIdAttr} ${evTypeAttr}
+    const recurAttr1 = e.recurrenceGroupId ? `data-group-id="${e.recurrenceGroupId}" data-recurrence="${e.recurrence || ''}"` : '';
+    html += `<div class="wcal-ev${isEditable ? ' wcal-ev-editable' : ''}" ${evId} ${classIdAttr} ${evTypeAttr} ${recurAttr1}
       data-date="${ds}" data-start="${e.timeStart}" data-end="${e.timeEnd || ''}" data-title="${(e.title||'').replace(/"/g,'&quot;')}" data-notes="${(e.notes||'').replace(/"/g,'&quot;')}"
       style="position:absolute;top:${topPct}%;left:2px;right:2px;
         min-height:${heightPx}px;background:${e.color};border-radius:4px;
@@ -697,7 +700,8 @@ function renderWeekGrid() {
       const evTypeAttr = `data-ev-type="${e.type}"`;
 
       const hasNote2 = !!(e.notes);
-      html += `<div class="wcal-ev${isEditable ? ' wcal-ev-editable' : ''}" ${evId} ${classIdAttr} ${evTypeAttr}
+      const recurAttr2 = e.recurrenceGroupId ? `data-group-id="${e.recurrenceGroupId}" data-recurrence="${e.recurrence || ''}"` : '';
+      html += `<div class="wcal-ev${isEditable ? ' wcal-ev-editable' : ''}" ${evId} ${classIdAttr} ${evTypeAttr} ${recurAttr2}
         data-date="${str}" data-start="${e.timeStart}" data-end="${e.timeEnd || ''}" data-title="${(e.title||'').replace(/"/g,'&quot;')}" data-notes="${(e.notes||'').replace(/"/g,'&quot;')}"
         style="position:absolute;top:${topPct}%;left:2px;right:2px;
           min-height:${heightPx}px;background:${e.color};border-radius:4px;
@@ -797,7 +801,7 @@ function _handleDragMove(e) {
   }
 }
 
-function _handleDragUp(e) {
+async function _handleDragUp(e) {
   if (!dragState) return;
   const ds = dragState;
   dragState = null;
@@ -813,6 +817,16 @@ function _handleDragUp(e) {
     lastDragEnd = Date.now();
     if (ds.evType === 'class' && ds.classId) {
       saveClassTime(ds.classId, minsToTimeStr(ds.startM), minsToTimeStr(ds.endM));
+    } else if (ds.groupId) {
+      // Recurring event resize — ask scope
+      const scope = await openMoveScopeModal('resize');
+      if (!scope) {
+        // Cancelled — restore original visual state
+        render();
+        return;
+      }
+      saveEventTime(ds.evId, ds.evDate, minsToTimeStr(ds.startM), minsToTimeStr(ds.endM),
+        ds.origDate, ds.origStart, ds.origEnd, 'resize', scope, ds.groupId);
     } else {
       saveEventTime(ds.evId, ds.evDate, minsToTimeStr(ds.startM), minsToTimeStr(ds.endM),
         ds.origDate, ds.origStart, ds.origEnd, 'resize');
@@ -826,11 +840,58 @@ function _handleDragUp(e) {
     lastDragEnd = Date.now();
     if (ds.evType === 'class' && ds.classId) {
       saveClassTime(ds.classId, minsToTimeStr(ds.startM), minsToTimeStr(ds.endM));
+    } else if (ds.groupId) {
+      // Recurring event move — ask scope
+      const scope = await openMoveScopeModal('move');
+      if (!scope) {
+        // Cancelled — restore original visual state
+        render();
+        return;
+      }
+      saveEventTime(ds.evId, ds.evDate, minsToTimeStr(ds.startM), minsToTimeStr(ds.endM),
+        ds.origDate, ds.origStart, ds.origEnd, 'move', scope, ds.groupId);
     } else {
       saveEventTime(ds.evId, ds.evDate, minsToTimeStr(ds.startM), minsToTimeStr(ds.endM),
         ds.origDate, ds.origStart, ds.origEnd, 'move');
     }
   }
+}
+
+// ── Move/Resize scope modal for recurring events ──────────────────────────────
+function openMoveScopeModal(action) {
+  const verb = action === 'resize' ? 'resize' : 'move';
+  const verbLabel = action === 'resize' ? 'Resize' : 'Move';
+  return new Promise((resolve) => {
+    removeModal();
+    const modal = document.createElement('div');
+    modal.id = 'cal-ev-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:500;display:flex;align-items:center;justify-content:center';
+    modal.innerHTML = `
+      <div style="background:var(--white);border-radius:12px;padding:20px;width:90%;max-width:320px;box-shadow:0 8px 32px rgba(0,0,0,0.2)" onclick="event.stopPropagation()">
+        <div style="font-size:15px;font-weight:700;color:var(--gray-800);margin-bottom:6px">${verbLabel} recurring event</div>
+        <div style="font-size:13px;color:var(--gray-500);margin-bottom:16px">Which events do you want to ${verb}?</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <button id="mv-scope-this" style="padding:10px 14px;border:1.5px solid var(--gray-200);border-radius:8px;background:var(--white);font-size:13px;font-weight:600;color:var(--gray-700);cursor:pointer;text-align:left">
+            🗂 This event only
+          </button>
+          <button id="mv-scope-following" style="padding:10px 14px;border:1.5px solid var(--gray-200);border-radius:8px;background:var(--white);font-size:13px;font-weight:600;color:var(--gray-700);cursor:pointer;text-align:left">
+            ⏩ This and all following
+          </button>
+          <button id="mv-scope-all" style="padding:10px 14px;border:1.5px solid var(--blue,#2563EB);border-radius:8px;background:#EFF6FF;font-size:13px;font-weight:600;color:var(--blue,#2563EB);cursor:pointer;text-align:left">
+            📆 All events in series
+          </button>
+          <button id="mv-scope-cancel" style="padding:8px 14px;border:none;border-radius:8px;background:transparent;font-size:13px;color:var(--gray-400);cursor:pointer">
+            Cancel
+          </button>
+        </div>
+      </div>`;
+    modal.addEventListener('click', () => { modal.remove(); resolve(null); });
+    document.body.appendChild(modal);
+    document.getElementById('mv-scope-cancel').addEventListener('click', (e) => { e.stopPropagation(); modal.remove(); resolve(null); });
+    document.getElementById('mv-scope-this').addEventListener('click', (e) => { e.stopPropagation(); modal.remove(); resolve('this'); });
+    document.getElementById('mv-scope-following').addEventListener('click', (e) => { e.stopPropagation(); modal.remove(); resolve('following'); });
+    document.getElementById('mv-scope-all').addEventListener('click', (e) => { e.stopPropagation(); modal.remove(); resolve('all'); });
+  });
 }
 
 // Attach global drag listeners once — they stay alive permanently across re-renders
@@ -908,6 +969,7 @@ function attachWeekInteractions() {
       const evId    = evEl.dataset.evId;
       const classId = evEl.dataset.classId;
       const evType  = evEl.dataset.evType;
+      const groupId = evEl.dataset.groupId || null;
 
       const resizeHandle = evEl.querySelector('.wcal-resize-handle');
 
@@ -921,6 +983,7 @@ function attachWeekInteractions() {
         dragState = {
           type: 'resize',
           evEl, evId, classId, evType, evDate,
+          groupId,
           startM:   timeToMinutes(evStart),
           endM:     timeToMinutes(evEnd) || timeToMinutes(evStart) + 60,
           col,
@@ -960,6 +1023,7 @@ function attachWeekInteractions() {
           const topPx    = colRect.top + (sMins - WEEK_HOUR_START * 60) / ((WEEK_HOUR_END - WEEK_HOUR_START) * 60) * TOTAL_HEIGHT;
           const evColor  = evEl.style.background || evEl.style.backgroundColor || '#2563EB';
           const liveStr  = `${fmt12(minsToTimeStr(sMins))}–${fmt12(minsToTimeStr(eMins))}`;
+          const isRecurring = !!groupId;
           const ghost    = document.createElement('div');
           ghost.style.cssText = `
             position:fixed;z-index:9999;pointer-events:none;box-sizing:border-box;
@@ -971,7 +1035,7 @@ function attachWeekInteractions() {
             transition:none;
           `;
           ghost.innerHTML = `
-            <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${evEl.dataset.title || ''}</div>
+            <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${evEl.dataset.title || ''}${isRecurring ? ' <span style="opacity:0.8;font-size:8px">🔁</span>' : ''}</div>
             <div class="wcal-time-lbl" style="font-size:9px;opacity:0.9">${liveStr}</div>
           `;
           document.body.appendChild(ghost);
@@ -983,6 +1047,7 @@ function attachWeekInteractions() {
           dragState = {
             type: 'move',
             evEl, evId, classId, evType, evDate,
+            groupId,
             startM:   sMins,
             endM:     eMins,
             duration: eMins - sMins,
@@ -1029,7 +1094,7 @@ function attachWeekInteractions() {
         const evEnd   = evEl.dataset.end;
         const evDate  = evEl.dataset.date || colDateStr;
         if (evType === 'gcal') {
-          openEventPopup(evId, evStart, evEnd, evEl.dataset.title || evEl.title, evDate, evEl, evEl.dataset.notes || '');
+          openEventPopup(evId, evStart, evEnd, evEl.dataset.title || evEl.title, evDate, evEl, evEl.dataset.notes || '', evEl.dataset.recurrence || null);
         } else if (evType === 'class' && classId) {
           const className = evEl.dataset.title || evEl.title;
           openClassEditModal(classId, className, evStart, evEnd, evDate);
@@ -1092,14 +1157,63 @@ function updateGhostBlock(ghost, startM, endM) {
 }
 
 // ── Save event time to Supabase ───────────────────────────────────────────────
-async function saveEventTime(id, dateStr, startTime, endTime, oldDate, oldStart, oldEnd, undoType) {
+// scope: 'this' | 'following' | 'all' | undefined (for non-recurring)
+// groupId: recurrence_group_id if recurring
+async function saveEventTime(id, dateStr, startTime, endTime, oldDate, oldStart, oldEnd, undoType, scope, groupId) {
   if (!id) return;
-  // Push undo entry before saving
+  // Push undo entry before saving (single-event undo)
   if (oldStart) {
     pushUndo({ type: undoType || 'move', id, oldDate: oldDate || dateStr, oldStart, oldEnd });
   }
   const startISO = `${dateStr}T${startTime}:00+00:00`;
   const endISO   = `${dateStr}T${endTime}:00+00:00`;
+
+  // ── scope === 'all' — update time on ALL events in the group ───────────────
+  if (scope === 'all' && groupId) {
+    // For 'all' scope on a time change, we update start/end time portion for every event in group
+    // First, fetch all events in the group
+    const { data: groupRows, error: fetchErr } = await supabase
+      .from('calendar_events').select('id, start_time, end_time').eq('recurrence_group_id', groupId);
+    if (fetchErr) { toast('Save failed: ' + fetchErr.message, 'error'); return; }
+    // Update each event keeping its date but using the new time
+    const updates = (groupRows || []).map(row => {
+      const rowDate = row.start_time ? row.start_time.slice(0, 10) : dateStr;
+      return supabase.from('calendar_events').update({
+        start_time: `${rowDate}T${startTime}:00+00:00`,
+        end_time:   `${rowDate}T${endTime}:00+00:00`,
+      }).eq('id', row.id);
+    });
+    const results = await Promise.all(updates);
+    const anyError = results.find(r => r.error);
+    if (anyError) { toast('Save failed: ' + anyError.error.message, 'error'); return; }
+    toast(`All ${results.length} events in series updated ✅`, 'success');
+    render();
+    return;
+  }
+
+  // ── scope === 'following' — update time on this event and all after it ─────
+  if (scope === 'following' && groupId) {
+    const { data: groupRows, error: fetchErr } = await supabase
+      .from('calendar_events').select('id, start_time, end_time')
+      .eq('recurrence_group_id', groupId)
+      .gte('start_time', `${oldDate || dateStr}T00:00:00+00:00`);
+    if (fetchErr) { toast('Save failed: ' + fetchErr.message, 'error'); return; }
+    const updates = (groupRows || []).map(row => {
+      const rowDate = row.start_time ? row.start_time.slice(0, 10) : dateStr;
+      return supabase.from('calendar_events').update({
+        start_time: `${rowDate}T${startTime}:00+00:00`,
+        end_time:   `${rowDate}T${endTime}:00+00:00`,
+      }).eq('id', row.id);
+    });
+    const results = await Promise.all(updates);
+    const anyError = results.find(r => r.error);
+    if (anyError) { toast('Save failed: ' + anyError.error.message, 'error'); return; }
+    toast(`This and ${results.length - 1} following events updated ✅`, 'success');
+    render();
+    return;
+  }
+
+  // ── scope === 'this' or non-recurring — single event update ───────────────
   const { error } = await supabase.from('calendar_events').update({
     start_time: startISO,
     end_time: endISO,
@@ -1282,11 +1396,11 @@ function openCreateModal(dateStr, startTime, endTime, allDay = false) {
       </div>
       <select id="cev-recur" style="width:100%;border:1.5px solid var(--gray-200);border-radius:8px;padding:9px 12px;font-size:14px;margin-bottom:14px;outline:none;box-sizing:border-box;background:var(--white)">
         <option value="none">🔂 Doesn't repeat</option>
-        <option value="daily">📅 Daily (30 days)</option>
-        <option value="weekdays">🗓 Weekdays Mon–Fri (8 weeks)</option>
-        <option value="weekly">📆 Weekly (2 years)</option>
-        <option value="biweekly">📆 Every 2 weeks (2 years)</option>
-        <option value="monthly">🗓 Monthly (3 years)</option>
+        <option value="daily">📅 Daily (indefinitely)</option>
+        <option value="weekdays">🗓 Weekdays Mon–Fri (indefinitely)</option>
+        <option value="weekly">📆 Weekly (indefinitely)</option>
+        <option value="biweekly">📆 Every 2 weeks (indefinitely)</option>
+        <option value="monthly">🗓 Monthly (indefinitely)</option>
       </select>
       <div style="display:flex;gap:8px">
         <button onclick="document.getElementById('cal-ev-modal').remove()"
@@ -1368,52 +1482,51 @@ function openCreateModal(dateStr, startTime, endTime, allDay = false) {
   });
 }
 
-// ── Build list of dates for recurrence ────────────────────────────────────────
+// ── Build list of dates for recurrence (indefinite = 10 years out) ────────────
 function buildRecurDates(startDateStr, recur) {
   const dates = [startDateStr];
   if (recur === 'none') return dates;
 
   const start = new Date(startDateStr + 'T00:00:00');
-  const dow = start.getDay(); // 0=Sun, 1=Mon...5=Fri, 6=Sat
+  // End date: 10 years from start
+  const endDate = new Date(start);
+  endDate.setFullYear(endDate.getFullYear() + 10);
 
   if (recur === 'daily') {
-    for (let i = 1; i < 30; i++) {
+    for (let i = 1; ; i++) {
       const d = new Date(start);
       d.setDate(d.getDate() + i);
+      if (d > endDate) break;
       dates.push(dateStr(d));
     }
   } else if (recur === 'weekdays') {
-    let count = 0;
-    let i = 1;
-    while (count < 39) { // 8 weeks * ~5 days
+    for (let i = 1; ; i++) {
       const d = new Date(start);
       d.setDate(d.getDate() + i);
+      if (d > endDate) break;
       if (d.getDay() >= 1 && d.getDay() <= 5) {
         dates.push(dateStr(d));
-        count++;
       }
-      i++;
-      if (i > 200) break;
     }
   } else if (recur === 'weekly') {
-    // 2 years of weekly occurrences
-    for (let i = 1; i < 104; i++) {
+    for (let i = 1; ; i++) {
       const d = new Date(start);
       d.setDate(d.getDate() + i * 7);
+      if (d > endDate) break;
       dates.push(dateStr(d));
     }
   } else if (recur === 'biweekly') {
-    // 2 years of biweekly occurrences
-    for (let i = 1; i < 52; i++) {
+    for (let i = 1; ; i++) {
       const d = new Date(start);
       d.setDate(d.getDate() + i * 14);
+      if (d > endDate) break;
       dates.push(dateStr(d));
     }
   } else if (recur === 'monthly') {
-    // 3 years of monthly
-    for (let i = 1; i < 36; i++) {
+    for (let i = 1; ; i++) {
       const d = new Date(start);
       d.setMonth(d.getMonth() + i);
+      if (d > endDate) break;
       dates.push(dateStr(d));
     }
   }
@@ -1446,7 +1559,7 @@ function _attachSwatchListeners(gridId, inputId) {
 }
 
 // ── Event detail popup (title + color swatches + edit + delete) ───────────────
-function openEventPopup(id, startTime, endTime, title, evDate, anchorEl, notes = '') {
+function openEventPopup(id, startTime, endTime, title, evDate, anchorEl, notes = '', recurrence = null) {
   removeModal();
   const rect = anchorEl.getBoundingClientRect();
   const currentColor = anchorEl.style.background || '#2563EB';
@@ -1485,9 +1598,18 @@ function openEventPopup(id, startTime, endTime, title, evDate, anchorEl, notes =
       <button id="ev-notes-save" style="display:none;margin-top:4px;padding:4px 10px;border:none;border-radius:6px;background:var(--blue);color:white;font-size:11px;font-weight:700;cursor:pointer">Save note</button>
     </div>`;
 
+  const recurLabel = recurrence && recurrence !== 'none' ? {
+    daily: '🔁 Repeats daily',
+    weekdays: '🔁 Repeats weekdays',
+    weekly: '🔁 Repeats weekly',
+    biweekly: '🔁 Repeats every 2 weeks',
+    monthly: '🔁 Repeats monthly',
+  }[recurrence] || null : null;
+
   popup.innerHTML = `
     <div style="font-size:13px;font-weight:700;color:var(--gray-800);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px">${title}</div>
-    <div style="font-size:11px;color:var(--gray-400);margin-bottom:10px">${fmt12Range(startTime, endTime)}</div>
+    <div style="font-size:11px;color:var(--gray-400);margin-bottom:${recurLabel ? '3px' : '10px'}">${fmt12Range(startTime, endTime)}</div>
+    ${recurLabel ? `<div style="font-size:11px;color:var(--blue,#2563EB);margin-bottom:10px;font-weight:500">${recurLabel}</div>` : ''}
     ${notesHTML}
     <div id="ev-color-swatches" style="display:grid;grid-template-columns:repeat(6,26px);gap:7px;margin-bottom:12px">
       ${swatchesHTML}
@@ -1656,11 +1778,11 @@ function openEditModal(id, title, evDate, startTime, endTime, currentRecur = 'no
   const recurOptions = ['none','daily','weekdays','weekly','biweekly','monthly'];
   const recurLabels  = {
     none: '🔂 Doesn\'t repeat',
-    daily: '📅 Daily (30 days)',
-    weekdays: '🗓 Weekdays Mon–Fri (8 weeks)',
-    weekly: '📆 Weekly (2 years)',
-    biweekly: '📆 Every 2 weeks (2 years)',
-    monthly: '🗓 Monthly (3 years)',
+    daily: '📅 Daily (indefinitely)',
+    weekdays: '🗓 Weekdays Mon–Fri (indefinitely)',
+    weekly: '📆 Weekly (indefinitely)',
+    biweekly: '📆 Every 2 weeks (indefinitely)',
+    monthly: '🗓 Monthly (indefinitely)',
   };
   const recurSelectHTML = recurOptions.map(v =>
     `<option value="${v}"${v === currentRecur ? ' selected' : ''}>${recurLabels[v]}</option>`
