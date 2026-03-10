@@ -12,14 +12,18 @@ html, body { background: #1a2a1a; overflow: hidden; font-family: 'Georgia', seri
 /* ── GAME CONTAINER (FULLSCREEN) ── */
 #game-container {
   position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
   overflow: hidden;
+  z-index: 0;
 }
-/* Phaser Scale.RESIZE manages canvas size — no CSS override needed */
 #game-container canvas {
   display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
 }
 
 /* ── MENU ── */
@@ -971,11 +975,11 @@ class GameScene extends Phaser.Scene {
       .setDisplaySize(18, 12).setCollideWorldBounds(true);
     this.player.setVisible(false);
 
-    // Smooth camera follow — follow the physics body (source of truth for position)
-    // offsetY of -8 compensates for sprite being drawn 8px above the physics body
-    this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
-    this.cameras.main.setFollowOffset(0, -8);
+    // Camera follow — follow the visible player sprite
+    // lerp=1 means instant (no smoothing lag), roundPixels for crisp pixel art
+    this.cameras.main.startFollow(this.playerSprite, true, 1, 1);
     this.cameras.main.setZoom(1.0);
+    this.cameras.main.setRoundPixels(true);
 
     // Keep camera bounds correct on window resize
     this.scale.on('resize', (gameSize) => {
@@ -1039,6 +1043,9 @@ class GameScene extends Phaser.Scene {
     // Update dialogue input placeholder
     const langName = getLangName(worldDef.world.language || 'es');
     document.getElementById('dialogue-input').placeholder = `Respond in ${langName}...`;
+
+    // Force camera to snap to player immediately (no lerp delay on first frame)
+    this.cameras.main.centerOn(this.playerSprite.x, this.playerSprite.y);
   }
 
   update(time, delta) {
@@ -1333,12 +1340,12 @@ function startGame() {
   const config = {
     type: Phaser.AUTO,
     parent: 'game-container',
+    width:  window.innerWidth,
+    height: window.innerHeight,
     backgroundColor: '#1a2a1a',
     scale: {
       mode: Phaser.Scale.RESIZE,
-      parent: 'game-container',
-      width:  '100%',
-      height: '100%',
+      autoCenter: Phaser.Scale.NO_CENTER,
     },
     physics: { default: 'arcade', arcade: { gravity: { y: 0 }, debug: false } },
     input: {
@@ -1353,6 +1360,13 @@ function startGame() {
   };
 
   phaserGame = new Phaser.Game(config);
+
+  // Force canvas to fill the window on resize
+  window.addEventListener('resize', () => {
+    if (phaserGame) {
+      phaserGame.scale.resize(window.innerWidth, window.innerHeight);
+    }
+  });
 
   fetchSRSVocab();
 }
