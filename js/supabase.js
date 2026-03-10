@@ -11,6 +11,30 @@ const PROXY_URL = 'https://kxsuzgpnvtepsyhkezin.supabase.co/functions/v1/db-prox
 const PAGE = window.location.pathname.split('/').pop() || 'index.html';
 const _recentDbErrors = new Map();
 
+// ── Downtime banner ────────────────────────────────────────────────────────────
+// Shows a visible red banner when db-proxy returns 5xx (not 403/404 which are
+// permission errors, not downtime). Only shows once per page load.
+let _downtimeBannerShown = false;
+function _showDowntimeBanner(statusCode) {
+  if (_downtimeBannerShown) return;
+  _downtimeBannerShown = true;
+  const banner = document.createElement('div');
+  banner.id = 'lifeos-downtime-banner';
+  banner.style.cssText = `
+    position:fixed;top:0;left:0;right:0;z-index:99999;
+    background:#DC2626;color:white;font-size:13px;font-weight:600;
+    padding:10px 16px;text-align:center;
+    box-shadow:0 2px 8px rgba(0,0,0,0.2);
+  `;
+  banner.innerHTML = `
+    ⚠️ LifeOS database is down (Error ${statusCode}) — data cannot load.
+    <a href="#" onclick="location.reload();return false;" style="color:white;text-decoration:underline;margin-left:8px">Reload</a>
+    <button onclick="document.getElementById('lifeos-downtime-banner').remove()"
+      style="margin-left:12px;background:rgba(255,255,255,0.2);border:none;color:white;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:12px">✕</button>
+  `;
+  document.body.appendChild(banner);
+}
+
 function _reportDbError(message, context) {
   // Never report errors from console_errors itself (avoid infinite loops)
   if (context?.table === 'console_errors') return;
@@ -141,6 +165,8 @@ class ProxyQueryBuilder {
       if (!res.ok) {
         const msg = `db-proxy HTTP ${res.status} on ${this._op} '${this._table}'`;
         _reportDbError(msg, { table: this._table, op: this._op, status: res.status });
+        // Show downtime banner for 5xx errors (server-side failure, not permission issues)
+        if (res.status >= 500) _showDowntimeBanner(res.status);
         return { data: null, error: { message: msg } };
       }
 
