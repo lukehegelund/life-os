@@ -224,7 +224,18 @@ function noteCardHtml(note) {
         <div class="note-collapsed-text">
           <div class="note-collapsed-title">${note.title ? esc(note.title) : '<span style="color:var(--gray-400);font-style:italic">Sin título</span>'}</div>
           ${bodyPreview ? `<div class="note-collapsed-body">${esc(bodyPreview)}</div>` : ''}
-          ${folderBadge ? `<div style="margin-top:4px">${folderBadge}</div>` : ''}
+          <div style="margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap" onclick="event.stopPropagation()">
+            ${folderBadge ? folderBadge : ''}
+            <select class="note-folder-select-collapsed"
+              style="font-size:11px;padding:2px 5px;border:1px solid var(--gray-200);border-radius:6px;background:var(--white);color:var(--gray-500);cursor:pointer;max-width:110px"
+              onchange="event.stopPropagation();setNoteFolder('${note.id}', this.value);this.blur()"
+              onclick="event.stopPropagation()"
+              title="Cambiar carpeta">
+              <option value="">📁 Carpeta</option>
+              <option value="">Sin carpeta</option>
+              ${allFolders.map(f => `<option value="${f.id}" ${note.folderId === f.id ? 'selected' : ''}>${esc(f.icon)} ${esc(f.name)}</option>`).join('')}
+            </select>
+          </div>
         </div>
         <div class="note-collapsed-meta">
           ${note.pinned ? '<span class="note-pin-badge">📌</span>' : ''}
@@ -266,12 +277,12 @@ function noteCardHtml(note) {
           onclick="event.stopPropagation()">${note.body || ''}</div>
 
         <div class="note-edit-toolbar" onclick="event.stopPropagation()">
-          <div class="note-color-row">
+          <div class="note-color-row" onclick="event.stopPropagation()">
             ${Object.entries(ACCENT_COLORS).map(([key, cfg]) => `
               <div class="note-color-swatch${note.color === key ? ' active' : ''}"
                    style="background:${cfg.strip === 'transparent' ? 'var(--gray-100)' : cfg.strip};${key==='none'?'border:1.5px dashed var(--gray-400);':''}"
                    title="${cfg.label}"
-                   onclick="setNoteColor('${note.id}','${key}')"></div>
+                   onclick="event.stopPropagation();setNoteColor('${note.id}','${key}')"></div>
             `).join('')}
           </div>
           <div class="note-toolbar-actions">
@@ -1098,23 +1109,59 @@ window.copyNote = function(noteId, refBtn) {
   const bodyPart = stripHtml(note.body);
   const fullText = (titlePart + bodyPart).trim();
 
-  navigator.clipboard.writeText(fullText).then(() => {
-    // Flash any copy buttons for this note
-    const flashBtn = (btn) => {
-      if (!btn) return;
-      const orig = btn.textContent;
-      btn.textContent = '✅';
-      setTimeout(() => { btn.textContent = orig; }, 1500);
-    };
-    flashBtn(refBtn || document.querySelector(`#note-card-${noteId} .note-tool-btn[title="Copiar nota"]`));
-  }).catch(() => {
+  const flashBtn = (btn, success) => {
+    if (!btn) return;
+    const orig = btn.textContent;
+    btn.textContent = success ? '✅' : '❌';
+    setTimeout(() => { btn.textContent = orig; }, 1500);
+  };
+
+  // Find copy button for this note (quick copy or toolbar copy)
+  const targetBtn = refBtn
+    || document.querySelector(`#note-card-${noteId} .note-copy-quick`)
+    || document.querySelector(`#note-card-${noteId} .note-tool-btn[title="Copiar nota"]`);
+
+  const showToast = (msg, color) => {
     const t = document.createElement('div');
-    t.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#e8563a;color:white;padding:8px 16px;border-radius:20px;font-size:13px;font-weight:600;z-index:900;pointer-events:none';
-    t.textContent = '⚠️ No se pudo copiar';
+    t.style.cssText = `position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:${color};color:white;padding:8px 16px;border-radius:20px;font-size:13px;font-weight:600;z-index:900;pointer-events:none`;
+    t.textContent = msg;
     document.body.appendChild(t);
     setTimeout(() => t.remove(), 2000);
-  });
+  };
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(fullText).then(() => {
+      flashBtn(targetBtn, true);
+      showToast('✅ Nota copiada', '#1A5E3A');
+    }).catch(() => {
+      // Fallback for iOS/Safari
+      _copyFallback(fullText, targetBtn, showToast);
+    });
+  } else {
+    _copyFallback(fullText, targetBtn, showToast);
+  }
 };
+
+function _copyFallback(text, btn, showToast) {
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    if (ok) {
+      if (btn) { const orig = btn.textContent; btn.textContent = '✅'; setTimeout(() => { btn.textContent = orig; }, 1500); }
+      showToast('✅ Nota copiada', '#1A5E3A');
+    } else {
+      showToast('⚠️ No se pudo copiar', '#e8563a');
+    }
+  } catch {
+    showToast('⚠️ No se pudo copiar', '#e8563a');
+  }
+}
 
 // ── Delete note (instant DOM removal) ────────────────────────────
 window.deleteNote = async function(noteId) {
