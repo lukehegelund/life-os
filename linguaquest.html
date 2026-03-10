@@ -310,8 +310,8 @@ html, body { background: #1a2a1a; overflow: hidden; font-family: 'Georgia', seri
 
 <script>
 // ═══════════════════════════════════════════════════════════
-//  LINGUAQUEST — Phase 2
-//  NPC portraits, vocab highlighting, typing indicators, wander AI, polish
+//  LINGUAQUEST — Phase 3
+//  Infinite world chunks: generates surrounding chunks as player explores
 // ═══════════════════════════════════════════════════════════
 
 // ── ASSET PATHS ────────────────────────────────────────────────
@@ -339,16 +339,36 @@ let currentWorld= null;
 let dialogueHistory = {};
 let lastNPCReply = '';   // for translation reveal
 
+// ── CHUNK SYSTEM STATE ──────────────────────────────────────
+// Each chunk is identified by its grid coordinates (cx, cy) where (0,0) is the origin chunk.
+// Chunks are stored in a Map keyed by "cx,cy" string.
+const CHUNK_COLS = 22;  // tiles per chunk (width)
+const CHUNK_ROWS = 16;  // tiles per chunk (height)
+const chunks = new Map();  // key: "cx,cy" -> { worldDef, gameObjects: [], npcs: [], loaded: bool }
+const chunkGenQueue = [];  // queue of {cx,cy} to generate
+let chunkGenerating = false;  // true while an API call is in flight
+let currentChunkX = 0;   // which chunk the player is currently in
+let currentChunkY = 0;
+let worldTheme = '';     // the original prompt, used to generate coherent neighbor chunks
+let worldLanguage = 'es';
+let chunkGenCount = 0;   // counter for unique NPC ids across chunks
+
+// Directions for the 8 surrounding chunks
+const NEIGHBOR_DIRS = [
+  { dx: 0, dy:-1, label:'north' },
+  { dx: 1, dy:-1, label:'northeast' },
+  { dx: 1, dy: 0, label:'east' },
+  { dx: 1, dy: 1, label:'southeast' },
+  { dx: 0, dy: 1, label:'south' },
+  { dx:-1, dy: 1, label:'southwest' },
+  { dx:-1, dy: 0, label:'west' },
+  { dx:-1, dy:-1, label:'northwest' },
+];
+
 // ─────────────────────────────────────────────────────────────
 //  SAMPLE WORLD (default until user generates one)
 // ─────────────────────────────────────────────────────────────
 const SAMPLE_WORLD = {
-  world: {
-    theme: "coastal_village",
-    language: "es",
-    description: "A peaceful fishing village at the edge of the sea.",
-    size: [22, 16]
-  },
   player_start: [7, 8],
   npcs: [
     {
@@ -364,7 +384,7 @@ const SAMPLE_WORLD = {
     {
       id: "mercader",
       name: "Doña Paloma",
-      sprite: "skeleton",
+      sprite: "player",
       position: [14, 7],
       greeting: "¡Bienvenido a mi tienda! Tengo de todo.",
       personality: "Sharp-tongued merchant who always knows the latest gossip.",
@@ -374,7 +394,7 @@ const SAMPLE_WORLD = {
     {
       id: "nina",
       name: "Luz",
-      sprite: "chicken",
+      sprite: "player",
       position: [10, 5],
       greeting: "¡Hola! ¿Quieres jugar conmigo?",
       personality: "A curious, energetic child who asks lots of questions.",
@@ -547,15 +567,12 @@ class GameScene extends Phaser.Scene {
     this._createAnim('skeleton_ss', 'skel_walk_up',   [12,13,14,15],  6);
 
     this._createAnim('slime_ss',   'slime_idle',    [0,1,2,3], 5);
-    // Chicken/Cow spritesheets are 64x64px = 2 cols x 2 rows = frames 0-3 only
     this._createAnim('chicken_ss', 'chicken_idle',  [0,1],   3);
     this._createAnim('chicken_ss', 'chicken_walk',  [2,3],   6);
     this._createAnim('cow_ss',     'cow_idle',      [0,1],   2);
     this._createAnim('cow_ss',     'cow_walk',      [2,3],   5);
-    // Pig: 2x2 grid of 32x32 = frames [0,1,2,3]
     this._createAnim('pig_ss',     'pig_idle',      [0,1],     3);
     this._createAnim('pig_ss',     'pig_walk',      [2,3],     5);
-    // Sheep: same layout
     this._createAnim('sheep_ss',   'sheep_idle',    [0,1],     2);
     this._createAnim('sheep_ss',   'sheep_walk',    [2,3],     4);
 
@@ -569,16 +586,7 @@ class GameScene extends Phaser.Scene {
       interact: Phaser.Input.Keyboard.KeyCodes.E,
     });
 
-    // Pre-bake autotile textures so loadWorld can use simple images instead of per-tile quads
-    this._prebakeAutotiles('path_tiles',  'at_path_');
-    this._prebakeAutotiles('water_tiles', 'at_water_');
-
-    this.loadWorld(SAMPLE_WORLD);
-  }
-
-  // No pre-baking needed — autotile is drawn per-tile in _drawAutotile
-  _prebakeAutotiles(texKey, prefix) {
-    // (intentionally empty — keeping method for forward compatibility)
+    this.loadChunk(SAMPLE_WORLD, 0, 0, true);
   }
 
   _createAnim(key, name, frames, frameRate, repeat = -1) {
@@ -672,57 +680,53 @@ class GameScene extends Phaser.Scene {
       rt.draw(tmp, q.dx, q.dy);
       tmp.destroy();
     }
+    return rt;
   }
 
-  loadWorld(worldDef) {
-    // ── Tear down old player objects BEFORE clearing children ──
-    // Physics bodies from physics.add.image() survive children.removeAll(true)
-    // and must be destroyed explicitly, otherwise old bodies keep running.
-    if (this.player) {
-      this.player.destroy();
-      this.player = null;
-    }
-    if (this.playerSprite) {
-      this.playerSprite.destroy();
-      this.playerSprite = null;
-    }
+  // ─────────────────────────────────────────────────────────────
+  //  CHUNK LOADING — renders a worldDef at chunk grid position (chunkX, chunkY)
+  //  All positions are offset into world-space by chunk coordinates.
+  //  isOrigin=true means this is the first chunk (spawn player here).
+  // ─────────────────────────────────────────────────────────────
+  loadChunk(worldDef, chunkX, chunkY, isOrigin = false) {
+    const key = `${chunkX},${chunkY}`;
+    if (chunks.has(key) && chunks.get(key).loaded) return; // already loaded
 
-    // Stop camera follow so it re-latches to the new sprite below
-    this.cameras.main.stopFollow();
-
-    // Clear all display objects (tiles, decorations, NPC sprites, labels)
-    this.children.removeAll(true);
-    this.npcObjects = [];
-    this._nearestNPC = null;
-
-    this.worldData = worldDef;
     const { tiles, size } = worldDef.world;
     const cols = size[0];
     const rows = size[1];
+    const gameObjects = []; // track all Phaser objects for this chunk so we can unload
+
+    // World-space pixel offset for this chunk
+    const offsetX = chunkX * CHUNK_COLS * TILE_SIZE;
+    const offsetY = chunkY * CHUNK_ROWS * TILE_SIZE;
 
     // ── TILE LAYER ──
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
         const tileType = (tiles[row]?.[col]) || 'grass';
         const def = TILE_DEFS[tileType] || TILE_DEFS.grass;
-        const x = col * TILE_SIZE;
-        const y = row * TILE_SIZE;
+        const x = offsetX + col * TILE_SIZE;
+        const y = offsetY + row * TILE_SIZE;
 
         const isPath  = (t) => t === 'path' || t === 'stone' || t === 'building_door' || t === 'farmland' || t === 'sand' || t === 'beach';
         const isWater = (t) => t === 'water' || t === 'water_deep';
 
         if (isPath(tileType) && this.textures.exists('path_tiles')) {
-          // Draw grass base first, then autotile path on top
-          this.add.image(x, y, 'grass').setOrigin(0,0).setDisplaySize(TILE_SIZE, TILE_SIZE).setDepth(0);
-          this._drawAutotile('path_tiles', x, y, 1, tiles, col, row, cols, rows, isPath);
+          const g = this.add.image(x, y, 'grass').setOrigin(0,0).setDisplaySize(TILE_SIZE, TILE_SIZE).setDepth(0);
+          gameObjects.push(g);
+          const rt = this._drawAutotile('path_tiles', x, y, 1, tiles, col, row, cols, rows, isPath);
+          if (rt) gameObjects.push(rt);
         } else if (isWater(tileType) && this.textures.exists('water_tiles')) {
-          // Draw grass base first, then autotile water on top
-          this.add.image(x, y, 'grass').setOrigin(0,0).setDisplaySize(TILE_SIZE, TILE_SIZE).setDepth(0);
-          this._drawAutotile('water_tiles', x, y, 1, tiles, col, row, cols, rows, isWater);
+          const g = this.add.image(x, y, 'grass').setOrigin(0,0).setDisplaySize(TILE_SIZE, TILE_SIZE).setDepth(0);
+          gameObjects.push(g);
+          const rt = this._drawAutotile('water_tiles', x, y, 1, tiles, col, row, cols, rows, isWater);
+          if (rt) gameObjects.push(rt);
         } else {
           const tile = this.add.image(x, y, def.key)
             .setOrigin(0, 0).setDisplaySize(TILE_SIZE, TILE_SIZE).setDepth(0);
           if (def.tint) tile.setTint(def.tint);
+          gameObjects.push(tile);
         }
       }
     }
@@ -731,337 +735,281 @@ class GameScene extends Phaser.Scene {
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
         const tileType = (tiles[row]?.[col]) || 'grass';
-        const cx = col * TILE_SIZE + TILE_SIZE / 2;
-        const cy = row * TILE_SIZE + TILE_SIZE / 2;
-        const x  = col * TILE_SIZE;
-        const y  = row * TILE_SIZE;
+        const cx = offsetX + col * TILE_SIZE + TILE_SIZE / 2;
+        const cy = offsetY + row * TILE_SIZE + TILE_SIZE / 2;
+        const x  = offsetX + col * TILE_SIZE;
+        const y  = offsetY + row * TILE_SIZE;
+        // Use absolute row for depth sorting (so objects across chunks sort correctly)
+        const absRow = chunkY * CHUNK_ROWS + row;
 
-        // ── TREE ──
         if (tileType === 'tree') {
-          // Pick tree size based on position for variety
           const variant = (row * 3 + col) % 4;
-          // (no manual shadow — sprite art includes its own shadow)
-
+          let obj;
           if (variant === 0) {
-            // Large oak (64x80) — anchored at bottom-center
-            this.add.image(cx, cy + TILE_SIZE * 0.2, 'oak_tree')
-              .setOrigin(0.5, 0.85).setScale(0.95).setDepth(row * 10 + 5);
+            obj = this.add.image(cx, cy + TILE_SIZE * 0.2, 'oak_tree')
+              .setOrigin(0.5, 0.85).setScale(0.95).setDepth(absRow * 10 + 5);
           } else if (variant === 1) {
-            // Medium extracted tree (32x48)
-            this.add.image(cx, cy + TILE_SIZE * 0.18, 'oak_tree_medium')
-              .setOrigin(0.5, 0.85).setScale(1.35).setDepth(row * 10 + 5);
+            obj = this.add.image(cx, cy + TILE_SIZE * 0.18, 'oak_tree_medium')
+              .setOrigin(0.5, 0.85).setScale(1.35).setDepth(absRow * 10 + 5);
           } else if (variant === 2) {
-            // Large extracted variant (32x48)
-            this.add.image(cx, cy + TILE_SIZE * 0.18, 'oak_tree_large')
-              .setOrigin(0.5, 0.85).setScale(1.45).setDepth(row * 10 + 5);
+            obj = this.add.image(cx, cy + TILE_SIZE * 0.18, 'oak_tree_large')
+              .setOrigin(0.5, 0.85).setScale(1.45).setDepth(absRow * 10 + 5);
           } else {
-            // Medium oak again, slightly different scale
-            this.add.image(cx, cy + TILE_SIZE * 0.18, 'oak_tree_medium')
-              .setOrigin(0.5, 0.85).setScale(1.15).setDepth(row * 10 + 5);
+            obj = this.add.image(cx, cy + TILE_SIZE * 0.18, 'oak_tree_medium')
+              .setOrigin(0.5, 0.85).setScale(1.15).setDepth(absRow * 10 + 5);
           }
+          gameObjects.push(obj);
         }
 
-        // ── BUILDING CLUSTER ── draw house once per cluster (top-left corner only)
         if (tileType === 'building' || tileType === 'building_door') {
           const above = row > 0 ? (tiles[row-1]?.[col] || '') : '';
           const left  = col > 0 ? (tiles[row]?.[col-1] || '') : '';
-          const aboveIsBldg = above === 'building' || above === 'building_door';
-          const leftIsBldg  = left  === 'building' || left  === 'building_door';
-          if (!aboveIsBldg && !leftIsBldg) {
-            // How wide is this building cluster? count rightward
+          if (!(above === 'building' || above === 'building_door') &&
+              !(left === 'building' || left === 'building_door')) {
             let clusterW = 1;
             while (col + clusterW < cols) {
               const right = tiles[row]?.[col + clusterW] || '';
               if (right === 'building' || right === 'building_door') clusterW++;
               else break;
             }
-            // Center house over the cluster footprint
             const hcx = x + (clusterW * TILE_SIZE) / 2;
-            // House is 96x128. Scale so it fits over cluster tiles visually
             const hScale = Math.max(0.9, Math.min(1.6, clusterW * 0.8));
-            // (no manual shadow — house sprite has its own shadow baked in)
-            this.add.image(hcx, cy - TILE_SIZE * 0.15, 'house')
-              .setOrigin(0.5, 0.75).setScale(hScale).setDepth(row * 10 + 6);
+            const obj = this.add.image(hcx, cy - TILE_SIZE * 0.15, 'house')
+              .setOrigin(0.5, 0.75).setScale(hScale).setDepth(absRow * 10 + 6);
+            gameObjects.push(obj);
           }
         }
 
-        // ── CLIFF / MOUNTAIN ── draw as dark rocky mass
         if (tileType === 'cliff' || tileType === 'mountain') {
-          const g = this.add.graphics().setDepth(row * 10 + 5);
-          g.fillStyle(0x6a6a58, 1);
-          g.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-          g.fillStyle(0x888878, 1);
-          g.fillRect(x + 4, y + 4, TILE_SIZE - 8, TILE_SIZE / 2 - 4);
-          g.fillStyle(0xaaaaaa, 0.5);
-          g.fillRect(x + 8, y + 6, 8, 4);
+          const g = this.add.graphics().setDepth(absRow * 10 + 5);
+          g.fillStyle(0x6a6a58, 1); g.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+          g.fillStyle(0x888878, 1); g.fillRect(x + 4, y + 4, TILE_SIZE - 8, TILE_SIZE / 2 - 4);
+          g.fillStyle(0xaaaaaa, 0.5); g.fillRect(x + 8, y + 6, 8, 4);
+          gameObjects.push(g);
         }
 
-        // ── ROCK ── draw small rock decoration
         if (tileType === 'rock') {
-          this.add.image(cx, cy, 'rock_small')
-            .setOrigin(0.5, 0.5).setDisplaySize(TILE_SIZE * 0.7, TILE_SIZE * 0.7)
-            .setDepth(row * 10 + 5);
+          const obj = this.add.image(cx, cy, 'rock_small')
+            .setOrigin(0.5, 0.5).setDisplaySize(TILE_SIZE * 0.7, TILE_SIZE * 0.7).setDepth(absRow * 10 + 5);
+          gameObjects.push(obj);
         }
 
-        // ── CHEST ──
         if (tileType === 'chest') {
-          this.add.image(cx, cy, 'chest_sprite')
-            .setOrigin(0.5, 0.5).setScale(2.5).setDepth(row * 10 + 5);
+          const obj = this.add.image(cx, cy, 'chest_sprite')
+            .setOrigin(0.5, 0.5).setScale(2.5).setDepth(absRow * 10 + 5);
+          gameObjects.push(obj);
         }
 
-        // ── FARMLAND ROWS ──
         if (tileType === 'farmland') {
           const g = this.add.graphics().setDepth(1);
           g.lineStyle(1, 0x8B6914, 0.40);
-          for (let i = 0; i < 3; i++) {
-            const fy = y + (i + 1) * (TILE_SIZE / 4);
-            g.lineBetween(x + 4, fy, x + TILE_SIZE - 4, fy);
-          }
+          for (let i = 0; i < 3; i++) { g.lineBetween(x + 4, y + (i+1)*(TILE_SIZE/4), x + TILE_SIZE - 4, y + (i+1)*(TILE_SIZE/4)); }
+          gameObjects.push(g);
         }
 
-        // ── STONE VARIANT ── add subtle texture marks
         if (tileType === 'stone') {
           const g = this.add.graphics().setDepth(1);
-          g.lineStyle(1, 0x888888, 0.25);
-          g.strokeRect(x + 4, y + 4, TILE_SIZE - 8, TILE_SIZE - 8);
+          g.lineStyle(1, 0x888888, 0.25); g.strokeRect(x + 4, y + 4, TILE_SIZE - 8, TILE_SIZE - 8);
+          gameObjects.push(g);
         }
       }
     }
 
-    // ── GROUND SCATTER PASS ──
-    // Sprinkle flowers, grass tufts, stumps, rocks, mushrooms on grass tiles.
-    // Uses a seeded-ish deterministic random so the same world always looks the same.
+    // ── GROUND SCATTER ──
     if (this.textures.exists('decor')) {
-      // Decor frame groups (from Outdoor_Decor_Free.png, 7 cols × 12 rows):
-      const GRASS_TUFTS  = [0, 1, 2];          // small green grass tufts
-      const FLOWERS      = [7, 8, 9];           // yellow/white flowers
-      const STUMPS       = [14];                 // tree stump
-      const SMALL_ROCKS  = [15, 16];             // small grey rocks
-      const MUSHROOM     = [51];                 // red mushroom
-      const LOG          = [49];                 // log / branch
-
+      const GRASS_TUFTS = [0,1,2], FLOWERS = [7,8,9], STUMPS = [14], SMALL_ROCKS = [15,16], MUSHROOM = [51], LOG = [49];
       for (let row = 0; row < rows; row++) {
         for (let col = 0; col < cols; col++) {
           const tileType = (tiles[row]?.[col]) || 'grass';
-          const cx = col * TILE_SIZE + TILE_SIZE / 2;
-          const cy = row * TILE_SIZE + TILE_SIZE / 2;
-          // Simple deterministic hash so scatter is stable per-tile
-          const h = (col * 2654435761 + row * 2246822519) >>> 0;
-          const roll = (h % 100);            // 0–99
-          const jx = ((h >> 8) % TILE_SIZE) - TILE_SIZE / 2;  // ±24 offset
+          const cx = offsetX + col * TILE_SIZE + TILE_SIZE / 2;
+          const cy = offsetY + row * TILE_SIZE + TILE_SIZE / 2;
+          // Include chunk coords in hash so scatter varies between chunks
+          const h = ((col + chunkX * 1000) * 2654435761 + (row + chunkY * 1000) * 2246822519) >>> 0;
+          const roll = h % 100;
+          const jx = ((h >> 8) % TILE_SIZE) - TILE_SIZE / 2;
           const jy = ((h >> 16) % TILE_SIZE) - TILE_SIZE / 2;
-          const depth = row * 10 + 2;        // below trees/NPCs
+          const absRow = chunkY * CHUNK_ROWS + row;
+          const depth = absRow * 10 + 2;
 
           if (tileType === 'grass') {
-            if (roll < 12) {
-              // Flowers (12% chance)
-              const frame = FLOWERS[h % FLOWERS.length];
-              this.add.image(cx + jx * 0.6, cy + jy * 0.6, 'decor', frame)
-                .setOrigin(0.5, 0.8).setScale(2.5).setDepth(depth);
-            } else if (roll < 22) {
-              // Grass tufts (10%)
-              const frame = GRASS_TUFTS[h % GRASS_TUFTS.length];
-              this.add.image(cx + jx * 0.7, cy + jy * 0.7, 'decor', frame)
-                .setOrigin(0.5, 0.8).setScale(2.2).setDepth(depth);
-            } else if (roll < 27) {
-              // Small rocks (5%)
-              const frame = SMALL_ROCKS[h % SMALL_ROCKS.length];
-              this.add.image(cx + jx * 0.5, cy + jy * 0.5, 'decor', frame)
-                .setOrigin(0.5, 0.8).setScale(2.5).setDepth(depth);
-            } else if (roll < 30) {
-              // Stump (3%)
-              this.add.image(cx + jx * 0.4, cy + jy * 0.4, 'decor', STUMPS[0])
-                .setOrigin(0.5, 0.8).setScale(2.8).setDepth(depth);
-            } else if (roll < 32) {
-              // Mushroom (2%)
-              this.add.image(cx + jx * 0.5, cy + jy * 0.5, 'decor', MUSHROOM[0])
-                .setOrigin(0.5, 0.8).setScale(2.5).setDepth(depth);
-            } else if (roll < 34) {
-              // Log (2%)
-              this.add.image(cx + jx * 0.4, cy + jy * 0.4, 'decor', LOG[0])
-                .setOrigin(0.5, 0.8).setScale(2.5).setDepth(depth);
-            }
+            let frame, obj;
+            if (roll < 12) { frame = FLOWERS[h % FLOWERS.length]; obj = this.add.image(cx+jx*0.6,cy+jy*0.6,'decor',frame).setOrigin(0.5,0.8).setScale(2.5).setDepth(depth); }
+            else if (roll < 22) { frame = GRASS_TUFTS[h % GRASS_TUFTS.length]; obj = this.add.image(cx+jx*0.7,cy+jy*0.7,'decor',frame).setOrigin(0.5,0.8).setScale(2.2).setDepth(depth); }
+            else if (roll < 27) { frame = SMALL_ROCKS[h % SMALL_ROCKS.length]; obj = this.add.image(cx+jx*0.5,cy+jy*0.5,'decor',frame).setOrigin(0.5,0.8).setScale(2.5).setDepth(depth); }
+            else if (roll < 30) { obj = this.add.image(cx+jx*0.4,cy+jy*0.4,'decor',STUMPS[0]).setOrigin(0.5,0.8).setScale(2.8).setDepth(depth); }
+            else if (roll < 32) { obj = this.add.image(cx+jx*0.5,cy+jy*0.5,'decor',MUSHROOM[0]).setOrigin(0.5,0.8).setScale(2.5).setDepth(depth); }
+            else if (roll < 34) { obj = this.add.image(cx+jx*0.4,cy+jy*0.4,'decor',LOG[0]).setOrigin(0.5,0.8).setScale(2.5).setDepth(depth); }
+            if (obj) gameObjects.push(obj);
           }
 
-          // ── WATER SCATTER ── rocks at water's edge & in open water
           if (tileType === 'water' || tileType === 'water_deep') {
-            const isWater = (t) => t === 'water' || t === 'water_deep';
-            const above = isWater(tiles[row-1]?.[col]);
-            const below = isWater(tiles[row+1]?.[col]);
-            const left  = isWater(tiles[row]?.[col-1]);
-            const right = isWater(tiles[row]?.[col+1]);
-            const surrounded = above && below && left && right;
-            if (roll < 6 && surrounded) {
-              // Small rock cluster in open water (6%)
-              const frame = SMALL_ROCKS[h % SMALL_ROCKS.length];
-              this.add.image(cx + jx * 0.5, cy + jy * 0.5, 'decor', frame)
-                .setOrigin(0.5, 0.8).setScale(2.2).setDepth(depth).setAlpha(0.85);
+            const isW = (t) => t === 'water' || t === 'water_deep';
+            if (roll < 6 && isW(tiles[row-1]?.[col]) && isW(tiles[row+1]?.[col]) && isW(tiles[row]?.[col-1]) && isW(tiles[row]?.[col+1])) {
+              const obj = this.add.image(cx+jx*0.5,cy+jy*0.5,'decor',SMALL_ROCKS[h%SMALL_ROCKS.length]).setOrigin(0.5,0.8).setScale(2.2).setDepth(depth).setAlpha(0.85);
+              gameObjects.push(obj);
             }
           }
         }
       }
     }
 
-    // ── AMBIENT ANIMALS PASS ──
-    // Spawn a handful of wandering animals on open grass tiles.
-    // These are purely decorative — not NPCs, no dialogue.
+    // ── AMBIENT ANIMALS ──
+    const chunkNpcs = [];
     {
       const animalTypes = [
-        { key: 'chicken_ss', idle: 'chicken_idle', walk: 'chicken_walk', scale: 1.8 },
-        { key: 'pig_ss',     idle: 'pig_idle',     walk: 'pig_walk',     scale: 1.6 },
-        { key: 'sheep_ss',   idle: 'sheep_idle',   walk: 'sheep_walk',   scale: 1.6 },
-        { key: 'cow_ss',     idle: 'cow_idle',     walk: 'cow_walk',     scale: 1.7 },
+        { key:'chicken_ss', idle:'chicken_idle', walk:'chicken_walk', scale:1.8, name:'chicken' },
+        { key:'pig_ss',     idle:'pig_idle',     walk:'pig_walk',     scale:1.6, name:'pig' },
+        { key:'sheep_ss',   idle:'sheep_idle',   walk:'sheep_walk',   scale:1.6, name:'sheep' },
+        { key:'cow_ss',     idle:'cow_idle',     walk:'cow_walk',     scale:1.7, name:'cow' },
       ];
-      // Collect grass tiles far from the player start
-      const [pStartCol, pStartRow] = worldDef.player_start;
       const grassTiles = [];
       for (let row = 0; row < rows; row++) {
         for (let col = 0; col < cols; col++) {
           if ((tiles[row]?.[col] || 'grass') !== 'grass') continue;
-          const dist = Math.abs(col - pStartCol) + Math.abs(row - pStartRow);
-          if (dist > 3) grassTiles.push([col, row]);
+          grassTiles.push([col, row]);
         }
       }
-      // Shuffle deterministically and pick ~6–10 animals
-      grassTiles.sort((a, b) => {
-        const ha = (a[0] * 2654435761 + a[1] * 2246822519) >>> 0;
-        const hb = (b[0] * 2654435761 + b[1] * 2246822519) >>> 0;
+      grassTiles.sort((a,b) => {
+        const ha = ((a[0]+chunkX*1000)*2654435761 + (a[1]+chunkY*1000)*2246822519) >>> 0;
+        const hb = ((b[0]+chunkX*1000)*2654435761 + (b[1]+chunkY*1000)*2246822519) >>> 0;
         return ha - hb;
       });
-      const animalCount = Math.min(8, Math.floor(grassTiles.length * 0.04));
+      const animalCount = Math.min(6, Math.floor(grassTiles.length * 0.03));
       for (let i = 0; i < animalCount; i++) {
         const [ac, ar] = grassTiles[i];
-        const ax = ac * TILE_SIZE + TILE_SIZE / 2;
-        const ay = ar * TILE_SIZE + TILE_SIZE / 2;
+        const ax = offsetX + ac * TILE_SIZE + TILE_SIZE / 2;
+        const ay = offsetY + ar * TILE_SIZE + TILE_SIZE / 2;
         const aType = animalTypes[i % animalTypes.length];
         if (!this.textures.exists(aType.key)) continue;
+        const absRow = chunkY * CHUNK_ROWS + ar;
 
-        const aSprite = this.add.sprite(ax, ay, aType.key)
-          .setScale(aType.scale).setDepth(ar * 10 + 6);
+        const aSprite = this.add.sprite(ax, ay, aType.key).setScale(aType.scale).setDepth(absRow * 10 + 6);
         this._safePlay(aSprite, aType.idle);
+        gameObjects.push(aSprite);
 
-        // Simple wander — reuse same wander logic as NPCs via the npcObjects list
-        // but mark them as ambient (no dialogue, no label)
-        const wander = {
-          homeX: ax, homeY: ay,
-          targetX: ax, targetY: ay,
-          moving: false,
-          timer: Math.random() * 4000 + 1000,
-          idleAnim: aType.idle, walkAnim: aType.walk,
-        };
-        // Store which animal type this is so the wander AI uses the right walk anim
-        const animalName = ['chicken','pig','sheep','cow'][i % animalTypes.length];
-        this.npcObjects.push({
-          def: { name: '', dialogue: [], type: 'ambient', sprite: animalName },
-          sprite: aSprite, label: null,
-          nx: ax, ny: ay, range: TILE_SIZE * 2, wander,
-        });
+        const wander = { homeX:ax, homeY:ay, targetX:ax, targetY:ay, moving:false, timer:Math.random()*4000+1000, idleAnim:aType.idle, walkAnim:aType.walk };
+        const npcObj = { def:{name:'',dialogue:[],type:'ambient',sprite:aType.name}, sprite:aSprite, label:null, nx:ax, ny:ay, range:TILE_SIZE*2, wander, chunkKey:key };
+        chunkNpcs.push(npcObj);
+        this.npcObjects.push(npcObj);
       }
     }
 
-    // ── PHYSICS & CAMERA BOUNDS ──
-    const worldW = cols * TILE_SIZE;
-    const worldH = rows * TILE_SIZE;
-    this.physics.world.setBounds(0, 0, worldW, worldH);
-    // Camera bounds must be at least as large as the viewport, otherwise
-    // Phaser clamps scrollX/scrollY to 0 and startFollow can't center the player.
-    // We expand bounds outward so the camera can scroll freely and center on the player
-    // even when the world is smaller than the screen.
-    const camW = Math.max(worldW, this.scale.width * 2);
-    const camH = Math.max(worldH, this.scale.height * 2);
-    const camX = -(camW - worldW) / 2;
-    const camY = -(camH - worldH) / 2;
-    this.cameras.main.setBounds(camX, camY, camW, camH);
-
-    // ── SPAWN PLAYER ──
-    const [pCol, pRow] = worldDef.player_start;
-    const px = pCol * TILE_SIZE + TILE_SIZE / 2;
-    const py = pRow * TILE_SIZE + TILE_SIZE / 2;
-
-    this.playerSprite = this.add.sprite(px, py, 'player_ss', 0)
-      .setScale(SPRITE_SCALE).setDepth(pRow * 10 + 8);
-    this._safePlay(this.playerSprite, 'player_idle_down');
-
-    // Physics body (invisible, slightly smaller for feel)
-    this.player = this.physics.add.image(px, py + 8, null)
-      .setDisplaySize(18, 12).setCollideWorldBounds(true);
-    this.player.setVisible(false);
-
-    // Camera follow — follow the visible player sprite
-    // lerp=1 means instant (no smoothing lag), roundPixels for crisp pixel art
-    this.cameras.main.startFollow(this.playerSprite, true, 1, 1);
-    this.cameras.main.setZoom(1.0);
-    this.cameras.main.setRoundPixels(true);
-
-    // Keep camera bounds correct on window resize
-    this.scale.on('resize', (gameSize) => {
-      this.cameras.main.setViewport(0, 0, gameSize.width, gameSize.height);
-      // Recalculate camera bounds so player stays centerable
-      const rW = Math.max(worldW, gameSize.width * 2);
-      const rH = Math.max(worldH, gameSize.height * 2);
-      this.cameras.main.setBounds(-(rW - worldW) / 2, -(rH - worldH) / 2, rW, rH);
-    });
-
-    // ── SPAWN NPCs ──
-    for (const npcDef of worldDef.npcs) {
+    // ── SPAWN NAMED NPCs ──
+    for (const npcDef of (worldDef.npcs || [])) {
       const [nc, nr] = npcDef.position;
-      const nx = nc * TILE_SIZE + TILE_SIZE / 2;
-      const ny = nr * TILE_SIZE + TILE_SIZE / 2;
+      const nx = offsetX + nc * TILE_SIZE + TILE_SIZE / 2;
+      const ny = offsetY + nr * TILE_SIZE + TILE_SIZE / 2;
+      const absRow = chunkY * CHUNK_ROWS + nr;
+
+      // Make NPC ids unique across chunks
+      const uniqueId = `${key}_${npcDef.id}`;
+      const npcDefCopy = { ...npcDef, id: uniqueId };
 
       let spriteKey, idleAnim, walkAnim, scale;
       switch (npcDef.sprite) {
-        case 'skeleton':
-          spriteKey = 'skeleton_ss'; idleAnim = 'skel_idle'; walkAnim = 'skel_walk_down'; scale = SPRITE_SCALE; break;
-        case 'slime':
-          spriteKey = 'slime_ss'; idleAnim = 'slime_idle'; walkAnim = 'slime_idle'; scale = 1.0; break;
-        case 'chicken':
-          spriteKey = 'chicken_ss'; idleAnim = 'chicken_idle'; walkAnim = 'chicken_walk'; scale = 2.0; break;
-        case 'cow':
-          spriteKey = 'cow_ss'; idleAnim = 'cow_idle'; walkAnim = 'cow_walk'; scale = 1.8; break;
-        case 'pig':
-          spriteKey = 'pig_ss'; idleAnim = 'pig_idle'; walkAnim = 'pig_walk'; scale = 1.8; break;
-        case 'sheep':
-          spriteKey = 'sheep_ss'; idleAnim = 'sheep_idle'; walkAnim = 'sheep_walk'; scale = 1.8; break;
-        default:
-          spriteKey = 'player_ss'; idleAnim = 'player_idle_down'; walkAnim = 'player_walk_down'; scale = SPRITE_SCALE; break;
+        case 'skeleton': spriteKey='skeleton_ss'; idleAnim='skel_idle'; walkAnim='skel_walk_down'; scale=SPRITE_SCALE; break;
+        case 'slime':    spriteKey='slime_ss'; idleAnim='slime_idle'; walkAnim='slime_idle'; scale=1.0; break;
+        case 'chicken':  spriteKey='chicken_ss'; idleAnim='chicken_idle'; walkAnim='chicken_walk'; scale=2.0; break;
+        case 'cow':      spriteKey='cow_ss'; idleAnim='cow_idle'; walkAnim='cow_walk'; scale=1.8; break;
+        case 'pig':      spriteKey='pig_ss'; idleAnim='pig_idle'; walkAnim='pig_walk'; scale=1.8; break;
+        case 'sheep':    spriteKey='sheep_ss'; idleAnim='sheep_idle'; walkAnim='sheep_walk'; scale=1.8; break;
+        default:         spriteKey='player_ss'; idleAnim='player_idle_down'; walkAnim='player_walk_down'; scale=SPRITE_SCALE; break;
       }
 
-      const npcSprite = this.add.sprite(nx, ny, spriteKey)
-        .setScale(scale).setDepth(nr * 10 + 7);
+      const npcSprite = this.add.sprite(nx, ny, spriteKey).setScale(scale).setDepth(absRow * 10 + 7);
       this._safePlay(npcSprite, idleAnim);
+      gameObjects.push(npcSprite);
 
-      // Floating name label
       const label = this.add.text(nx, ny - FRAME_H * scale * 0.7, npcDef.name, {
-        fontSize: '11px', color: '#d0f890', stroke: '#000000',
-        strokeThickness: 3, fontFamily: 'Georgia, serif',
-      }).setOrigin(0.5, 1).setDepth(nr * 10 + 9);
+        fontSize:'11px', color:'#d0f890', stroke:'#000000', strokeThickness:3, fontFamily:'Georgia, serif',
+      }).setOrigin(0.5, 1).setDepth(absRow * 10 + 9);
+      gameObjects.push(label);
 
-      const range = TILE_SIZE * 1.6;
-
-      // Wander state
-      const wander = {
-        homeX: nx, homeY: ny,
-        targetX: nx, targetY: ny,
-        moving: false,
-        timer: Math.random() * 3000,
-        idleAnim, walkAnim,
-      };
-
-      this.npcObjects.push({ def: npcDef, sprite: npcSprite, label, nx, ny, range, wander });
+      const wander = { homeX:nx, homeY:ny, targetX:nx, targetY:ny, moving:false, timer:Math.random()*3000, idleAnim, walkAnim };
+      const npcObj = { def:npcDefCopy, sprite:npcSprite, label, nx, ny, range:TILE_SIZE*1.6, wander, chunkKey:key };
+      chunkNpcs.push(npcObj);
+      this.npcObjects.push(npcObj);
     }
 
-    // ── HUD ──
-    const wname = (worldDef.world.theme || 'world').replace(/_/g, ' ');
-    document.getElementById('world-name').textContent = wname.toUpperCase();
-    document.getElementById('lang-badge').textContent = (worldDef.world.language || 'es').toUpperCase();
-    if (worldDef.world.description) showStatus(worldDef.world.description, 5000);
+    // Store chunk data
+    chunks.set(key, { worldDef, gameObjects, npcs: chunkNpcs, loaded: true, cx: chunkX, cy: chunkY });
 
-    // Update dialogue input placeholder
-    const langName = getLangName(worldDef.world.language || 'es');
-    document.getElementById('dialogue-input').placeholder = `Respond in ${langName}...`;
+    // ── PLAYER (only on origin chunk) ──
+    if (isOrigin) {
+      // Clear old player if exists
+      if (this.player) { this.player.destroy(); this.player = null; }
+      if (this.playerSprite) { this.playerSprite.destroy(); this.playerSprite = null; }
+      this.cameras.main.stopFollow();
 
-    // Force camera to snap to player immediately (no lerp delay on first frame)
-    this.cameras.main.centerOn(this.playerSprite.x, this.playerSprite.y);
+      const [pCol, pRow] = worldDef.player_start;
+      const px = offsetX + pCol * TILE_SIZE + TILE_SIZE / 2;
+      const py = offsetY + pRow * TILE_SIZE + TILE_SIZE / 2;
+
+      this.playerSprite = this.add.sprite(px, py, 'player_ss', 0).setScale(SPRITE_SCALE).setDepth(99999);
+      this._safePlay(this.playerSprite, 'player_idle_down');
+
+      this.player = this.physics.add.image(px, py + 8, null).setDisplaySize(18, 12);
+      this.player.setVisible(false);
+      this.player.body.setCollideWorldBounds(false); // no world bounds in infinite world
+
+      this.cameras.main.startFollow(this.playerSprite, true, 1, 1);
+      this.cameras.main.setZoom(1.0);
+      this.cameras.main.setRoundPixels(true);
+      this.cameras.main.setBounds(-999999, -999999, 1999998, 1999998); // effectively unbounded
+
+      currentChunkX = chunkX;
+      currentChunkY = chunkY;
+      worldTheme = worldDef.world.theme || '';
+      worldLanguage = worldDef.world.language || 'es';
+      currentWorld = worldDef;
+
+      // HUD
+      const wname = (worldDef.world.theme || 'world').replace(/_/g, ' ');
+      document.getElementById('world-name').textContent = wname.toUpperCase();
+      document.getElementById('lang-badge').textContent = worldLanguage.toUpperCase();
+      document.getElementById('dialogue-input').placeholder = `Respond in ${getLangName(worldLanguage)}...`;
+      if (worldDef.world.description) showStatus(worldDef.world.description, 5000);
+
+      this.cameras.main.centerOn(px, py);
+
+      // Queue generation of surrounding chunks
+      queueSurroundingChunks(chunkX, chunkY);
+      processChunkQueue(); // start generating
+    }
+
+    console.log(`Chunk (${chunkX},${chunkY}) loaded — ${gameObjects.length} objects`);
+  }
+
+  // ── UNLOAD a chunk — destroy all its game objects ──
+  unloadChunk(chunkX, chunkY) {
+    const key = `${chunkX},${chunkY}`;
+    const chunk = chunks.get(key);
+    if (!chunk || !chunk.loaded) return;
+
+    // Remove NPCs from the global list
+    this.npcObjects = this.npcObjects.filter(n => n.chunkKey !== key);
+
+    // Destroy all game objects
+    for (const obj of chunk.gameObjects) {
+      if (obj && obj.destroy) obj.destroy();
+    }
+    chunk.gameObjects = [];
+    chunk.npcs = [];
+    chunk.loaded = false;
+    chunks.delete(key);
+    console.log(`Chunk (${chunkX},${chunkY}) unloaded`);
+  }
+
+  // ── Get tile type at world pixel position, looking up the correct chunk ──
+  getTileAt(worldX, worldY) {
+    const cx = Math.floor(worldX / (CHUNK_COLS * TILE_SIZE));
+    const cy = Math.floor(worldY / (CHUNK_ROWS * TILE_SIZE));
+    const key = `${cx},${cy}`;
+    const chunk = chunks.get(key);
+    if (!chunk || !chunk.loaded) return 'grass'; // unloaded chunks treated as walkable grass
+    const localCol = Math.floor((worldX - cx * CHUNK_COLS * TILE_SIZE) / TILE_SIZE);
+    const localRow = Math.floor((worldY - cy * CHUNK_ROWS * TILE_SIZE) / TILE_SIZE);
+    return chunk.worldDef.world.tiles?.[localRow]?.[localCol] || 'grass';
   }
 
   update(time, delta) {
@@ -1070,7 +1018,6 @@ class GameScene extends Phaser.Scene {
     const dialogueOpen = document.getElementById('dialogue-box').style.display !== 'none'
                       && document.getElementById('dialogue-box').style.display !== '';
 
-    // Don't move player while any text input has keyboard focus
     const inputFocused = ['INPUT','TEXTAREA'].includes(document.activeElement?.tagName);
 
     const speed = 120;
@@ -1083,24 +1030,39 @@ class GameScene extends Phaser.Scene {
       if (this.cursors.down.isDown  || this.wasd.down.isDown)  vy =  speed;
     }
 
-    // Diagonal normalization
     if (vx !== 0 && vy !== 0) { vx *= 0.707; vy *= 0.707; }
 
-    // Tile collision
+    // Tile collision — now works across chunks
     if (vx !== 0 || vy !== 0) {
       const nx = this.player.x + vx * (delta / 1000) * 1.8;
       const ny = this.player.y + vy * (delta / 1000) * 1.8;
-      const col = Math.floor(nx / TILE_SIZE);
-      const row = Math.floor(ny / TILE_SIZE);
-      const tiles = this.worldData?.world?.tiles;
-      if (tiles) {
-        const tileType = (tiles[row]?.[col]) || 'grass';
-        const def = TILE_DEFS[tileType] || TILE_DEFS.grass;
-        if (!def.walkable) { vx = 0; vy = 0; }
-      }
+      const tileType = this.getTileAt(nx, ny);
+      const def = TILE_DEFS[tileType] || TILE_DEFS.grass;
+      if (!def.walkable) { vx = 0; vy = 0; }
     }
 
     this.player.setVelocity(vx, vy);
+
+    // ── CHUNK TRACKING — detect when player enters a new chunk ──
+    const newCX = Math.floor(this.player.x / (CHUNK_COLS * TILE_SIZE));
+    const newCY = Math.floor(this.player.y / (CHUNK_ROWS * TILE_SIZE));
+    if (newCX !== currentChunkX || newCY !== currentChunkY) {
+      console.log(`Player entered chunk (${newCX},${newCY})`);
+      currentChunkX = newCX;
+      currentChunkY = newCY;
+
+      // Queue surrounding chunks for generation
+      queueSurroundingChunks(newCX, newCY);
+      processChunkQueue();
+
+      // Unload chunks that are too far away (more than 2 chunks distance)
+      for (const [key, chunk] of chunks) {
+        const dist = Math.max(Math.abs(chunk.cx - newCX), Math.abs(chunk.cy - newCY));
+        if (dist > 2 && chunk.loaded) {
+          this.unloadChunk(chunk.cx, chunk.cy);
+        }
+      }
+    }
 
     // Sync player sprite
     this.playerSprite.x = this.player.x;
@@ -1180,11 +1142,8 @@ class GameScene extends Phaser.Scene {
           const tx = w.homeX + Math.cos(angle) * dist3;
           const ty = w.homeY + Math.sin(angle) * dist3;
 
-          // Check if target is walkable
-          const tcol = Math.floor(tx / TILE_SIZE);
-          const trow = Math.floor(ty / TILE_SIZE);
-          const tiles = this.worldData?.world?.tiles;
-          const tType = tiles?.[trow]?.[tcol] || 'grass';
+          // Check if target is walkable (now chunk-aware)
+          const tType = this.getTileAt(tx, ty);
           const tDef  = TILE_DEFS[tType] || TILE_DEFS.grass;
 
           if (tDef.walkable) {
@@ -1394,6 +1353,181 @@ function startGame() {
 }
 
 // ─────────────────────────────────────────────────────────────
+//  CHUNK QUEUE — queues neighboring chunks for generation
+// ─────────────────────────────────────────────────────────────
+function queueSurroundingChunks(cx, cy) {
+  for (const dir of NEIGHBOR_DIRS) {
+    const nx = cx + dir.dx;
+    const ny = cy + dir.dy;
+    const key = `${nx},${ny}`;
+    // Skip if already loaded or already in queue
+    if (chunks.has(key)) continue;
+    if (chunkGenQueue.some(q => q.cx === nx && q.cy === ny)) continue;
+    chunkGenQueue.push({ cx: nx, cy: ny, label: dir.label });
+    // Mark as queued (not loaded) so we don't re-queue
+    chunks.set(key, { worldDef: null, gameObjects: [], npcs: [], loaded: false, cx: nx, cy: ny });
+  }
+}
+
+async function processChunkQueue() {
+  if (chunkGenerating || chunkGenQueue.length === 0) return;
+  chunkGenerating = true;
+
+  while (chunkGenQueue.length > 0) {
+    const { cx, cy, label } = chunkGenQueue.shift();
+    const key = `${cx},${cy}`;
+
+    // Skip if already loaded (may have been loaded while waiting)
+    const existing = chunks.get(key);
+    if (existing && existing.loaded) continue;
+
+    // Check distance from player — skip if player has moved too far away
+    const dist = Math.max(Math.abs(cx - currentChunkX), Math.abs(cy - currentChunkY));
+    if (dist > 2) {
+      chunks.delete(key);
+      continue;
+    }
+
+    try {
+      console.log(`Generating chunk (${cx},${cy}) [${label}]...`);
+      const worldDef = await generateChunkAPI(cx, cy, label);
+      if (worldDef) {
+        gameScene.loadChunk(worldDef, cx, cy, false);
+      }
+    } catch (err) {
+      console.error(`Chunk (${cx},${cy}) generation failed:`, err);
+      chunks.delete(key); // Allow retry later
+    }
+
+    // Small delay between API calls to avoid rate limiting
+    await new Promise(r => setTimeout(r, 300));
+  }
+
+  chunkGenerating = false;
+}
+
+async function generateChunkAPI(cx, cy, dirLabel) {
+  if (!CLAUDE_KEY) return null;
+  chunkGenCount++;
+
+  // Gather edge tiles from adjacent loaded chunks for seamless transitions
+  const edgeContext = [];
+  for (const dir of NEIGHBOR_DIRS) {
+    const adjKey = `${cx + dir.dx},${cy + dir.dy}`;
+    const adj = chunks.get(adjKey);
+    if (adj && adj.loaded && adj.worldDef) {
+      const tiles = adj.worldDef.world.tiles;
+      const rows = tiles.length;
+      const cols = tiles[0]?.length || 0;
+      let edgeTiles = [];
+
+      // Get the edge of the adjacent chunk that faces us
+      if (dir.dx === -1 && dir.dy === 0) {
+        // Chunk to our west — get its east edge (last column)
+        edgeTiles = tiles.map(r => r[cols - 1] || 'grass');
+        edgeContext.push(`West neighbor east-edge: [${edgeTiles.join(',')}]`);
+      } else if (dir.dx === 1 && dir.dy === 0) {
+        edgeTiles = tiles.map(r => r[0] || 'grass');
+        edgeContext.push(`East neighbor west-edge: [${edgeTiles.join(',')}]`);
+      } else if (dir.dy === -1 && dir.dx === 0) {
+        edgeTiles = tiles[rows - 1] || [];
+        edgeContext.push(`North neighbor south-edge: [${edgeTiles.join(',')}]`);
+      } else if (dir.dy === 1 && dir.dx === 0) {
+        edgeTiles = tiles[0] || [];
+        edgeContext.push(`South neighbor north-edge: [${edgeTiles.join(',')}]`);
+      }
+    }
+  }
+
+  // Also get OUR OWN adjacent chunks' edges that touch this chunk
+  const originChunk = chunks.get('0,0');
+  const theme = worldTheme || 'wilderness';
+  const lang = worldLanguage || 'es';
+
+  // Get direct neighbor edges (the chunks that border this one and are loaded)
+  const directEdges = [];
+  // North neighbor of this chunk
+  const northKey = `${cx},${cy - 1}`;
+  const northChunk = chunks.get(northKey);
+  if (northChunk?.loaded && northChunk.worldDef) {
+    const t = northChunk.worldDef.world.tiles;
+    directEdges.push(`Your NORTH edge must connect to: [${(t[t.length - 1] || []).join(',')}]`);
+  }
+  // South neighbor
+  const southKey = `${cx},${cy + 1}`;
+  const southChunk = chunks.get(southKey);
+  if (southChunk?.loaded && southChunk.worldDef) {
+    const t = southChunk.worldDef.world.tiles;
+    directEdges.push(`Your SOUTH edge must connect to: [${(t[0] || []).join(',')}]`);
+  }
+  // West neighbor
+  const westKey = `${cx - 1},${cy}`;
+  const westChunk = chunks.get(westKey);
+  if (westChunk?.loaded && westChunk.worldDef) {
+    const t = westChunk.worldDef.world.tiles;
+    directEdges.push(`Your WEST edge must connect to: [${t.map(r => r[r.length - 1]).join(',')}]`);
+  }
+  // East neighbor
+  const eastKey = `${cx + 1},${cy}`;
+  const eastChunk = chunks.get(eastKey);
+  if (eastChunk?.loaded && eastChunk.worldDef) {
+    const t = eastChunk.worldDef.world.tiles;
+    directEdges.push(`Your EAST edge must connect to: [${t.map(r => r[0]).join(',')}]`);
+  }
+
+  const edgeInstructions = directEdges.length > 0
+    ? `\n\nCRITICAL — EDGE MATCHING:\nThis chunk borders existing chunks. Your edges MUST match seamlessly:\n${directEdges.join('\n')}\n- Where the neighbor has water at an edge, your matching edge tile must be water or beach\n- Where the neighbor has grass, match with grass, path, or tree\n- Where the neighbor has path, continue the path into your chunk\n- Transitions should feel natural, not abrupt`
+    : '';
+
+  const chunkPrompt = `You are generating a ${CHUNK_COLS}x${CHUNK_ROWS} chunk for an infinite world.
+Theme: "${theme}" | Direction: ${dirLabel} from origin | Language: ${lang}
+This is chunk (${cx},${cy}) in a seamless infinite world.${edgeInstructions}
+
+Return ONLY raw JSON (no markdown, no fences):
+{
+  "world": { "theme":"${theme}", "language":"${lang}", "description":"brief", "size":[${CHUNK_COLS},${CHUNK_ROWS}], "tiles": [...] },
+  "npcs": [ ... 1-2 NPCs max ... ],
+  "player_start": [${Math.floor(CHUNK_COLS/2)},${Math.floor(CHUNK_ROWS/2)}]
+}
+
+Valid tiles: grass, path, water, beach, sand, tree, building, building_door, farmland, stone, cliff, chest, rock, mountain
+NPC sprites: player, skeleton, slime, chicken, cow, pig, sheep
+NPC greetings/vocab in ${lang}. 1-2 NPCs with rich ai_context.
+Make it feel like a natural continuation of the ${theme} world — vary the landscape.`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': CLAUDE_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 4000,
+        messages: [{ role: 'user', content: chunkPrompt }],
+      }),
+    });
+
+    if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || 'API error'); }
+    const data = await res.json();
+    const raw = data.content[0].text.trim().replace(/^```json?\n?/, '').replace(/\n?```$/, '');
+
+    let worldDef;
+    try { worldDef = JSON.parse(raw); }
+    catch { console.error('Chunk JSON parse failed'); return null; }
+
+    if (!worldDef.world?.tiles) { console.error('Chunk missing tiles'); return null; }
+    return worldDef;
+  } catch (err) {
+    console.error('Chunk API error:', err);
+    return null;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
 //  WORLD GENERATION
 // ─────────────────────────────────────────────────────────────
 async function generateWorld() {
@@ -1515,7 +1649,22 @@ ${JSON.stringify(SAMPLE_WORLD, null, 2)}
 
     currentWorld = worldDef;
     dialogueHistory = {};
-    gameScene.loadWorld(worldDef);
+
+    // Clear all existing chunks
+    for (const [key, chunk] of chunks) {
+      if (chunk.loaded) gameScene.unloadChunk(chunk.cx, chunk.cy);
+    }
+    chunks.clear();
+    chunkGenQueue.length = 0;
+    chunkGenerating = false;
+
+    // Store theme/language for neighbor chunk generation
+    worldTheme = worldDef.world?.theme || prompt;
+    worldLanguage = worldDef.world?.language || 'es';
+    chunkGenCount = 0;
+
+    // Load the generated world as origin chunk (0,0)
+    gameScene.loadChunk(worldDef, 0, 0, true);
 
   } catch (err) {
     showStatus('⚠ ' + err.message, 5000);
