@@ -537,7 +537,7 @@ function renderDayGrid() {
 
   html += `<div class="wgcal-day-col" data-date="${ds}" style="flex:1;position:relative;height:${TOTAL_HEIGHT}px;${isToday ? 'background:rgba(37,99,235,0.03)' : ''}">`;
 
-  // Current time indicator
+  // Current time indicator (day view)
   if (isToday) {
     const now = new Date();
     const pstTime = now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', minute: 'numeric', hour12: false });
@@ -547,7 +547,7 @@ function renderDayGrid() {
     const endMins = WEEK_HOUR_END * 60;
     if (nowMins >= startMins && nowMins <= endMins) {
       const pct = (nowMins - startMins) / ((WEEK_HOUR_END - WEEK_HOUR_START) * 60) * 100;
-      html += `<div style="position:absolute;left:0;right:0;top:${pct}%;height:2px;background:var(--red);z-index:10;pointer-events:none">
+      html += `<div id="cal-now-line" data-view="day" style="position:absolute;left:0;right:0;top:${pct}%;height:2px;background:var(--red);z-index:10;pointer-events:none">
         <div style="position:absolute;left:-3px;top:-3px;width:8px;height:8px;border-radius:50%;background:var(--red)"></div>
       </div>`;
     }
@@ -667,7 +667,7 @@ function renderWeekGrid() {
     const timedEvents = getVisibleEvents(str).filter(e => e.timeStart);
     html += `<div class="wgcal-day-col" data-date="${str}" style="flex:1;position:relative;height:${TOTAL_HEIGHT}px;border-left:1px solid var(--gray-100);${isToday ? 'background:rgba(37,99,235,0.03)' : ''}">`;
 
-    // Current time indicator
+    // Current time indicator (week view)
     if (isToday) {
       const now = new Date();
       const pstTime = now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', minute: 'numeric', hour12: false });
@@ -677,7 +677,7 @@ function renderWeekGrid() {
       const endMins = WEEK_HOUR_END * 60;
       if (nowMins >= startMins && nowMins <= endMins) {
         const pct = (nowMins - startMins) / ((WEEK_HOUR_END - WEEK_HOUR_START) * 60) * 100;
-        html += `<div style="position:absolute;left:0;right:0;top:${pct}%;height:2px;background:var(--red);z-index:10;pointer-events:none">
+        html += `<div id="cal-now-line" data-view="week" style="position:absolute;left:0;right:0;top:${pct}%;height:2px;background:var(--red);z-index:10;pointer-events:none">
           <div style="position:absolute;left:-3px;top:-3px;width:8px;height:8px;border-radius:50%;background:var(--red)"></div>
         </div>`;
       }
@@ -1600,11 +1600,54 @@ function openEventPopup(id, startTime, endTime, title, evDate, anchorEl, notes =
     const color      = (rows && rows[0] && rows[0].color) || '#2563EB';
     // Re-fetch notes (might have been edited inline in popup)
     const currentNotes = anchorEl?.dataset?.notes || notes || '';
-    openEditModal(id, title, evDate, startTime, endTime, recurrence, groupId, color, currentNotes);
+    if (groupId) {
+      // Recurring event — ask scope before opening edit modal
+      const scope = await openEditScopeModal();
+      if (!scope) return; // cancelled
+      openEditModal(id, title, evDate, startTime, endTime, recurrence, groupId, color, currentNotes, scope);
+    } else {
+      openEditModal(id, title, evDate, startTime, endTime, recurrence, groupId, color, currentNotes);
+    }
   });
 }
 
-function openEditModal(id, title, evDate, startTime, endTime, currentRecur = 'none', groupId = null, currentColor = '#2563EB', currentNotes = '') {
+// ── Edit scope modal — ask "which events to edit?" before opening edit form ────
+function openEditScopeModal() {
+  return new Promise((resolve) => {
+    removeModal();
+    const modal = document.createElement('div');
+    modal.id = 'cal-ev-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:500;display:flex;align-items:center;justify-content:center';
+    modal.innerHTML = `
+      <div style="background:var(--white);border-radius:12px;padding:20px;width:90%;max-width:320px;box-shadow:0 8px 32px rgba(0,0,0,0.2)" onclick="event.stopPropagation()">
+        <div style="font-size:15px;font-weight:700;color:var(--gray-800);margin-bottom:6px">Edit recurring event</div>
+        <div style="font-size:13px;color:var(--gray-500);margin-bottom:16px">Which events do you want to edit?</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <button id="edit-scope-this" style="padding:10px 14px;border:1.5px solid var(--gray-200);border-radius:8px;background:var(--white);font-size:13px;font-weight:600;color:var(--gray-700);cursor:pointer;text-align:left">
+            🗂 This event only
+          </button>
+          <button id="edit-scope-following" style="padding:10px 14px;border:1.5px solid var(--gray-200);border-radius:8px;background:var(--white);font-size:13px;font-weight:600;color:var(--gray-700);cursor:pointer;text-align:left">
+            ⏩ This and all following
+          </button>
+          <button id="edit-scope-all" style="padding:10px 14px;border:1.5px solid var(--blue,#2563EB);border-radius:8px;background:#EFF6FF;font-size:13px;font-weight:600;color:var(--blue,#2563EB);cursor:pointer;text-align:left">
+            📆 All events in series
+          </button>
+          <button id="edit-scope-cancel" style="padding:8px 14px;border:none;border-radius:8px;background:transparent;font-size:13px;color:var(--gray-400);cursor:pointer">
+            Cancel
+          </button>
+        </div>
+      </div>`;
+    modal.addEventListener('click', () => { modal.remove(); resolve(null); });
+    document.body.appendChild(modal);
+
+    document.getElementById('edit-scope-cancel').addEventListener('click', (e) => { e.stopPropagation(); modal.remove(); resolve(null); });
+    document.getElementById('edit-scope-this').addEventListener('click', (e) => { e.stopPropagation(); modal.remove(); resolve('this'); });
+    document.getElementById('edit-scope-following').addEventListener('click', (e) => { e.stopPropagation(); modal.remove(); resolve('following'); });
+    document.getElementById('edit-scope-all').addEventListener('click', (e) => { e.stopPropagation(); modal.remove(); resolve('all'); });
+  });
+}
+
+function openEditModal(id, title, evDate, startTime, endTime, currentRecur = 'none', groupId = null, currentColor = '#2563EB', currentNotes = '', preSelectedScope = 'this') {
   removeModal();
   const modal = document.createElement('div');
   modal.id = 'cal-ev-modal';
@@ -1659,17 +1702,10 @@ function openEditModal(id, title, evDate, startTime, endTime, currentRecur = 'no
         ${recurSelectHTML}
       </select>
       ${hasGroup ? `
-      <div id="eev-scope-wrap" style="margin-bottom:14px;padding:10px;background:var(--gray-50,#f9fafb);border-radius:8px;border:1px solid var(--gray-200)">
-        <div style="font-size:11px;color:var(--gray-500);margin-bottom:6px;font-weight:600">APPLY CHANGES TO</div>
-        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:4px">
-          <input type="radio" name="eev-scope" value="this" checked style="accent-color:var(--blue)"> This event only
-        </label>
-        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:4px">
-          <input type="radio" name="eev-scope" value="following" style="accent-color:var(--blue)"> This and all following
-        </label>
-        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
-          <input type="radio" name="eev-scope" value="all" style="accent-color:var(--blue)"> All events in series
-        </label>
+      <input type="hidden" id="eev-scope-hidden" value="${preSelectedScope}" />
+      <div id="eev-scope-wrap" style="margin-bottom:14px;padding:8px 12px;background:#EFF6FF;border-radius:8px;border:1px solid #BFDBFE;display:flex;align-items:center;gap:8px">
+        <span style="font-size:14px">${preSelectedScope === 'this' ? '🗂' : preSelectedScope === 'following' ? '⏩' : '📆'}</span>
+        <span style="font-size:12px;color:var(--blue,#2563EB);font-weight:600">${preSelectedScope === 'this' ? 'This event only' : preSelectedScope === 'following' ? 'This and all following' : 'All events in series'}</span>
       </div>` : ''}
       <div style="margin-bottom:14px">
         <label style="font-size:11px;color:var(--gray-400);margin-bottom:6px;display:block">Notes</label>
@@ -1702,12 +1738,7 @@ function openEditModal(id, title, evDate, startTime, endTime, currentRecur = 'no
   // Wire up color swatches for edit modal
   _attachSwatchListeners('eev-color-swatches', 'eev-color');
 
-  // Show/hide scope picker when recurrence changes
   const recurEl = document.getElementById('eev-recur');
-  const scopeWrap = document.getElementById('eev-scope-wrap');
-  recurEl.addEventListener('change', () => {
-    if (scopeWrap) scopeWrap.style.display = recurEl.value !== 'none' && hasGroup ? '' : 'none';
-  });
 
   document.getElementById('eev-save-btn').addEventListener('click', async () => {
     const newTitle  = titleEl.value.trim();
@@ -1717,8 +1748,8 @@ function openEditModal(id, title, evDate, startTime, endTime, currentRecur = 'no
     const newRecur  = recurEl.value;
     const newColor  = document.getElementById('eev-color').value;
     const newNotes  = (document.getElementById('eev-notes')?.value) ?? currentNotes;
-    const scopeEl   = document.querySelector('input[name="eev-scope"]:checked');
-    const scope     = scopeEl ? scopeEl.value : 'this';
+    const scopeHidden = document.getElementById('eev-scope-hidden');
+    const scope     = scopeHidden ? scopeHidden.value : 'this';
 
     const btn = document.getElementById('eev-save-btn');
     if (btn) btn.disabled = true;
@@ -2050,3 +2081,23 @@ window._calToggleColor = (color) => {
 // ── Init ──────────────────────────────────────────────────────────────────────
 _initFilterSwatches();
 render();
+
+// ── Auto-update current time indicator every 30 seconds ───────────────────────
+function _updateNowLine() {
+  const line = document.getElementById('cal-now-line');
+  if (!line) return;
+  const now = new Date();
+  const pstTime = now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', minute: 'numeric', hour12: false });
+  const [pstH, pstM] = pstTime.split(':').map(Number);
+  const nowMins = pstH * 60 + pstM;
+  const startMins = WEEK_HOUR_START * 60;
+  const endMins = WEEK_HOUR_END * 60;
+  if (nowMins >= startMins && nowMins <= endMins) {
+    const pct = (nowMins - startMins) / ((WEEK_HOUR_END - WEEK_HOUR_START) * 60) * 100;
+    line.style.top = `${pct}%`;
+    line.style.display = '';
+  } else {
+    line.style.display = 'none';
+  }
+}
+setInterval(_updateNowLine, 30000);
