@@ -643,7 +643,7 @@ function renderDayGrid() {
     const evTypeAttr = `data-ev-type="${e.type}"`;
 
     const hasNote1 = !!(e.notes);
-    const recurAttr1 = e.recurrenceGroupId ? `data-group-id="${e.recurrenceGroupId}" data-recurrence="${e.recurrence || ''}"` : '';
+    const recurAttr1 = e.recurrenceGroupId ? `data-group-id="${e.recurrenceGroupId}" data-recurrence="${e.recurrence || ''}" data-is-template="${e.isTemplate ? 'true' : 'false'}"` : '';
     html += `<div class="wcal-ev${isEditable ? ' wcal-ev-editable' : ''}" ${evId} ${classIdAttr} ${evTypeAttr} ${recurAttr1}
       data-date="${ds}" data-start="${e.timeStart}" data-end="${e.timeEnd || ''}" data-title="${(e.title||'').replace(/"/g,'&quot;')}" data-notes="${(e.notes||'').replace(/"/g,'&quot;')}"
       style="position:absolute;top:${topPct}%;left:2px;right:2px;
@@ -774,7 +774,7 @@ function renderWeekGrid() {
       const evTypeAttr = `data-ev-type="${e.type}"`;
 
       const hasNote2 = !!(e.notes);
-      const recurAttr2 = e.recurrenceGroupId ? `data-group-id="${e.recurrenceGroupId}" data-recurrence="${e.recurrence || ''}"` : '';
+      const recurAttr2 = e.recurrenceGroupId ? `data-group-id="${e.recurrenceGroupId}" data-recurrence="${e.recurrence || ''}" data-is-template="${e.isTemplate ? 'true' : 'false'}"` : '';
       html += `<div class="wcal-ev${isEditable ? ' wcal-ev-editable' : ''}" ${evId} ${classIdAttr} ${evTypeAttr} ${recurAttr2}
         data-date="${str}" data-start="${e.timeStart}" data-end="${e.timeEnd || ''}" data-title="${(e.title||'').replace(/"/g,'&quot;')}" data-notes="${(e.notes||'').replace(/"/g,'&quot;')}"
         style="position:absolute;top:${topPct}%;left:2px;right:2px;
@@ -1168,7 +1168,7 @@ function attachWeekInteractions() {
         const evEnd   = evEl.dataset.end;
         const evDate  = evEl.dataset.date || colDateStr;
         if (evType === 'gcal') {
-          openEventPopup(evId, evStart, evEnd, evEl.dataset.title || evEl.title, evDate, evEl, evEl.dataset.notes || '', evEl.dataset.recurrence || null);
+          openEventPopup(evId, evStart, evEnd, evEl.dataset.title || evEl.title, evDate, evEl, evEl.dataset.notes || '', evEl.dataset.recurrence || null, evEl.dataset.groupId || null, evEl.dataset.isTemplate === 'true');
         } else if (evType === 'class' && classId) {
           const className = evEl.dataset.title || evEl.title;
           openClassEditModal(classId, className, evStart, evEnd, evDate);
@@ -1718,7 +1718,7 @@ function _attachSwatchListeners(gridId, inputId) {
 }
 
 // ── Event detail popup (title + color swatches + edit + delete) ───────────────
-function openEventPopup(id, startTime, endTime, title, evDate, anchorEl, notes = '', recurrence = null) {
+function openEventPopup(id, startTime, endTime, title, evDate, anchorEl, notes = '', recurrence = null, groupId = null, isTemplate = false) {
   removeModal();
   const rect = anchorEl.getBoundingClientRect();
   const currentColor = anchorEl.style.background || '#2563EB';
@@ -1820,7 +1820,61 @@ function openEventPopup(id, startTime, endTime, title, evDate, anchorEl, notes =
       if (newNotes === lastSavedNotes) return;
       notesSaveBtn.textContent = 'Saving…';
       notesSaveBtn.disabled = true;
-      const { error } = await supabase.from('calendar_events').update({ notes: newNotes }).eq('id', id);
+
+      let targetId = id;
+
+      // If this is a template-expanded occurrence (isTemplate=true, has groupId),
+      // we need to create/find an exception row for this specific date so the note
+      // is stored per-occurrence, not shared across all occurrences via the template.
+      if (isTemplate && groupId && evDate) {
+        const { data: existing } = await supabase.from('calendar_events')
+          .select('id').eq('recurrence_group_id', groupId).eq('is_template', false)
+          .gte('start_time', `${evDate}T00:00:00`)
+          .lte('start_time', `${evDate}T23:59:59`);
+
+        if (existing && existing.length > 0) {
+          targetId = existing[0].id;
+        } else {
+          // Fetch template to clone it as exception row
+          const { data: tmplRows } = await supabase.from('calendar_events')
+            .select('*').eq('recurrence_group_id', groupId).eq('is_template', true);
+          const tmpl = tmplRows && tmplRows[0];
+          const baseTime = tmpl ? tmpl.start_time.slice(11, 16) : (startTime || '00:00');
+          const baseEndTime = tmpl && tmpl.end_time ? tmpl.end_time.slice(11, 16) : null;
+          const { data: newRow, error: insErr } = await supabase.from('calendar_events').insert([{
+            title: tmpl ? tmpl.title : title,
+            start_time: `${evDate}T${baseTime}:00+00:00`,
+            end_time: baseEndTime ? `${evDate}T${baseEndTime}:00+00:00` : null,
+            all_day: tmpl ? tmpl.all_day : false,
+            color: tmpl ? tmpl.color : '#2563EB',
+            calendar_name: tmpl ? tmpl.calendar_name : 'LifeOS',
+            is_busy: tmpl ? tmpl.is_busy : true,
+            recurrence: tmpl ? tmpl.recurrence : 'none',
+            recurrence_group_id: groupId,
+            is_template: false,
+            notes: newNotes,
+          }]).select('id');
+          if (insErr) {
+            toast('Note save failed', 'error');
+            notesSaveBtn.textContent = 'Save note';
+            notesSaveBtn.disabled = false;
+            return;
+          }
+          // Exception row created with the note — done
+          lastSavedNotes = newNotes;
+          notesSaveBtn.style.display = 'none';
+          notesSaveBtn.textContent = 'Save note';
+          notesSaveBtn.disabled = false;
+          if (anchorEl) anchorEl.dataset.notes = newNotes;
+          // Mark this occurrence as no longer template-based (it now has an exception row)
+          isTemplate = false;
+          if (newRow && newRow[0]) targetId = newRow[0].id;
+          toast('Note saved ✓', 'success');
+          return;
+        }
+      }
+
+      const { error } = await supabase.from('calendar_events').update({ notes: newNotes }).eq('id', targetId);
       if (error) {
         toast('Note save failed', 'error');
         notesSaveBtn.textContent = 'Save note';
