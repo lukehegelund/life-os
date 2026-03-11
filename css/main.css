@@ -65,7 +65,7 @@ body {
 }
 
 /* ── Main content ───────────────────────────────────────────────────────── */
-.content { padding: 16px 20px; max-width: 900px; margin: 0 auto; }
+.content { padding: 16px 20px; width: 100%; box-sizing: border-box; }
 
 /* ── Cards ──────────────────────────────────────────────────────────────── */
 .card {
@@ -270,7 +270,7 @@ body {
 /* ── Desktop wider layout ───────────────────────────────────────────────── */
 @media (min-width: 640px) {
   .stats-grid { grid-template-columns: repeat(4, 1fr); }
-  .content { padding: 20px 24px; }
+  .content { padding: 20px 32px; }
   .page-header { padding: 18px 24px 14px; }
   .page-header h1 { font-size: 24px; }
   .bottom-nav { max-width: 600px; left: 50%; transform: translateX(-50%); border-radius: 16px 16px 0 0; }
