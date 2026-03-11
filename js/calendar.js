@@ -1735,19 +1735,17 @@ function openEventPopup(id, startTime, endTime, title, evDate, anchorEl, notes =
 
   const popup = document.createElement('div');
   popup.id = 'cal-ev-modal';
-  // Position below event, but keep on screen
-  const top  = Math.min(rect.bottom + 6, window.innerHeight - 220);
-  const left = Math.min(Math.max(rect.left, 4), window.innerWidth - 228);
+  // Render off-screen first to measure actual height, then position smartly
   popup.style.cssText = `position:fixed;z-index:600;background:var(--white);border-radius:12px;
     padding:14px 14px 12px;box-shadow:0 8px 28px rgba(0,0,0,0.18);width:220px;
-    top:${top}px;left:${left}px;border:1px solid var(--gray-200)`;
+    top:-9999px;left:-9999px;border:1px solid var(--gray-200);visibility:hidden`;
 
   // Notes area — show inline editable textarea or placeholder
   const notesHTML = `
     <div id="ev-notes-wrap" style="margin-bottom:10px">
       <textarea id="ev-notes-area"
         placeholder="Add a note…"
-        style="width:100%;min-height:56px;max-height:140px;border:1.5px solid var(--gray-200);border-radius:8px;
+        style="width:100%;min-height:112px;max-height:220px;border:1.5px solid var(--gray-200);border-radius:8px;
           padding:7px 10px;font-size:12px;color:var(--gray-700);resize:vertical;
           outline:none;box-sizing:border-box;font-family:inherit;line-height:1.4;
           background:var(--gray-50,#f9fafb);"
@@ -1779,6 +1777,27 @@ function openEventPopup(id, startTime, endTime, title, evDate, anchorEl, notes =
     </div>
   `;
   document.body.appendChild(popup);
+
+  // Smart positioning: measure actual popup height, then decide above vs below
+  const popupH = popup.offsetHeight;
+  const popupW = popup.offsetWidth || 220;
+  const GAP = 6;
+  const MARGIN = 8; // min gap from screen edges
+  // Prefer below; flip above if not enough room below
+  let finalTop;
+  if (rect.bottom + GAP + popupH + MARGIN <= window.innerHeight) {
+    finalTop = rect.bottom + GAP;
+  } else if (rect.top - GAP - popupH - MARGIN >= 0) {
+    finalTop = rect.top - GAP - popupH;
+  } else {
+    // Neither fits cleanly — pin to bottom with margin
+    finalTop = window.innerHeight - popupH - MARGIN;
+  }
+  finalTop = Math.max(MARGIN, finalTop);
+  const finalLeft = Math.min(Math.max(rect.left, MARGIN), window.innerWidth - popupW - MARGIN);
+  popup.style.top  = `${finalTop}px`;
+  popup.style.left = `${finalLeft}px`;
+  popup.style.visibility = 'visible';
 
   // Wire up color swatches — instant save, no modal close
   let liveColor = currentColor;
