@@ -2539,20 +2539,28 @@ document.addEventListener('keydown', e => {
     }
   }
 
-  // E key — DOM-level building entry (works regardless of Phaser canvas focus)
-  if ((e.key === 'e' || e.key === 'E') && !inInput && !isIndoor && gameScene && !gameScene.dialogueCooldown) {
-    const dialogueOpen = document.getElementById('dialogue-box').style.display !== 'none'
-                      && document.getElementById('dialogue-box').style.display !== '';
-    if (!dialogueOpen) {
-      const buildingKey = gameScene._findNearbyBuildingDoor?.();
-      if (buildingKey) {
-        e.preventDefault();
-        const layout = indoorLayouts.get(buildingKey);
-        if (layout?.ready) {
-          enterHouse(buildingKey, layout);
-        } else if (layout?.loading || (layout && !layout.ready)) {
-          const msg = HOUSE_NOT_READY_MSGS[Math.floor(Math.random() * HOUSE_NOT_READY_MSGS.length)];
-          showStatus(msg, 2500);
+  // E key — DOM-level building entry (works regardless of Phaser canvas focus or input focus)
+  // Note: intentionally NOT gated by !inInput — building entry works even if prompt has focus
+  if ((e.key === 'e' || e.key === 'E') && !isIndoor && gameScene && !gameScene.dialogueCooldown) {
+    // Don't fire if user is actively typing in an input (dialogue input or world prompt)
+    const typingInDialogue = active === document.getElementById('dialogue-input');
+    const typingInPrompt = active === document.getElementById('world-prompt');
+    if (!typingInDialogue && !typingInPrompt) {
+      const dialogueOpen = document.getElementById('dialogue-box').style.display !== 'none'
+                        && document.getElementById('dialogue-box').style.display !== '';
+      if (!dialogueOpen) {
+        const buildingKey = gameScene._findNearbyBuildingDoor?.();
+        if (buildingKey) {
+          e.preventDefault();
+          // Also blur any focused input so future keys go to game
+          if (inInput) document.activeElement?.blur();
+          const layout = indoorLayouts.get(buildingKey);
+          if (layout?.ready) {
+            enterHouse(buildingKey, layout);
+          } else if (layout?.loading || (layout && !layout.ready)) {
+            const msg = HOUSE_NOT_READY_MSGS[Math.floor(Math.random() * HOUSE_NOT_READY_MSGS.length)];
+            showStatus(msg, 2500);
+          }
         }
       }
     }
