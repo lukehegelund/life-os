@@ -229,6 +229,35 @@ html, body { background: #1a2a1a; overflow: hidden; font-family: 'Georgia', seri
   border-radius: 12px; letter-spacing: 1px; opacity: 0;
   transition: opacity .15s; white-space: nowrap;
 }
+
+/* ── INDOOR OVERLAY ── */
+#indoor-overlay {
+  position: fixed; inset: 0; z-index: 160;
+  background: #0a0a0a;
+  display: none; align-items: center; justify-content: center;
+}
+#indoor-canvas-wrap {
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  width: 100vw; height: 100vh;
+}
+#indoor-canvas {
+  image-rendering: pixelated;
+  display: block;
+}
+#indoor-exit-hint {
+  position: fixed; bottom: 68px; right: 14px; z-index: 165;
+  color: #3a6028; font-size: 10px; letter-spacing: 1px;
+  text-align: right; line-height: 1.8; pointer-events: none;
+  display: none;
+}
+#indoor-loading-spinner {
+  position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+  background: rgba(4,8,4,.94); border: 1px solid #4a8020; color: #90d050;
+  padding: 5px 16px; font-size: 11px; border-radius: 4px; z-index: 170;
+  opacity: 0; transition: opacity .3s; pointer-events: none; letter-spacing: 1px;
+  white-space: nowrap;
+}
 </style>
 </head>
 <body>
@@ -294,7 +323,7 @@ html, body { background: #1a2a1a; overflow: hidden; font-family: 'Georgia', seri
 <!-- CONTROLS HINT -->
 <div id="controls-hint">
   WASD / ↑↓←→ move<br>
-  E &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; talk to NPC<br>
+  E &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; talk / enter building<br>
   T &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; type new world
 </div>
 
@@ -308,6 +337,18 @@ html, body { background: #1a2a1a; overflow: hidden; font-family: 'Georgia', seri
 <!-- STATUS -->
 <div id="status"></div>
 
+<!-- INDOOR SCENE -->
+<div id="indoor-overlay">
+  <div id="indoor-canvas-wrap">
+    <canvas id="indoor-canvas"></canvas>
+  </div>
+</div>
+<div id="indoor-exit-hint">
+  WASD / ↑↓←→ move<br>
+  E &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; exit building
+</div>
+<div id="indoor-loading-spinner">⟳ Loading interior...</div>
+
 <script>
 // ═══════════════════════════════════════════════════════════
 //  LINGUAQUEST — Phase 3
@@ -315,7 +356,8 @@ html, body { background: #1a2a1a; overflow: hidden; font-family: 'Georgia', seri
 // ═══════════════════════════════════════════════════════════
 
 // ── ASSET PATHS ────────────────────────────────────────────────
-const ASSETS = 'https://lukehegelund.github.io/life-os/Cute_Fantasy_Free/';
+const ASSETS      = 'https://lukehegelund.github.io/life-os/Cute_Fantasy_Free/';
+const ASSETS_FULL = 'https://lukehegelund.github.io/life-os/Cute_Fantasy/';
 
 // ── CONFIG ──────────────────────────────────────────────────
 const TILE_SIZE    = 48;   // rendered tile size in px (16px * 3)
@@ -353,6 +395,31 @@ let worldTheme = '';     // the original prompt, used to generate coherent neigh
 let worldLanguage = 'es';
 let chunkGenCount = 0;   // counter for unique NPC ids across chunks
 
+// ── INDOOR SYSTEM STATE ──────────────────────────────────────
+// indoorLayouts[chunkKey_col_row] = { tiles, furniture, ready: bool, loading: bool }
+const indoorLayouts = new Map();
+let isIndoor = false;          // true when player is inside a building
+let indoorData = null;         // current indoor layout being viewed
+let indoorPlayerCol = 3;       // player position inside (column)
+let indoorPlayerRow = 5;       // player position inside (row)
+let indoorSourceKey = null;    // which building key we entered ("cx,cy_col_row")
+let indoorLastDir = 'down';
+// Indoor canvas rendering state
+let indoorCanvas = null;
+let indoorCtx = null;
+let indoorImages = {};         // preloaded Image objects for indoor rendering
+let indoorImagesReady = false;
+let indoorAnimFrame = null;
+let indoorKeys = {};           // keyboard state for indoor movement
+let indoorMoveCooldown = 0;    // ms until next movement step
+
+// Refusal messages when house not ready
+const HOUSE_NOT_READY_MSGS = [
+  "Go away!", "Come back later!", "No one's home!",
+  "Leave me alone!", "I'm not here!", "Not now!", "Try again soon!",
+  "We're busy!", "Door's locked — try later.", "Not accepting visitors!"
+];
+
 // Directions for the 8 surrounding chunks
 const NEIGHBOR_DIRS = [
   { dx: 0, dy:-1, label:'north' },
@@ -364,6 +431,50 @@ const NEIGHBOR_DIRS = [
   { dx:-1, dy: 0, label:'west' },
   { dx:-1, dy:-1, label:'northwest' },
 ];
+
+// ─────────────────────────────────────────────────────────────
+//  INDOOR IMAGE PRELOADER — loads all tileset PNGs for canvas rendering
+// ─────────────────────────────────────────────────────────────
+function loadIndoorImages() {
+  if (indoorImagesReady) return Promise.resolve();
+  const sources = {
+    // Interior structure tiles
+    wood_floor:      ASSETS_FULL + 'Buildings/Houses_Interiors/Wood_Floor_Tiles.png',
+    interior_walls:  ASSETS_FULL + 'Buildings/Houses_Interiors/Interior_Walls.png',
+    wood_wall_fill:  ASSETS_FULL + 'Buildings/Houses_Interiors/Wood_Wall_Fillers.png',
+    stone_wall_fill: ASSETS_FULL + 'Buildings/Houses_Interiors/Stone_Wall_Fillers.png',
+    brick_wall_fill: ASSETS_FULL + 'Buildings/Houses_Interiors/Brick_Wall_Fillers.png',
+    wood_stairs:     ASSETS_FULL + 'Buildings/Houses_Interiors/Wood_Stairs.png',
+    // Furniture / decor
+    beds:            ASSETS_FULL + 'Buildings/House_Decor/Beds.png',
+    bookshelves:     ASSETS_FULL + 'Buildings/House_Decor/BookShelves.png',
+    chairs:          ASSETS_FULL + 'Buildings/House_Decor/Chairs.png',
+    tables:          ASSETS_FULL + 'Buildings/House_Decor/Tables.png',
+    drawers:         ASSETS_FULL + 'Buildings/House_Decor/Drawers.png',
+    indoor_decor:    ASSETS_FULL + 'Buildings/House_Decor/Indoor_Decor.png',
+    placeable_decor: ASSETS_FULL + 'Buildings/House_Decor/Placeable_Decoration.png',
+    standing_lamps:  ASSETS_FULL + 'Buildings/House_Decor/Standing_Lamps.png',
+    planters:        ASSETS_FULL + 'Buildings/House_Decor/Planters.png',
+    windows_single:  ASSETS_FULL + 'Buildings/House_Decor/Windows_Single.png',
+    windows_double:  ASSETS_FULL + 'Buildings/House_Decor/Windows_Double.png',
+    doors:           ASSETS_FULL + 'Buildings/House_Decor/Doors.png',
+    chest:           ASSETS_FULL + 'Buildings/House_Decor/Chest_Anim.png',
+    // Outdoor-free assets for fallback
+    grass_tile:      ASSETS + 'Tiles/Grass_Middle.png',
+  };
+  const promises = Object.entries(sources).map(([key, src]) => {
+    return new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => { indoorImages[key] = img; resolve(); };
+      img.onerror = () => { indoorImages[key] = null; resolve(); }; // graceful
+      img.src = src;
+    });
+  });
+  return Promise.all(promises).then(() => {
+    indoorImagesReady = true;
+    console.log('Indoor images loaded:', Object.keys(indoorImages).filter(k => indoorImages[k]).length, 'of', Object.keys(sources).length);
+  });
+}
 
 // ─────────────────────────────────────────────────────────────
 //  SAMPLE WORLD (default until user generates one)
@@ -934,6 +1045,10 @@ class GameScene extends Phaser.Scene {
     // Store chunk data
     chunks.set(key, { worldDef, gameObjects, npcs: chunkNpcs, loaded: true, cx: chunkX, cy: chunkY });
 
+    // ── Auto-queue house interiors for this chunk ──
+    // Do this after the chunk is marked loaded so indoor gen can read tile data
+    if (CLAUDE_KEY) queueHousesFromChunk(chunkX, chunkY, worldDef);
+
     // ── PLAYER (only on origin chunk) ──
     if (isOrigin) {
       // Clear old player if exists
@@ -1184,34 +1299,98 @@ class GameScene extends Phaser.Scene {
 
     // ── INTERACT PROMPT ──
     this._nearestNPC = nearestNPC;
-    if (!dialogueOpen && nearestNPC) {
-      // Convert world coords to screen coords
+    const nearbyBuilding = this._findNearbyBuildingDoor();
+    if (!dialogueOpen && (nearestNPC || nearbyBuilding)) {
       const cam = this.cameras.main;
       const scaleX = window.innerWidth  / cam.width;
       const scaleY = window.innerHeight / cam.height;
-      const sx = (nearestNPC.nx - cam.scrollX) * scaleX;
-      const sy = (nearestNPC.ny - cam.scrollY) * scaleY - FRAME_H * nearestNPC.sprite.scaleY * scaleY * 0.9 - 8;
-      this._interactPromptEl.style.left = Math.round(sx - 28) + 'px';
-      this._interactPromptEl.style.top  = Math.round(sy - 20) + 'px';
-      this._interactPromptEl.style.opacity = '1';
+      if (nearbyBuilding) {
+        // Show prompt above building tile
+        const px = this.player.x, py = this.player.y;
+        const sx = (px - cam.scrollX) * scaleX;
+        const sy = (py - cam.scrollY) * scaleY - TILE_SIZE * scaleY - 8;
+        this._interactPromptEl.textContent = '[E] Enter';
+        this._interactPromptEl.style.left = Math.round(sx - 32) + 'px';
+        this._interactPromptEl.style.top  = Math.round(sy - 20) + 'px';
+        this._interactPromptEl.style.opacity = '1';
+      } else if (nearestNPC) {
+        const sx = (nearestNPC.nx - cam.scrollX) * scaleX;
+        const sy = (nearestNPC.ny - cam.scrollY) * scaleY - FRAME_H * nearestNPC.sprite.scaleY * scaleY * 0.9 - 8;
+        this._interactPromptEl.textContent = '[E] Talk';
+        this._interactPromptEl.style.left = Math.round(sx - 28) + 'px';
+        this._interactPromptEl.style.top  = Math.round(sy - 20) + 'px';
+        this._interactPromptEl.style.opacity = '1';
+      }
     } else {
       this._interactPromptEl.style.opacity = '0';
     }
 
     // ── E TO INTERACT ──
-    if (!dialogueOpen && !this.dialogueCooldown && nearestNPC) {
+    if (!dialogueOpen && !this.dialogueCooldown) {
       if (Phaser.Input.Keyboard.JustDown(this.wasd.interact)) {
-        this.openNPCDialogue(nearestNPC.def, nearestNPC.sprite, nearestNPC.def.sprite);
+        // First check: are we standing on or adjacent to a building_door tile?
+        const buildingKey = this._findNearbyBuildingDoor();
+        if (buildingKey) {
+          // Found a building door — try to enter
+          const layout = indoorLayouts.get(buildingKey);
+          if (layout && layout.ready) {
+            enterHouse(buildingKey, layout);
+          } else if (layout && layout.loading) {
+            const msg = HOUSE_NOT_READY_MSGS[Math.floor(Math.random() * HOUSE_NOT_READY_MSGS.length)];
+            showStatus(msg, 2500);
+          } else if (nearestNPC) {
+            // No building, fall through to NPC
+            this.openNPCDialogue(nearestNPC.def, nearestNPC.sprite, nearestNPC.def.sprite);
+          }
+        } else if (nearestNPC) {
+          this.openNPCDialogue(nearestNPC.def, nearestNPC.sprite, nearestNPC.def.sprite);
+        }
       }
     }
+  }
+
+  // Find the key of a nearby building door tile
+  _findNearbyBuildingDoor() {
+    if (!this.player) return null;
+    // Check player tile and adjacent tiles for building or building_door
+    const px = this.player.x, py = this.player.y;
+    const SEARCH_RADIUS = TILE_SIZE * 1.2;
+    // Check 5 positions: current + 4 cardinal neighbors
+    const checks = [
+      [px, py],
+      [px, py - TILE_SIZE * 0.7],
+      [px, py + TILE_SIZE * 0.7],
+      [px - TILE_SIZE * 0.7, py],
+      [px + TILE_SIZE * 0.7, py],
+    ];
+    for (const [wx, wy] of checks) {
+      const tileType = this.getTileAt(wx, wy);
+      if (tileType === 'building_door' || tileType === 'building') {
+        // Find the chunk this belongs to
+        const cx = Math.floor(wx / (CHUNK_COLS * TILE_SIZE));
+        const cy = Math.floor(wy / (CHUNK_ROWS * TILE_SIZE));
+        const localCol = Math.floor((wx - cx * CHUNK_COLS * TILE_SIZE) / TILE_SIZE);
+        const localRow = Math.floor((wy - cy * CHUNK_ROWS * TILE_SIZE) / TILE_SIZE);
+        const chunk = chunks.get(`${cx},${cy}`);
+        if (!chunk || !chunk.worldDef) continue;
+        const tiles = chunk.worldDef.world.tiles;
+        // Walk up and left to find top-left of the building cluster
+        const isBuilding = v => v === 'building' || v === 'building_door';
+        let topRow = localRow, leftCol = localCol;
+        while (topRow > 0 && isBuilding(tiles[topRow-1]?.[leftCol])) topRow--;
+        while (leftCol > 0 && isBuilding(tiles[topRow]?.[leftCol-1])) leftCol--;
+        return `${cx},${cy}_${leftCol}_${topRow}`;
+      }
+    }
+    return null;
   }
 
   openNPCDialogue(npcDef, npcSprite, spriteType) {
     if (this.dialogueCooldown) return;
     currentNPC = npcDef;
-    this.player.setVelocity(0, 0);
-    this._safePlay(this.playerSprite, `player_idle_${this.playerFacing}`, true);
-    this._interactPromptEl.style.opacity = '0';
+    if (this.player) this.player.setVelocity(0, 0);
+    if (this.playerSprite) this._safePlay(this.playerSprite, `player_idle_${this.playerFacing}`, true);
+    if (this._interactPromptEl) this._interactPromptEl.style.opacity = '0';
 
     if (!dialogueHistory[npcDef.id]) dialogueHistory[npcDef.id] = [];
 
@@ -1347,10 +1526,491 @@ function startGame() {
     if (phaserGame) {
       phaserGame.scale.resize(window.innerWidth, window.innerHeight);
     }
+    // Also resize indoor canvas if active
+    if (isIndoor && indoorData) {
+      const layout = indoorData;
+      const w = layout.cols * INDOOR_TS;
+      const h = layout.rows * INDOOR_TS;
+      const scale = Math.min(window.innerWidth / w, window.innerHeight / h, 3);
+      if (indoorCanvas) {
+        indoorCanvas.width  = Math.round(w * scale);
+        indoorCanvas.height = Math.round(h * scale);
+        if (indoorCtx) {
+          indoorCtx.imageSmoothingEnabled = false;
+          indoorCtx.setTransform(scale, 0, 0, scale, 0, 0);
+        }
+        drawIndoor();
+      }
+    }
   });
+
+  // Init indoor canvas and preload images
+  setupIndoorCanvas();
+  loadIndoorImages().then(() => console.log('Indoor tileset preloaded'));
 
   fetchSRSVocab();
 }
+
+// ─────────────────────────────────────────────────────────────
+//  INDOOR HOUSE GENERATION SYSTEM
+// ─────────────────────────────────────────────────────────────
+
+// House generation queue (separate from chunk queue)
+const houseGenQueue = [];
+let houseGenRunning = false;
+
+// Called after a chunk finishes loading — queues all its building tiles for interior gen
+function queueHousesFromChunk(chunkX, chunkY, worldDef) {
+  const tiles = worldDef.world.tiles;
+  const rows = tiles.length;
+  const cols = tiles[0]?.length || 0;
+
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const t = tiles[row]?.[col] || '';
+      if (t !== 'building' && t !== 'building_door') continue;
+
+      // Only generate for the "top-left" tile of each building cluster
+      const above = row > 0 ? (tiles[row-1]?.[col] || '') : '';
+      const left  = col > 0 ? (tiles[row]?.[col-1] || '') : '';
+      const isBuilding = v => v === 'building' || v === 'building_door';
+      if (isBuilding(above) || isBuilding(left)) continue; // not top-left
+
+      const houseKey = `${chunkX},${chunkY}_${col}_${row}`;
+      if (indoorLayouts.has(houseKey)) continue; // already exists
+
+      // Mark as loading so E key can show "not ready" message
+      indoorLayouts.set(houseKey, { ready: false, loading: true, tiles: null, furniture: null });
+      houseGenQueue.push({ houseKey, chunkX, chunkY, col, row, worldDef });
+    }
+  }
+  processHouseQueue();
+}
+
+async function processHouseQueue() {
+  if (houseGenRunning || houseGenQueue.length === 0) return;
+  houseGenRunning = true;
+  while (houseGenQueue.length > 0) {
+    const task = houseGenQueue.shift();
+    try {
+      const layout = await generateHouseInteriorAPI(task);
+      if (layout) {
+        indoorLayouts.set(task.houseKey, { ready: true, loading: false, ...layout });
+        console.log(`House ${task.houseKey} interior ready`);
+      } else {
+        indoorLayouts.set(task.houseKey, { ready: false, loading: false, tiles: null, furniture: null });
+      }
+    } catch(e) {
+      console.warn('House gen failed:', task.houseKey, e);
+      indoorLayouts.set(task.houseKey, { ready: false, loading: false, tiles: null, furniture: null });
+    }
+    await new Promise(r => setTimeout(r, 200));
+  }
+  houseGenRunning = false;
+}
+
+async function generateHouseInteriorAPI(task) {
+  if (!CLAUDE_KEY) return null;
+  const { worldDef, col, row } = task;
+  const theme = worldDef.world?.theme || 'village';
+  const lang = worldDef.world?.language || 'es';
+
+  // Measure building cluster size
+  const tiles = worldDef.world.tiles;
+  const rows = tiles.length, cols = tiles[0]?.length || 0;
+  const isBuilding = v => v === 'building' || v === 'building_door';
+  let clusterW = 0, clusterH = 0;
+  let r = row;
+  while (r < rows && isBuilding(tiles[r]?.[col])) { clusterH++; r++; }
+  let c = col;
+  while (c < cols && isBuilding(tiles[row]?.[c])) { clusterW++; c++; }
+
+  // Interior is 2 tiles smaller than exterior (walls)
+  const intW = Math.max(5, clusterW * 2 + 3);
+  const intH = Math.max(5, clusterH * 2 + 3);
+
+  const prompt = `You are designing the interior of a house for a top-down pixel RPG.
+World theme: "${theme}" | Language: ${lang}
+
+The house exterior is ${clusterW}×${clusterH} tiles. The interior is ${intW} columns × ${intH} rows.
+Return ONLY raw JSON (no markdown):
+{
+  "room_type": "e.g. cottage, inn_room, shop, blacksmith, fisherman_hut",
+  "wall_style": "wood | stone | brick",
+  "floor_style": "wood_light | wood_dark | wood_mixed",
+  "npc": { "name":"...", "greeting":"...(in ${lang})", "personality":"...", "ai_context":"...", "vocab_focus":["..."] },
+  "tiles": [
+    ... ${intH} rows, each ${intW} columns ...
+  ],
+  "furniture": [
+    { "type": "bed|chair|table|bookshelf|drawer|lamp|planter|chest|window|door|staircase|decor", "col": N, "row": N, "variant": 0 }
+  ]
+}
+
+Tile values: floor, wall_top, wall_left, wall_right, wall_bottom, wall_corner_tl, wall_corner_tr, wall_corner_bl, wall_corner_br, doorway, rug
+- Row 0 and row ${intH-1} should be wall_top/wall_bottom. Col 0 and col ${intW-1} should be wall_left/wall_right.
+- Place a doorway at bottom-center (row ${intH-1}, col ${Math.floor(intW/2)}).
+- Fill interior with floor tiles. Add a rug in the center.
+- Place 4-8 furniture pieces that fit the room_type and theme. Keep furniture away from the doorway (bottom-center).
+- Make it feel cozy and lived-in with variety. Use lamps near walls, chairs near tables, books on shelves.
+- The npc greeting must be in ${lang}.`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': CLAUDE_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 2000,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+    if (!res.ok) throw new Error('API error');
+    const data = await res.json();
+    const raw = data.content[0].text.trim().replace(/^```json?\n?/, '').replace(/\n?```$/, '');
+    let layout;
+    try { layout = JSON.parse(raw); } catch { return null; }
+    if (!layout.tiles) return null;
+    // Validate + clamp tile dimensions
+    layout.cols = intW;
+    layout.rows = intH;
+    layout.tiles = layout.tiles.slice(0, intH).map(r => (r || []).slice(0, intW).concat(Array(intW).fill('floor')).slice(0, intW));
+    layout.furniture = (layout.furniture || []).filter(f => f.col >= 0 && f.col < intW && f.row >= 0 && f.row < intH);
+    return layout;
+  } catch(e) {
+    console.error('House interior API error:', e);
+    return null;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  INDOOR RENDERER — canvas-based top-down room renderer
+// ─────────────────────────────────────────────────────────────
+const INDOOR_TS = 48; // tile size in px for indoor view
+
+function setupIndoorCanvas() {
+  indoorCanvas = document.getElementById('indoor-canvas');
+  indoorCtx = indoorCanvas.getContext('2d');
+  indoorCtx.imageSmoothingEnabled = false;
+}
+
+function enterHouse(houseKey, layout) {
+  isIndoor = true;
+  indoorData = layout;
+  indoorSourceKey = houseKey;
+  // Spawn at doorway (bottom center)
+  indoorPlayerCol = Math.floor(layout.cols / 2);
+  indoorPlayerRow = layout.rows - 2;
+  indoorLastDir = 'up'; // entering from south, face north
+
+  // Show indoor overlay, hide controls hint
+  document.getElementById('indoor-overlay').style.display = 'flex';
+  document.getElementById('indoor-exit-hint').style.display = 'block';
+  document.getElementById('controls-hint').style.display = 'none';
+
+  // Resize canvas
+  const w = layout.cols * INDOOR_TS;
+  const h = layout.rows * INDOOR_TS;
+  const scale = Math.min(window.innerWidth / w, window.innerHeight / h, 3);
+  indoorCanvas.width  = Math.round(w * scale);
+  indoorCanvas.height = Math.round(h * scale);
+  indoorCtx.imageSmoothingEnabled = false;
+  indoorCtx.scale(scale, scale);
+
+  // Pause Phaser
+  if (phaserGame) phaserGame.loop.stop();
+
+  drawIndoor();
+  // Bind keyboard for indoor movement
+  bindIndoorKeys();
+
+  // If the indoor NPC exists, show greeting in dialogue
+  if (layout.npc) {
+    setTimeout(() => {
+      const fakeNPC = { ...layout.npc, id: `indoor_${houseKey}`, type: 'indoor' };
+      if (gameScene) gameScene.openNPCDialogue(fakeNPC, null, 'player');
+    }, 300);
+  }
+}
+
+function exitHouse() {
+  isIndoor = false;
+  indoorData = null;
+  document.getElementById('indoor-overlay').style.display = 'none';
+  document.getElementById('indoor-exit-hint').style.display = 'none';
+  document.getElementById('controls-hint').style.display = 'block';
+  // Resume Phaser
+  if (phaserGame) phaserGame.loop.start();
+  unbindIndoorKeys();
+  closeDialogue();
+}
+
+function isIndoorWalkable(col, row, layout) {
+  if (col < 0 || row < 0 || col >= layout.cols || row >= layout.rows) return false;
+  const t = layout.tiles[row]?.[col] || 'wall_top';
+  if (['floor','doorway','rug'].includes(t)) {
+    // Check no blocking furniture
+    const blocking = (layout.furniture || []).some(f =>
+      f.col === col && f.row === row && FURNITURE_BLOCKS[f.type]
+    );
+    return !blocking;
+  }
+  return false;
+}
+
+const FURNITURE_BLOCKS = { bed:true, bookshelf:true, table:false, chair:false, drawer:true, staircase:false, decor:false, planter:false };
+
+// ── Indoor tile palette ──
+// We draw from spritesheet PNGs using known frame positions.
+// Wood_Floor_Tiles.png: assume 16x16 frames in a grid
+// Interior_Walls.png: wall tiles
+// We'll map tile types to (image, sx, sy, sw, sh) source rectangles.
+
+function getFloorSrc(style) {
+  // Wood_Floor_Tiles.png is a spritesheet; use first 16x16 frame for simplicity
+  // Different offsets for different styles
+  const img = indoorImages['wood_floor'];
+  if (!img) return null;
+  const styleMap = { wood_light:[0,0], wood_dark:[16,0], wood_mixed:[32,0] };
+  const [sx, sy] = (styleMap[style] || [0,0]);
+  return { img, sx, sy, sw:16, sh:16 };
+}
+
+function getWallSrc(wallStyle, wallTile) {
+  // Interior_Walls.png — use different offsets for different wall positions
+  const img = indoorImages['interior_walls'];
+  if (!img) return null;
+  // row 0 = top walls, row 1 = bottom walls, etc (estimate 16x16 frames)
+  const tileMap = {
+    wall_top:       [0, 0],
+    wall_bottom:    [0, 16],
+    wall_left:      [16, 0],
+    wall_right:     [32, 0],
+    wall_corner_tl: [48, 0],
+    wall_corner_tr: [64, 0],
+    wall_corner_bl: [48, 16],
+    wall_corner_br: [64, 16],
+  };
+  const [sx, sy] = (tileMap[wallTile] || [0, 0]);
+  return { img, sx, sy, sw:16, sh:16 };
+}
+
+function drawIndoor() {
+  if (!indoorCtx || !indoorData) return;
+  const layout = indoorData;
+  const TS = INDOOR_TS;
+  const ctx = indoorCtx;
+
+  // Clear
+  ctx.fillStyle = '#0a0a0a';
+  ctx.fillRect(0, 0, layout.cols * TS, layout.rows * TS);
+
+  // ── Draw floor and wall tiles ──
+  for (let row = 0; row < layout.rows; row++) {
+    for (let col = 0; col < layout.cols; col++) {
+      const t = layout.tiles[row]?.[col] || 'wall_top';
+      const x = col * TS, y = row * TS;
+      drawIndoorTile(ctx, t, x, y, TS, layout);
+    }
+  }
+
+  // ── Draw furniture ──
+  for (const f of (layout.furniture || [])) {
+    drawFurniture(ctx, f, TS, layout);
+  }
+
+  // ── Draw player ──
+  drawIndoorPlayer(ctx, indoorPlayerCol, indoorPlayerRow, TS);
+}
+
+function drawIndoorTile(ctx, tileType, x, y, TS, layout) {
+  const floorStyle = layout.floor_style || 'wood_light';
+  const wallStyle  = layout.wall_style  || 'wood';
+
+  const isWall = tileType.startsWith('wall') || tileType === 'doorway';
+
+  if (tileType === 'floor' || tileType === 'rug' || tileType === 'doorway') {
+    // Draw floor base
+    const src = getFloorSrc(floorStyle);
+    if (src && src.img) {
+      ctx.drawImage(src.img, src.sx, src.sy, src.sw, src.sh, x, y, TS, TS);
+    } else {
+      // Fallback: colored rect
+      ctx.fillStyle = tileType === 'doorway' ? '#4a3820' : '#5a4028';
+      ctx.fillRect(x, y, TS, TS);
+      ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+      ctx.strokeRect(x+1, y+1, TS-2, TS-2);
+    }
+    // Rug overlay
+    if (tileType === 'rug') {
+      ctx.fillStyle = 'rgba(160,60,40,0.35)';
+      ctx.fillRect(x+4, y+4, TS-8, TS-8);
+      ctx.strokeStyle = 'rgba(200,80,50,0.4)';
+      ctx.strokeRect(x+6, y+6, TS-12, TS-12);
+    }
+    // Doorway marker
+    if (tileType === 'doorway') {
+      const doorImg = indoorImages['doors'];
+      if (doorImg) {
+        // Draw a door frame from the Doors spritesheet (first frame, 16x32 assumed)
+        ctx.drawImage(doorImg, 0, 0, 16, 32, x + TS*0.1, y - TS*0.3, TS*0.8, TS*1.2);
+      } else {
+        ctx.fillStyle = '#8B5E3C';
+        ctx.fillRect(x + TS*0.2, y, TS*0.6, TS);
+      }
+    }
+  } else {
+    // Wall tile
+    const wallSrc = getWallSrc(wallStyle, tileType);
+    const fillMap = {
+      wall_top:'#2a2018', wall_bottom:'#3a2a1a', wall_left:'#2a2018',
+      wall_right:'#2a2018', wall_corner_tl:'#222015', wall_corner_tr:'#222015',
+      wall_corner_bl:'#2a2218', wall_corner_br:'#2a2218',
+    };
+    if (wallSrc && wallSrc.img) {
+      ctx.drawImage(wallSrc.img, wallSrc.sx, wallSrc.sy, wallSrc.sw, wallSrc.sh, x, y, TS, TS);
+      // Draw wall filler texture on top
+      const fillerKey = wallStyle === 'stone' ? 'stone_wall_fill' : wallStyle === 'brick' ? 'brick_wall_fill' : 'wood_wall_fill';
+      const fillerImg = indoorImages[fillerKey];
+      if (fillerImg) {
+        ctx.globalAlpha = 0.5;
+        ctx.drawImage(fillerImg, 0, 0, 16, 16, x, y, TS, TS);
+        ctx.globalAlpha = 1.0;
+      }
+    } else {
+      ctx.fillStyle = fillMap[tileType] || '#1a1810';
+      ctx.fillRect(x, y, TS, TS);
+      // Simple wall texture
+      ctx.strokeStyle = 'rgba(80,60,30,0.2)';
+      ctx.strokeRect(x+2, y+2, TS-4, TS-4);
+    }
+  }
+}
+
+// Furniture draw lookup table (image key, frame col, frame row in 16x16 grid)
+const FURNITURE_DRAW = {
+  bed:        { key:'beds',          col:0, row:0, w:32, h:32 },
+  bookshelf:  { key:'bookshelves',   col:0, row:0, w:32, h:32 },
+  chair:      { key:'chairs',        col:0, row:0, w:16, h:16 },
+  table:      { key:'tables',        col:0, row:0, w:32, h:16 },
+  drawer:     { key:'drawers',       col:0, row:0, w:16, h:16 },
+  lamp:       { key:'standing_lamps',col:0, row:0, w:16, h:32 },
+  planter:    { key:'planters',      col:0, row:0, w:16, h:16 },
+  chest:      { key:'chest',         col:0, row:0, w:16, h:16 },
+  window:     { key:'windows_single',col:0, row:0, w:16, h:16 },
+  door:       { key:'doors',         col:0, row:0, w:16, h:32 },
+  staircase:  { key:'wood_stairs',   col:0, row:0, w:32, h:32 },
+  decor:      { key:'indoor_decor',  col:0, row:0, w:16, h:16 },
+};
+
+function drawFurniture(ctx, f, TS, layout) {
+  const x = f.col * TS, y = f.row * TS;
+  const spec = FURNITURE_DRAW[f.type] || FURNITURE_DRAW['decor'];
+  const img = indoorImages[spec.key];
+  const variant = f.variant || 0;
+  const framesPerRow = Math.max(1, Math.floor(16 / spec.w) * (img ? Math.floor(img.width / spec.w) : 1));
+
+  if (img) {
+    // Compute frame offset for variant
+    const frCols = Math.floor(img.width  / spec.w);
+    const frRows = Math.floor(img.height / spec.h);
+    const fCol = variant % frCols;
+    const fRow = Math.floor(variant / frCols) % frRows;
+    const sx = fCol * spec.w;
+    const sy = fRow * spec.h;
+    const dw = spec.w / 16 * TS;
+    const dh = spec.h / 16 * TS;
+    // Center within tile(s)
+    const dx = x + (TS - dw) / 2;
+    const dy = y + (TS - dh) / 2;
+    ctx.drawImage(img, sx, sy, spec.w, spec.h, dx, dy, dw, dh);
+  } else {
+    // Fallback colored boxes
+    const colorMap = { bed:'#6a3a80', bookshelf:'#4a3020', chair:'#5a4030',
+      table:'#6a5040', drawer:'#5a4030', lamp:'#f0d050', planter:'#3a6020',
+      chest:'#8B6914', window:'#80c0e0', door:'#8B5E3C', staircase:'#8a7040', decor:'#808080' };
+    ctx.fillStyle = colorMap[f.type] || '#888';
+    ctx.fillRect(x+4, y+4, TS-8, TS-8);
+    ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+    ctx.strokeRect(x+4, y+4, TS-8, TS-8);
+  }
+  // Furniture shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  ctx.fillRect(x+6, y + TS - 8, TS-12, 4);
+}
+
+function drawIndoorPlayer(ctx, col, row, TS) {
+  const x = col * TS + TS/2;
+  const y = row * TS + TS/2;
+
+  // Try to draw from Phaser player texture
+  if (phaserGame) {
+    try {
+      const tex = phaserGame.textures.get('player_ss');
+      if (tex && tex.key !== '__MISSING') {
+        const src = tex.getSourceImage();
+        const fw = 32, fh = 32;
+        // Frame 0 = idle down
+        const scl = TS * 0.8 / fh;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(src, 0, 0, fw, fh, x - fw*scl/2, y - fh*scl*0.7, fw*scl, fh*scl);
+        return;
+      }
+    } catch(e) {}
+  }
+  // Fallback: simple character
+  ctx.fillStyle = '#90d050';
+  ctx.beginPath();
+  ctx.arc(x, y - 4, TS*0.22, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = '#5a9028';
+  ctx.fillRect(x - TS*0.15, y - TS*0.05, TS*0.3, TS*0.35);
+}
+
+// ── Indoor keyboard bindings ──
+const INDOOR_KEY_HANDLER = (e) => {
+  const k = e.key;
+  const dialogueOpen = document.getElementById('dialogue-box').style.display !== 'none'
+                    && document.getElementById('dialogue-box').style.display !== '';
+  if (dialogueOpen) return;
+
+  if (!isIndoor) return;
+  const layout = indoorData;
+  let dc = 0, dr = 0;
+  if (k === 'ArrowUp'    || k === 'w' || k === 'W') dr = -1;
+  if (k === 'ArrowDown'  || k === 's' || k === 'S') dr =  1;
+  if (k === 'ArrowLeft'  || k === 'a' || k === 'A') dc = -1;
+  if (k === 'ArrowRight' || k === 'd' || k === 'D') dc =  1;
+
+  if (dc !== 0 || dr !== 0) {
+    e.preventDefault();
+    const nc = indoorPlayerCol + dc;
+    const nr = indoorPlayerRow + dr;
+    if (nr === layout.rows - 1 && nc === Math.floor(layout.cols / 2)) {
+      // Stepped onto doorway — exit
+      exitHouse();
+      return;
+    }
+    if (isIndoorWalkable(nc, nr, layout)) {
+      indoorPlayerCol = nc;
+      indoorPlayerRow = nr;
+      drawIndoor();
+    }
+  }
+
+  // E key inside = exit
+  if (k === 'e' || k === 'E') {
+    exitHouse();
+  }
+};
+
+function bindIndoorKeys()   { window.addEventListener('keydown', INDOOR_KEY_HANDLER); }
+function unbindIndoorKeys() { window.removeEventListener('keydown', INDOOR_KEY_HANDLER); }
 
 // ─────────────────────────────────────────────────────────────
 //  CHUNK QUEUE — queues neighboring chunks for generation
@@ -1657,6 +2317,11 @@ ${JSON.stringify(SAMPLE_WORLD, null, 2)}
     chunks.clear();
     chunkGenQueue.length = 0;
     chunkGenerating = false;
+    // Clear indoor layouts and house gen queue
+    indoorLayouts.clear();
+    houseGenQueue.length = 0;
+    houseGenRunning = false;
+    if (isIndoor) exitHouse();
 
     // Store theme/language for neighbor chunk generation
     worldTheme = worldDef.world?.theme || prompt;
@@ -1762,7 +2427,7 @@ function closeDialogue() {
   document.getElementById('dialogue-box').style.display = 'none';
   currentNPC = null;
   lastNPCReply = '';
-  if (gameScene) {
+  if (gameScene && !isIndoor) {
     gameScene.dialogueCooldown = true;
     setTimeout(() => { if (gameScene) gameScene.dialogueCooldown = false; }, 400);
   }
