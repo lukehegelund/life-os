@@ -2,6 +2,7 @@
 import { supabase } from './supabase.js';
 import { qp, today, fmtDate, fmtTime, daysAgo, goldStr, goldClass, toast, showSpinner, showEmpty, pstDatePlusDays } from './utils.js';
 import { initSwipe } from './swipe-handler.js';
+import { fetchSpellingTestsByClass, renderSpellingStudentBlock } from './spelling-tests.js';
 
 const classId = qp('id');
 if (!classId) { window.location.href = 'classes.html'; }
@@ -88,7 +89,42 @@ async function load() {
     loadGoldBulk(),
     loadAttendanceGrid(),
     cls.track_pages !== 'None' ? loadAnalytics() : Promise.resolve(),
+    cls.subject === 'English' ? loadSpellingTests(cls) : Promise.resolve(),
   ]);
+}
+
+// ── Spelling Tests (English classes only) ────────────────────────────────────
+async function loadSpellingTests(cls) {
+  const section = document.getElementById('spelling-tests-section');
+  const content = document.getElementById('spelling-tests-content');
+  if (!section || !content) return;
+  section.style.display = 'block';
+
+  // Get enrolled students with their spelling_test_folder_id
+  const [enrRes, testsMap] = await Promise.all([
+    supabase.from('class_enrollments')
+      .select('students(id, name, spelling_test_folder_id)')
+      .eq('class_id', classId)
+      .is('enrolled_until', null),
+    fetchSpellingTestsByClass(classId),
+  ]);
+
+  const students = (enrRes.data || [])
+    .map(e => e.students)
+    .filter(Boolean)
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  if (!students.length) {
+    content.innerHTML = '<div style="color:var(--gray-400);font-size:14px">No students enrolled</div>';
+    return;
+  }
+
+  content.innerHTML = students.map(s =>
+    renderSpellingStudentBlock(s, testsMap[s.id] || [], classId)
+  ).join('');
+
+  // Register reload callback for after save/delete
+  window._reloadSpellingSection = () => loadSpellingTests(cls);
 }
 
 function renderClassSettingsBadge(cls) {
