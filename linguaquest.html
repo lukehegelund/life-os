@@ -1766,38 +1766,45 @@ function isIndoorWalkable(col, row, layout) {
 const FURNITURE_BLOCKS = { bed:true, bookshelf:true, table:false, chair:false, drawer:true, staircase:false, decor:false, planter:false };
 
 // ── Indoor tile palette ──
-// We draw from spritesheet PNGs using known frame positions.
-// Wood_Floor_Tiles.png: assume 16x16 frames in a grid
-// Interior_Walls.png: wall tiles
-// We'll map tile types to (image, sx, sy, sw, sh) source rectangles.
+// Real spritesheet dimensions (from loaded images):
+// wood_floor:      128×96  — 4 cols × 3 rows of 32×32 px tiles
+// interior_walls:  224×96  — 7 cols × 3 rows of 32×32 px tiles
+// wood_wall_fill:  64×32   — 2 cols × 1 row  of 32×32 px tiles
+// stone_wall_fill: 32×32   — single 32×32 tile
+// brick_wall_fill: 32×32   — single 32×32 tile
 
 function getFloorSrc(style) {
-  // Wood_Floor_Tiles.png is a spritesheet; use first 16x16 frame for simplicity
-  // Different offsets for different styles
+  // Wood_Floor_Tiles.png: 128×96, 4 cols × 3 rows of 32×32
+  // Row 0: light planks, Row 1: medium planks, Row 2: dark/varied
   const img = indoorImages['wood_floor'];
   if (!img) return null;
-  const styleMap = { wood_light:[0,0], wood_dark:[16,0], wood_mixed:[32,0] };
-  const [sx, sy] = (styleMap[style] || [0,0]);
-  return { img, sx, sy, sw:16, sh:16 };
+  const styleMap = {
+    wood_light: [0, 0],   // col 0, row 0 = light wood plank
+    wood_dark:  [32, 32], // col 1, row 1 = darker tone
+    wood_mixed: [64, 0],  // col 2, row 0 = mixed
+  };
+  const [sx, sy] = (styleMap[style] || [0, 0]);
+  return { img, sx, sy, sw: 32, sh: 32 };
 }
 
 function getWallSrc(wallStyle, wallTile) {
-  // Interior_Walls.png — use different offsets for different wall positions
+  // Interior_Walls.png: 224×96, 7 cols × 3 rows of 32×32
+  // Col 0-2: solid wall variants, Col 3-6: wall edge/corner pieces
   const img = indoorImages['interior_walls'];
   if (!img) return null;
-  // row 0 = top walls, row 1 = bottom walls, etc (estimate 16x16 frames)
+  // Use different columns for wall face vs edge tiles
   const tileMap = {
-    wall_top:       [0, 0],
-    wall_bottom:    [0, 16],
-    wall_left:      [16, 0],
-    wall_right:     [32, 0],
-    wall_corner_tl: [48, 0],
-    wall_corner_tr: [64, 0],
-    wall_corner_bl: [48, 16],
-    wall_corner_br: [64, 16],
+    wall_top:       [0,   0],
+    wall_bottom:    [0,  32],
+    wall_left:      [32,  0],
+    wall_right:     [64,  0],
+    wall_corner_tl: [96,  0],
+    wall_corner_tr: [128, 0],
+    wall_corner_bl: [96, 32],
+    wall_corner_br: [128,32],
   };
   const [sx, sy] = (tileMap[wallTile] || [0, 0]);
-  return { img, sx, sy, sw:16, sh:16 };
+  return { img, sx, sy, sw: 32, sh: 32 };
 }
 
 function drawIndoor() {
@@ -1878,8 +1885,9 @@ function drawIndoorTile(ctx, tileType, x, y, TS, layout) {
       const fillerKey = wallStyle === 'stone' ? 'stone_wall_fill' : wallStyle === 'brick' ? 'brick_wall_fill' : 'wood_wall_fill';
       const fillerImg = indoorImages[fillerKey];
       if (fillerImg) {
-        ctx.globalAlpha = 0.5;
-        ctx.drawImage(fillerImg, 0, 0, 16, 16, x, y, TS, TS);
+        ctx.globalAlpha = 0.45;
+        // Use full 32×32 source tile (real dimensions)
+        ctx.drawImage(fillerImg, 0, 0, Math.min(32, fillerImg.naturalWidth), Math.min(32, fillerImg.naturalHeight), x, y, TS, TS);
         ctx.globalAlpha = 1.0;
       }
     } else {
@@ -1892,20 +1900,24 @@ function drawIndoorTile(ctx, tileType, x, y, TS, layout) {
   }
 }
 
-// Furniture draw lookup table (image key, frame col, frame row in 16x16 grid)
+// Furniture draw lookup table — (key, source w×h in px, dest scale relative to INDOOR_TS)
+// Real image dims: beds=112×192, bookshelves=192×112, chairs=224×352, tables=192×80,
+//   drawers=96×160, standing_lamps=160×288, planters=160×96, windows_single=640×384,
+//   windows_double=480×384, doors=176×384, chest=96×16, indoor_decor=96×256,
+//   placeable_decor=144×128, wood_stairs=64×32
 const FURNITURE_DRAW = {
-  bed:        { key:'beds',          col:0, row:0, w:32, h:32 },
-  bookshelf:  { key:'bookshelves',   col:0, row:0, w:32, h:32 },
-  chair:      { key:'chairs',        col:0, row:0, w:16, h:16 },
-  table:      { key:'tables',        col:0, row:0, w:32, h:16 },
-  drawer:     { key:'drawers',       col:0, row:0, w:16, h:16 },
-  lamp:       { key:'standing_lamps',col:0, row:0, w:16, h:32 },
-  planter:    { key:'planters',      col:0, row:0, w:16, h:16 },
-  chest:      { key:'chest',         col:0, row:0, w:16, h:16 },
-  window:     { key:'windows_single',col:0, row:0, w:16, h:16 },
-  door:       { key:'doors',         col:0, row:0, w:16, h:32 },
-  staircase:  { key:'wood_stairs',   col:0, row:0, w:32, h:32 },
-  decor:      { key:'indoor_decor',  col:0, row:0, w:16, h:16 },
+  bed:        { key:'beds',           sw:32, sh:48, dw:1.8, dh:2.0 },
+  bookshelf:  { key:'bookshelves',    sw:32, sh:32, dw:1.6, dh:1.6 },
+  chair:      { key:'chairs',         sw:32, sh:32, dw:1.2, dh:1.2 },
+  table:      { key:'tables',         sw:32, sh:16, dw:1.8, dh:1.0 },
+  drawer:     { key:'drawers',        sw:16, sh:32, dw:1.0, dh:1.6 },
+  lamp:       { key:'standing_lamps', sw:32, sh:48, dw:1.2, dh:1.8 },
+  planter:    { key:'planters',       sw:16, sh:16, dw:1.0, dh:1.0 },
+  chest:      { key:'chest',          sw:16, sh:16, dw:1.0, dh:1.0 },
+  window:     { key:'windows_single', sw:32, sh:32, dw:1.5, dh:1.5 },
+  door:       { key:'doors',          sw:16, sh:48, dw:1.0, dh:2.0 },
+  staircase:  { key:'wood_stairs',    sw:32, sh:32, dw:1.5, dh:1.5 },
+  decor:      { key:'indoor_decor',   sw:16, sh:16, dw:1.0, dh:1.0 },
 };
 
 function drawFurniture(ctx, f, TS, layout) {
@@ -1913,22 +1925,22 @@ function drawFurniture(ctx, f, TS, layout) {
   const spec = FURNITURE_DRAW[f.type] || FURNITURE_DRAW['decor'];
   const img = indoorImages[spec.key];
   const variant = f.variant || 0;
-  const framesPerRow = Math.max(1, Math.floor(16 / spec.w) * (img ? Math.floor(img.width / spec.w) : 1));
 
   if (img) {
-    // Compute frame offset for variant
-    const frCols = Math.floor(img.width  / spec.w);
-    const frRows = Math.floor(img.height / spec.h);
+    // Pick variant frame — step through source cols then rows
+    const frCols = Math.max(1, Math.floor(img.naturalWidth  / spec.sw));
+    const frRows = Math.max(1, Math.floor(img.naturalHeight / spec.sh));
     const fCol = variant % frCols;
     const fRow = Math.floor(variant / frCols) % frRows;
-    const sx = fCol * spec.w;
-    const sy = fRow * spec.h;
-    const dw = spec.w / 16 * TS;
-    const dh = spec.h / 16 * TS;
-    // Center within tile(s)
+    const sx = fCol * spec.sw;
+    const sy = fRow * spec.sh;
+    // Dest size — scale relative to tile size using dw/dh multipliers
+    const dw = TS * spec.dw;
+    const dh = TS * spec.dh;
+    // Center horizontally, anchor to bottom of tile
     const dx = x + (TS - dw) / 2;
-    const dy = y + (TS - dh) / 2;
-    ctx.drawImage(img, sx, sy, spec.w, spec.h, dx, dy, dw, dh);
+    const dy = y + TS - dh;
+    ctx.drawImage(img, sx, sy, spec.sw, spec.sh, dx, dy, dw, dh);
   } else {
     // Fallback colored boxes
     const colorMap = { bed:'#6a3a80', bookshelf:'#4a3020', chair:'#5a4030',
@@ -1939,9 +1951,9 @@ function drawFurniture(ctx, f, TS, layout) {
     ctx.strokeStyle = 'rgba(0,0,0,0.4)';
     ctx.strokeRect(x+4, y+4, TS-8, TS-8);
   }
-  // Furniture shadow
-  ctx.fillStyle = 'rgba(0,0,0,0.15)';
-  ctx.fillRect(x+6, y + TS - 8, TS-12, 4);
+  // Subtle furniture drop shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.12)';
+  ctx.fillRect(x + TS*0.15, y + TS*0.8, TS*0.7, TS*0.12);
 }
 
 function drawIndoorPlayer(ctx, col, row, TS) {
@@ -2524,6 +2536,25 @@ document.addEventListener('keydown', e => {
     if (wp && document.getElementById('prompt-bar')?.style.display !== 'none') {
       e.preventDefault();
       wp.focus();
+    }
+  }
+
+  // E key — DOM-level building entry (works regardless of Phaser canvas focus)
+  if ((e.key === 'e' || e.key === 'E') && !inInput && !isIndoor && gameScene && !gameScene.dialogueCooldown) {
+    const dialogueOpen = document.getElementById('dialogue-box').style.display !== 'none'
+                      && document.getElementById('dialogue-box').style.display !== '';
+    if (!dialogueOpen) {
+      const buildingKey = gameScene._findNearbyBuildingDoor?.();
+      if (buildingKey) {
+        e.preventDefault();
+        const layout = indoorLayouts.get(buildingKey);
+        if (layout?.ready) {
+          enterHouse(buildingKey, layout);
+        } else if (layout?.loading || (layout && !layout.ready)) {
+          const msg = HOUSE_NOT_READY_MSGS[Math.floor(Math.random() * HOUSE_NOT_READY_MSGS.length)];
+          showStatus(msg, 2500);
+        }
+      }
     }
   }
 });
