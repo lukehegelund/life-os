@@ -2,6 +2,7 @@
 import { supabase } from './supabase.js';
 import { qp, fmtDate, fmtDateFull, daysAgo, goldStr, goldClass, attendanceBadge, toast, showSpinner, showEmpty, today, pstDatePlusDays } from './utils.js';
 import { initSwipe } from './swipe-handler.js';
+import { fetchSpellingTestsByStudent, renderSpellingStudentBlock } from './spelling-tests.js';
 
 const studentId = qp('id');
 if (!studentId) { window.location.href = 'students.html'; }
@@ -71,7 +72,47 @@ async function load() {
     loadClasses(s),
     loadPagesAnalytics(s),
     loadEodReminder(s),
+    loadStudentSpellingTests(s),
   ]);
+}
+
+// ── Spelling Tests on Student Profile ─────────────────────────────────────────
+async function loadStudentSpellingTests(s) {
+  // Only show if student is enrolled in an English class
+  const enrRes = await supabase
+    .from('class_enrollments')
+    .select('class_id, classes(id, name, subject)')
+    .eq('student_id', studentId)
+    .is('enrolled_until', null);
+
+  const englishClasses = (enrRes.data || [])
+    .map(e => e.classes)
+    .filter(c => c?.subject === 'English');
+
+  if (!englishClasses.length) return;
+
+  const section = document.getElementById('spelling-tests-student-section');
+  const content = document.getElementById('spelling-tests-student-content');
+  if (!section || !content) return;
+  section.style.display = 'block';
+
+  const tests = await fetchSpellingTestsByStudent(studentId);
+  const classId = englishClasses[0].id; // use first English class for new entries
+
+  content.innerHTML = renderSpellingStudentBlock(
+    { id: s.id, name: s.name, spelling_test_folder_id: s.spelling_test_folder_id },
+    tests,
+    classId
+  );
+
+  window._reloadSpellingSection = async () => {
+    const refreshed = await fetchSpellingTestsByStudent(studentId);
+    content.innerHTML = renderSpellingStudentBlock(
+      { id: s.id, name: s.name, spelling_test_folder_id: s.spelling_test_folder_id },
+      refreshed,
+      classId
+    );
+  };
 }
 
 // ── Add Note ──────────────────────────────────────────────────────────────
