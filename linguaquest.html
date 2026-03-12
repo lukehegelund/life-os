@@ -1742,7 +1742,7 @@ function enterHouse(houseKey, layout) {
   indoorCanvas.width  = Math.round(w * scale);
   indoorCanvas.height = Math.round(h * scale);
   indoorCtx.imageSmoothingEnabled = false;
-  indoorCtx.scale(scale, scale);
+  indoorCtx.setTransform(scale, 0, 0, scale, 0, 0); // absolute — avoids compounding on re-entry
 
   // Pause Phaser
   if (phaserGame) phaserGame.loop.stop();
@@ -2043,7 +2043,10 @@ const INDOOR_KEY_HANDLER = (e) => {
   }
 };
 
-function bindIndoorKeys()   { window.addEventListener('keydown', INDOOR_KEY_HANDLER); }
+function bindIndoorKeys()   {
+  // Delay binding by one frame so the E keydown that triggered entry doesn't immediately exit
+  setTimeout(() => window.addEventListener('keydown', INDOOR_KEY_HANDLER), 50);
+}
 function unbindIndoorKeys() { window.removeEventListener('keydown', INDOOR_KEY_HANDLER); }
 
 // ─────────────────────────────────────────────────────────────
