@@ -1750,14 +1750,6 @@ function enterHouse(houseKey, layout) {
   drawIndoor();
   // Bind keyboard for indoor movement
   bindIndoorKeys();
-
-  // If the indoor NPC exists, show greeting in dialogue
-  if (layout.npc) {
-    setTimeout(() => {
-      const fakeNPC = { ...layout.npc, id: `indoor_${houseKey}`, type: 'indoor' };
-      if (gameScene) gameScene.openNPCDialogue(fakeNPC, null, 'player');
-    }, 300);
-  }
 }
 
 function exitHouse() {
