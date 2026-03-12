@@ -1773,7 +1773,7 @@ function enterHouse(houseKey, layout) {
   indoorWalkTick  = 0;
   // Place NPC in the upper-center area of the room (row 2, center col)
   indoorNPCPX = (Math.floor(layout.cols / 2) + 0.5) * INDOOR_TS;
-  indoorNPCPY = (2 + 0.5) * INDOOR_TS;
+  indoorNPCPY = (Math.max(2, Math.floor(layout.rows * 0.3)) + 0.5) * INDOOR_TS; // upper third, at least row 2
 
   // Show indoor overlay, hide controls hint
   document.getElementById('indoor-overlay').style.display = 'flex';
@@ -2225,7 +2225,7 @@ function drawIndoorNPC(ctx, px, py, TS, npc) {
 // ── Indoor keyboard bindings ──
 const INDOOR_MOVE_KEYS = new Set(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright']);
 
-const INDOOR_NPC_TALK_DIST = INDOOR_TS * 2.0; // px distance to trigger NPC talk
+const INDOOR_NPC_TALK_DIST = INDOOR_TS * 2.5; // px distance to trigger NPC talk (~2.5 tiles)
 
 const INDOOR_KEY_DOWN = (e) => {
   if (!isIndoor) return;
