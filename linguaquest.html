@@ -64,6 +64,22 @@ html, body { background: #1a2a1a; overflow: hidden; font-family: 'Georgia', seri
   letter-spacing: 2px;
 }
 .menu-hint { font-size: 11px; color: #2a4a18; letter-spacing: 2px; }
+#autogen-toggle-row {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 12px; color: #4a7a30; letter-spacing: 1px;
+}
+#autogen-toggle-row input[type=checkbox] {
+  appearance: none; width: 32px; height: 18px; border-radius: 9px;
+  background: #1a2a10; border: 1px solid #2a5018; cursor: pointer;
+  position: relative; transition: background 0.2s;
+  flex-shrink: 0;
+}
+#autogen-toggle-row input[type=checkbox]:checked { background: #2a6010; border-color: #5a9030; }
+#autogen-toggle-row input[type=checkbox]::after {
+  content: ''; position: absolute; width: 12px; height: 12px; border-radius: 50%;
+  background: #4a7a30; top: 2px; left: 2px; transition: left 0.2s, background 0.2s;
+}
+#autogen-toggle-row input[type=checkbox]:checked::after { left: 16px; background: #90d050; }
 
 /* ── PROMPT BAR ── */
 #prompt-bar {
@@ -268,6 +284,10 @@ html, body { background: #1a2a1a; overflow: hidden; font-family: 'Georgia', seri
   <p>An AI-Powered Language RPG</p>
   <div id="loading-menu">Loading configuration...</div>
   <input id="key-input" type="password" placeholder="Claude API key (sk-ant-...)">
+  <div id="autogen-toggle-row">
+    <input type="checkbox" id="autogen-checkbox" checked>
+    <label for="autogen-checkbox">Auto-generate world as you explore</label>
+  </div>
   <button id="menu-start" onclick="startGame()">Begin Adventure</button>
   <span class="menu-hint">WASD to move · E to interact</span>
 </div>
@@ -372,6 +392,7 @@ const SUPABASE_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzd
 const CLAUDE_KEY_STORE = 'lq_claude_key';
 let CLAUDE_KEY = '';
 let srsVocab   = [];   // [{word, translation, stage}]
+let AUTO_GEN   = localStorage.getItem('lq-autogen') !== 'false'; // default on
 
 // ── STATE ────────────────────────────────────────────────────
 let phaserGame  = null;
@@ -400,8 +421,11 @@ let chunkGenCount = 0;   // counter for unique NPC ids across chunks
 const indoorLayouts = new Map();
 let isIndoor = false;          // true when player is inside a building
 let indoorData = null;         // current indoor layout being viewed
-let indoorPlayerCol = 3;       // player position inside (column)
-let indoorPlayerRow = 5;       // player position inside (row)
+let indoorPlayerCol = 3;       // player target tile (column)
+let indoorPlayerRow = 5;       // player target tile (row)
+let indoorPlayerX = 3;         // player visual position (float, for smooth lerp)
+let indoorPlayerY = 5;         // player visual position (float, for smooth lerp)
+let indoorMoveRAF = null;      // requestAnimationFrame handle for indoor animation loop
 let indoorSourceKey = null;    // which building key we entered ("cx,cy_col_row")
 let indoorLastDir = 'down';
 // Indoor canvas rendering state
@@ -1086,9 +1110,8 @@ class GameScene extends Phaser.Scene {
 
       this.cameras.main.centerOn(px, py);
 
-      // Queue generation of surrounding chunks
-      queueSurroundingChunks(chunkX, chunkY);
-      processChunkQueue(); // start generating
+      // Queue generation of surrounding chunks (only in auto-gen mode)
+      if (AUTO_GEN) { queueSurroundingChunks(chunkX, chunkY); processChunkQueue(); }
     }
 
     console.log(`Chunk (${chunkX},${chunkY}) loaded — ${gameObjects.length} objects`);
@@ -1153,6 +1176,16 @@ class GameScene extends Phaser.Scene {
       const tileType = this.getTileAt(nx, ny);
       const def = TILE_DEFS[tileType] || TILE_DEFS.grass;
       if (!def.walkable) { vx = 0; vy = 0; }
+
+      // Manual mode: if walking toward an unloaded chunk, trigger generation for it
+      if (!AUTO_GEN) {
+        const ncx = Math.floor(nx / (CHUNK_COLS * TILE_SIZE));
+        const ncy = Math.floor(ny / (CHUNK_ROWS * TILE_SIZE));
+        if (!chunks.get(`${ncx},${ncy}`)?.loaded) {
+          queueSurroundingChunks(ncx, ncy);
+          processChunkQueue();
+        }
+      }
     }
 
     this.player.setVelocity(vx, vy);
@@ -1165,9 +1198,8 @@ class GameScene extends Phaser.Scene {
       currentChunkX = newCX;
       currentChunkY = newCY;
 
-      // Queue surrounding chunks for generation
-      queueSurroundingChunks(newCX, newCY);
-      processChunkQueue();
+      // Queue surrounding chunks for generation (only in auto-gen mode)
+      if (AUTO_GEN) { queueSurroundingChunks(newCX, newCY); processChunkQueue(); }
 
       // Unload chunks that are too far away (more than 2 chunks distance)
       for (const [key, chunk] of chunks) {
@@ -1494,6 +1526,10 @@ function startGame() {
   }
   if (!CLAUDE_KEY) { showStatus('Please enter your Claude API key', 3000); return; }
 
+  // Save auto-gen preference
+  AUTO_GEN = document.getElementById('autogen-checkbox').checked;
+  localStorage.setItem('lq-autogen', AUTO_GEN ? 'true' : 'false');
+
   document.getElementById('menu').style.display = 'none';
   document.getElementById('prompt-bar').style.display = 'flex';
   document.getElementById('top-hud').style.display = 'flex';
@@ -1728,6 +1764,8 @@ function enterHouse(houseKey, layout) {
   // Spawn at doorway (bottom center)
   indoorPlayerCol = Math.floor(layout.cols / 2);
   indoorPlayerRow = layout.rows - 2;
+  indoorPlayerX = indoorPlayerCol; // sync visual to tile immediately
+  indoorPlayerY = indoorPlayerRow;
   indoorLastDir = 'up'; // entering from south, face north
 
   // Show indoor overlay, hide controls hint
@@ -1747,7 +1785,8 @@ function enterHouse(houseKey, layout) {
   // Pause Phaser
   if (phaserGame) phaserGame.loop.stop();
 
-  drawIndoor();
+  // Start smooth animation loop
+  startIndoorAnimLoop();
   // Bind keyboard for indoor movement
   bindIndoorKeys();
 }
@@ -1761,6 +1800,7 @@ function exitHouse() {
   // Resume Phaser
   if (phaserGame) phaserGame.loop.wake(); // loop.start() causes Phaser callback error
   unbindIndoorKeys();
+  stopIndoorAnimLoop();
   closeDialogue();
 }
 
@@ -1821,11 +1861,14 @@ function getWallSrc(wallStyle, wallTile) {
   return { img, sx, sy, sw: 32, sh: 32 };
 }
 
-function drawIndoor() {
+function drawIndoor(px, py) {
   if (!indoorCtx || !indoorData) return;
   const layout = indoorData;
   const TS = INDOOR_TS;
   const ctx = indoorCtx;
+  // Use float visual position if provided, otherwise fall back to tile position
+  const drawCol = (px !== undefined) ? px : indoorPlayerX;
+  const drawRow = (py !== undefined) ? py : indoorPlayerY;
 
   // Clear
   ctx.fillStyle = '#0a0a0a';
@@ -1845,8 +1888,39 @@ function drawIndoor() {
     drawFurniture(ctx, f, TS, layout);
   }
 
-  // ── Draw player ──
-  drawIndoorPlayer(ctx, indoorPlayerCol, indoorPlayerRow, TS);
+  // ── Draw player at smooth float position ──
+  drawIndoorPlayer(ctx, drawCol, drawRow, TS);
+}
+
+const INDOOR_LERP_SPEED = 12; // tiles per second — higher = snappier
+let _indoorLastTime = 0;
+
+function startIndoorAnimLoop() {
+  stopIndoorAnimLoop();
+  _indoorLastTime = performance.now();
+  function loop(now) {
+    if (!isIndoor) return;
+    const dt = Math.min((now - _indoorLastTime) / 1000, 0.1); // cap at 100ms
+    _indoorLastTime = now;
+    // Lerp visual position toward target tile
+    const dx = indoorPlayerCol - indoorPlayerX;
+    const dy = indoorPlayerRow - indoorPlayerY;
+    const step = INDOOR_LERP_SPEED * dt;
+    if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) {
+      indoorPlayerX = indoorPlayerCol;
+      indoorPlayerY = indoorPlayerRow;
+    } else {
+      indoorPlayerX += Math.sign(dx) * Math.min(Math.abs(dx), step);
+      indoorPlayerY += Math.sign(dy) * Math.min(Math.abs(dy), step);
+    }
+    drawIndoor(indoorPlayerX, indoorPlayerY);
+    indoorMoveRAF = requestAnimationFrame(loop);
+  }
+  indoorMoveRAF = requestAnimationFrame(loop);
+}
+
+function stopIndoorAnimLoop() {
+  if (indoorMoveRAF) { cancelAnimationFrame(indoorMoveRAF); indoorMoveRAF = null; }
 }
 
 function drawIndoorTile(ctx, tileType, x, y, TS, layout) {
@@ -2025,7 +2099,7 @@ const INDOOR_KEY_HANDLER = (e) => {
     if (isIndoorWalkable(nc, nr, layout)) {
       indoorPlayerCol = nc;
       indoorPlayerRow = nr;
-      drawIndoor();
+      // Visual position lerps toward target in the animation loop — no manual drawIndoor() needed
     }
   }
 
@@ -2618,6 +2692,8 @@ document.getElementById('game-container').addEventListener('pointerdown', () => 
 //  STARTUP
 // ─────────────────────────────────────────────────────────────
 loadConfig();
+// Sync autogen checkbox to saved preference on load
+document.getElementById('autogen-checkbox').checked = AUTO_GEN;
 </script>
 </body>
 </html>
