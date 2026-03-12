@@ -435,6 +435,11 @@ let indoorImagesReady = false;
 let indoorAnimFrame = null;
 let indoorKeys = {};           // keyboard state for indoor movement
 let indoorMoveCooldown = 0;    // ms until next movement step
+// Indoor NPC position (pixel coords, set on enterHouse)
+let indoorNPCPX = 0;
+let indoorNPCPY = 0;
+let indoorWalkFrame = 0;       // animation frame counter for indoor walking (0-5)
+let indoorWalkTick  = 0;       // frame accumulator for walk animation
 
 // Refusal messages when house not ready
 const HOUSE_NOT_READY_MSGS = [
@@ -1764,6 +1769,11 @@ function enterHouse(houseKey, layout) {
   indoorPX = (Math.floor(layout.cols / 2) + 0.5) * INDOOR_TS;
   indoorPY = (layout.rows - 2 + 0.5) * INDOOR_TS;
   indoorLastDir = 'up'; // entering from south, face north
+  indoorWalkFrame = 0;
+  indoorWalkTick  = 0;
+  // Place NPC in the upper-center area of the room (row 2, center col)
+  indoorNPCPX = (Math.floor(layout.cols / 2) + 0.5) * INDOOR_TS;
+  indoorNPCPY = (2 + 0.5) * INDOOR_TS;
 
   // Show indoor overlay, hide controls hint
   document.getElementById('indoor-overlay').style.display = 'flex';
@@ -1794,6 +1804,9 @@ function exitHouse() {
   document.getElementById('indoor-overlay').style.display = 'none';
   document.getElementById('indoor-exit-hint').style.display = 'none';
   document.getElementById('controls-hint').style.display = 'block';
+  // Hide interact prompt
+  const promptEl = document.getElementById('interact-prompt');
+  if (promptEl) promptEl.style.opacity = '0';
   // Resume Phaser
   if (phaserGame) phaserGame.loop.wake(); // loop.start() causes Phaser callback error
   unbindIndoorKeys();
@@ -1882,8 +1895,17 @@ function drawIndoor() {
     drawFurniture(ctx, f, TS, layout);
   }
 
-  // ── Draw player at continuous pixel position ──
-  drawIndoorPlayer(ctx, indoorPX, indoorPY, TS);
+  // ── Draw NPC (behind player if player is lower on screen) ──
+  if (layout.npc) {
+    const drawNPCFirst = indoorNPCPY <= indoorPY;
+    if (drawNPCFirst) drawIndoorNPC(ctx, indoorNPCPX, indoorNPCPY, TS, layout.npc);
+    // ── Draw player at continuous pixel position ──
+    drawIndoorPlayer(ctx, indoorPX, indoorPY, TS);
+    if (!drawNPCFirst) drawIndoorNPC(ctx, indoorNPCPX, indoorNPCPY, TS, layout.npc);
+  } else {
+    // ── Draw player at continuous pixel position ──
+    drawIndoorPlayer(ctx, indoorPX, indoorPY, TS);
+  }
 }
 
 const INDOOR_SPEED_PX = 3.5; // pixels per frame at 60fps (~210px/s = ~4.4 tiles/s)
@@ -1931,7 +1953,21 @@ function startIndoorAnimLoop() {
 
       if (vx !== 0 && vy !== 0) { vx *= 0.707; vy *= 0.707; } // normalize diagonal
 
-      if (vx !== 0 || vy !== 0) {
+      // Track facing direction & walk frame animation
+      const moving = vx !== 0 || vy !== 0;
+      if (moving) {
+        if      (Math.abs(vx) >= Math.abs(vy) && vx < 0) indoorLastDir = 'left';
+        else if (Math.abs(vx) >= Math.abs(vy) && vx > 0) indoorLastDir = 'right';
+        else if (vy < 0)                                  indoorLastDir = 'up';
+        else                                              indoorLastDir = 'down';
+        indoorWalkTick += dt * 60; // ~10fps walk animation
+        if (indoorWalkTick >= 6) { indoorWalkTick = 0; indoorWalkFrame = (indoorWalkFrame + 1) % 6; }
+      } else {
+        indoorWalkFrame = 0; // idle: first frame of direction row
+        indoorWalkTick = 0;
+      }
+
+      if (moving) {
         const nx = indoorPX + vx * speed;
         const ny = indoorPY + vy * speed;
 
@@ -1950,6 +1986,29 @@ function startIndoorAnimLoop() {
         // Clamp to layout bounds
         indoorPX = Math.max(INDOOR_PLAYER_RADIUS, Math.min(layout.cols * INDOOR_TS - INDOOR_PLAYER_RADIUS, indoorPX));
         indoorPY = Math.max(INDOOR_PLAYER_RADIUS, Math.min(layout.rows * INDOOR_TS - INDOOR_PLAYER_RADIUS, indoorPY));
+      }
+
+      // NPC proximity hint — show [E] Talk above NPC when close
+      const npcDist = Math.hypot(indoorPX - indoorNPCPX, indoorPY - indoorNPCPY);
+      const promptEl = document.getElementById('interact-prompt');
+      if (promptEl && layout.npc) {
+        if (npcDist < INDOOR_TS * 2.2) {
+          promptEl.textContent = '[E] Talk';
+          promptEl.style.opacity = '1';
+          // Position prompt above NPC on the canvas (accounting for canvas centering)
+          const wrap = document.getElementById('indoor-canvas-wrap');
+          const cvs  = document.getElementById('indoor-canvas');
+          if (wrap && cvs) {
+            const scale = cvs.width / (layout.cols * INDOOR_TS);
+            const cr = cvs.getBoundingClientRect();
+            const npxScreen = cr.left + indoorNPCPX * scale;
+            const npyScreen = cr.top  + (indoorNPCPY - INDOOR_TS * 1.1) * scale;
+            promptEl.style.left = (npxScreen - 36) + 'px';
+            promptEl.style.top  = npyScreen + 'px';
+          }
+        } else {
+          promptEl.style.opacity = '0';
+        }
       }
     }
 
@@ -2084,11 +2143,36 @@ function drawFurniture(ctx, f, TS, layout) {
   ctx.fillRect(x + TS*0.15, y + TS*0.8, TS*0.7, TS*0.12);
 }
 
+// player_ss frame layout: 6 frames per row, row order = down(0), left(1), up(2), right(3)
+// walk frames: col 0-5 per row | idle = col 0
+const PLAYER_SS_ROW = { down: 0, left: 1, up: 2, right: 3 };
+
+function drawSpriteFromSheet(ctx, texKey, row, col, x, y, TS, frameCols) {
+  if (!phaserGame) return false;
+  try {
+    const tex = phaserGame.textures.get(texKey);
+    if (!tex || tex.key === '__MISSING') return false;
+    const src = tex.getSourceImage();
+    const fw = 32, fh = 32;
+    const sx = col * fw;
+    const sy = row * fh;
+    const scl = TS * 0.8 / fh;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(src, sx, sy, fw, fh, x - fw*scl/2, y - fh*scl*0.85, fw*scl, fh*scl);
+    return true;
+  } catch(e) { return false; }
+}
+
 function drawIndoorPlayer(ctx, px, py, TS) {
   const x = px;
   const y = py;
 
-  // Try to draw from Phaser player texture
+  const row = PLAYER_SS_ROW[indoorLastDir] ?? 0;
+  const col = indoorWalkFrame; // 0 = idle first frame, 1-5 = walk cycle
+
+  if (drawSpriteFromSheet(ctx, 'player_ss', row, col, x, y, TS, 6)) return;
+
+  // Try to draw from Phaser player texture (legacy path)
   if (phaserGame) {
     try {
       const tex = phaserGame.textures.get('player_ss');
@@ -2112,14 +2196,57 @@ function drawIndoorPlayer(ctx, px, py, TS) {
   ctx.fillRect(x - TS*0.15, y - TS*0.05, TS*0.3, TS*0.35);
 }
 
+// ── Draw indoor NPC sprite ──
+function drawIndoorNPC(ctx, px, py, TS, npc) {
+  // NPC faces down (toward entrance) — always idle row 0
+  if (!drawSpriteFromSheet(ctx, 'player_ss', 0, 0, px, py, TS, 6)) {
+    // Fallback: colored circle + body
+    ctx.fillStyle = '#e08840';
+    ctx.beginPath();
+    ctx.arc(px, py - 4, TS*0.22, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = '#a05820';
+    ctx.fillRect(px - TS*0.15, py - TS*0.05, TS*0.3, TS*0.35);
+  }
+  // Name label above NPC
+  const nameText = npc.name || 'NPC';
+  ctx.save();
+  ctx.font = `bold ${Math.round(TS * 0.28)}px Georgia, serif`;
+  ctx.textAlign = 'center';
+  const textW = ctx.measureText(nameText).width;
+  const labelY = py - TS * 0.65;
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.fillRect(px - textW/2 - 3, labelY - TS*0.22, textW + 6, TS*0.26);
+  ctx.fillStyle = '#a8e060';
+  ctx.fillText(nameText, px, labelY);
+  ctx.restore();
+}
+
 // ── Indoor keyboard bindings ──
 const INDOOR_MOVE_KEYS = new Set(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright']);
+
+const INDOOR_NPC_TALK_DIST = INDOOR_TS * 2.0; // px distance to trigger NPC talk
 
 const INDOOR_KEY_DOWN = (e) => {
   if (!isIndoor) return;
   const k = e.key.toLowerCase();
   if (INDOOR_MOVE_KEYS.has(k)) { e.preventDefault(); indoorKeysHeld.add(k); }
-  if (k === 'e') { exitHouse(); }
+  if (k === 'e') {
+    // Check NPC proximity first — if close, talk; otherwise exit
+    const npc = indoorData?.npc;
+    const npcDist = npc ? Math.hypot(indoorPX - indoorNPCPX, indoorPY - indoorNPCPY) : Infinity;
+    if (npc && npcDist < INDOOR_NPC_TALK_DIST) {
+      // Open dialogue with indoor NPC
+      const dBox = document.getElementById('dialogue-box');
+      if (dBox.style.display === 'none' || dBox.style.display === '') {
+        openIndoorNPCDialogue(npc);
+      } else {
+        closeDialogue();
+      }
+    } else {
+      exitHouse();
+    }
+  }
 };
 
 const INDOOR_KEY_UP = (e) => {
@@ -2572,6 +2699,39 @@ function closeDialogue() {
     gameScene.dialogueCooldown = true;
     setTimeout(() => { if (gameScene) gameScene.dialogueCooldown = false; }, 400);
   }
+}
+
+// ── Indoor NPC dialogue opener ──
+function openIndoorNPCDialogue(npc) {
+  if (!npc) return;
+  // Give it a unique id based on houseKey so dialogue history is preserved
+  const npcId = (indoorSourceKey || 'indoor') + '_npc';
+  const npcDef = {
+    id:          npcId,
+    name:        npc.name       || 'Stranger',
+    greeting:    npc.greeting   || '...',
+    personality: npc.personality|| 'A local resident.',
+    ai_context:  npc.ai_context || 'A person at home.',
+    vocab_focus: npc.vocab_focus || [],
+    sprite:      'player',
+  };
+  currentNPC = npcDef;
+  if (!dialogueHistory[npcId]) dialogueHistory[npcId] = [];
+
+  // Render portrait
+  renderNPCPortrait('player', npcId);
+
+  document.getElementById('dialogue-npc-name').textContent = npcDef.name;
+  document.getElementById('dialogue-npc-tag').textContent  = npcDef.personality.split('.')[0];
+  document.getElementById('dialogue-text').innerHTML = highlightVocab(npcDef.greeting);
+  document.getElementById('dialogue-translation').textContent = '(tap to translate)';
+  lastNPCReply = npcDef.greeting;
+
+  document.getElementById('dialogue-input').style.display = 'block';
+  document.getElementById('dialogue-send').style.display  = 'block';
+  document.getElementById('dialogue-input').value = '';
+  document.getElementById('dialogue-box').style.display = 'block';
+  setTimeout(() => document.getElementById('dialogue-input').focus(), 80);
 }
 
 // Translation reveal (click handler on translation element)
