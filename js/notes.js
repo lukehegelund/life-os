@@ -29,7 +29,12 @@ const FOLDER_COLORS = {
 
 let allNotes   = [];
 let allFolders = [];
-let activeFolderId = null; // null = "All", 'none' = unfiled
+// Restore last active folder from localStorage (persists across reloads)
+const _savedFolder = localStorage.getItem('notes-active-folder');
+let activeFolderId = _savedFolder === 'null' ? null
+  : _savedFolder === 'none' ? 'none'
+  : _savedFolder ? Number(_savedFolder)
+  : null; // null = "All", 'none' = unfiled
 let searchQuery = '';
 let activeNoteId = null;
 const saveTimeouts = {};
@@ -672,6 +677,8 @@ window.submitSlashStudentNote = async function(classId, content) {
 
 window.setActiveFolder = function(folderId) {
   activeFolderId = folderId;
+  // Persist selected folder across reloads
+  localStorage.setItem('notes-active-folder', folderId === null ? 'null' : String(folderId));
   renderNotes();
 };
 
@@ -760,6 +767,7 @@ window.submitCreateFolder = async function() {
   document.getElementById('folder-modal')?.remove();
   allFolders.push(data);
   activeFolderId = data.id;
+  localStorage.setItem('notes-active-folder', String(data.id));
   renderFolderBar();
   renderNotes();
 };
@@ -890,7 +898,10 @@ window.deleteFolder = async function(folderId) {
   if (error) { alert('Error: ' + error.message); return; }
 
   allFolders = allFolders.filter(f => f.id !== folderId);
-  if (activeFolderId === folderId) activeFolderId = null;
+  if (activeFolderId === folderId) {
+    activeFolderId = null;
+    localStorage.setItem('notes-active-folder', 'null');
+  }
   renderFolderBar();
   renderNotes();
 };
