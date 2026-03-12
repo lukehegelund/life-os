@@ -421,13 +421,12 @@ let chunkGenCount = 0;   // counter for unique NPC ids across chunks
 const indoorLayouts = new Map();
 let isIndoor = false;          // true when player is inside a building
 let indoorData = null;         // current indoor layout being viewed
-let indoorPlayerCol = 3;       // player target tile (column)
-let indoorPlayerRow = 5;       // player target tile (row)
-let indoorPlayerX = 3;         // player visual position (float, for smooth lerp)
-let indoorPlayerY = 5;         // player visual position (float, for smooth lerp)
+let indoorPX = 0;              // player pixel X (continuous float)
+let indoorPY = 0;              // player pixel Y (continuous float)
 let indoorMoveRAF = null;      // requestAnimationFrame handle for indoor animation loop
 let indoorSourceKey = null;    // which building key we entered ("cx,cy_col_row")
 let indoorLastDir = 'down';
+const indoorKeysHeld = new Set(); // currently held movement keys
 // Indoor canvas rendering state
 let indoorCanvas = null;
 let indoorCtx = null;
@@ -1761,11 +1760,9 @@ function enterHouse(houseKey, layout) {
   isIndoor = true;
   indoorData = layout;
   indoorSourceKey = houseKey;
-  // Spawn at doorway (bottom center)
-  indoorPlayerCol = Math.floor(layout.cols / 2);
-  indoorPlayerRow = layout.rows - 2;
-  indoorPlayerX = indoorPlayerCol; // sync visual to tile immediately
-  indoorPlayerY = indoorPlayerRow;
+  // Spawn at doorway (bottom center) — pixel position
+  indoorPX = (Math.floor(layout.cols / 2) + 0.5) * INDOOR_TS;
+  indoorPY = (layout.rows - 2 + 0.5) * INDOOR_TS;
   indoorLastDir = 'up'; // entering from south, face north
 
   // Show indoor overlay, hide controls hint
@@ -1861,14 +1858,11 @@ function getWallSrc(wallStyle, wallTile) {
   return { img, sx, sy, sw: 32, sh: 32 };
 }
 
-function drawIndoor(px, py) {
+function drawIndoor() {
   if (!indoorCtx || !indoorData) return;
   const layout = indoorData;
   const TS = INDOOR_TS;
   const ctx = indoorCtx;
-  // Use float visual position if provided, otherwise fall back to tile position
-  const drawCol = (px !== undefined) ? px : indoorPlayerX;
-  const drawRow = (py !== undefined) ? py : indoorPlayerY;
 
   // Clear
   ctx.fillStyle = '#0a0a0a';
@@ -1888,32 +1882,78 @@ function drawIndoor(px, py) {
     drawFurniture(ctx, f, TS, layout);
   }
 
-  // ── Draw player at smooth float position ──
-  drawIndoorPlayer(ctx, drawCol, drawRow, TS);
+  // ── Draw player at continuous pixel position ──
+  drawIndoorPlayer(ctx, indoorPX, indoorPY, TS);
 }
 
-const INDOOR_LERP_SPEED = 12; // tiles per second — higher = snappier
+const INDOOR_SPEED_PX = 3.5; // pixels per frame at 60fps (~210px/s = ~4.4 tiles/s)
+const INDOOR_PLAYER_RADIUS = INDOOR_TS * 0.3; // collision box half-size
 let _indoorLastTime = 0;
+
+function indoorPixelWalkable(px, py, layout) {
+  // Check all four corners of the player's bounding box
+  const r = INDOOR_PLAYER_RADIUS * 0.85;
+  const checks = [
+    [px - r, py - r], [px + r, py - r],
+    [px - r, py + r], [px + r, py + r],
+  ];
+  for (const [cx, cy] of checks) {
+    const col = Math.floor(cx / INDOOR_TS);
+    const row = Math.floor(cy / INDOOR_TS);
+    if (col < 0 || row < 0 || col >= layout.cols || row >= layout.rows) return false;
+    const t = layout.tiles[row]?.[col] || 'wall_top';
+    if (!['floor', 'doorway', 'rug'].includes(t)) return false;
+    // Furniture blocking
+    if ((layout.furniture || []).some(f => f.col === col && f.row === row && FURNITURE_BLOCKS[f.type])) return false;
+  }
+  return true;
+}
 
 function startIndoorAnimLoop() {
   stopIndoorAnimLoop();
   _indoorLastTime = performance.now();
   function loop(now) {
-    if (!isIndoor) return;
-    const dt = Math.min((now - _indoorLastTime) / 1000, 0.1); // cap at 100ms
+    if (!isIndoor) { stopIndoorAnimLoop(); return; }
+    const dt = Math.min((now - _indoorLastTime) / 1000, 0.05);
     _indoorLastTime = now;
-    // Lerp visual position toward target tile
-    const dx = indoorPlayerCol - indoorPlayerX;
-    const dy = indoorPlayerRow - indoorPlayerY;
-    const step = INDOOR_LERP_SPEED * dt;
-    if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) {
-      indoorPlayerX = indoorPlayerCol;
-      indoorPlayerY = indoorPlayerRow;
-    } else {
-      indoorPlayerX += Math.sign(dx) * Math.min(Math.abs(dx), step);
-      indoorPlayerY += Math.sign(dy) * Math.min(Math.abs(dy), step);
+
+    const layout = indoorData;
+    const dialogueOpen = document.getElementById('dialogue-box').style.display !== 'none'
+                      && document.getElementById('dialogue-box').style.display !== '';
+
+    if (!dialogueOpen && layout) {
+      const speed = INDOOR_SPEED_PX * (dt * 60); // frame-rate independent
+      let vx = 0, vy = 0;
+      if (indoorKeysHeld.has('w') || indoorKeysHeld.has('arrowup'))    vy = -1;
+      if (indoorKeysHeld.has('s') || indoorKeysHeld.has('arrowdown'))  vy =  1;
+      if (indoorKeysHeld.has('a') || indoorKeysHeld.has('arrowleft'))  vx = -1;
+      if (indoorKeysHeld.has('d') || indoorKeysHeld.has('arrowright')) vx =  1;
+
+      if (vx !== 0 && vy !== 0) { vx *= 0.707; vy *= 0.707; } // normalize diagonal
+
+      if (vx !== 0 || vy !== 0) {
+        const nx = indoorPX + vx * speed;
+        const ny = indoorPY + vy * speed;
+
+        // Check doorway exit — bottom center of the layout
+        const doorCol = Math.floor(layout.cols / 2);
+        const doorPX = (doorCol + 0.5) * INDOOR_TS;
+        const doorPY = (layout.rows - 1) * INDOOR_TS;
+        if (ny + INDOOR_PLAYER_RADIUS > doorPY && Math.abs(nx - doorPX) < INDOOR_TS * 0.6) {
+          exitHouse(); return;
+        }
+
+        // Slide along walls: try X and Y independently
+        if (indoorPixelWalkable(nx, indoorPY, layout)) indoorPX = nx;
+        if (indoorPixelWalkable(indoorPX, ny, layout)) indoorPY = ny;
+
+        // Clamp to layout bounds
+        indoorPX = Math.max(INDOOR_PLAYER_RADIUS, Math.min(layout.cols * INDOOR_TS - INDOOR_PLAYER_RADIUS, indoorPX));
+        indoorPY = Math.max(INDOOR_PLAYER_RADIUS, Math.min(layout.rows * INDOOR_TS - INDOOR_PLAYER_RADIUS, indoorPY));
+      }
     }
-    drawIndoor(indoorPlayerX, indoorPlayerY);
+
+    drawIndoor();
     indoorMoveRAF = requestAnimationFrame(loop);
   }
   indoorMoveRAF = requestAnimationFrame(loop);
@@ -2044,9 +2084,9 @@ function drawFurniture(ctx, f, TS, layout) {
   ctx.fillRect(x + TS*0.15, y + TS*0.8, TS*0.7, TS*0.12);
 }
 
-function drawIndoorPlayer(ctx, col, row, TS) {
-  const x = col * TS + TS/2;
-  const y = row * TS + TS/2;
+function drawIndoorPlayer(ctx, px, py, TS) {
+  const x = px;
+  const y = py;
 
   // Try to draw from Phaser player texture
   if (phaserGame) {
@@ -2073,47 +2113,32 @@ function drawIndoorPlayer(ctx, col, row, TS) {
 }
 
 // ── Indoor keyboard bindings ──
-const INDOOR_KEY_HANDLER = (e) => {
-  const k = e.key;
-  const dialogueOpen = document.getElementById('dialogue-box').style.display !== 'none'
-                    && document.getElementById('dialogue-box').style.display !== '';
-  if (dialogueOpen) return;
+const INDOOR_MOVE_KEYS = new Set(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright']);
 
+const INDOOR_KEY_DOWN = (e) => {
   if (!isIndoor) return;
-  const layout = indoorData;
-  let dc = 0, dr = 0;
-  if (k === 'ArrowUp'    || k === 'w' || k === 'W') dr = -1;
-  if (k === 'ArrowDown'  || k === 's' || k === 'S') dr =  1;
-  if (k === 'ArrowLeft'  || k === 'a' || k === 'A') dc = -1;
-  if (k === 'ArrowRight' || k === 'd' || k === 'D') dc =  1;
-
-  if (dc !== 0 || dr !== 0) {
-    e.preventDefault();
-    const nc = indoorPlayerCol + dc;
-    const nr = indoorPlayerRow + dr;
-    if (nr === layout.rows - 1 && nc === Math.floor(layout.cols / 2)) {
-      // Stepped onto doorway — exit
-      exitHouse();
-      return;
-    }
-    if (isIndoorWalkable(nc, nr, layout)) {
-      indoorPlayerCol = nc;
-      indoorPlayerRow = nr;
-      // Visual position lerps toward target in the animation loop — no manual drawIndoor() needed
-    }
-  }
-
-  // E key inside = exit
-  if (k === 'e' || k === 'E') {
-    exitHouse();
-  }
+  const k = e.key.toLowerCase();
+  if (INDOOR_MOVE_KEYS.has(k)) { e.preventDefault(); indoorKeysHeld.add(k); }
+  if (k === 'e') { exitHouse(); }
 };
 
-function bindIndoorKeys()   {
-  // Delay binding by one frame so the E keydown that triggered entry doesn't immediately exit
-  setTimeout(() => window.addEventListener('keydown', INDOOR_KEY_HANDLER), 50);
+const INDOOR_KEY_UP = (e) => {
+  indoorKeysHeld.delete(e.key.toLowerCase());
+};
+
+function bindIndoorKeys() {
+  indoorKeysHeld.clear();
+  // Small delay so the E that triggered entry doesn't immediately exit
+  setTimeout(() => {
+    window.addEventListener('keydown', INDOOR_KEY_DOWN);
+    window.addEventListener('keyup',   INDOOR_KEY_UP);
+  }, 50);
 }
-function unbindIndoorKeys() { window.removeEventListener('keydown', INDOOR_KEY_HANDLER); }
+function unbindIndoorKeys() {
+  window.removeEventListener('keydown', INDOOR_KEY_DOWN);
+  window.removeEventListener('keyup',   INDOOR_KEY_UP);
+  indoorKeysHeld.clear();
+}
 
 // ─────────────────────────────────────────────────────────────
 //  CHUNK QUEUE — queues neighboring chunks for generation
