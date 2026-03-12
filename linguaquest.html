@@ -1801,17 +1801,21 @@ function enterHouse(houseKey, layout) {
 function exitHouse() {
   isIndoor = false;
   indoorData = null;
-  document.getElementById('indoor-overlay').style.display = 'none';
-  document.getElementById('indoor-exit-hint').style.display = 'none';
-  document.getElementById('controls-hint').style.display = 'block';
-  // Hide interact prompt
+  // Hide interact prompt immediately
   const promptEl = document.getElementById('interact-prompt');
   if (promptEl) promptEl.style.opacity = '0';
-  // Resume Phaser
-  if (phaserGame) phaserGame.loop.wake(); // loop.start() causes Phaser callback error
+  // Stop indoor loop and keys immediately (isIndoor=false stops movement in loop too)
   unbindIndoorKeys();
   stopIndoorAnimLoop();
   closeDialogue();
+  // Resume Phaser first, let it render one frame, THEN hide the indoor overlay
+  // This prevents a black flash caused by Phaser clearing its canvas before first render
+  if (phaserGame) phaserGame.loop.wake();
+  requestAnimationFrame(() => {
+    document.getElementById('indoor-overlay').style.display = 'none';
+    document.getElementById('indoor-exit-hint').style.display = 'none';
+    document.getElementById('controls-hint').style.display = 'block';
+  });
 }
 
 function isIndoorWalkable(col, row, layout) {
@@ -2230,8 +2234,14 @@ const INDOOR_NPC_TALK_DIST = INDOOR_TS * 2.5; // px distance to trigger NPC talk
 const INDOOR_KEY_DOWN = (e) => {
   if (!isIndoor) return;
   const k = e.key.toLowerCase();
-  if (INDOOR_MOVE_KEYS.has(k)) { e.preventDefault(); indoorKeysHeld.add(k); }
-  if (k === 'e') {
+
+  // If the dialogue input is focused, let the browser handle typing — don't intercept movement keys
+  const activeEl = document.activeElement;
+  const typingInDialogue = activeEl === document.getElementById('dialogue-input');
+
+  if (!typingInDialogue && INDOOR_MOVE_KEYS.has(k)) { e.preventDefault(); indoorKeysHeld.add(k); }
+
+  if (k === 'e' && !typingInDialogue) {
     // Check NPC proximity first — if close, talk; otherwise exit
     const npc = indoorData?.npc;
     const npcDist = npc ? Math.hypot(indoorPX - indoorNPCPX, indoorPY - indoorNPCPY) : Infinity;
