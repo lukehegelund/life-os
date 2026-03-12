@@ -1045,9 +1045,8 @@ class GameScene extends Phaser.Scene {
     // Store chunk data
     chunks.set(key, { worldDef, gameObjects, npcs: chunkNpcs, loaded: true, cx: chunkX, cy: chunkY });
 
-    // ── Auto-queue house interiors for this chunk ──
-    // Do this after the chunk is marked loaded so indoor gen can read tile data
-    if (CLAUDE_KEY) queueHousesFromChunk(chunkX, chunkY, worldDef);
+    // House interiors are generated lazily — only when player tries to enter.
+    // No upfront queuing to avoid rate limit spikes.
 
     // ── PLAYER (only on origin chunk) ──
     if (isOrigin) {
@@ -1336,11 +1335,14 @@ class GameScene extends Phaser.Scene {
           if (layout && layout.ready) {
             enterHouse(buildingKey, layout);
           } else if (layout && layout.loading) {
+            // Already generating — show a "come back soon" hint
             const msg = HOUSE_NOT_READY_MSGS[Math.floor(Math.random() * HOUSE_NOT_READY_MSGS.length)];
             showStatus(msg, 2500);
-          } else if (nearestNPC) {
-            // No building, fall through to NPC
-            this.openNPCDialogue(nearestNPC.def, nearestNPC.sprite, nearestNPC.def.sprite);
+          } else {
+            // Not yet started — kick off lazy generation now
+            // buildingKey format: "cx,cy_col_row" — parse chunk coords from it
+            const _bkParts = buildingKey.split('_')[0].split(',');
+            triggerLazyHouseGen(buildingKey, parseInt(_bkParts[0]), parseInt(_bkParts[1]));
           }
         } else if (nearestNPC) {
           this.openNPCDialogue(nearestNPC.def, nearestNPC.sprite, nearestNPC.def.sprite);
@@ -1560,34 +1562,45 @@ const houseGenQueue = [];
 let houseGenRunning = false;
 
 // Called after a chunk finishes loading — queues all its building tiles for interior gen
-function queueHousesFromChunk(chunkX, chunkY, worldDef) {
-  const tiles = worldDef.world.tiles;
-  const rows = tiles.length;
-  const cols = tiles[0]?.length || 0;
+// ── Lazy house generation — called only when player presses E on a building door ──
+// Finds the top-left corner of the building cluster containing the given houseKey,
+// then kicks off a single interior generation for that house only.
+function triggerLazyHouseGen(houseKey, chunkX, chunkY) {
+  if (!CLAUDE_KEY) return;
+  if (indoorLayouts.has(houseKey)) return; // already generated or in progress
 
-  for (let row = 0; row < rows; row++) {
-    for (let col = 0; col < cols; col++) {
-      const t = tiles[row]?.[col] || '';
-      if (t !== 'building' && t !== 'building_door') continue;
-
-      // Only generate for the "top-left" tile of each building cluster
-      const above = row > 0 ? (tiles[row-1]?.[col] || '') : '';
-      const left  = col > 0 ? (tiles[row]?.[col-1] || '') : '';
-      const isBuilding = v => v === 'building' || v === 'building_door';
-      if (isBuilding(above) || isBuilding(left)) continue; // not top-left
-
-      const houseKey = `${chunkX},${chunkY}_${col}_${row}`;
-      if (indoorLayouts.has(houseKey)) continue; // already exists
-
-      // Mark as loading so E key can show "not ready" message
-      indoorLayouts.set(houseKey, { ready: false, loading: true, tiles: null, furniture: null });
-      houseGenQueue.push({ houseKey, chunkX, chunkY, col, row, worldDef });
-    }
+  // Look up the worldDef for this chunk
+  const chunkData = chunks.get(`${chunkX},${chunkY}`);
+  if (!chunkData || !chunkData.worldDef) {
+    showStatus('⟳ Building not loaded yet...', 1500);
+    return;
   }
-  processHouseQueue();
+
+  // Parse col/row from houseKey: "cx,cy_col_row"
+  const parts = houseKey.split('_');
+  const col = parseInt(parts[1]);
+  const row = parseInt(parts[2]);
+
+  // Mark as loading immediately so repeat-press shows "come back soon"
+  indoorLayouts.set(houseKey, { ready: false, loading: true, tiles: null, furniture: null });
+  showStatus('🏠 Preparing the house... come back in a moment!', 3000);
+
+  const task = { houseKey, chunkX, chunkY, col, row, worldDef: chunkData.worldDef };
+  generateHouseInteriorAPI(task).then(layout => {
+    if (layout) {
+      indoorLayouts.set(houseKey, { ready: true, loading: false, ...layout });
+      showStatus('🏠 House is ready — press E to enter!', 2500);
+    } else {
+      indoorLayouts.delete(houseKey); // allow retry
+      showStatus('🏠 Nobody seems to be home right now.', 2000);
+    }
+  }).catch(() => {
+    indoorLayouts.delete(houseKey); // allow retry
+  });
 }
 
 async function processHouseQueue() {
+  // Kept for compatibility — lazy gen bypasses this queue entirely now.
   if (houseGenRunning || houseGenQueue.length === 0) return;
   houseGenRunning = true;
   while (houseGenQueue.length > 0) {
@@ -1596,15 +1609,13 @@ async function processHouseQueue() {
       const layout = await generateHouseInteriorAPI(task);
       if (layout) {
         indoorLayouts.set(task.houseKey, { ready: true, loading: false, ...layout });
-        console.log(`House ${task.houseKey} interior ready`);
       } else {
         indoorLayouts.set(task.houseKey, { ready: false, loading: false, tiles: null, furniture: null });
       }
     } catch(e) {
-      console.warn('House gen failed:', task.houseKey, e);
       indoorLayouts.set(task.houseKey, { ready: false, loading: false, tiles: null, furniture: null });
     }
-    await new Promise(r => setTimeout(r, 200));
+    await new Promise(r => setTimeout(r, 400));
   }
   houseGenRunning = false;
 }
@@ -1655,37 +1666,48 @@ Tile values: floor, wall_top, wall_left, wall_right, wall_bottom, wall_corner_tl
 - Make it feel cozy and lived-in with variety. Use lamps near walls, chairs near tables, books on shelves.
 - The npc greeting must be in ${lang}.`;
 
-  try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': CLAUDE_KEY,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 2000,
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    });
-    if (!res.ok) throw new Error('API error');
-    const data = await res.json();
-    const raw = data.content[0].text.trim().replace(/^```json?\n?/, '').replace(/\n?```$/, '');
-    let layout;
-    try { layout = JSON.parse(raw); } catch { return null; }
-    if (!layout.tiles) return null;
-    // Validate + clamp tile dimensions
-    layout.cols = intW;
-    layout.rows = intH;
-    layout.tiles = layout.tiles.slice(0, intH).map(r => (r || []).slice(0, intW).concat(Array(intW).fill('floor')).slice(0, intW));
-    layout.furniture = (layout.furniture || []).filter(f => f.col >= 0 && f.col < intW && f.row >= 0 && f.row < intH);
-    return layout;
-  } catch(e) {
-    console.error('House interior API error:', e);
-    return null;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': CLAUDE_KEY,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 2000,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      });
+
+      if (res.status === 429) {
+        const wait = 5000 * Math.pow(2, attempt);
+        console.warn(`House interior rate limited — retrying in ${wait/1000}s`);
+        await new Promise(r => setTimeout(r, wait));
+        continue;
+      }
+
+      if (!res.ok) throw new Error('API error');
+      const data = await res.json();
+      const raw = data.content[0].text.trim().replace(/^```json?\n?/, '').replace(/\n?```$/, '');
+      let layout;
+      try { layout = JSON.parse(raw); } catch { return null; }
+      if (!layout.tiles) return null;
+      // Validate + clamp tile dimensions
+      layout.cols = intW;
+      layout.rows = intH;
+      layout.tiles = layout.tiles.slice(0, intH).map(r => (r || []).slice(0, intW).concat(Array(intW).fill('floor')).slice(0, intW));
+      layout.furniture = (layout.furniture || []).filter(f => f.col >= 0 && f.col < intW && f.row >= 0 && f.row < intH);
+      return layout;
+    } catch(e) {
+      console.error('House interior API error:', e);
+      return null;
+    }
   }
+  return null;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -1745,7 +1767,7 @@ function exitHouse() {
   document.getElementById('indoor-exit-hint').style.display = 'none';
   document.getElementById('controls-hint').style.display = 'block';
   // Resume Phaser
-  if (phaserGame) phaserGame.loop.start();
+  if (phaserGame) phaserGame.loop.wake(); // loop.start() causes Phaser callback error
   unbindIndoorKeys();
   closeDialogue();
 }
@@ -2071,8 +2093,8 @@ async function processChunkQueue() {
       chunks.delete(key); // Allow retry later
     }
 
-    // Small delay between API calls to avoid rate limiting
-    await new Promise(r => setTimeout(r, 300));
+    // Longer delay between chunk API calls to stay under rate limits
+    await new Promise(r => setTimeout(r, 2000));
   }
 
   chunkGenerating = false;
@@ -2167,36 +2189,49 @@ NPC sprites: player, skeleton, slime, chicken, cow, pig, sheep
 NPC greetings/vocab in ${lang}. 1-2 NPCs with rich ai_context.
 Make it feel like a natural continuation of the ${theme} world — vary the landscape.`;
 
-  try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': CLAUDE_KEY,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 4000,
-        messages: [{ role: 'user', content: chunkPrompt }],
-      }),
-    });
+  // Retry with exponential backoff on 429 rate limit errors
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': CLAUDE_KEY,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 4000,
+          messages: [{ role: 'user', content: chunkPrompt }],
+        }),
+      });
 
-    if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || 'API error'); }
-    const data = await res.json();
-    const raw = data.content[0].text.trim().replace(/^```json?\n?/, '').replace(/\n?```$/, '');
+      if (res.status === 429) {
+        // Rate limited — wait and retry with backoff: 5s, 10s, 20s
+        const wait = 5000 * Math.pow(2, attempt);
+        console.warn(`Chunk (${cx},${cy}) rate limited — retrying in ${wait/1000}s (attempt ${attempt+1}/4)`);
+        await new Promise(r => setTimeout(r, wait));
+        continue;
+      }
 
-    let worldDef;
-    try { worldDef = JSON.parse(raw); }
-    catch { console.error('Chunk JSON parse failed'); return null; }
+      if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || 'API error'); }
+      const data = await res.json();
+      const raw = data.content[0].text.trim().replace(/^```json?\n?/, '').replace(/\n?```$/, '');
 
-    if (!worldDef.world?.tiles) { console.error('Chunk missing tiles'); return null; }
-    return worldDef;
-  } catch (err) {
-    console.error('Chunk API error:', err);
-    return null;
+      let worldDef;
+      try { worldDef = JSON.parse(raw); }
+      catch { console.error('Chunk JSON parse failed'); return null; }
+
+      if (!worldDef.world?.tiles) { console.error('Chunk missing tiles'); return null; }
+      return worldDef;
+    } catch (err) {
+      console.error('Chunk API error:', err);
+      return null;
+    }
   }
+  console.warn(`Chunk (${cx},${cy}) failed after all retries`);
+  return null;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -2557,9 +2592,13 @@ document.addEventListener('keydown', e => {
           const layout = indoorLayouts.get(buildingKey);
           if (layout?.ready) {
             enterHouse(buildingKey, layout);
-          } else if (layout?.loading || (layout && !layout.ready)) {
+          } else if (layout?.loading) {
             const msg = HOUSE_NOT_READY_MSGS[Math.floor(Math.random() * HOUSE_NOT_READY_MSGS.length)];
             showStatus(msg, 2500);
+          } else {
+            // Lazy gen — kick off now
+            const [gcx, gcy] = buildingKey.split('_')[0].split(',').map(Number);
+            triggerLazyHouseGen(buildingKey, gcx, gcy);
           }
         }
       }
