@@ -182,6 +182,35 @@ html, body { background: #1a2a1a; overflow: hidden; font-family: 'Georgia', seri
   cursor: pointer; border-radius: 3px; display: none; transition: all .15s;
 }
 #dialogue-send:hover { background: #1e3a0a; }
+/* ── Voice mic button ── */
+#dialogue-mic {
+  padding: 7px 10px; background: #162808; border: 1px solid #4a8020;
+  color: #90c850; font-size: 14px; cursor: pointer; border-radius: 3px;
+  display: none; transition: all .15s; line-height: 1; flex-shrink: 0;
+}
+#dialogue-mic:hover { background: #1e3a0a; }
+#dialogue-mic.recording {
+  background: rgba(180,40,40,.3); border-color: #d05050; color: #ff8080;
+  animation: micPulse .8s infinite;
+}
+#dialogue-mic.speaking { color: #60c0ff; border-color: #4090c0; }
+#dialogue-mic.loading { opacity: .5; cursor: default; }
+@keyframes micPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(200,50,50,.4); } 50% { box-shadow: 0 0 0 5px rgba(200,50,50,0); } }
+/* ── Voice mute toggle in footer ── */
+#dialogue-mute {
+  background: none; border: 1px solid #1a3010; color: #3a5a28;
+  font-family: Georgia, serif; font-size: 10px; padding: 4px 10px; cursor: pointer;
+  border-radius: 3px; letter-spacing: 1px; transition: all .15s;
+}
+#dialogue-mute:hover { border-color: #3a5018; color: #6a8a48; }
+#dialogue-mute.active { border-color: #3a6028; color: #7ec850; }
+/* ── NPC speaking indicator ── */
+#dialogue-speaking-dot {
+  display: none; width: 7px; height: 7px; border-radius: 50%;
+  background: #60c0ff; margin-left: 6px; flex-shrink: 0;
+  animation: speakPulse 1s infinite;
+}
+@keyframes speakPulse { 0%,100% { opacity: .3; transform: scale(.8); } 50% { opacity: 1; transform: scale(1.2); } }
 #dialogue-footer {
   padding: 8px 16px 10px; display: flex; justify-content: space-between; align-items: center;
 }
@@ -311,8 +340,11 @@ html, body { background: #1a2a1a; overflow: hidden; font-family: 'Georgia', seri
     <div id="dialogue-portrait-wrap">
       <canvas id="dialogue-portrait" width="48" height="48"></canvas>
     </div>
-    <div>
-      <div id="dialogue-npc-name">NPC</div>
+    <div style="flex:1">
+      <div style="display:flex;align-items:center;gap:6px">
+        <div id="dialogue-npc-name">NPC</div>
+        <div id="dialogue-speaking-dot"></div>
+      </div>
       <div id="dialogue-npc-tag">Villager</div>
     </div>
   </div>
@@ -321,12 +353,16 @@ html, body { background: #1a2a1a; overflow: hidden; font-family: 'Georgia', seri
     <div id="dialogue-translation" title="Click to reveal translation">(tap to translate)</div>
     <div id="dialogue-input-row">
       <input id="dialogue-input" type="text" placeholder="Respond in Spanish...">
+      <button id="dialogue-mic" onclick="lqMicToggle()" title="Speak your reply">🎙️</button>
       <button id="dialogue-send" onclick="sendDialogue()">Send</button>
     </div>
   </div>
   <div id="dialogue-footer">
     <span id="dialogue-hint">Enter to send · Esc to close</span>
-    <button id="dialogue-close" onclick="closeDialogue()">[ CLOSE ]</button>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button id="dialogue-mute" onclick="lqToggleMute()" title="Toggle NPC voice">🔊</button>
+      <button id="dialogue-close" onclick="closeDialogue()">[ CLOSE ]</button>
+    </div>
   </div>
 </div>
 
@@ -1432,6 +1468,9 @@ class GameScene extends Phaser.Scene {
 
     if (!dialogueHistory[npcDef.id]) dialogueHistory[npcDef.id] = [];
 
+    // Assign voice to this NPC (stored on npcDef so sendDialogue can use it)
+    if (!npcDef._voiceId) npcDef._voiceId = lqPickVoice(npcDef);
+
     // Render NPC portrait into the small canvas
     renderNPCPortrait(spriteType || npcDef.sprite, npcDef.id);
 
@@ -1449,6 +1488,10 @@ class GameScene extends Phaser.Scene {
     document.getElementById('dialogue-input').value = '';
     document.getElementById('dialogue-box').style.display = 'block';
     setTimeout(() => document.getElementById('dialogue-input').focus(), 80);
+
+    // Init voice (loads keys, shows mic/mute buttons) + speak greeting
+    lqVoiceInit();
+    lqSpeak(npcDef.greeting, npcDef._voiceId);
   }
 }
 
@@ -2624,6 +2667,247 @@ ${JSON.stringify(SAMPLE_WORLD, null, 2)}
   document.querySelector('#game-container canvas')?.focus();
 }
 
+// ═══════════════════════════════════════════════════════════
+//  NPC VOICE SYSTEM — Groq Whisper STT + ElevenLabs TTS
+//  Keys fetched from Supabase app_secrets (same as languages.html)
+// ═══════════════════════════════════════════════════════════
+
+// ── ElevenLabs voice roster ──
+// Voices available on all plans (pre-made voices)
+const LQ_VOICES = {
+  // Female voices
+  female_warm:       'EXAVITQu4vr4xnSDxMaL', // Sarah  — warm, clear, multilingual
+  female_professional: 'XrExE9yKIg1WjnnlVkGX', // Matilda — professional, clear
+  female_soft:       'pFZP5JQG7iQjIQuC4Bku', // Lily   — gentle, soft
+  female_young:      'jsCqWAovK2LkecY7zXl4', // Freya  — young, expressive
+  // Male voices
+  male_deep:         'onwK4e9ZLuTAKqWW03F9', // Daniel — deep, authoritative
+  male_young:        'TX3LPaxmHKxFdv7VOQHJ', // Liam   — young, energetic
+  male_old:          'nPczCjzI2devNBz1zQrb', // Brian  — older, wise
+  male_gruff:        'N2lVS1w4EtoT3dr4eOWO', // Callum — raspy, character voice
+};
+
+// Derive ElevenLabs voice from NPC personality + name
+function lqPickVoice(npc) {
+  const p = ((npc.personality || '') + ' ' + (npc.ai_context || '') + ' ' + (npc.role || '')).toLowerCase();
+  const name = (npc.name || '').toLowerCase();
+
+  // Gender detection from personality keywords and common names
+  const femaleNames = ['maria','sofia','isabella','elena','ana','carmen','rosa','lucia','gabriela','fatima','amara','yuki','sakura'];
+  const femaleWords = ['woman','she','her','señora','madre','abuela','hermana','girl','female','widow','priestess','witch','healer','nurse'];
+  const maleWords   = ['man','he','his','señor','padre','abuelo','hermano','boy','male','soldier','guard','knight','farmer','merchant','elder','blacksmith','sailor'];
+
+  const looksF = femaleWords.some(w => p.includes(w)) || femaleNames.some(n => name.startsWith(n));
+  const looksM = maleWords.some(w => p.includes(w));
+  const isFemale = looksF && !looksM;
+  const isMale   = looksM && !looksF;
+
+  if (isFemale) {
+    if (/elder|wise|old|mature|grandmother|abuela/.test(p))   return LQ_VOICES.female_professional;
+    if (/young|child|girl|bright|cheerful|excited/.test(p))   return LQ_VOICES.female_young;
+    if (/quiet|soft|gentle|shy|timid|sad/.test(p))            return LQ_VOICES.female_soft;
+    return LQ_VOICES.female_warm; // default female
+  }
+  if (isMale) {
+    if (/elder|old|wise|grandfather|abuelo|ancient/.test(p))  return LQ_VOICES.male_old;
+    if (/guard|soldier|knight|warrior|rough|gruff|stern/.test(p)) return LQ_VOICES.male_gruff;
+    if (/young|boy|child|energetic|excited|merchant|trader/.test(p)) return LQ_VOICES.male_young;
+    return LQ_VOICES.male_deep; // default male
+  }
+  // Ambiguous — alternate based on NPC id hash for variety
+  const hash = (npc.id || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+  const pool = Object.values(LQ_VOICES);
+  return pool[hash % pool.length];
+}
+
+// ── Keys ──
+let lqVoiceKeys = {};  // { elevenlabs_api_key, groq_api_key }
+let lqVoiceKeysLoaded = false;
+let lqVoiceMuted = false;
+
+async function lqLoadVoiceKeys() {
+  if (lqVoiceKeysLoaded) return;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/app_secrets?select=key,value`, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
+    });
+    if (!res.ok) return;
+    const rows = await res.json();
+    for (const r of rows) lqVoiceKeys[r.key] = r.value;
+    lqVoiceKeysLoaded = true;
+  } catch(e) { console.warn('lqLoadVoiceKeys failed', e); }
+}
+
+// ── Mute toggle ──
+function lqToggleMute() {
+  lqVoiceMuted = !lqVoiceMuted;
+  const btn = document.getElementById('dialogue-mute');
+  if (btn) btn.textContent = lqVoiceMuted ? '🔇' : '🔊';
+  if (lqVoiceMuted) lqStopSpeaking();
+}
+
+// ── TTS state ──
+let lqTTSSource = null;
+let lqTTSCtx = null;
+let lqIsSpeaking = false;
+
+function lqStopSpeaking() {
+  if (lqTTSSource) { try { lqTTSSource.stop(); } catch(e) {} lqTTSSource = null; }
+  if (lqTTSCtx)   { try { lqTTSCtx.close();  } catch(e) {} lqTTSCtx = null; }
+  lqIsSpeaking = false;
+  const dot = document.getElementById('dialogue-speaking-dot');
+  if (dot) dot.style.display = 'none';
+}
+
+// Speak text using ElevenLabs with a specific voice ID
+async function lqSpeak(text, voiceId) {
+  if (lqVoiceMuted) return;
+  const key = lqVoiceKeys.elevenlabs_api_key;
+  if (!key || key === 'ENTER_YOUR_KEY') return;
+
+  lqStopSpeaking();
+
+  const dot = document.getElementById('dialogue-speaking-dot');
+  if (dot) dot.style.display = 'inline-block';
+
+  try {
+    const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream`, {
+      method: 'POST',
+      headers: { 'xi-api-key': key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text,
+        model_id: 'eleven_turbo_v2_5',
+        voice_settings: { stability: 0.55, similarity_boost: 0.80, speed: 1.0 },
+      }),
+    });
+    if (!res.ok) { console.warn('ElevenLabs TTS error', res.status); lqStopSpeaking(); return; }
+
+    const buf = await res.arrayBuffer();
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const decoded  = await audioCtx.decodeAudioData(buf);
+    const source   = audioCtx.createBufferSource();
+    source.buffer  = decoded;
+    source.connect(audioCtx.destination);
+
+    lqTTSCtx    = audioCtx;
+    lqTTSSource = source;
+    lqIsSpeaking = true;
+
+    source.start();
+    source.onended = () => lqStopSpeaking();
+  } catch(e) {
+    console.warn('lqSpeak error', e);
+    lqStopSpeaking();
+  }
+}
+
+// ── STT state ──
+let lqMicRecorder = null;
+let lqMicChunks   = [];
+let lqMicStream   = null;
+let lqMicActive   = false;
+
+async function lqMicToggle() {
+  if (lqMicActive) {
+    lqMicStop();
+  } else {
+    await lqMicStart();
+  }
+}
+
+async function lqMicStart() {
+  if (lqMicActive) return;
+  lqStopSpeaking(); // interrupt NPC if speaking
+
+  const micBtn = document.getElementById('dialogue-mic');
+
+  try {
+    lqMicStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch(e) {
+    showStatus('Microphone access denied', 3000);
+    return;
+  }
+
+  lqMicChunks = [];
+  const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/ogg';
+  lqMicRecorder = new MediaRecorder(lqMicStream, { mimeType });
+  lqMicRecorder.ondataavailable = e => { if (e.data.size > 0) lqMicChunks.push(e.data); };
+  lqMicRecorder.start(100);
+  lqMicActive = true;
+
+  if (micBtn) { micBtn.classList.add('recording'); micBtn.textContent = '⏹️'; }
+  showStatus('🔴 Recording… tap again to send', 15000);
+}
+
+function lqMicStop() {
+  if (!lqMicActive || !lqMicRecorder) return;
+  lqMicActive = false;
+  lqMicRecorder.stop();
+  if (lqMicStream) lqMicStream.getTracks().forEach(t => t.stop());
+
+  const micBtn = document.getElementById('dialogue-mic');
+  if (micBtn) { micBtn.classList.remove('recording'); micBtn.classList.add('loading'); micBtn.textContent = '⏳'; }
+
+  lqMicRecorder.onstop = async () => {
+    const blob = new Blob(lqMicChunks, { type: 'audio/webm' });
+    showStatus('Transcribing…', 5000);
+    try {
+      const text = await lqTranscribe(blob);
+      if (text && text.trim().length > 1) {
+        const input = document.getElementById('dialogue-input');
+        if (input) {
+          input.value = text.trim();
+          input.focus();
+        }
+        // Auto-send after a short delay so user can see what was transcribed
+        setTimeout(() => sendDialogue(), 400);
+      } else {
+        showStatus('Didn\'t catch that — try again', 3000);
+      }
+    } catch(e) {
+      showStatus('Transcription failed — check Groq key', 3000);
+      console.warn('lqTranscribe error', e);
+    }
+    if (micBtn) { micBtn.classList.remove('loading'); micBtn.textContent = '🎙️'; }
+  };
+}
+
+async function lqTranscribe(blob) {
+  await lqLoadVoiceKeys();
+  const groqKey = lqVoiceKeys.groq_api_key;
+  if (!groqKey) throw new Error('No Groq key');
+
+  // Detect language from world setting
+  const world = currentWorld || SAMPLE_WORLD;
+  const lang  = (world?.world?.language || 'es').split('-')[0];
+
+  const form = new FormData();
+  form.append('file', blob, 'audio.webm');
+  form.append('model', 'whisper-large-v3-turbo');
+  form.append('language', lang);
+  form.append('response_format', 'json');
+
+  const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${groqKey}` },
+    body: form,
+  });
+  if (!res.ok) throw new Error(`Groq STT ${res.status}`);
+  const j = await res.json();
+  return j.text;
+}
+
+// Called by openNPCDialogue and openIndoorNPCDialogue — kick off key load eagerly
+function lqVoiceInit() {
+  lqLoadVoiceKeys(); // fire-and-forget — ready before first NPC reply
+  // Show mic button and mute button
+  const micBtn  = document.getElementById('dialogue-mic');
+  const muteBtn = document.getElementById('dialogue-mute');
+  if (micBtn)  micBtn.style.display  = 'inline-flex';
+  if (muteBtn) muteBtn.style.display = 'inline-block';
+  if (muteBtn) muteBtn.textContent   = lqVoiceMuted ? '🔇' : '🔊';
+}
+
 // ─────────────────────────────────────────────────────────────
 //  NPC DIALOGUE
 // ─────────────────────────────────────────────────────────────
@@ -2690,6 +2974,9 @@ Rules:
     textEl.innerHTML = highlightVocab(reply);
     transEl.textContent = '(tap to translate)';
 
+    // ── Speak NPC reply via ElevenLabs ──
+    if (currentNPC?._voiceId) lqSpeak(reply, currentNPC._voiceId);
+
   } catch (err) {
     textEl.textContent = '(Connection error — check API key)';
     transEl.textContent = '';
@@ -2702,6 +2989,8 @@ Rules:
 }
 
 function closeDialogue() {
+  lqStopSpeaking();
+  if (lqMicActive) lqMicStop();
   document.getElementById('dialogue-box').style.display = 'none';
   currentNPC = null;
   lastNPCReply = '';
@@ -2728,6 +3017,9 @@ function openIndoorNPCDialogue(npc) {
   currentNPC = npcDef;
   if (!dialogueHistory[npcId]) dialogueHistory[npcId] = [];
 
+  // Assign voice
+  if (!npcDef._voiceId) npcDef._voiceId = lqPickVoice(npcDef);
+
   // Render portrait
   renderNPCPortrait('player', npcId);
 
@@ -2742,6 +3034,10 @@ function openIndoorNPCDialogue(npc) {
   document.getElementById('dialogue-input').value = '';
   document.getElementById('dialogue-box').style.display = 'block';
   setTimeout(() => document.getElementById('dialogue-input').focus(), 80);
+
+  // Init voice + speak greeting
+  lqVoiceInit();
+  lqSpeak(npcDef.greeting, npcDef._voiceId);
 }
 
 // Translation reveal (click handler on translation element)
