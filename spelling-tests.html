@@ -627,11 +627,13 @@ function pickWords(count, difficulty) {
 const DB_PROXY_URL = 'https://kxsuzgpnvtepsyhkezin.supabase.co/functions/v1/db-proxy';
 const KEY_SESSION  = 'st_claude_key';
 let   CLAUDE_API_KEY = '';
+let   _keyLoadPromise = null;  // deduplicate concurrent fetches
 
-async function loadClaudeKey() {
-  const cached = sessionStorage.getItem(KEY_SESSION);
-  if (cached) { CLAUDE_API_KEY = cached; return; }
-  try {
+function loadClaudeKey() {
+  if (_keyLoadPromise) return _keyLoadPromise;
+  _keyLoadPromise = (async () => {
+    const cached = sessionStorage.getItem(KEY_SESSION);
+    if (cached) { CLAUDE_API_KEY = cached; return; }
     const r = await fetch(DB_PROXY_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -642,18 +644,20 @@ async function loadClaudeKey() {
         select: 'value'
       })
     });
+    if (!r.ok) throw new Error(`db-proxy returned ${r.status}`);
     const data = await r.json();
     const row = Array.isArray(data) ? data[0] : (data?.data?.[0]);
-    if (row && row.value) {
-      CLAUDE_API_KEY = row.value;
-      sessionStorage.setItem(KEY_SESSION, CLAUDE_API_KEY);
-    }
-  } catch (e) {
-    console.warn('Could not load Claude key from db-proxy:', e);
-  }
+    if (!row || !row.value) throw new Error('anthropic_api_key not found in app_secrets');
+    CLAUDE_API_KEY = row.value;
+    sessionStorage.setItem(KEY_SESSION, CLAUDE_API_KEY);
+  })().catch(e => {
+    console.error('loadClaudeKey failed:', e);
+    _keyLoadPromise = null; // allow retry on next generate click
+  });
+  return _keyLoadPromise;
 }
 
-// Load key on page start
+// Kick off key load immediately on page start
 loadClaudeKey();
 
 async function callClaude(words, difficulty, count) {
