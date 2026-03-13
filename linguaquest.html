@@ -2692,29 +2692,36 @@ function lqPickVoice(npc) {
   const p = ((npc.personality || '') + ' ' + (npc.ai_context || '') + ' ' + (npc.role || '')).toLowerCase();
   const name = (npc.name || '').toLowerCase();
 
-  // Gender detection from personality keywords and common names
-  const femaleNames = ['maria','sofia','isabella','elena','ana','carmen','rosa','lucia','gabriela','fatima','amara','yuki','sakura'];
-  const femaleWords = ['woman','she','her','señora','madre','abuela','hermana','girl','female','widow','priestess','witch','healer','nurse'];
-  const maleWords   = ['man','he','his','señor','padre','abuelo','hermano','boy','male','soldier','guard','knight','farmer','merchant','elder','blacksmith','sailor'];
+  // Word-boundary helper — avoids "man" matching "woman", "he" matching "she", etc.
+  const hasWord = (text, word) => new RegExp('\\b' + word + '\\b').test(text);
 
-  const looksF = femaleWords.some(w => p.includes(w)) || femaleNames.some(n => name.startsWith(n));
-  const looksM = maleWords.some(w => p.includes(w));
+  // Gender detection — explicit words only (word-boundary matched)
+  const femaleNames = ['maria','sofia','isabella','elena','ana','carmen','rosa','lucia','gabriela',
+                       'fatima','amara','yuki','sakura','abuela','grandma'];
+  const femaleWords = ['woman','she','señora','madre','abuela','hermana','girl','female',
+                       'widow','priestess','witch','healer','nurse','grandmother','sister','lady'];
+  const maleWords   = ['man','he','señor','padre','abuelo','hermano','boy','male','soldier',
+                       'guard','knight','farmer','merchant','blacksmith','sailor','grandfather',
+                       'brother','sir','mister','lord'];
+
+  const looksF = femaleWords.some(w => hasWord(p, w)) || femaleNames.some(n => name.startsWith(n));
+  const looksM = maleWords.some(w => hasWord(p, w));
   const isFemale = looksF && !looksM;
   const isMale   = looksM && !looksF;
 
   if (isFemale) {
-    if (/elder|wise|old|mature|grandmother|abuela/.test(p))   return LQ_VOICES.female_professional;
-    if (/young|child|girl|bright|cheerful|excited/.test(p))   return LQ_VOICES.female_young;
-    if (/quiet|soft|gentle|shy|timid|sad/.test(p))            return LQ_VOICES.female_soft;
+    if (/\b(elder|wise|old|mature|grandmother|abuela|ancient)\b/.test(p)) return LQ_VOICES.female_professional;
+    if (/\b(young|child|girl|bright|cheerful|excited|playful)\b/.test(p)) return LQ_VOICES.female_young;
+    if (/\b(quiet|soft|gentle|shy|timid|sad|melancholy)\b/.test(p))       return LQ_VOICES.female_soft;
     return LQ_VOICES.female_warm; // default female
   }
   if (isMale) {
-    if (/elder|old|wise|grandfather|abuelo|ancient/.test(p))  return LQ_VOICES.male_old;
-    if (/guard|soldier|knight|warrior|rough|gruff|stern/.test(p)) return LQ_VOICES.male_gruff;
-    if (/young|boy|child|energetic|excited|merchant|trader/.test(p)) return LQ_VOICES.male_young;
+    if (/\b(elder|old|wise|grandfather|abuelo|ancient|aged)\b/.test(p))   return LQ_VOICES.male_old;
+    if (/\b(guard|soldier|knight|warrior|rough|gruff|stern|angry)\b/.test(p)) return LQ_VOICES.male_gruff;
+    if (/\b(young|boy|child|energetic|excited|merchant|trader|vendor)\b/.test(p)) return LQ_VOICES.male_young;
     return LQ_VOICES.male_deep; // default male
   }
-  // Ambiguous — alternate based on NPC id hash for variety
+  // Ambiguous — hash-based variety so different NPCs still get different voices
   const hash = (npc.id || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0);
   const pool = Object.values(LQ_VOICES);
   return pool[hash % pool.length];
