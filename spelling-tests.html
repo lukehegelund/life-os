@@ -623,27 +623,33 @@ function pickWords(count, difficulty) {
 }
 
 /* ── Call Claude API ── */
-// API key fetched from Supabase app_secrets at runtime — never hardcoded
-const SUPABASE_URL  = 'https://kxsuzgpnvtepsyhkezin.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4c3V6Z3BudnRlcHN5aGtlemluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3Nzc1MDAsImV4cCI6MjA4NzM1MzUwMH0.oKtpiH63heyK-wJ87ZRvkhUzRqy6NT6Z2XWF1xjbtxA';
-const KEY_SESSION   = 'st_claude_key';
+// API key fetched via db-proxy (service_role) at runtime — never hardcoded
+const DB_PROXY_URL = 'https://kxsuzgpnvtepsyhkezin.supabase.co/functions/v1/db-proxy';
+const KEY_SESSION  = 'st_claude_key';
 let   CLAUDE_API_KEY = '';
 
 async function loadClaudeKey() {
   const cached = sessionStorage.getItem(KEY_SESSION);
   if (cached) { CLAUDE_API_KEY = cached; return; }
   try {
-    const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/app_secrets?key=eq.anthropic_api_key&select=value`,
-      { headers: { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}` } }
-    );
+    const r = await fetch(DB_PROXY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        table: 'app_secrets',
+        op: 'select',
+        filters: { eq: { key: 'anthropic_api_key' } },
+        select: 'value'
+      })
+    });
     const data = await r.json();
-    if (data && data[0] && data[0].value) {
-      CLAUDE_API_KEY = data[0].value;
+    const row = Array.isArray(data) ? data[0] : (data?.data?.[0]);
+    if (row && row.value) {
+      CLAUDE_API_KEY = row.value;
       sessionStorage.setItem(KEY_SESSION, CLAUDE_API_KEY);
     }
   } catch (e) {
-    console.warn('Could not load Claude key from Supabase:', e);
+    console.warn('Could not load Claude key from db-proxy:', e);
   }
 }
 
