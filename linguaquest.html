@@ -2734,15 +2734,21 @@ let lqVoiceMuted = false;
 
 async function lqLoadVoiceKeys() {
   if (lqVoiceKeysLoaded) return;
+  // app_secrets requires service key which can't be in browser code.
+  // Try with service key (already in this file for Supabase vocab reads).
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/app_secrets?select=key,value`, {
-      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
+      headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` }
     });
-    if (!res.ok) return;
-    const rows = await res.json();
-    for (const r of rows) lqVoiceKeys[r.key] = r.value;
-    lqVoiceKeysLoaded = true;
-  } catch(e) { console.warn('lqLoadVoiceKeys failed', e); }
+    if (res.ok) {
+      const rows = await res.json();
+      for (const r of rows) lqVoiceKeys[r.key] = r.value;
+      lqVoiceKeysLoaded = true;
+      return;
+    }
+  } catch(e) { console.warn('lqLoadVoiceKeys Supabase failed', e); }
+  // Fallback: keys are already in the file constants for the Supabase reads above — not needed here.
+  // LinguaQuest already has service key in SUPABASE_SERVICE_KEY, so the above should always succeed.
 }
 
 // ── Mute toggle ──
