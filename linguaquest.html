@@ -38,19 +38,6 @@ html, body { background: #1a2a1a; overflow: hidden; font-family: 'Georgia', seri
   image-rendering: auto;
 }
 #menu p  { color: #4a7a30; font-size: 12px; letter-spacing: 4px; text-transform: uppercase; }
-#key-input {
-  padding: 8px 14px;
-  background: rgba(255,255,255,.04);
-  border: 1px solid #2a5018;
-  color: #90d050;
-  font-family: monospace;
-  font-size: 13px;
-  border-radius: 3px;
-  width: 320px;
-  outline: none;
-  display: none;
-}
-#key-input.visible { display: block; }
 #menu-start {
   margin-top: 28px; padding: 13px 52px; font-family: Georgia, serif; font-size: 16px;
   background: linear-gradient(180deg, #2a5010, #1a3408); border: 2px solid #5a9030;
@@ -312,7 +299,6 @@ html, body { background: #1a2a1a; overflow: hidden; font-family: 'Georgia', seri
   <h1>LinguaQuest</h1>
   <p>An AI-Powered Language RPG</p>
   <div id="loading-menu">Loading configuration...</div>
-  <input id="key-input" type="password" placeholder="Claude API key (sk-ant-...)">
   <div id="autogen-toggle-row">
     <input type="checkbox" id="autogen-checkbox" checked>
     <label for="autogen-checkbox">Auto-generate world as you explore</label>
@@ -422,11 +408,14 @@ const FRAME_H      = 32;   // player/NPC sprite frame height
 const SPRITE_SCALE = 1.5;
 
 // ── SUPABASE ──────────────────────────────────────────────────
-const SUPABASE_URL         = 'https://kxsuzgpnvtepsyhkezin.supabase.co';
-const SUPABASE_ANON_KEY    = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4c3V6Z3BudnRlcHN5aGtlemluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzczNjI5ODUsImV4cCI6MjA1MjkzODk4NX0.Jq3zOz9EhJJiqnkHBPDf8YrNmrHjWfJDKJXdIXBiAHQ';
-const SUPABASE_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4c3V6Z3BudnRlcHN5aGtlemluIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczNzM2Mjk4NSwiZXhwIjoyMDUyOTM4OTg1fQ.GqhVHHbfAQHMuDjEA4bHI4IQOL9QMuSDwc2BQBM3Wak';
-const CLAUDE_KEY_STORE = 'lq_claude_key';
-let CLAUDE_KEY = '';
+const SUPABASE_URL      = 'https://kxsuzgpnvtepsyhkezin.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4c3V6Z3BudnRlcHN5aGtlemluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3Nzc1MDAsImV4cCI6MjA4NzM1MzUwMH0.oKtpiH63heyK-wJ87ZRvkhUzRqy6NT6Z2XWF1xjbtxA';
+// All API keys loaded via db-proxy Edge Function — service key never exposed in browser
+const DB_PROXY_URL = `${SUPABASE_URL}/functions/v1/db-proxy`;
+const LQ_KEY_SESSION = 'lq_keys_v1'; // sessionStorage cache key
+let CLAUDE_KEY      = '';  // anthropic_api_key
+let LQ_ELEVEN_KEY   = '';  // elevenlabs_api_key
+let LQ_GROQ_KEY     = '';  // groq_api_key
 let srsVocab   = [];   // [{word, translation, stage}]
 let AUTO_GEN   = localStorage.getItem('lq-autogen') !== 'false'; // default on
 
@@ -630,29 +619,45 @@ const WANDER_RADIUS = 2.0;   // tiles
 const WANDER_INTERVAL_MS = [2800, 6000];  // min/max ms between wander steps
 
 // ─────────────────────────────────────────────────────────────
-//  CONFIG LOAD (Supabase API key fetch)
+//  CONFIG LOAD — all keys via db-proxy (service key never in browser)
 // ─────────────────────────────────────────────────────────────
 async function loadConfig() {
-  const stored = sessionStorage.getItem(CLAUDE_KEY_STORE);
-  if (stored) { CLAUDE_KEY = stored; return; }
+  // Try session cache first (avoids a round-trip on every page reload)
+  const cached = sessionStorage.getItem(LQ_KEY_SESSION);
+  if (cached) {
+    try {
+      const keys = JSON.parse(cached);
+      CLAUDE_KEY    = keys.anthropic_api_key    || '';
+      LQ_ELEVEN_KEY = keys.elevenlabs_api_key   || '';
+      LQ_GROQ_KEY   = keys.groq_api_key         || '';
+      if (CLAUDE_KEY) return;
+    } catch(e) { sessionStorage.removeItem(LQ_KEY_SESSION); }
+  }
 
-  document.getElementById('loading-menu').style.display = 'block';
+  const statusEl = document.getElementById('loading-menu');
+  if (statusEl) statusEl.style.display = 'block';
+
   try {
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/app_secrets?key=eq.anthropic_api_key&select=value`,
-      { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }
-    );
-    const data = await res.json();
-    if (data?.[0]?.value) {
-      CLAUDE_KEY = data[0].value;
-      sessionStorage.setItem(CLAUDE_KEY_STORE, CLAUDE_KEY);
-      document.getElementById('loading-menu').style.display = 'none';
-      return;
-    }
-  } catch(e) { /* fallthrough to manual input */ }
+    const res = await fetch(DB_PROXY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ table: 'app_secrets', op: 'select', select: 'key,value' })
+    });
+    const json = await res.json();
+    const rows = Array.isArray(json) ? json : (json?.data || []);
+    const map = {};
+    for (const r of rows) map[r.key] = r.value;
 
-  document.getElementById('loading-menu').style.display = 'none';
-  document.getElementById('key-input').classList.add('visible');
+    CLAUDE_KEY    = map.anthropic_api_key  || '';
+    LQ_ELEVEN_KEY = map.elevenlabs_api_key || '';
+    LQ_GROQ_KEY   = map.groq_api_key       || '';
+
+    if (CLAUDE_KEY) sessionStorage.setItem(LQ_KEY_SESSION, JSON.stringify(map));
+  } catch(e) {
+    console.warn('loadConfig failed:', e);
+  }
+
+  if (statusEl) statusEl.style.display = 'none';
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -1567,11 +1572,7 @@ function getLangName(code) {
 //  GAME INIT
 // ─────────────────────────────────────────────────────────────
 function startGame() {
-  if (!CLAUDE_KEY) {
-    const k = document.getElementById('key-input').value.trim();
-    if (k) { CLAUDE_KEY = k; sessionStorage.setItem(CLAUDE_KEY_STORE, k); }
-  }
-  if (!CLAUDE_KEY) { showStatus('Please enter your Claude API key', 3000); return; }
+  if (!CLAUDE_KEY) { showStatus('Loading keys — try again in a moment', 3000); loadConfig(); return; }
 
   // Save auto-gen preference
   AUTO_GEN = document.getElementById('autogen-checkbox').checked;
@@ -2727,28 +2728,15 @@ function lqPickVoice(npc) {
   return pool[hash % pool.length];
 }
 
-// ── Keys ──
-let lqVoiceKeys = {};  // { elevenlabs_api_key, groq_api_key }
-let lqVoiceKeysLoaded = false;
+// ── Voice key state ──
 let lqVoiceMuted = false;
 
+// Keys are loaded at startup via loadConfig() into LQ_ELEVEN_KEY / LQ_GROQ_KEY.
+// No separate fetch needed — just reference those globals.
 async function lqLoadVoiceKeys() {
-  if (lqVoiceKeysLoaded) return;
-  // app_secrets requires service key which can't be in browser code.
-  // Try with service key (already in this file for Supabase vocab reads).
-  try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/app_secrets?select=key,value`, {
-      headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` }
-    });
-    if (res.ok) {
-      const rows = await res.json();
-      for (const r of rows) lqVoiceKeys[r.key] = r.value;
-      lqVoiceKeysLoaded = true;
-      return;
-    }
-  } catch(e) { console.warn('lqLoadVoiceKeys Supabase failed', e); }
-  // Fallback: keys are already in the file constants for the Supabase reads above — not needed here.
-  // LinguaQuest already has service key in SUPABASE_SERVICE_KEY, so the above should always succeed.
+  // Keys already loaded by loadConfig() on page init.
+  // If somehow not loaded yet (race), wait for loadConfig to finish.
+  if (!LQ_ELEVEN_KEY || !LQ_GROQ_KEY) await loadConfig();
 }
 
 // ── Mute toggle ──
@@ -2775,8 +2763,8 @@ function lqStopSpeaking() {
 // Speak text using ElevenLabs with a specific voice ID
 async function lqSpeak(text, voiceId) {
   if (lqVoiceMuted) return;
-  const key = lqVoiceKeys.elevenlabs_api_key;
-  if (!key || key === 'ENTER_YOUR_KEY') return;
+  const key = LQ_ELEVEN_KEY;
+  if (!key) return;
 
   lqStopSpeaking();
 
@@ -2886,9 +2874,9 @@ function lqMicStop() {
 }
 
 async function lqTranscribe(blob) {
-  await lqLoadVoiceKeys();
-  const groqKey = lqVoiceKeys.groq_api_key;
-  if (!groqKey) throw new Error('No Groq key');
+  if (!LQ_GROQ_KEY) await loadConfig();
+  const groqKey = LQ_GROQ_KEY;
+  if (!groqKey) throw new Error('No Groq key — check app_secrets table');
 
   // Detect language from world setting
   const world = currentWorld || SAMPLE_WORLD;
@@ -2912,7 +2900,7 @@ async function lqTranscribe(blob) {
 
 // Called by openNPCDialogue and openIndoorNPCDialogue — kick off key load eagerly
 function lqVoiceInit() {
-  lqLoadVoiceKeys(); // fire-and-forget — ready before first NPC reply
+  // Keys already loaded by loadConfig() at startup — nothing to fetch
   // Show mic button and mute button
   const micBtn  = document.getElementById('dialogue-mic');
   const muteBtn = document.getElementById('dialogue-mute');
@@ -3092,7 +3080,7 @@ async function fetchSRSVocab() {
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/vocab_words?select=word,translation,stage&next_review=lte.${today}&order=stage.asc&limit=20`,
-      { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
+      { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
     );
     if (!res.ok) throw new Error();
     srsVocab = await res.json();
