@@ -2531,15 +2531,15 @@ function _drawLightDisk(sx, sy, radius, tint, darkVal, steps) {
     const ease = Math.pow(s, 1.5);
 
     let rv, gv, bv;
-    if (ease < 0.6) {
-      // Phase A: darkVal → tint (outer glow zone)
-      const p = ease / 0.6;
+    if (ease < 0.35) {
+      // Phase A: darkVal → tint (outer glow zone, compact)
+      const p = ease / 0.35;
       rv = Math.round(darkVal + p * (tr - darkVal));
       gv = Math.round(darkVal + p * (tg - darkVal));
       bv = Math.round(darkVal + p * (tb - darkVal));
     } else {
-      // Phase B: tint → white (inner hotspot brightens to full)
-      const p = (ease - 0.6) / 0.4;
+      // Phase B: tint → white (inner hotspot, most of the disk)
+      const p = (ease - 0.35) / 0.65;
       rv = Math.round(tr  + p * (255 - tr));
       gv = Math.round(tg  + p * (255 - tg));
       bv = Math.round(tb  + p * (255 - tb));
@@ -2631,15 +2631,15 @@ function _drawVisibilityPoly(sx, sy, pts, color, darkVal) {
     const scale = 1.0 - t;
 
     let rv, gv, bv;
-    if (ease < 0.55) {
-      // Phase A: darkVal → color (outer glow)
-      const p2 = ease / 0.55;
+    if (ease < 0.35) {
+      // Phase A: darkVal → color (compact outer glow)
+      const p2 = ease / 0.35;
       rv = Math.round(darkVal + p2 * (cr - darkVal));
       gv = Math.round(darkVal + p2 * (cg - darkVal));
       bv = Math.round(darkVal + p2 * (cb - darkVal));
     } else {
-      // Phase B: color → white (inner hotspot)
-      const p2 = (ease - 0.55) / 0.45;
+      // Phase B: color → white (inner hotspot, most of the polygon)
+      const p2 = (ease - 0.35) / 0.65;
       rv = Math.round(cr + p2 * (255 - cr));
       gv = Math.round(cg + p2 * (255 - cg));
       bv = Math.round(cb + p2 * (255 - cb));
@@ -2752,9 +2752,9 @@ function _updateLighting(renderer, playerScreenX, playerScreenY, ambientAlpha, i
     }
     const tinted = _surfaceTintColor(lt.color, lt.wx, lt.wy);
     _drawLightDisk(sx, sy, r, tinted, darkVal, 18);
-    // Bright hotspot
-    _lightGfx.beginFill(tinted, 1);
-    _lightGfx.drawCircle(sx, sy, r * 0.1);
+    // Pure white hotspot — MULTIPLY white = scene unchanged (fully lit at source)
+    _lightGfx.beginFill(0xFFFFFF, 1);
+    _lightGfx.drawCircle(sx, sy, r * 0.12);
     _lightGfx.endFill();
   }
 
