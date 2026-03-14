@@ -2536,15 +2536,14 @@ function _drawLightDisk(sx, sy, radius, tint, nightAlpha, steps) {
   for (let i = 0; i <= N; i++) {
     const t    = i / N;              // 0=edge, 1=centre
     const s    = t * t * (3 - 2*t); // smoothstep
-    const ease = Math.pow(s, 1.4);
+    const ease = s; // linear-ish for smooth gradient
 
     // Alpha: nightAlpha at edge → 0 at centre (transparent = lit)
-    const alpha = nightAlpha * (1 - ease);
+    // pow(0.55) = fast initial falloff = brighter-feeling centre area
+    const alpha = nightAlpha * Math.pow(1 - ease, 0.55);
 
-    // Colour: pure tint at mid-ring (ease≈0.5), black at extremes.
-    // This puts warm colour where alpha is mid-range (~50% dark),
-    // creating a visible glowing fringe at the light boundary.
-    const colEase = Math.pow(4 * ease * (1 - ease), 1.2); // peaks at ease=0.5
+    // Colour: pure tint at mid-ring, black at extremes.
+    const colEase = Math.pow(4 * ease * (1 - ease), 1.0); // peaks at ease=0.5
     const rv = Math.round(tr * colEase);
     const gv = Math.round(tg * colEase);
     const bv = Math.round(tb * colEase);
@@ -2656,14 +2655,14 @@ function _drawVisibilityPoly(sx, sy, pts, color, nightAlpha) {
   for (let p = 0; p <= PASSES; p++) {
     const t    = p / PASSES;              // 0=outermost, 1=centre
     const s    = t * t * (3 - 2 * t);    // smoothstep
-    const ease = Math.pow(s, 1.3);
+    const ease = s;
     const scale = 1.0 - t;               // polygon shrinks toward centre
 
-    // Alpha: nightAlpha at edge → 0 at centre
-    const alpha = nightAlpha * (1 - ease);
+    // Alpha: nightAlpha at edge → 0 at centre (fast falloff = bright centre)
+    const alpha = nightAlpha * Math.pow(1 - ease, 0.55);
 
-    // Colour tint peaks at mid-ring (ease≈0.5) where alpha is ~50% dark
-    const colEase = Math.pow(4 * ease * (1 - ease), 1.2);
+    // Colour tint peaks at mid-ring
+    const colEase = Math.pow(4 * ease * (1 - ease), 1.0);
     const rv = Math.round(cr * colEase);
     const gv = Math.round(cg * colEase);
     const bv = Math.round(cb * colEase);
