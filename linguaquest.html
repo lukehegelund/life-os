@@ -2184,12 +2184,18 @@ class GameScene extends Phaser.Scene {
           const hb = ((b[0]+chunkX*1000)*2654435761 + (b[1]+chunkY*1000)*2246822519) >>> 0;
           return ha - hb;
         });
-        const animalCount = Math.min(5, Math.floor(spawnTiles.length * 0.03));
+        const animalCount = Math.min(2, Math.floor(spawnTiles.length * 0.008));
+        // Use a chunk-seeded shuffle so each chunk gets a different mix of animal types
+        const shuffledTypes = [...animalTypes].sort((a, b) => {
+          const ha = ((chunkX * 31337 + chunkY * 92821 + animalTypes.indexOf(a)) * 2654435761) >>> 0;
+          const hb = ((chunkX * 31337 + chunkY * 92821 + animalTypes.indexOf(b)) * 2654435761) >>> 0;
+          return ha - hb;
+        });
         for (let i = 0; i < animalCount; i++) {
           const [ac, ar] = spawnTiles[i];
           const ax = offsetX + ac * TILE_SIZE + TILE_SIZE / 2;
           const ay = offsetY + ar * TILE_SIZE + TILE_SIZE / 2;
-          const aType = animalTypes[i % animalTypes.length];
+          const aType = shuffledTypes[i % shuffledTypes.length];
           if (!this.textures.exists(aType.key)) continue;
           const absRow = chunkY * CHUNK_ROWS + ar + 10000;
 
