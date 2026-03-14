@@ -476,8 +476,10 @@ let lastNPCReply = '';   // for translation reveal
 const CHUNK_COLS = 22;  // tiles per chunk (width)
 const CHUNK_ROWS = 16;  // tiles per chunk (height)
 const chunks = new Map();  // key: "cx,cy" -> { worldDef, gameObjects: [], npcs: [], loaded: bool }
-const chunkGenQueue = [];  // queue of {cx,cy} to generate
-let chunkGenerating = false;  // true while an API call is in flight
+const chunkGenQueue = [];  // queue of {cx,cy,label,priority} to generate
+let chunkGenInFlight = 0;  // number of concurrent API calls in progress
+const CHUNK_GEN_CONCURRENCY = 2; // run up to 2 chunk calls at once
+const CHUNK_GEN_DELAY_MS = 300;  // ms between starting each parallel slot
 let currentChunkX = 0;   // which chunk the player is currently in
 let currentChunkY = 0;
 let worldTheme = '';     // the original prompt, used to generate coherent neighbor chunks
@@ -2383,15 +2385,21 @@ class GameScene extends Phaser.Scene {
     const pRow = Math.floor(this.player.y / TILE_SIZE);
     this.playerSprite.setDepth(pRow * 10 + 8);
 
-    // Player animations
+    // Player animations + direction tracking for chunk pre-gen
     const moving = (vx !== 0 || vy !== 0);
     if (moving) {
+      const prevFacing = this.playerFacing;
       if (Math.abs(vx) > Math.abs(vy)) {
         if (vx < 0) { this._safePlay(this.playerSprite,'player_walk_left',true);  this.playerFacing='left'; }
         else         { this._safePlay(this.playerSprite,'player_walk_right',true); this.playerFacing='right'; }
       } else {
         if (vy < 0) { this._safePlay(this.playerSprite,'player_walk_up',true);    this.playerFacing='up'; }
         else         { this._safePlay(this.playerSprite,'player_walk_down',true);  this.playerFacing='down'; }
+      }
+      // When direction changes, re-sort the queue so new lead chunk gets priority
+      if (this.playerFacing !== prevFacing && chunkGenQueue.length > 0) {
+        chunkGenQueue.forEach(q => { q.priority = _chunkPriority(q.cx, q.cy); });
+        chunkGenQueue.sort((a, b) => a.priority - b.priority);
       }
     } else if (this.playerMoving) {
       this._safePlay(this.playerSprite, `player_idle_${this.playerFacing}`, true);
@@ -3446,55 +3454,106 @@ function unbindIndoorKeys() {
 // ─────────────────────────────────────────────────────────────
 //  CHUNK QUEUE — queues neighboring chunks for generation
 // ─────────────────────────────────────────────────────────────
+
+// Priority scores: lower number = generated first.
+// Direct neighbor in movement direction = 0 (highest priority)
+// Direct cardinal neighbor = 1
+// Diagonal neighbor = 2
+// Look-ahead chunk (2 steps ahead) = 1
+function _chunkPriority(nx, ny) {
+  const facing = gameScene?.playerFacing || 'down';
+  const facingDx = { right:1, left:-1, up:0, down:0 }[facing] ?? 0;
+  const facingDy = { right:0, left:0, up:-1, down:1 }[facing] ?? 0;
+  const dx = nx - currentChunkX;
+  const dy = ny - currentChunkY;
+  // Chunk directly ahead in movement direction gets highest priority
+  if (dx === facingDx && dy === facingDy) return 0;
+  if (dx === facingDx * 2 && dy === facingDy * 2) return 1; // look-ahead
+  // Cardinal neighbors ahead of player
+  const dot = dx * facingDx + dy * facingDy;
+  if (dot > 0) return 1;
+  // Side neighbors
+  if (dot === 0) return 2;
+  // Chunks behind player — lowest priority
+  return 3;
+}
+
 function queueSurroundingChunks(cx, cy) {
+  const toQueue = [];
   for (const dir of NEIGHBOR_DIRS) {
     const nx = cx + dir.dx;
     const ny = cy + dir.dy;
     const key = `${nx},${ny}`;
-    // Skip if already loaded or already in queue
     if (chunks.has(key)) continue;
     if (chunkGenQueue.some(q => q.cx === nx && q.cy === ny)) continue;
-    chunkGenQueue.push({ cx: nx, cy: ny, label: dir.label });
-    // Mark as queued (not loaded) so we don't re-queue
+    toQueue.push({ cx: nx, cy: ny, label: dir.label, priority: _chunkPriority(nx, ny) });
     chunks.set(key, { worldDef: null, gameObjects: [], npcs: [], loaded: false, cx: nx, cy: ny });
   }
+
+  // Also look 2 chunks ahead in the movement direction for early pre-generation
+  const facing = gameScene?.playerFacing || 'down';
+  const facingDx = { right:1, left:-1, up:0, down:0 }[facing] ?? 0;
+  const facingDy = { right:0, left:0, up:-1, down:1 }[facing] ?? 0;
+  if (facingDx !== 0 || facingDy !== 0) {
+    const ax = cx + facingDx * 2;
+    const ay = cy + facingDy * 2;
+    const aKey = `${ax},${ay}`;
+    if (!chunks.has(aKey) && !chunkGenQueue.some(q => q.cx === ax && q.cy === ay)) {
+      toQueue.push({ cx: ax, cy: ay, label: facing + '+2', priority: 1 });
+      chunks.set(aKey, { worldDef: null, gameObjects: [], npcs: [], loaded: false, cx: ax, cy: ay });
+    }
+  }
+
+  // Insert with priority — higher priority items bubble toward front
+  for (const item of toQueue) {
+    const insertAt = chunkGenQueue.findIndex(q => q.priority > item.priority);
+    if (insertAt === -1) chunkGenQueue.push(item);
+    else chunkGenQueue.splice(insertAt, 0, item);
+  }
+
+  processChunkQueue();
 }
 
 async function processChunkQueue() {
-  if (chunkGenerating || chunkGenQueue.length === 0) return;
-  chunkGenerating = true;
-
-  while (chunkGenQueue.length > 0) {
-    const { cx, cy, label } = chunkGenQueue.shift();
+  // Spin up workers up to concurrency limit
+  while (chunkGenInFlight < CHUNK_GEN_CONCURRENCY && chunkGenQueue.length > 0) {
+    const item = chunkGenQueue.shift();
+    if (!item) break;
+    const { cx, cy, label } = item;
     const key = `${cx},${cy}`;
 
-    // Skip if already loaded (may have been loaded while waiting)
     const existing = chunks.get(key);
     if (existing && existing.loaded) continue;
 
-    // Check distance from player — skip if player has moved too far away
+    // Drop chunks that are too far from the player now
     const dist = Math.max(Math.abs(cx - currentChunkX), Math.abs(cy - currentChunkY));
-    if (dist > 2) {
-      chunks.delete(key);
-      continue;
-    }
+    if (dist > 3) { chunks.delete(key); continue; }
 
-    try {
-      console.log(`Generating chunk (${cx},${cy}) [${label}]...`);
-      const worldDef = await generateChunkAPI(cx, cy, label);
-      if (worldDef) {
-        gameScene.loadChunk(worldDef, cx, cy, false);
-      }
-    } catch (err) {
-      console.error(`Chunk (${cx},${cy}) generation failed:`, err);
-      chunks.delete(key); // Allow retry later
-    }
+    chunkGenInFlight++;
+    // Fire without await so we can spin up the next worker immediately
+    _generateOneChunk(cx, cy, label, key).finally(() => {
+      chunkGenInFlight--;
+      // After each slot frees up, drain remaining queue
+      if (chunkGenQueue.length > 0) processChunkQueue();
+    });
 
-    // Longer delay between chunk API calls to stay under rate limits
-    await new Promise(r => setTimeout(r, 2000));
+    // Small stagger between parallel calls to avoid sending them at identical milliseconds
+    if (chunkGenInFlight < CHUNK_GEN_CONCURRENCY && chunkGenQueue.length > 0) {
+      await new Promise(r => setTimeout(r, CHUNK_GEN_DELAY_MS));
+    }
   }
+}
 
-  chunkGenerating = false;
+async function _generateOneChunk(cx, cy, label, key) {
+  try {
+    const worldDef = await generateChunkAPI(cx, cy, label);
+    if (worldDef && gameScene) {
+      gameScene.loadChunk(worldDef, cx, cy, false);
+    }
+  } catch (err) {
+    console.error(`Chunk (${cx},${cy}) generation failed:`, err);
+    chunks.delete(key);
+  }
 }
 
 async function generateChunkAPI(cx, cy, dirLabel) {
