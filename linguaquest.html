@@ -2384,9 +2384,11 @@ function _resizeLighting(w, h) {
 }
 
 function _updateLighting(renderer, playerScreenX, playerScreenY, ambientAlpha) {
-  if (!_lightRT || !_lightGfx || ambientAlpha <= 0.02) {
-    // Daytime — hide the overlay entirely
-    if (_lightSprite) _lightSprite.visible = (ambientAlpha > 0.02);
+  if (!_lightRT || !_lightGfx) return;
+
+  // Daytime — hide overlay entirely
+  if (ambientAlpha <= 0.02) {
+    _lightSprite.visible = false;
     return;
   }
   _lightSprite.visible = true;
@@ -2394,38 +2396,42 @@ function _updateLighting(renderer, playerScreenX, playerScreenY, ambientAlpha) {
   const w = _lightRT.width, h = _lightRT.height;
   _lightGfx.clear();
 
-  // Fill screen with ambient darkness
-  _lightGfx.beginFill(0x000000, ambientAlpha);
+  // MULTIPLY blend technique:
+  //   • White (0xFFFFFF) × scene = scene (fully lit — no change)
+  //   • Black (0x000000) × scene = black (fully dark)
+  //   • Grey  (0x808080) × scene = half-brightness (dim)
+  //
+  // Strategy:
+  //   1. Fill entire screen with a dark grey (= the ambient darkness level)
+  //   2. Overdraw the player lantern area with white fading to grey at the edges
+  //      so the scene shines through fully at the center and dims gradually.
+
+  // 1. Ambient darkness fill — grey value: 1-ambientAlpha → 0 is pitch black, 1 is no effect
+  const darkVal = Math.round((1 - ambientAlpha) * 255);
+  const darkColor = (darkVal << 16) | (darkVal << 8) | darkVal;
+  _lightGfx.beginFill(darkColor, 1);
   _lightGfx.drawRect(0, 0, w, h);
   _lightGfx.endFill();
 
-  // Erase light around the player (radial gradient effect via alpha rings)
+  // 2. Player lantern — concentric circles from white (center) to darkColor (edge)
+  //    Draw from outer ring inward so inner rings overdraw outer
   const r = LIGHT_RADIUS_PLAYER;
-  _lightGfx.beginFill(0x000000, 0);
-  _lightGfx.lineStyle(0);
-  // Use a series of concentric circles with decreasing alpha fill for soft falloff
-  for (let i = 0; i < 8; i++) {
-    const frac = i / 8;
-    const alpha = ambientAlpha * (1 - Math.pow(1 - frac, 2));
-    _lightGfx.beginFill(0x000000, alpha - ambientAlpha * (1 - Math.pow(1 - (i+1)/8, 2)));
-    // Actually use blend erase approach: draw colored circles that "punch holes"
-  }
-  // Simpler soft-circle: draw black, then overdraw transparent circle
-  _lightGfx.beginFill(0x1a2a0a, ambientAlpha * 0.0);
-
-  // The real technique: draw gradient manually as concentric circles
-  const steps = 12;
-  for (let i = steps; i >= 0; i--) {
-    const t = i / steps;
-    const radius = r * (1 - t * 0.15);
-    const alpha = ambientAlpha * (t * t);
-    _lightGfx.beginFill(0x000000, alpha);
+  const steps = 16;
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;           // 0=edge, 1=center
+    // Ease: bright at center, falloff curve toward edge
+    const brightness = Math.pow(t, 1.5);
+    // Lerp from darkColor (at edge, t=0) to 0xFFFFFF (at center, t=1)
+    const v = Math.round(darkVal + brightness * (255 - darkVal));
+    const col = (v << 16) | (v << 8) | v;
+    const radius = r * (1 - t * (1 - 1/steps));
+    _lightGfx.beginFill(col, 1);
     _lightGfx.drawCircle(playerScreenX, playerScreenY, radius);
     _lightGfx.endFill();
   }
-  // Hard clear at center
-  _lightGfx.beginFill(0x000000, 0);
-  _lightGfx.drawCircle(playerScreenX, playerScreenY, r * 0.35);
+  // Pure white at very center for a bright hotspot
+  _lightGfx.beginFill(0xFFFFFF, 1);
+  _lightGfx.drawCircle(playerScreenX, playerScreenY, r * 0.18);
   _lightGfx.endFill();
 
   renderer.render(_lightGfx, { renderTexture: _lightRT, clear: true });
