@@ -1875,7 +1875,11 @@ function _pixiDrawAutotile(worldContainer, texKey, x, y, depth, tiles, col, row,
 // ─────────────────────────────────────────────────────────────
 function _pixiLoadChunk(worldContainer, worldDef, chunkX, chunkY, isOrigin) {
   const key = `${chunkX},${chunkY}`;
-  if (chunks.has(key) && chunks.get(key).loaded) return;
+  // For origin chunk: always run player init even if tiles are cached,
+  // so hot-reload / campaign-continue flows always place the player correctly.
+  if (chunks.has(key) && chunks.get(key).loaded && !isOrigin) return;
+  // If origin chunk tiles already drawn, skip tile drawing but still init player
+  const tilesAlreadyDrawn = chunks.has(key) && chunks.get(key).loaded;
 
   const { tiles, size } = worldDef.world;
   const cols = size[0];
@@ -1887,6 +1891,8 @@ function _pixiLoadChunk(worldContainer, worldDef, chunkX, chunkY, isOrigin) {
 
   const isPath  = (t) => t === 'path' || t === 'stone' || t === 'building_door' || t === 'farmland' || t === 'sand' || t === 'beach';
   const isWater = (t) => t === 'water' || t === 'water_deep';
+
+  if (!tilesAlreadyDrawn) { // ── TILE DRAWING BLOCK START ──
 
   // ── BASE TILE LAYER ──
   for (let row = 0; row < rows; row++) {
@@ -2356,6 +2362,8 @@ function _pixiLoadChunk(worldContainer, worldDef, chunkX, chunkY, isOrigin) {
   }
 
   chunks.set(key, { worldDef, gameObjects, npcs: chunkNpcs, loaded: true, cx: chunkX, cy: chunkY });
+
+  } // ── TILE DRAWING BLOCK END (tilesAlreadyDrawn guard) ──
 
   // ── PLAYER (origin only) ──
   if (isOrigin) {
@@ -3116,7 +3124,7 @@ function _pixiUpdate(delta) {
 
   // ── LIGHTING ──
   _tickLightFlicker(dt);
-  if (pixiApp && !isIndoor) {
+  if (pixiApp && !isIndoor && gameScene.player) {
     const px = gameScene.player.x + (gameScene._worldContainer?.x || 0);
     const py = gameScene.player.y - 8 + (gameScene._worldContainer?.y || 0);
     const ambientAlpha = _dayNightAmbientAlpha(ingameMin);
