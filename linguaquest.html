@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LinguaQuest</title>
+<title>LinguaQuest — La Lengua del Culpable</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js"></script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -38,12 +38,7 @@ html, body { background: #1a2a1a; overflow: hidden; font-family: 'Georgia', seri
   image-rendering: auto;
 }
 #menu p  { color: #4a7a30; font-size: 12px; letter-spacing: 4px; text-transform: uppercase; }
-#menu-start {
-  margin-top: 28px; padding: 13px 52px; font-family: Georgia, serif; font-size: 16px;
-  background: linear-gradient(180deg, #2a5010, #1a3408); border: 2px solid #5a9030;
-  color: #a8e060; cursor: pointer; letter-spacing: 4px; border-radius: 3px; transition: all .2s;
-}
-#menu-start:hover { background: linear-gradient(180deg, #3a6018, #2a4410); transform: translateY(-1px); }
+
 #loading-menu {
   display: none;
   font-size: 12px;
@@ -51,49 +46,20 @@ html, body { background: #1a2a1a; overflow: hidden; font-family: 'Georgia', seri
   letter-spacing: 2px;
 }
 .menu-hint { font-size: 11px; color: #2a4a18; letter-spacing: 2px; }
-#autogen-toggle-row {
-  display: flex; align-items: center; gap: 10px;
-  font-size: 12px; color: #4a7a30; letter-spacing: 1px;
+.menu-btn {
+  padding: 12px 44px; font-family: Georgia, serif; font-size: 15px;
+  background: linear-gradient(180deg, #2a5010, #1a3408); border: 2px solid #5a9030;
+  color: #a8e060; cursor: pointer; letter-spacing: 3px; border-radius: 3px; transition: all .2s;
+  white-space: nowrap;
 }
-#autogen-toggle-row input[type=checkbox] {
-  appearance: none; width: 32px; height: 18px; border-radius: 9px;
-  background: #1a2a10; border: 1px solid #2a5018; cursor: pointer;
-  position: relative; transition: background 0.2s;
-  flex-shrink: 0;
-}
-#autogen-toggle-row input[type=checkbox]:checked { background: #2a6010; border-color: #5a9030; }
-#autogen-toggle-row input[type=checkbox]::after {
-  content: ''; position: absolute; width: 12px; height: 12px; border-radius: 50%;
-  background: #4a7a30; top: 2px; left: 2px; transition: left 0.2s, background 0.2s;
-}
-#autogen-toggle-row input[type=checkbox]:checked::after { left: 16px; background: #90d050; }
+.menu-btn:hover:not(:disabled) { background: linear-gradient(180deg, #3a6018, #2a4410); transform: translateY(-1px); }
+.menu-btn-dim { opacity: 0.45; cursor: not-allowed !important; border-color: #3a5020; color: #607040; background: linear-gradient(180deg, #1a3008, #111e06); }
 
-/* ── PROMPT BAR ── */
-#prompt-bar {
-  position: fixed; bottom: 0; left: 0; right: 0; z-index: 200;
-  background: linear-gradient(0deg, #080e06ee, #0e180aee);
-  border-top: 2px solid #2a4018; padding: 9px 14px;
-  display: none; align-items: center; gap: 10px;
-  backdrop-filter: blur(4px);
-}
-#prompt-bar label { color: #4a7a28; font-size: 10px; letter-spacing: 2px; text-transform: uppercase; white-space: nowrap; }
-#world-prompt {
-  flex: 1; padding: 8px 14px; background: rgba(255,255,255,.04);
-  border: 1px solid #2a5018; color: #b0e060; font-family: Georgia, serif; font-size: 14px;
-  outline: none; border-radius: 3px;
-}
-#world-prompt::placeholder { color: #2a4a18; font-size: 13px; }
-#gen-btn {
-  padding: 8px 22px; background: linear-gradient(180deg, #2a5010, #1a3408);
-  border: 1px solid #5a9030; color: #a0d850; font-family: Georgia, serif; font-size: 13px;
-  cursor: pointer; border-radius: 3px; letter-spacing: 1px; white-space: nowrap; transition: all .15s;
-}
-#gen-btn:hover { background: linear-gradient(180deg, #3a6018, #2a4410); }
-#gen-btn:disabled { opacity: .35; cursor: default; }
+/* prompt-bar removed in v4 campaign system */
 
 /* ── DIALOGUE BOX ── */
 #dialogue-box {
-  position: fixed; bottom: 62px; left: 50%; transform: translateX(-50%);
+  position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
   width: min(600px, 92vw); z-index: 200;
   background: rgba(4, 10, 4, .97); border: 2px solid #3a6020;
   border-radius: 6px; padding: 0;
@@ -298,13 +264,13 @@ html, body { background: #1a2a1a; overflow: hidden; font-family: 'Georgia', seri
 <div id="menu">
   <h1>LinguaQuest</h1>
   <p>An AI-Powered Language RPG</p>
-  <div id="loading-menu">Loading configuration...</div>
-  <div id="autogen-toggle-row">
-    <input type="checkbox" id="autogen-checkbox" checked>
-    <label for="autogen-checkbox">Auto-generate world as you explore</label>
+  <div id="loading-menu">Loading...</div>
+  <div id="menu-buttons" style="display:flex;flex-direction:column;gap:10px;margin-top:28px;">
+    <button class="menu-btn" id="menu-play" onclick="startDefaultCampaign()">▶ Play: La Lengua del Culpable</button>
+    <button class="menu-btn menu-btn-dim" disabled title="Coming soon">✦ Generate Campaign <span style="font-size:10px;letter-spacing:1px;opacity:0.5">(soon)</span></button>
+    <button class="menu-btn menu-btn-dim" id="menu-continue" onclick="continueGame()" style="display:none">↺ Continue</button>
   </div>
-  <button id="menu-start" onclick="startGame()">Begin Adventure</button>
-  <span class="menu-hint">WASD to move · E to interact</span>
+  <span class="menu-hint" style="margin-top:14px">WASD to move · E to interact</span>
 </div>
 
 <!-- TOP HUD -->
@@ -352,21 +318,12 @@ html, body { background: #1a2a1a; overflow: hidden; font-family: 'Georgia', seri
   </div>
 </div>
 
-<!-- PROMPT BAR -->
-<div id="prompt-bar">
-  <label>Generate →</label>
-  <input id="world-prompt" type="text"
-    placeholder="e.g. a rainy Spanish fishing village · a Tokyo market · a medieval castle courtyard"
-    maxlength="200"
-    onkeydown="if(event.key==='Enter')generateWorld(); if(event.key==='Escape')this.blur();">
-  <button id="gen-btn" onclick="generateWorld()">✦ Generate</button>
-</div>
+
 
 <!-- CONTROLS HINT -->
 <div id="controls-hint">
-  WASD / ↑↓←→ move<br>
-  E &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; talk / enter building<br>
-  T &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; type new world
+  WASD / ↑↓←→ &nbsp;move<br>
+  E &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; talk / enter
 </div>
 
 <!-- LOADING -->
@@ -393,8 +350,8 @@ html, body { background: #1a2a1a; overflow: hidden; font-family: 'Georgia', seri
 
 <script>
 // ═══════════════════════════════════════════════════════════
-//  LINGUAQUEST — Phase 3
-//  Infinite world chunks: generates surrounding chunks as player explores
+//  LINGUAQUEST — v4.0  "La Lengua del Culpable"
+//  Campaign system: living NPCs, soul documents, Arenas Blancas
 // ═══════════════════════════════════════════════════════════
 
 // ── ASSET PATHS ────────────────────────────────────────────────
@@ -417,7 +374,6 @@ let CLAUDE_KEY      = '';  // anthropic_api_key
 let LQ_ELEVEN_KEY   = '';  // elevenlabs_api_key
 let LQ_GROQ_KEY     = '';  // groq_api_key
 let srsVocab   = [];   // [{word, translation, stage}]
-let AUTO_GEN   = localStorage.getItem('lq-autogen') !== 'false'; // default on
 
 // ── STATE ────────────────────────────────────────────────────
 let phaserGame  = null;
@@ -660,6 +616,619 @@ async function loadConfig() {
   if (statusEl) statusEl.style.display = 'none';
 }
 
+
+// ═══════════════════════════════════════════════════════════
+//  LINGUAQUEST — CAMPAIGN SYSTEM v1.0
+//  Phase 1: Campaign bootstrap, soul generation, starting chunk
+// ═══════════════════════════════════════════════════════════
+
+// ── Campaign state ──────────────────────────────────────────
+let activeCampaign   = null;  // current lq_campaigns row
+let activeCampaignId = null;  // uuid
+let campaignNPCs     = {};    // {slug: lq_npcs row}
+let campaignPlayerState = null;
+
+const LQ_CAMPAIGN_ID_KEY = 'lq_active_campaign_id';
+
+// ── Default Campaign: "La Lengua del Culpable" ──────────────
+const DEFAULT_CAMPAIGN = {
+  title:    "La Lengua del Culpable",
+  tagline:  "A stranger has vanished. Everyone knows something.",
+  language: "es",
+  difficulty: "beginner",
+  premise:  "You arrive by boat to the coastal village of Arenas Blancas to deliver a letter to Don Esteban Velarde. His door is open. He's gone. The constable suspects you.",
+  truth:    "Don Esteban was smuggled out alive by Los Silenciosos — a quiet network of merchants and officials who use debt and fear to control what people say. He found proof of their operation. He's being held at a farmhouse two regions east. The letter you're carrying was a warning from his niece: 'They're watching you. Run.' It arrived too late.",
+  resolution_conditions: {
+    must_have_talked_to: ["petra","ramos","padre_tomas","mirela","sonia"],
+    must_have_item: "sealed_letter_decoded",
+    must_have_reached: "la_hacienda_roja"
+  },
+  world_state: {
+    public_knowledge: [
+      "Don Esteban Velarde has vanished from his home.",
+      "His front door was found wide open.",
+      "A stranger (the player) arrived by boat the same morning.",
+      "The constable Mirela Fuentes is conducting an investigation."
+    ],
+    rumors: [
+      { text: "Someone heard shouting near the docks three nights ago.", accuracy: 0.7, origin_chunk: "0,0", spread_radius: 1 },
+      { text: "The port official Delgado was seen near Velarde's home last week.", accuracy: 0.8, origin_chunk: "0,0", spread_radius: 2 }
+    ],
+    factions: [
+      {
+        id: "los_silenciosos",
+        name: "Los Silenciosos",
+        goal: "Control trade through debt and silence",
+        resources: "money, political connections, port authority access",
+        internal_tension: "One member is having second thoughts",
+        known_members: ["delgado"],
+        suspected_by: []
+      }
+    ],
+    player_reputation: { overall: "neutral", by_faction: {}, notable_acts: [] },
+    world_damage: {},
+    in_game_date: "Day 1, Morning",
+    in_game_minutes_elapsed: 0
+  }
+};
+
+// ── Main cast soul documents ─────────────────────────────────
+const MAIN_CAST_SOULS = {
+  petra: {
+    name: "Doña Petra",
+    age: 52,
+    occupation: "Innkeeper",
+    sprite_key: "player",
+    home_chunk: "0,0",
+    soul: {
+      personality: "Direct, warmly guarded, speaks in dry observation. Runs the only inn in Arenas Blancas with quiet pride.",
+      history: "Born in this village. Married the inn at 22, buried her husband at 37. Has seen every stranger who ever passed through, and remembers all of them.",
+      values: ["the inn's survival", "loyalty to old friends", "her own dignity"],
+      fears: ["losing the inn to debt", "being implicated in something she only witnessed"],
+      desires: ["to know who raided her storeroom last week", "to see the village safe again"],
+      contradictions: "Presents as tough and self-sufficient but fiercely protective of those who earn her trust.",
+      speech_pattern: "Direct, dry humor, occasional proverbs. Rarely answers a question without asking one back.",
+      current_preoccupation: "Someone has been in my storeroom — and I need to know if it connects to the disappearance.",
+      open_wounds: ["Her husband did not die peacefully. She has never told anyone what she saw."],
+      secrets: ["She saw one of Delgado's men near the docks the night of the shipment, three weeks ago."],
+      faction_ties: [{ faction: "los_silenciosos", nature: "unwilling witness, not a member" }],
+      emotional_state: { current: "anxious and watchful", toward_player: "cautious curiosity", stability: "holding together but brittle" },
+      spanish_register: "informal"
+    },
+    vocab_focus: ["la posada", "el cuarto", "la llave", "el desayuno", "el pueblo", "contar", "escuchar", "saber"],
+    spanish_difficulty: "beginner",
+    min_trust_to_advance: 0.25,
+    simulation_tier: "full",
+    position: [7, 9]  // starting tile position in Arenas Blancas
+  },
+  ramos: {
+    name: "El Viejo Ramos",
+    age: 71,
+    occupation: "Fisherman",
+    sprite_key: "player",
+    home_chunk: "0,0",
+    soul: {
+      personality: "Weathered, evasive, speaks in fragments. Has been trying to convince himself he didn't see what he saw.",
+      history: "Fished these waters for fifty years. Knows every current, every mood of the bay. Lately he avoids the dock at night.",
+      values: ["the sea", "his solitude", "not getting involved"],
+      fears: ["what he saw that night", "what they'll do to him if he talks", "dying alone in fear"],
+      desires: ["for someone else to come forward so he doesn't have to", "to go back to simple mornings with his nets"],
+      contradictions: "Pretends nothing happened. But he wants someone to ask the right question so the weight can leave him.",
+      speech_pattern: "Short sentences. Changes subject abruptly. Returns to fishing metaphors when uncomfortable.",
+      current_preoccupation: "I know something. And every day I don't say it, I become part of it.",
+      open_wounds: ["He saw the boat that night. He saw Don Esteban being led onto it. He said nothing."],
+      secrets: ["He witnessed the abduction. Three men, a covered boat, the seal of Los Silenciosos on a crate."],
+      faction_ties: [],
+      emotional_state: { current: "guilt-ridden and frightened", toward_player: "suspicious, then desperate", stability: "barely holding" },
+      spanish_register: "informal"
+    },
+    vocab_focus: ["el pescado", "la red", "el bote", "el amanecer", "el muelle", "ver", "callar", "tener miedo"],
+    spanish_difficulty: "beginner",
+    min_trust_to_advance: 0.4,
+    simulation_tier: "full",
+    position: [3, 12]
+  },
+  padre_tomas: {
+    name: "Padre Tomás",
+    age: 63,
+    occupation: "Parish Priest",
+    sprite_key: "player",
+    home_chunk: "0,0",
+    soul: {
+      personality: "Patient, oblique, gentle. Guides without directing. Knows the weight of secrets others cannot carry.",
+      history: "Has served this parish for thirty years. Heard confessions from every family in the village. The archive of this town lives in his memory.",
+      values: ["the seal of confession", "indirect truth", "the long view"],
+      fears: ["breaking a sacred confidence", "that his inaction is a sin as heavy as the crime"],
+      desires: ["to give the player enough without giving too much", "for the right person to ask the right question in the right way"],
+      contradictions: "Believes in truth. Is protecting a lie. Manages this through careful language.",
+      speech_pattern: "Slow, considered. Uses parables. Answers questions with questions about different topics that rhyme with the truth.",
+      current_preoccupation: "I heard a confession that I cannot share. But I can be present while someone finds their own way to the answer.",
+      open_wounds: ["Delgado confessed to him. Three weeks ago. He is bound by the sacrament."],
+      secrets: ["Delgado confessed to involvement in the disappearance. Padre Tomás cannot name him but can confirm the player is on the right path."],
+      faction_ties: [],
+      emotional_state: { current: "quietly anguished", toward_player: "warm, carefully helpful", stability: "composed but strained" },
+      spanish_register: "formal"
+    },
+    vocab_focus: ["la iglesia", "la verdad", "la confianza", "rezar", "escuchar", "perdonar", "el alma", "confesar"],
+    spanish_difficulty: "intermediate",
+    min_trust_to_advance: 0.3,
+    simulation_tier: "full",
+    position: [14, 5]
+  },
+  mirela: {
+    name: "Constable Mirela Fuentes",
+    age: 29,
+    occupation: "Village Constable",
+    sprite_key: "player",
+    home_chunk: "0,0",
+    soul: {
+      personality: "Sharp, procedural, trying to appear confident. Compromised but not corrupt — just scared of the wrong person.",
+      history: "First posting as constable after training in the city. Has been in Arenas Blancas eight months. Long enough to know who really holds power here.",
+      values: ["doing the job correctly", "her reputation", "not making powerful enemies"],
+      fears: ["Delgado", "that she's already gone too far", "being wrong about the stranger (the player)"],
+      desires: ["someone to give her a reason to do the right thing", "to find Velarde and close this case properly"],
+      contradictions: "She suspects the player is innocent but has already told Delgado about the letter the player is carrying.",
+      speech_pattern: "Official, clipped, slightly rehearsed. Softens when she feels safe. Reverts to formality under pressure.",
+      current_preoccupation: "I told Delgado about the letter. If this stranger is innocent, I've made a terrible mistake.",
+      open_wounds: ["She reported the player's arrival and the letter to Delgado before she had any reason to."],
+      secrets: ["She alerted Delgado about the player on the morning of arrival. She's been regretting it since noon."],
+      faction_ties: [{ faction: "los_silenciosos", nature: "informant under pressure, wants out" }],
+      emotional_state: { current: "tense and guilty", toward_player: "suspicious but increasingly sympathetic", stability: "fragile" },
+      spanish_register: "formal"
+    },
+    vocab_focus: ["la investigación", "el sospechoso", "la prueba", "arrestar", "declarar", "la ley", "el caso", "confesar"],
+    spanish_difficulty: "intermediate",
+    min_trust_to_advance: 0.45,
+    simulation_tier: "full",
+    position: [11, 8]
+  },
+  sonia: {
+    name: "Sonia",
+    age: 24,
+    occupation: "Niece of Don Esteban",
+    sprite_key: "player",
+    home_chunk: "0,0",
+    soul: {
+      personality: "Frightened but determined. Has been waiting for someone like the player. Holds back until she's sure it's safe.",
+      history: "Grew up in the city, came to visit her uncle three months ago when she noticed the pressure building against him. She sent the letter the player is carrying.",
+      values: ["her uncle's life", "her own courage", "choosing the right moment"],
+      fears: ["that she waited too long", "that the player is working for them", "that she'll be next"],
+      desires: ["to trust the player enough to give them everything she knows", "to get her uncle back"],
+      contradictions: "She sent for help and is now afraid of the help that arrived.",
+      speech_pattern: "Careful, rapid, alert. Speaks in short bursts. Always watching the door.",
+      current_preoccupation: "I wrote that letter. I chose this person. Now I have to decide if I trust them.",
+      open_wounds: ["She knows the full truth about Los Silenciosos because she found her uncle's documents."],
+      secrets: ["Has copies of Don Esteban's ledger documenting debt coercion by Los Silenciosos. Has the location of La Hacienda Roja. Will only reveal this at high trust."],
+      faction_ties: [],
+      emotional_state: { current: "frightened and watchful", toward_player: "desperately hopeful but not yet trusting", stability: "on edge" },
+      spanish_register: "informal"
+    },
+    vocab_focus: ["el tío", "la carta", "el peligro", "confiar", "escapar", "la verdad", "ayudar", "el secreto"],
+    spanish_difficulty: "beginner",
+    min_trust_to_advance: 0.5,
+    simulation_tier: "full",
+    position: [16, 11]
+  },
+  delgado: {
+    name: "Capitán Delgado",
+    age: 45,
+    occupation: "Port Official",
+    sprite_key: "skeleton",
+    home_chunk: "0,0",
+    soul: {
+      personality: "Charming, bureaucratic, precise. The villain who never does anything overtly villainous in front of you.",
+      history: "Rose through port administration over fifteen years. Built his network slowly, quietly, always staying one step removed from direct action.",
+      values: ["order", "appearances", "leverage"],
+      fears: ["exposure", "someone piecing together what Mirela told him about the letter"],
+      desires: ["to learn what's in the letter the player is carrying", "to ensure Esteban disappears permanently"],
+      contradictions: "Presents as a helpful bureaucrat while actively working to ensure the player fails.",
+      speech_pattern: "Smooth, official, warm. Offers help. Always knows slightly too much about your situation.",
+      current_preoccupation: "The stranger is asking questions. I need to know how much they know before this becomes a problem.",
+      open_wounds: ["Confessed to Padre Tomás — the one error he regrets."],
+      secrets: ["He orchestrated the abduction. The ledger Sonia has would end him. He knows she has it."],
+      faction_ties: [{ faction: "los_silenciosos", nature: "primary coordinator" }],
+      emotional_state: { current: "controlled, mildly concerned", toward_player: "friendly and slightly predatory", stability: "steady" },
+      spanish_register: "formal"
+    },
+    vocab_focus: ["el puerto", "el permiso", "el registro", "el capitán", "el comercio", "verificar", "el documento", "las normas"],
+    spanish_difficulty: "advanced",
+    min_trust_to_advance: 0.6,
+    simulation_tier: "full",
+    position: [18, 7]
+  }
+};
+
+// ── Hardcoded Arenas Blancas — chunk "0,0" ──────────────────
+// A coastal village: fishing docks to the west, inn at center,
+// church to the north, constable's post center-east, Velarde's empty house southeast
+const ARENAS_BLANCAS_WORLD = {
+  player_start: [9, 10],
+  npcs: [
+    {
+      id: "petra",
+      name: "Doña Petra",
+      sprite: "player",
+      position: MAIN_CAST_SOULS.petra.position,
+      greeting: "¿Qué buscas aquí, forastero? La habitación cuesta tres reales la noche.",
+      personality: MAIN_CAST_SOULS.petra.soul.personality,
+      ai_context: "Innkeeper of the only posada in Arenas Blancas. Warm but guarded. Someone raided her storeroom last week and she suspects it connects to Velarde's disappearance. She'll trade information for information.",
+      vocab_focus: MAIN_CAST_SOULS.petra.vocab_focus,
+      role: "main_cast"
+    },
+    {
+      id: "ramos",
+      name: "El Viejo Ramos",
+      sprite: "player",
+      position: MAIN_CAST_SOULS.ramos.position,
+      greeting: "Largo de aquí. Los barcos no paran de ir y venir... no es asunto mío.",
+      personality: MAIN_CAST_SOULS.ramos.soul.personality,
+      ai_context: "Old fisherman who witnessed Don Esteban's abduction from the dock three nights ago. He is terrified and pretending he saw nothing. He mends nets near the water and avoids eye contact with strangers.",
+      vocab_focus: MAIN_CAST_SOULS.ramos.vocab_focus,
+      role: "main_cast"
+    },
+    {
+      id: "padre_tomas",
+      name: "Padre Tomás",
+      sprite: "player",
+      position: MAIN_CAST_SOULS.padre_tomas.position,
+      greeting: "La paz sea contigo. ¿Vienes a confesar... o a buscar algo más?",
+      personality: MAIN_CAST_SOULS.padre_tomas.soul.personality,
+      ai_context: "Parish priest. Heard Delgado's confession three weeks ago. Bound by the sacrament. Will help the player indirectly — never naming names, only guiding through metaphor and careful questions.",
+      vocab_focus: MAIN_CAST_SOULS.padre_tomas.vocab_focus,
+      role: "main_cast"
+    },
+    {
+      id: "mirela",
+      name: "Constable Mirela",
+      sprite: "player",
+      position: MAIN_CAST_SOULS.mirela.position,
+      greeting: "Alto. Necesito ver tus papeles. ¿Qué traes en esa carta?",
+      personality: MAIN_CAST_SOULS.mirela.soul.personality,
+      ai_context: "Young constable investigating the disappearance. She's the one who suspects the player. She secretly informed Delgado about the player's arrival and is starting to regret it. Will soften as trust builds.",
+      vocab_focus: MAIN_CAST_SOULS.mirela.vocab_focus,
+      role: "main_cast"
+    },
+    {
+      id: "sonia",
+      name: "Sonia",
+      sprite: "player",
+      position: MAIN_CAST_SOULS.sonia.position,
+      greeting: "...¿Eres tú? Yo... tú tienes la carta. Por favor, habla bajo.",
+      personality: MAIN_CAST_SOULS.sonia.soul.personality,
+      ai_context: "Don Esteban's niece. She sent the warning letter the player is carrying. She's been hiding in the village watching for someone trustworthy. Has the real evidence (ledger copies, hacienda location) but will only share at high trust.",
+      vocab_focus: MAIN_CAST_SOULS.sonia.vocab_focus,
+      role: "main_cast"
+    },
+    {
+      id: "delgado",
+      name: "Capitán Delgado",
+      sprite: "skeleton",
+      position: MAIN_CAST_SOULS.delgado.position,
+      greeting: "¡Bienvenido a Arenas Blancas! Un placer. Puedo ayudarte con cualquier trámite del puerto.",
+      personality: MAIN_CAST_SOULS.delgado.soul.personality,
+      ai_context: "Port official and secret villain. Charming and bureaucratic. Knows about the player's letter. Is gathering information while appearing helpful. Never overtly threatening.",
+      vocab_focus: MAIN_CAST_SOULS.delgado.vocab_focus,
+      role: "main_cast"
+    }
+  ],
+  world: {
+    theme: "arenas_blancas",
+    language: "es",
+    description: "The coastal village of Arenas Blancas. Don Esteban Velarde has vanished. Everyone is watching.",
+    size: [22, 16],
+    tiles: [
+      ["water","water","water","water","beach","beach","grass","grass","grass","grass","tree","tree","grass","grass","building","building","grass","grass","grass","grass","grass","grass"],
+      ["water","water","water","beach","beach","grass","grass","grass","grass","grass","grass","grass","path","path","building","building","grass","grass","tree","tree","grass","grass"],
+      ["water","water","beach","beach","grass","grass","grass","tree","tree","grass","grass","path","path","grass","grass","grass","grass","grass","grass","tree","grass","grass"],
+      ["water","beach","beach","grass","grass","grass","tree","tree","grass","grass","path","path","grass","grass","grass","building","building","grass","grass","grass","grass","grass"],
+      ["water","beach","grass","grass","grass","grass","grass","grass","grass","path","path","grass","grass","grass","grass","building","building","grass","grass","grass","tree","grass"],
+      ["beach","grass","grass","grass","building","building","grass","grass","path","path","grass","grass","grass","grass","grass","grass","grass","building","building","grass","grass","grass"],
+      ["beach","grass","grass","grass","building","building_door","path","path","path","grass","grass","grass","grass","tree","grass","grass","grass","building","building_door","path","grass","grass"],
+      ["beach","grass","grass","grass","grass","path","path","grass","grass","grass","grass","building","building","grass","grass","grass","path","path","path","path","path","grass"],
+      ["beach","grass","grass","grass","path","path","grass","grass","grass","grass","grass","building_door","building","grass","grass","path","path","grass","grass","grass","grass","grass"],
+      ["water","beach","grass","path","path","grass","grass","grass","grass","grass","grass","grass","grass","grass","path","path","grass","grass","grass","grass","grass","grass"],
+      ["water","beach","beach","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","path","path","grass","grass","grass","grass","tree","tree","grass"],
+      ["water","water","beach","beach","grass","grass","grass","tree","grass","grass","grass","grass","path","path","grass","grass","grass","grass","tree","tree","grass","grass"],
+      ["water","water","water","beach","beach","grass","grass","grass","grass","grass","grass","path","path","grass","grass","grass","building","building","grass","grass","grass","grass"],
+      ["water","water","water","water","beach","beach","grass","grass","grass","grass","path","path","grass","grass","grass","grass","building_door","building","grass","grass","grass","grass"],
+      ["water","water","water","water","water","beach","beach","grass","grass","path","path","grass","grass","grass","grass","grass","grass","grass","grass","grass","tree","tree"],
+      ["water","water","water","water","water","water","beach","beach","path","path","grass","grass","grass","grass","grass","tree","tree","grass","grass","grass","grass","grass"]
+    ]
+  }
+};
+
+// ─────────────────────────────────────────────────────────────
+//  DB HELPER — reads/writes to lq_ tables via Supabase REST API
+// ─────────────────────────────────────────────────────────────
+async function lqDB(method, table, body = null, query = '') {
+  const url = `${SUPABASE_URL}/rest/v1/${table}${query}`;
+  const headers = {
+    'apikey': SUPABASE_ANON_KEY,
+    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+    'Content-Type': 'application/json',
+    'Prefer': method === 'POST' ? 'return=representation' : 'return=minimal'
+  };
+  const opts = { method, headers };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(url, opts);
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`lqDB ${method} ${table}: ${err}`);
+  }
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
+}
+
+// ─────────────────────────────────────────────────────────────
+//  SAVE / LOAD
+// ─────────────────────────────────────────────────────────────
+async function saveGame() {
+  if (!activeCampaignId || !gameScene?.player) return;
+  try {
+    await lqDB('PATCH', 'lq_player_state',
+      {
+        current_chunk: `${currentChunkX},${currentChunkY}`,
+        player_x: gameScene.player.x,
+        player_y: gameScene.player.y,
+        last_facing: gameScene.playerFacing || 'down',
+        updated_at: new Date().toISOString()
+      },
+      `?campaign_id=eq.${activeCampaignId}`
+    );
+    localStorage.setItem(LQ_CAMPAIGN_ID_KEY, activeCampaignId);
+    console.log('Game saved');
+  } catch(e) {
+    console.warn('Save failed:', e.message);
+  }
+}
+
+async function loadSavedGame(campaignId) {
+  try {
+    // Load campaign row
+    const camps = await lqDB('GET', 'lq_campaigns', null, `?id=eq.${campaignId}&limit=1`);
+    if (!camps?.length) return false;
+    activeCampaign = camps[0];
+    activeCampaignId = campaignId;
+
+    // Load player state
+    const ps = await lqDB('GET', 'lq_player_state', null, `?campaign_id=eq.${campaignId}&limit=1`);
+    if (ps?.length) campaignPlayerState = ps[0];
+
+    // Load main cast NPCs
+    const npcs = await lqDB('GET', 'lq_npcs', null, `?campaign_id=eq.${campaignId}&is_main_cast=eq.true`);
+    if (npcs) {
+      for (const npc of npcs) {
+        // Find slug by name
+        const slug = Object.keys(MAIN_CAST_SOULS).find(k => MAIN_CAST_SOULS[k].name === npc.name);
+        if (slug) campaignNPCs[slug] = npc;
+      }
+    }
+    return true;
+  } catch(e) {
+    console.warn('Load failed:', e.message);
+    return false;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  CREATE CAMPAIGN — Phase 1.1
+//  Creates a new campaign in lq_campaigns, generates NPC souls,
+//  creates player_state, saves the starting chunk.
+// ─────────────────────────────────────────────────────────────
+async function createCampaign() {
+  showStatus('✦ Creating campaign...', 30000);
+  document.getElementById('loading-title').textContent = 'Creating your campaign...';
+  document.getElementById('loading-sub').textContent = 'Breathing life into the village';
+  document.getElementById('loading').style.display = 'flex';
+
+  try {
+    // 1.1 — Create lq_campaigns row
+    const campRows = await lqDB('POST', 'lq_campaigns', {
+      title: DEFAULT_CAMPAIGN.title,
+      tagline: DEFAULT_CAMPAIGN.tagline,
+      language: DEFAULT_CAMPAIGN.language,
+      difficulty: DEFAULT_CAMPAIGN.difficulty,
+      premise: DEFAULT_CAMPAIGN.premise,
+      truth: DEFAULT_CAMPAIGN.truth,
+      resolution_conditions: DEFAULT_CAMPAIGN.resolution_conditions,
+      world_state: DEFAULT_CAMPAIGN.world_state,
+      real_time_started: new Date().toISOString(),
+      status: 'active'
+    });
+    const campaign = Array.isArray(campRows) ? campRows[0] : campRows;
+    activeCampaign = campaign;
+    activeCampaignId = campaign.id;
+
+    // 1.2 — Generate soul documents for all 6 main cast NPCs (Template A via Claude)
+    document.getElementById('loading-sub').textContent = 'Meeting the villagers...';
+    const npcInserts = [];
+    for (const [slug, cast] of Object.entries(MAIN_CAST_SOULS)) {
+      const soul = await generateSoulTemplateA(cast, DEFAULT_CAMPAIGN);
+      const npcRows = await lqDB('POST', 'lq_npcs', {
+        campaign_id: activeCampaignId,
+        name: cast.name,
+        age: cast.age,
+        occupation: cast.occupation,
+        sprite_key: cast.sprite_key,
+        home_chunk: cast.home_chunk,
+        current_chunk: cast.home_chunk,
+        soul: soul.soul || cast.soul,
+        current_focus: soul.current_focus || { goal: cast.soul.current_preoccupation, current_step: "Starting.", obstacles: [], resources_available: [], recent_progress: "" },
+        relationships: soul.relationships || [],
+        vocab_focus: cast.vocab_focus,
+        spanish_difficulty: cast.spanish_difficulty,
+        min_trust_to_advance: cast.min_trust_to_advance,
+        is_main_cast: true,
+        simulation_tier: cast.simulation_tier
+      });
+      const npc = Array.isArray(npcRows) ? npcRows[0] : npcRows;
+      campaignNPCs[slug] = npc;
+    }
+
+    // 1.3 — Create initial player_state row
+    document.getElementById('loading-sub').textContent = 'Setting the scene...';
+    await lqDB('POST', 'lq_player_state', {
+      campaign_id: activeCampaignId,
+      current_chunk: '0,0',
+      player_x: ARENAS_BLANCAS_WORLD.player_start[0] * TILE_SIZE + TILE_SIZE / 2,
+      player_y: ARENAS_BLANCAS_WORLD.player_start[1] * TILE_SIZE + TILE_SIZE / 2,
+      last_facing: 'down',
+      inventory: [
+        { id: "sealed_letter", name: "The Sealed Letter", description: "Addressed to Don Esteban Velarde. You still have it.", acquired_ingame: "Day 1, Morning" }
+      ],
+      case_file: [
+        { ingame_time: "Day 1, Morning", entry: "I arrived in Arenas Blancas by boat to deliver a letter to Don Esteban Velarde. His front door was open. He was gone. The constable immediately named me a suspect." }
+      ],
+      session_start_at: new Date().toISOString()
+    });
+
+    // 1.3b — Create initial planned events (lightweight boot events) for main cast
+    const bootMinute = 0;
+    for (const [slug, npc] of Object.entries(campaignNPCs)) {
+      const cast = MAIN_CAST_SOULS[slug];
+      await lqDB('POST', 'lq_planned_events', {
+        campaign_id: activeCampaignId,
+        decided_by_npc: npc.id,
+        decided_at_ingame: "Day 1, Dawn",
+        event_type: "npc_movement",
+        description: `${cast.name} begins their day in ${cast.soul.current_preoccupation.substring(0,60)}...`,
+        payload: { npc_id: npc.id, from_chunk: "0,0", to_chunk: "0,0", reason: "morning routine", travel_duration_ingame_minutes: 0 },
+        execute_at_ingame_minute: bootMinute,
+        priority: 3,
+        status: 'resolved'
+      });
+    }
+
+    // 1.4 — Save the starting chunk to lq_chunks
+    await lqDB('POST', 'lq_chunks', {
+      campaign_id: activeCampaignId,
+      chunk_key: '0,0',
+      world_def: ARENAS_BLANCAS_WORLD,
+      current_state: {},
+      distance_from_origin: 0,
+      story_connection: 'critical',
+      npcs_present: Object.keys(MAIN_CAST_SOULS)
+    });
+
+    // 1.5 — Save campaign ID locally
+    localStorage.setItem(LQ_CAMPAIGN_ID_KEY, activeCampaignId);
+
+    document.getElementById('loading').style.display = 'none';
+    showStatus('✦ Arenas Blancas awaits', 3000);
+    return true;
+
+  } catch(e) {
+    console.error('createCampaign failed:', e);
+    document.getElementById('loading').style.display = 'none';
+    showStatus('⚠ Campaign creation failed: ' + e.message, 5000);
+    return false;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  TEMPLATE A — SOUL GENERATION
+//  Called once per NPC on campaign creation. Enhances the default
+//  soul document with Claude's creative additions.
+// ─────────────────────────────────────────────────────────────
+async function generateSoulTemplateA(castEntry, campaign) {
+  if (!CLAUDE_KEY) return { soul: castEntry.soul, current_focus: null, relationships: [] };
+
+  const prompt = `You are generating a soul document for an NPC in a Spanish-language detective RPG.
+
+Campaign: "${campaign.title}" — ${campaign.premise}
+World truth (NOT known to player): ${campaign.truth}
+
+NPC: ${castEntry.name}, age ${castEntry.age}, ${castEntry.occupation}
+Base soul: ${JSON.stringify(castEntry.soul)}
+
+Return ONLY valid JSON (no markdown, no fences):
+{
+  "soul": { /* enhanced soul — keep same structure, deepen personality/history/fears/desires/speech_pattern/emotional_state */ },
+  "current_focus": {
+    "goal": "...",
+    "current_step": "...",
+    "obstacles": ["..."],
+    "resources_available": ["..."],
+    "recent_progress": "..."
+  },
+  "relationships": [
+    { "npc_id": null, "name": "...", "nature": "...", "trust": 0.5, "recent_tension": "...", "shared_history": "..." }
+  ]
+}
+
+Keep soul.emotional_state. Keep all secrets intact. Deepen speech_pattern to 2-3 sentences. Add 1-2 relationships with other main cast members. Max 400 tokens.`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': CLAUDE_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 600,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+    if (!res.ok) throw new Error('Soul gen API error');
+    const data = await res.json();
+    const raw = data.content[0].text.trim().replace(/^```json?\n?/, '').replace(/\n?```$/, '');
+    return JSON.parse(raw);
+  } catch(e) {
+    console.warn('Soul gen failed for', castEntry.name, '— using default');
+    return { soul: castEntry.soul, current_focus: null, relationships: [] };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  ENTRY POINTS — menu buttons
+// ─────────────────────────────────────────────────────────────
+async function startDefaultCampaign() {
+  if (!CLAUDE_KEY) {
+    showStatus('Loading keys — please wait a moment', 2000);
+    await loadConfig();
+checkSavedGame();
+    if (!CLAUDE_KEY) { showStatus('Could not load API key', 3000); return; }
+  }
+
+  // Check for existing campaign
+  const savedId = localStorage.getItem(LQ_CAMPAIGN_ID_KEY);
+  if (savedId) {
+    const loaded = await loadSavedGame(savedId);
+    if (loaded) {
+      startGame(ARENAS_BLANCAS_WORLD);
+      return;
+    }
+  }
+
+  // New campaign
+  const ok = await createCampaign();
+  if (ok) startGame(ARENAS_BLANCAS_WORLD);
+}
+
+async function continueGame() {
+  const savedId = localStorage.getItem(LQ_CAMPAIGN_ID_KEY);
+  if (!savedId) { showStatus('No saved game found.', 2000); return; }
+  const loaded = await loadSavedGame(savedId);
+  if (loaded) {
+    startGame(ARENAS_BLANCAS_WORLD);
+  } else {
+    showStatus('Could not load save — starting fresh', 3000);
+    await startDefaultCampaign();
+  }
+}
+
+// Check on load if there's a saved campaign — if so, show Continue button
+async function checkSavedGame() {
+  const savedId = localStorage.getItem(LQ_CAMPAIGN_ID_KEY);
+  if (savedId) {
+    document.getElementById('menu-continue').style.display = 'block';
+  }
+}
+
 // ─────────────────────────────────────────────────────────────
 //  GAME SCENE
 // ─────────────────────────────────────────────────────────────
@@ -766,7 +1335,7 @@ class GameScene extends Phaser.Scene {
       interact: Phaser.Input.Keyboard.KeyCodes.E,
     });
 
-    this.loadChunk(SAMPLE_WORLD, 0, 0, true);
+    this.loadChunk(_startingWorld || ARENAS_BLANCAS_WORLD, 0, 0, true);
   }
 
   _createAnim(key, name, frames, frameRate, repeat = -1) {
@@ -1156,7 +1725,7 @@ class GameScene extends Phaser.Scene {
       this.cameras.main.centerOn(px, py);
 
       // Queue generation of surrounding chunks (only in auto-gen mode)
-      if (AUTO_GEN) { queueSurroundingChunks(chunkX, chunkY); processChunkQueue(); }
+      queueSurroundingChunks(chunkX, chunkY); processChunkQueue();
     }
 
     console.log(`Chunk (${chunkX},${chunkY}) loaded — ${gameObjects.length} objects`);
@@ -1223,7 +1792,7 @@ class GameScene extends Phaser.Scene {
       if (!def.walkable) { vx = 0; vy = 0; }
 
       // Manual mode: if walking toward an unloaded chunk, trigger generation for it
-      if (!AUTO_GEN) {
+      {
         const ncx = Math.floor(nx / (CHUNK_COLS * TILE_SIZE));
         const ncy = Math.floor(ny / (CHUNK_ROWS * TILE_SIZE));
         if (!chunks.get(`${ncx},${ncy}`)?.loaded) {
@@ -1244,7 +1813,7 @@ class GameScene extends Phaser.Scene {
       currentChunkY = newCY;
 
       // Queue surrounding chunks for generation (only in auto-gen mode)
-      if (AUTO_GEN) { queueSurroundingChunks(newCX, newCY); processChunkQueue(); }
+      queueSurroundingChunks(newCX, newCY); processChunkQueue();
 
       // Unload chunks that are too far away (more than 2 chunks distance)
       for (const [key, chunk] of chunks) {
@@ -1571,15 +2140,12 @@ function getLangName(code) {
 // ─────────────────────────────────────────────────────────────
 //  GAME INIT
 // ─────────────────────────────────────────────────────────────
-function startGame() {
-  if (!CLAUDE_KEY) { showStatus('Loading keys — try again in a moment', 3000); loadConfig(); return; }
-
-  // Save auto-gen preference
-  AUTO_GEN = document.getElementById('autogen-checkbox').checked;
-  localStorage.setItem('lq-autogen', AUTO_GEN ? 'true' : 'false');
+function startGame(worldDef) {
+  if (!CLAUDE_KEY) { showStatus('Loading keys — try again in a moment', 3000); loadConfig();
+checkSavedGame(); return; }
+  const startingWorld = worldDef || ARENAS_BLANCAS_WORLD;
 
   document.getElementById('menu').style.display = 'none';
-  document.getElementById('prompt-bar').style.display = 'flex';
   document.getElementById('top-hud').style.display = 'flex';
   document.getElementById('controls-hint').style.display = 'block';
 
@@ -1606,6 +2172,9 @@ function startGame() {
   };
 
   phaserGame = new Phaser.Game(config);
+
+  // Auto-save every 30 seconds
+  setInterval(() => { if (activeCampaignId) saveGame(); }, 30000);
 
   // Force canvas to fill the window on resize
   window.addEventListener('resize', () => {
@@ -2509,165 +3078,6 @@ Make it feel like a natural continuation of the ${theme} world — vary the land
   return null;
 }
 
-// ─────────────────────────────────────────────────────────────
-//  WORLD GENERATION
-// ─────────────────────────────────────────────────────────────
-async function generateWorld() {
-  const prompt = document.getElementById('world-prompt').value.trim();
-  if (!prompt) { showStatus('Type a world description first.', 2000); return; }
-
-  document.getElementById('gen-btn').disabled = true;
-  document.getElementById('gen-btn').textContent = '⟳ Thinking...';
-  document.getElementById('loading').style.display = 'flex';
-
-  // Cycle loading sub-messages
-  const subMsgs = [
-    'Sketching the zones...', 'Planting trees...', 'Placing the villagers...',
-    'Winding the paths...', 'Setting the scene...', 'Almost there...',
-  ];
-  let subIdx = 0;
-  const subEl = document.getElementById('loading-sub');
-  const subTimer = setInterval(() => {
-    subEl.textContent = subMsgs[subIdx % subMsgs.length]; subIdx++;
-  }, 1800);
-
-  const vocabContext = srsVocab.length > 0
-    ? `\n\nThe player is currently studying these words — prioritize them in NPC vocab_focus: ${srsVocab.slice(0,15).map(w=>w.word).join(', ')}`
-    : '';
-
-  const systemPrompt = `You are an expert world designer for LinguaQuest, a language-learning RPG. You create beautiful, organic, immersive game worlds.
-
-Return ONLY raw valid JSON — no markdown, no code fences, no explanation.
-
-CRITICAL DESIGN PRINCIPLES — encode these into every world you create:
-
-1. CLUSTERED DECORATION
-   - Trees always appear in natural clusters of 2–5, never isolated singles
-   - Rocks and flowers cluster together in natural groupings
-   - Decorations follow organic patterns, not grids
-
-2. ORGANIC PATHS
-   - Paths wind and curve naturally, never straight lines
-   - Use irregular, meandering shapes that guide players through zones
-   - Paths should feel discovered, not engineered
-
-3. ZONE VARIETY & STRUCTURE
-   - Every world must have 3–4 distinct, visually separate zones
-   - Examples: dense forest + clearing + settlement + water feature
-   - Each zone should feel purposeful and interconnected
-
-4. TRANSITION TILES & NATURAL BORDERS
-   - Water must be bordered by beach/sand tiles (never water next to buildings)
-   - Forest areas fade from trees to grass at edges
-   - Sand/beach appears between water and grassland
-
-5. BUILDING PLACEMENT
-   - Buildings cluster in 2–3 groups (not spread out)
-   - Buildings face paths and open areas
-   - Never place buildings isolated in wilderness
-   - Use 2x2 or 2x3 clusters for substantial structures
-
-6. NATURAL LANDMARKS & FOCAL POINTS
-   - Every world needs ONE "heart" — a focal point players notice first
-   - Examples: a well in the town center, a large ancient tree, a market square, a bridge
-   - Place this landmark where paths naturally converge
-
-7. NPC PLACEMENT LOGIC
-   - Fisherman near water/boats; merchants near buildings; farmers near farmland
-   - Each NPC contextually belongs to their location
-
-8. OPTIMAL TILE RATIOS
-   - ~60% open walkable ground (grass/path/sand/farmland)
-   - ~25% features (trees/buildings)
-   - ~15% water or impassable terrain
-
-9. WORLD SIZE: Minimum 22x16, recommended 26x18 to 28x20
-
-10. DEPTH & LAYERING
-    - Use 2x2 building clusters minimum
-    - Vary tree density: dense forest corners → sparse meadow center
-
-TECHNICAL REQUIREMENTS:
-- Match this exact JSON structure (customize content to match prompt):
-${JSON.stringify(SAMPLE_WORLD, null, 2)}
-- tiles must be exactly size[1] rows, each row exactly size[0] columns
-- Valid tile values: grass, path, water, beach, sand, tree, building, building_door, farmland, stone, cliff, chest, rock, mountain
-- 60%+ of tiles must be walkable (grass, path, beach, sand, farmland, stone, building_door)
-- player_start must be on a walkable tile
-- NPC positions must be on walkable tiles, not on tree/building/water/cliff/mountain/rock tiles
-- 3–4 NPCs
-- NPC sprite must be one of: player, skeleton, slime, chicken, cow, pig, sheep
-- NPC greetings and vocab_focus must be in the target language
-- ai_context: 3–4 rich sentences: what they're doing RIGHT NOW, what they want, one secret, opinion of travelers
-- personality: one vivid sentence
-- Choose language from prompt context (Spanish default unless another is implied)${vocabContext}`;
-
-  try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': CLAUDE_KEY,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 6000,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: `Design a beautiful, organic world for: "${prompt}"\n\nThink in zones, use natural clusters, create a focal landmark, and place NPCs contextually. Make every element feel like it belongs.` }],
-      }),
-    });
-
-    if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || 'API error'); }
-    const data = await res.json();
-    const raw = data.content[0].text.trim().replace(/^```json?\n?/, '').replace(/\n?```$/, '');
-
-    let worldDef;
-    try { worldDef = JSON.parse(raw); }
-    catch { throw new Error('Claude returned invalid JSON — try again.'); }
-
-    if (!worldDef.world?.tiles || !worldDef.npcs) throw new Error('Missing required fields — try again.');
-
-    currentWorld = worldDef;
-    dialogueHistory = {};
-
-    // Clear all existing chunks
-    for (const [key, chunk] of chunks) {
-      if (chunk.loaded) gameScene.unloadChunk(chunk.cx, chunk.cy);
-    }
-    chunks.clear();
-    chunkGenQueue.length = 0;
-    chunkGenerating = false;
-    // Clear indoor layouts and house gen queue
-    indoorLayouts.clear();
-    houseGenQueue.length = 0;
-    houseGenRunning = false;
-    if (isIndoor) exitHouse();
-
-    // Store theme/language for neighbor chunk generation
-    worldTheme = worldDef.world?.theme || prompt;
-    worldLanguage = worldDef.world?.language || 'es';
-    chunkGenCount = 0;
-
-    // Load the generated world as origin chunk (0,0)
-    gameScene.loadChunk(worldDef, 0, 0, true);
-
-  } catch (err) {
-    showStatus('⚠ ' + err.message, 5000);
-    console.error(err);
-  }
-
-  clearInterval(subTimer);
-  document.getElementById('loading').style.display = 'none';
-  document.getElementById('gen-btn').disabled = false;
-  document.getElementById('gen-btn').textContent = '✦ Generate';
-
-  // Return focus to game canvas so WASD works immediately after generation
-  document.getElementById('world-prompt').blur();
-  document.querySelector('#game-container canvas')?.focus();
-}
-
 // ═══════════════════════════════════════════════════════════
 //  NPC VOICE SYSTEM — Groq Whisper STT + ElevenLabs TTS
 //  Keys fetched from Supabase app_secrets (same as languages.html)
@@ -2737,6 +3147,7 @@ async function lqLoadVoiceKeys() {
   // Keys already loaded by loadConfig() on page init.
   // If somehow not loaded yet (race), wait for loadConfig to finish.
   if (!LQ_ELEVEN_KEY || !LQ_GROQ_KEY) await loadConfig();
+checkSavedGame();
 }
 
 // ── Mute toggle ──
@@ -2875,11 +3286,12 @@ function lqMicStop() {
 
 async function lqTranscribe(blob) {
   if (!LQ_GROQ_KEY) await loadConfig();
+checkSavedGame();
   const groqKey = LQ_GROQ_KEY;
   if (!groqKey) throw new Error('No Groq key — check app_secrets table');
 
   // Detect language from world setting
-  const world = currentWorld || SAMPLE_WORLD;
+  const world = currentWorld || ARENAS_BLANCAS_WORLD;
   const lang  = (world?.world?.language || 'es').split('-')[0];
 
   const form = new FormData();
@@ -2930,7 +3342,7 @@ async function sendDialogue() {
   if (!dialogueHistory[currentNPC.id]) dialogueHistory[currentNPC.id] = [];
   dialogueHistory[currentNPC.id].push({ role: 'user', content: playerText });
 
-  const world = currentWorld || SAMPLE_WORLD;
+  const world = currentWorld || ARENAS_BLANCAS_WORLD;
   const lang = world.world.language || 'es';
   const langName = getLangName(lang);
   const vocabLine = (currentNPC.vocab_focus||[]).length > 0
@@ -3117,22 +3529,10 @@ document.addEventListener('keydown', e => {
     if (dBox.style.display !== 'none' && active === dInput) {
       sendDialogue(); return;
     }
-    if (active === document.getElementById('world-prompt')) generateWorld();
   }
 
   if (e.key === 'Escape') {
     closeDialogue();
-    // Also dismiss focus from prompt bar so WASD resumes
-    document.getElementById('world-prompt')?.blur();
-  }
-
-  // T key = focus the world prompt bar (only when not already in an input)
-  if ((e.key === 't' || e.key === 'T') && !inInput) {
-    const wp = document.getElementById('world-prompt');
-    if (wp && document.getElementById('prompt-bar')?.style.display !== 'none') {
-      e.preventDefault();
-      wp.focus();
-    }
   }
 
   // E key — DOM-level building entry (works regardless of Phaser canvas focus or input focus)
@@ -3140,8 +3540,7 @@ document.addEventListener('keydown', e => {
   if ((e.key === 'e' || e.key === 'E') && !isIndoor && gameScene && !gameScene.dialogueCooldown) {
     // Don't fire if user is actively typing in an input (dialogue input or world prompt)
     const typingInDialogue = active === document.getElementById('dialogue-input');
-    const typingInPrompt = active === document.getElementById('world-prompt');
-    if (!typingInDialogue && !typingInPrompt) {
+    if (!typingInDialogue) {
       const dialogueOpen = document.getElementById('dialogue-box').style.display !== 'none'
                         && document.getElementById('dialogue-box').style.display !== '';
       if (!dialogueOpen) {
@@ -3167,25 +3566,20 @@ document.addEventListener('keydown', e => {
   }
 });
 
-// Clicking the game canvas returns focus to game (dismisses prompt focus)
-document.getElementById('game-container').addEventListener('pointerdown', () => {
-  document.getElementById('world-prompt')?.blur();
-});
-
-// Pause Phaser keyboard when typing in HTML inputs
-['world-prompt','dialogue-input'].forEach(id => {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.addEventListener('focus', () => { if (phaserGame) phaserGame.input.keyboard.enabled = false; });
-  el.addEventListener('blur',  () => { if (phaserGame) phaserGame.input.keyboard.enabled = true; });
-});
+// Pause Phaser keyboard when typing in HTML inputs (dialogue only)
+{
+  const el = document.getElementById('dialogue-input');
+  if (el) {
+    el.addEventListener('focus', () => { if (phaserGame) phaserGame.input.keyboard.enabled = false; });
+    el.addEventListener('blur',  () => { if (phaserGame) phaserGame.input.keyboard.enabled = true; });
+  }
+}
 
 // ─────────────────────────────────────────────────────────────
 //  STARTUP
 // ─────────────────────────────────────────────────────────────
 loadConfig();
-// Sync autogen checkbox to saved preference on load
-document.getElementById('autogen-checkbox').checked = AUTO_GEN;
+checkSavedGame();
 </script>
 </body>
 </html>
