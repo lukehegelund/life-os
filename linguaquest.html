@@ -2289,7 +2289,7 @@ function _pixiLoadChunk(worldContainer, worldDef, chunkX, chunkY, isOrigin) {
       for (let col = 0; col < cols; col++) {
         const t = tiles[row]?.[col];
         if (t === 'building_door') {
-          addLight(col, row - 0.5, 0xFFCC66, LIGHT_RADIUS_WINDOW, false);
+          addLight(col, row - 0.5, LCOLOR_WINDOW, LIGHT_RADIUS_WINDOW, false);
         }
       }
     }
@@ -2314,7 +2314,7 @@ function _pixiLoadChunk(worldContainer, worldDef, chunkX, chunkY, isOrigin) {
         const h = ((chunkSeed + i * 2654435761) >>> 0);
         if (h % 5 === 0) {
           const [tc, tr] = pathTiles[i];
-          addLight(tc, tr - 0.3, 0xFF9933, LIGHT_RADIUS_TORCH, true);
+          addLight(tc, tr - 0.3, LCOLOR_TORCH, LIGHT_RADIUS_TORCH, true);
         }
       }
     }
@@ -2329,12 +2329,12 @@ function _pixiLoadChunk(worldContainer, worldDef, chunkX, chunkY, isOrigin) {
       if (grassTiles.length > 0) {
         const pick = (chunkSeed * 1234567) % grassTiles.length;
         const [fc, fr] = grassTiles[pick];
-        addLight(fc, fr, 0xFF6600, LIGHT_RADIUS_CAMPFIRE, true);
+        addLight(fc, fr, LCOLOR_CAMPFIRE, LIGHT_RADIUS_CAMPFIRE, true);
         // Embers nearby
         for (let e = 0; e < 2; e++) {
           const ep = (chunkSeed * (e + 7) * 987654) % grassTiles.length;
           const [ec, er] = grassTiles[ep];
-          addLight(ec, er, 0xFF4400, LIGHT_RADIUS_TORCH * 0.6, true);
+          addLight(ec, er, LCOLOR_TORCH, LIGHT_RADIUS_TORCH * 0.6, true);
         }
       }
     }
@@ -2349,7 +2349,7 @@ function _pixiLoadChunk(worldContainer, worldDef, chunkX, chunkY, isOrigin) {
         const h = ((chunkSeed + i * 999983) >>> 0);
         if (h % 8 === 0) {
           const [lc, lr] = pathT[i];
-          addLight(lc, lr, 0xDDEEFF, LIGHT_RADIUS_TORCH * 0.85, false);
+          addLight(lc, lr, LCOLOR_LAMP, LIGHT_RADIUS_TORCH * 0.85, false);
         }
       }
     }
@@ -2462,6 +2462,15 @@ const LIGHT_RADIUS_WINDOW   = TILE_SIZE * 2.2;
 const LIGHT_AMBIENT_NIGHT   = 0.82;
 const LIGHT_AMBIENT_DAY     = 0.0;
 
+// Light tint colours — near-white with colour temperature bias.
+// Under MULTIPLY: centre is bright+coloured, edge fades to ambient darkness.
+const LCOLOR_LANTERN  = 0xFFE8A0;  // warm amber (player)
+const LCOLOR_TORCH    = 0xFFCC80;  // orange torch
+const LCOLOR_CAMPFIRE = 0xFFAA60;  // deep orange fire
+const LCOLOR_WINDOW   = 0xFFDD90;  // warm window glow
+const LCOLOR_LAMP     = 0xCCE0FF;  // cool moonlit lamp post
+const LCOLOR_MOON     = 0xBBCCFF;  // cool blue moonlight
+
 // World light sources — populated by chunk loader, cleared on unload
 const _worldLights = [];
 
@@ -2488,27 +2497,36 @@ function _tickLightFlicker(dt) {
 }
 
 // ── Smooth falloff disk ───────────────────────────────────────
-// Draws concentric rings outer→inner. Each ring's colour is lerped
-// from darkVal (edge) to `color` (centre) using smoothstep^1.4.
-// IMPORTANT: never draw below darkVal — that would create dark artifacts
-// under MULTIPLY.
-function _drawLightDisk(sx, sy, radius, color, darkVal, steps) {
-  const cr = (color >> 16) & 0xFF;
-  const cg = (color >> 8)  & 0xFF;
-  const cb =  color        & 0xFF;
+// MULTIPLY colour model:
+//   white (255,255,255) = fully lit — scene shows through unchanged
+//   grey  (n,n,n)       = dimmed to n/255 of scene brightness
+//   black (0,0,0)       = fully dark
+//
+// `tint` encodes the light's colour temperature as a near-white colour:
+//   amber lantern  → 0xFFE8A0  (full red, high green, reduced blue)
+//   orange torch   → 0xFFCC80
+//   campfire       → 0xFFAA60
+//   window glow    → 0xFFDD90
+//   moonlight      → 0xCCDDFF  (slightly cool)
+//
+// Centre ring = tint (bright, coloured light).
+// Edge ring   = darkVal grey (ambient darkness).  Never below darkVal.
+function _drawLightDisk(sx, sy, radius, tint, darkVal, steps) {
+  const tr = (tint >> 16) & 0xFF;
+  const tg = (tint >> 8)  & 0xFF;
+  const tb =  tint        & 0xFF;
   const N = steps || 24;
   for (let i = 0; i <= N; i++) {
-    const t    = i / N;                          // 0=edge → 1=centre
-    const s    = t * t * (3 - 2 * t);           // smoothstep
-    const ease = Math.pow(s, 1.4);
-    // Lerp: edge=darkVal, centre=color. Never go darker than darkVal.
-    const rv = Math.round(darkVal + ease * Math.max(0, cr - darkVal));
-    const gv = Math.round(darkVal + ease * Math.max(0, cg - darkVal));
-    const bv = Math.round(darkVal + ease * Math.max(0, cb - darkVal));
-    const col = (rv << 16) | (gv << 8) | bv;
-    // Ring radius: full radius at i=0, shrinks linearly to ~0 at i=N
+    const t    = i / N;                    // 0=edge → 1=centre
+    const s    = t * t * (3 - 2 * t);     // smoothstep
+    const ease = Math.pow(s, 1.5);
+    // Lerp from darkVal (edge) to tint channel (centre)
+    // Clamp so we never go below darkVal on any channel
+    const rv = Math.round(darkVal + ease * Math.max(0, tr - darkVal));
+    const gv = Math.round(darkVal + ease * Math.max(0, tg - darkVal));
+    const bv = Math.round(darkVal + ease * Math.max(0, tb - darkVal));
     const ringR = radius * (1 - t * (N / (N + 1)));
-    _lightGfx.beginFill(col, 1);
+    _lightGfx.beginFill((rv << 16) | (gv << 8) | bv, 1);
     _lightGfx.drawCircle(sx, sy, ringR);
     _lightGfx.endFill();
   }
@@ -2614,24 +2632,24 @@ function _drawVisibilityPoly(sx, sy, pts, color, darkVal) {
 }
 
 // ── Surface tint ──────────────────────────────────────────────
-// Shift a light colour based on the tile it's sitting on.
-// Only shifts HUE slightly — never darkens below the base colour.
-function _surfaceTintColor(baseColor, worldX, worldY) {
+// Nudge the light tint based on surface type. Works in near-white space:
+// small channel tweaks shift the colour temperature without darkening.
+function _surfaceTintColor(baseTint, worldX, worldY) {
   const tile = _pixiGetTileAt(worldX, worldY);
-  let r = (baseColor >> 16) & 0xFF;
-  let g = (baseColor >> 8)  & 0xFF;
-  let b =  baseColor        & 0xFF;
+  let r = (baseTint >> 16) & 0xFF;
+  let g = (baseTint >> 8)  & 0xFF;
+  let b =  baseTint        & 0xFF;
   if (tile === 'water' || tile === 'beach') {
-    // Slight cyan shift — don't darken
-    b = Math.min(255, b + 18);
-    r = Math.max(r - 10, 0);
+    // Cooler — boost blue slightly, reduce red a touch
+    b = Math.min(255, b + 20);
+    r = Math.max(0, r - 12);
   } else if (tile === 'stone' || tile === 'path') {
-    // Neutral boost
-    r = Math.min(255, r + 10);
-    g = Math.min(255, g + 8);
-    b = Math.min(255, b + 6);
+    // Neutral: push all channels toward white
+    r = Math.min(255, r + 8);
+    g = Math.min(255, g + 6);
+    b = Math.min(255, b + 5);
   }
-  // grass: no change — amber already looks good on grass
+  // grass: keep as-is
   return (r << 16) | (g << 8) | b;
 }
 
@@ -2679,13 +2697,14 @@ function _updateLighting(renderer, playerScreenX, playerScreenY, ambientAlpha, i
     _lightGfx.drawRect(0, 0, w, h);
     _lightGfx.endFill();
 
-    // Moon-lit half: a large soft ellipse offset toward the moon direction.
-    // IMPORTANT: floor must be darkVal (not sv) so outer rings never go
-    // darker than the ambient fill — that would produce a dark arc artifact.
+    // Moon-lit half: a large soft disk offset toward the moon direction.
+    // Use LCOLOR_MOON (cool blue near-white) as the tint.
+    // Radius >> screen so the outer edge (which fades to darkVal) is always
+    // off-screen — no dark arc artifact at the boundary.
     const mx = w / 2 + moonDX * w * 0.55;
     const my = h / 2 + moonDY * h * 0.55;
-    const mr = Math.max(w, h) * 1.1; // big enough that edge is off-screen
-    _drawLightDisk(mx, my, mr, moonCol, darkVal, 10);
+    const mr = Math.max(w, h) * 1.2;
+    _drawLightDisk(mx, my, mr, LCOLOR_MOON, darkVal, 10);
   }
 
   // ── 2. World light disks (torches, campfires, windows) ─────
@@ -2714,7 +2733,7 @@ function _updateLighting(renderer, playerScreenX, playerScreenY, ambientAlpha, i
     const r = LIGHT_RADIUS_PLAYER * flicker;
     const playerWorldX = playerScreenX - wcx;
     const playerWorldY = playerScreenY - wcy;
-    const amber = _surfaceTintColor(0xFFD080, playerWorldX, playerWorldY);
+    const amber = _surfaceTintColor(LCOLOR_LANTERN, playerWorldX, playerWorldY);
 
     const visPoly = _computeVisibilityPoly(playerScreenX, playerScreenY, r, wcx, wcy);
     if (visPoly.length >= 3) {
