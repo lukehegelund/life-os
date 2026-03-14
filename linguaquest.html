@@ -2606,9 +2606,10 @@ function _drawVisibilityPoly(sx, sy, pts, color, darkVal) {
     _lightGfx.closePath();
     _lightGfx.endFill();
   }
-  // Bright warm hotspot at dead centre
-  _lightGfx.beginFill(0xFFEEB0, 1);
-  _lightGfx.drawCircle(sx, sy, TILE_SIZE * 0.6);
+  // Bright hotspot at dead centre — use the light's own colour, not a
+  // hardcoded value (hardcoded values look wrong under MULTIPLY on dark scenes)
+  _lightGfx.beginFill(color, 1);
+  _lightGfx.drawCircle(sx, sy, TILE_SIZE * 0.55);
   _lightGfx.endFill();
 }
 
@@ -2678,13 +2679,13 @@ function _updateLighting(renderer, playerScreenX, playerScreenY, ambientAlpha, i
     _lightGfx.drawRect(0, 0, w, h);
     _lightGfx.endFill();
 
-    // Moon-lit half: a large soft ellipse offset toward the moon direction
-    const mx = w / 2 + moonDX * w * 0.6;
-    const my = h / 2 + moonDY * h * 0.6;
-    const mr = Math.max(w, h) * 0.85;
-    // Draw as a disk using _drawLightDisk but with moonCol as peak
-    // and shadowCol already filling behind it
-    _drawLightDisk(mx, my, mr, moonCol, sv, 8);
+    // Moon-lit half: a large soft ellipse offset toward the moon direction.
+    // IMPORTANT: floor must be darkVal (not sv) so outer rings never go
+    // darker than the ambient fill — that would produce a dark arc artifact.
+    const mx = w / 2 + moonDX * w * 0.55;
+    const my = h / 2 + moonDY * h * 0.55;
+    const mr = Math.max(w, h) * 1.1; // big enough that edge is off-screen
+    _drawLightDisk(mx, my, mr, moonCol, darkVal, 10);
   }
 
   // ── 2. World light disks (torches, campfires, windows) ─────
@@ -2720,8 +2721,8 @@ function _updateLighting(renderer, playerScreenX, playerScreenY, ambientAlpha, i
       _drawVisibilityPoly(playerScreenX, playerScreenY, visPoly, amber, darkVal);
     } else {
       _drawLightDisk(playerScreenX, playerScreenY, r, amber, darkVal, 24);
-      _lightGfx.beginFill(0xFFEEB0, 1);
-      _lightGfx.drawCircle(playerScreenX, playerScreenY, TILE_SIZE * 0.6);
+      _lightGfx.beginFill(amber, 1);
+      _lightGfx.drawCircle(playerScreenX, playerScreenY, TILE_SIZE * 0.55);
       _lightGfx.endFill();
     }
   }
