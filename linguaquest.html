@@ -4137,15 +4137,46 @@ async function generateChunkAPI(cx, cy, dirLabel) {
   // ── 2. Procedural tile generation — instant, no API ───────────────────────
   const tiles = _generateProceduralTiles(cx, cy, biomeKey, campaignId);
 
+  // ── 2b. Seam stitching — blend edges with already-loaded neighbours ────────
+  // Since noise is continuous, only the border 1px needs hard-matching.
+  // This prevents autotile from drawing mismatched borders at chunk edges.
+  const _N = chunks.get(`${cx},${cy - 1}`);
+  const _S = chunks.get(`${cx},${cy + 1}`);
+  const _W = chunks.get(`${cx - 1},${cy}`);
+  const _E = chunks.get(`${cx + 1},${cy}`);
+  if (_N?.loaded && _N.worldDef?.world?.tiles) {
+    const nt = _N.worldDef.world.tiles;
+    const lastRow = nt[nt.length - 1] || [];
+    for (let c = 0; c < CHUNK_COLS; c++) if (lastRow[c]) tiles[0][c] = lastRow[c];
+  }
+  if (_S?.loaded && _S.worldDef?.world?.tiles) {
+    const st = _S.worldDef.world.tiles;
+    const firstRow = st[0] || [];
+    for (let c = 0; c < CHUNK_COLS; c++) if (firstRow[c]) tiles[CHUNK_ROWS-1][c] = firstRow[c];
+  }
+  if (_W?.loaded && _W.worldDef?.world?.tiles) {
+    const wt = _W.worldDef.world.tiles;
+    for (let r = 0; r < CHUNK_ROWS; r++) if (wt[r]?.[CHUNK_COLS-1]) tiles[r][0] = wt[r][CHUNK_COLS-1];
+  }
+  if (_E?.loaded && _E.worldDef?.world?.tiles) {
+    const et = _E.worldDef.world.tiles;
+    for (let r = 0; r < CHUNK_ROWS; r++) if (et[r]?.[0]) tiles[r][CHUNK_COLS-1] = et[r][0];
+  }
+
   // ── 3. Generate NPCs via AI (lightweight call — names/dialogue only) ───────
   const npcs = await _generateNPCsForChunk(cx, cy, biomeKey, campaignId);
 
   // ── 4. Normalise NPC format to match what loadChunk expects ───────────────
+  // AI returns {col, row} but loadChunk expects {position: [col, row]}
   const normalisedNpcs = npcs.map((npc, i) => {
     const rawGreeting = npc.greeting || (Array.isArray(npc.dialogue) && npc.dialogue[0]) || '...';
+    const col = npc.col ?? npc.position?.[0] ?? Math.floor(CHUNK_COLS / 2);
+    const row = npc.row ?? npc.position?.[1] ?? Math.floor(CHUNK_ROWS / 2);
     return {
       ...npc,
       id: `${cx}_${cy}_npc${i}`,
+      position: [col, row],  // loadChunk destructures this at line 2222
+      col, row,
       greeting: rawGreeting,
       dialogue: npc.dialogue || [rawGreeting],
       personality: npc.personality || npc.ai_context || '',
