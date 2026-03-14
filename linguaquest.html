@@ -3732,7 +3732,11 @@ function _dbgH(str) {
 }
 function _dbgVal(v, dim=false) {
   if (v === null || v === undefined || v === '') return `<span class="dbg-val dim">—</span>`;
-  if (typeof v === 'object') return `<span class="dbg-val dim">[object]</span>`;
+  if (typeof v === 'object') {
+    // Render objects inline as compact key: value lines
+    const entries = Object.entries(v).map(([k,val]) => `${k}: ${val}`).join(' · ');
+    return `<span class="dbg-val" style="font-size:9px;opacity:.85">${_dbgH(entries)}</span>`;
+  }
   const cls = dim ? 'dbg-val dim' : 'dbg-val';
   return `<span class="${cls}">${_dbgH(v)}</span>`;
 }
