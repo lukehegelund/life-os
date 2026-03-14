@@ -2444,13 +2444,12 @@ function _pixiGetTileAt(worldX, worldY) {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  DYNAMIC LIGHTING  (R1.6 — improved)
+//  DYNAMIC LIGHTING
 //  MULTIPLY-blend overlay with:
-//    • Smooth falloff (smoothstep) per light disk
+//    • Smooth smoothstep falloff per light disk
 //    • 2D visibility polygon for player lantern (rays stop at walls)
-//    • Moonlight directional gradient
-//    • Surface tinting (water/stone/grass affect light color)
-//    • Penumbra strips behind wall tiles near light sources
+//    • Moonlight tint (cool-blue ambient, no band geometry)
+//    • Surface tinting (water/stone/grass affect light colour)
 // ─────────────────────────────────────────────────────────────
 let _lightRT     = null;
 let _lightGfx    = null;
@@ -2484,32 +2483,31 @@ let _lightTime = 0;
 function _tickLightFlicker(dt) {
   _lightTime += dt * 0.016;
   for (const lt of _worldLights) {
-    if (lt.flicker) lt.flickerPhase += dt * 0.016 * (6 + lt.flickerSeed * 4);
+    if (lt.flicker) lt.flickerPhase += dt * 0.016 * (5 + (lt.flickerSeed || 0.5) * 3);
   }
 }
 
-// ── Smooth falloff disk (smoothstep, drawn outer→inner) ───────
-// Draws 32 concentric rings lerping from darkVal at edge to color at center.
-// Uses smoothstep(0,1,t)^1.5 for natural photometric falloff.
+// ── Smooth falloff disk ───────────────────────────────────────
+// Draws concentric rings outer→inner. Each ring's colour is lerped
+// from darkVal (edge) to `color` (centre) using smoothstep^1.4.
+// IMPORTANT: never draw below darkVal — that would create dark artifacts
+// under MULTIPLY.
 function _drawLightDisk(sx, sy, radius, color, darkVal, steps) {
   const cr = (color >> 16) & 0xFF;
   const cg = (color >> 8)  & 0xFF;
   const cb =  color        & 0xFF;
-  const STEPS = steps || 32;
-  for (let i = 0; i <= STEPS; i++) {
-    // t goes 0→1 from edge to center; draw outer rings first
-    const t = i / STEPS;
-    // smoothstep then power for slow-then-fast decay near edge
-    const s = t * t * (3 - 2 * t);          // smoothstep
+  const N = steps || 24;
+  for (let i = 0; i <= N; i++) {
+    const t    = i / N;                          // 0=edge → 1=centre
+    const s    = t * t * (3 - 2 * t);           // smoothstep
     const ease = Math.pow(s, 1.4);
-    const rv = Math.round(darkVal + ease * (cr - darkVal));
-    const gv = Math.round(darkVal + ease * (cg - darkVal));
-    const bv = Math.round(darkVal + ease * (cb - darkVal));
-    const col = (Math.max(darkVal, rv) << 16)
-              | (Math.max(darkVal, gv) << 8)
-              |  Math.max(darkVal, bv);
-    // Radius shrinks as t grows (center-most ring is smallest)
-    const ringR = radius * (1.0 - t + t / (STEPS + 1));
+    // Lerp: edge=darkVal, centre=color. Never go darker than darkVal.
+    const rv = Math.round(darkVal + ease * Math.max(0, cr - darkVal));
+    const gv = Math.round(darkVal + ease * Math.max(0, cg - darkVal));
+    const bv = Math.round(darkVal + ease * Math.max(0, cb - darkVal));
+    const col = (rv << 16) | (gv << 8) | bv;
+    // Ring radius: full radius at i=0, shrinks linearly to ~0 at i=N
+    const ringR = radius * (1 - t * (N / (N + 1)));
     _lightGfx.beginFill(col, 1);
     _lightGfx.drawCircle(sx, sy, ringR);
     _lightGfx.endFill();
@@ -2517,173 +2515,123 @@ function _drawLightDisk(sx, sy, radius, color, darkVal, steps) {
 }
 
 // ── 2D Visibility Polygon ─────────────────────────────────────
-// Sweeps rays from (sx,sy) outward, stopping at opaque tiles.
-// Returns array of {x,y} screen-space polygon vertices.
-// Only used for player lantern (expensive but worth it for the one hero source).
-const _WALL_TILES = new Set(['building','cliff','mountain','tree']);
+// Cast rays from player to every wall-tile corner ± ε.
+// Each ray stops at the first opaque tile.  Returns screen-space pts[].
+const _WALL_TILES = new Set(['building', 'cliff', 'mountain', 'tree']);
 
 function _computeVisibilityPoly(sx, sy, radius, wcx, wcy) {
-  // Convert screen origin to world
-  const wx0 = sx - wcx;
-  const wy0 = sy - wcy;
+  const wx0 = sx - wcx;   // player world-x
+  const wy0 = sy - wcy;   // player world-y
 
-  // Gather nearby wall tile corners within radius
-  const tileR = Math.ceil(radius / TILE_SIZE) + 1;
+  // Collect corners of every wall tile within radius
   const corners = [];
   const cx0 = Math.floor((wx0 - radius) / TILE_SIZE);
   const cy0 = Math.floor((wy0 - radius) / TILE_SIZE);
-  for (let ty = cy0; ty <= cy0 + tileR * 2; ty++) {
-    for (let tx = cx0; tx <= cx0 + tileR * 2; tx++) {
-      const worldX = tx * TILE_SIZE;
-      const worldY = ty * TILE_SIZE;
-      const tileType = _pixiGetTileAt(worldX + TILE_SIZE / 2, worldY + TILE_SIZE / 2);
-      if (_WALL_TILES.has(tileType)) {
-        // Push all 4 corners of this tile
-        corners.push([worldX,            worldY           ]);
-        corners.push([worldX + TILE_SIZE, worldY           ]);
-        corners.push([worldX,            worldY + TILE_SIZE]);
-        corners.push([worldX + TILE_SIZE, worldY + TILE_SIZE]);
-      }
+  const span = Math.ceil(radius * 2 / TILE_SIZE) + 2;
+  for (let ty = cy0; ty <= cy0 + span; ty++) {
+    for (let tx = cx0; tx <= cx0 + span; tx++) {
+      const tt = _pixiGetTileAt(tx * TILE_SIZE + TILE_SIZE * 0.5,
+                                ty * TILE_SIZE + TILE_SIZE * 0.5);
+      if (!_WALL_TILES.has(tt)) continue;
+      const wx = tx * TILE_SIZE, wy = ty * TILE_SIZE;
+      corners.push([wx,            wy           ]);
+      corners.push([wx + TILE_SIZE, wy           ]);
+      corners.push([wx,            wy + TILE_SIZE]);
+      corners.push([wx + TILE_SIZE, wy + TILE_SIZE]);
     }
   }
 
-  // Build angle list: corner angles ± tiny epsilon for edge grazing
+  // Build sorted angle list
   const angles = [];
-  for (const [cx, cy] of corners) {
-    const dx = cx - wx0, dy = cy - wy0;
-    const a = Math.atan2(dy, dx);
-    angles.push(a - 0.0001, a, a + 0.0001);
+  for (const [cx2, cy2] of corners) {
+    const a = Math.atan2(cy2 - wy0, cx2 - wx0);
+    angles.push(a - 0.00015, a, a + 0.00015);
   }
-  // Add cardinal fallback rays
-  for (let a = 0; a < Math.PI * 2; a += Math.PI / 16) angles.push(a);
+  // Uniform fallback rays so we always get a full circle when no walls
+  for (let i = 0; i < 32; i++) angles.push((i / 32) * Math.PI * 2 - Math.PI);
   angles.sort((a, b) => a - b);
 
-  // Ray cast each angle
+  // Cast each ray, step size = half a tile
+  const step = TILE_SIZE * 0.5;
+  const maxSteps = Math.ceil(radius / step) + 1;
   const pts = [];
   for (const angle of angles) {
     const dx = Math.cos(angle), dy = Math.sin(angle);
-    // Step through tiles along the ray
-    let dist = radius;
-    for (let step = 1; step <= Math.ceil(radius / (TILE_SIZE * 0.5)); step++) {
-      const d = step * TILE_SIZE * 0.5;
-      if (d > radius) { dist = radius; break; }
-      const wx = wx0 + dx * d;
-      const wy = wy0 + dy * d;
-      const tt = _pixiGetTileAt(wx, wy);
-      if (_WALL_TILES.has(tt)) { dist = d - TILE_SIZE * 0.25; break; }
-      dist = d;
+    let hitDist = radius;
+    for (let s = 1; s <= maxSteps; s++) {
+      const d = s * step;
+      if (d >= radius) break;
+      const tt = _pixiGetTileAt(wx0 + dx * d, wy0 + dy * d);
+      if (_WALL_TILES.has(tt)) {
+        hitDist = Math.max(0, d - step * 0.5);
+        break;
+      }
     }
-    dist = Math.max(0, Math.min(dist, radius));
-    // Convert back to screen space
-    pts.push({ x: sx + dx * dist, y: sy + dy * dist });
+    pts.push({ x: sx + dx * hitDist, y: sy + dy * hitDist });
   }
   return pts;
 }
 
-// Draw visibility polygon as a fan from center
+// Draw visibility polygon with smooth radial falloff.
+// Strategy: fill the full polygon at darkVal first, then draw N scaled-down
+// versions from the outermost (darkVal→color boundary) to a tight centre
+// hotspot. Scale goes from 1.0 (full polygon) down to 0 (just the centre),
+// with colour lerping from darkVal at scale=1 to lightColor at scale=0.
 function _drawVisibilityPoly(sx, sy, pts, color, darkVal) {
-  if (pts.length < 2) return;
+  if (pts.length < 3) return;
   const cr = (color >> 16) & 0xFF;
   const cg = (color >> 8)  & 0xFF;
   const cb =  color        & 0xFF;
 
-  // Draw in 3 passes with decreasing radius for falloff effect
-  const PASSES = 28;
+  const PASSES = 24;
   for (let p = 0; p <= PASSES; p++) {
-    const t = p / PASSES;                  // 0=edge, 1=center
-    const s = t * t * (3 - 2 * t);        // smoothstep
+    const t    = p / PASSES;              // 0=outermost, 1=centre
+    const s    = t * t * (3 - 2 * t);    // smoothstep
     const ease = Math.pow(s, 1.3);
-    const scale = 1.0 - t * (1 - 1 / (PASSES + 1));
-    const rv = Math.round(darkVal + ease * (cr - darkVal));
-    const gv = Math.round(darkVal + ease * (cg - darkVal));
-    const bv = Math.round(darkVal + ease * (cb - darkVal));
-    const col = (Math.max(darkVal, rv) << 16)
-              | (Math.max(darkVal, gv) << 8)
-              |  Math.max(darkVal, bv);
+    // Scale: 1 at edge → 0 at centre (so each pass is smaller)
+    const scale = 1.0 - t;
+    // Colour: darkVal at edge → lightColor at centre (never below darkVal)
+    const rv = Math.round(darkVal + ease * Math.max(0, cr - darkVal));
+    const gv = Math.round(darkVal + ease * Math.max(0, cg - darkVal));
+    const bv = Math.round(darkVal + ease * Math.max(0, cb - darkVal));
+    const col = (rv << 16) | (gv << 8) | bv;
+
     _lightGfx.beginFill(col, 1);
     _lightGfx.moveTo(sx, sy);
     for (const pt of pts) {
-      const px2 = sx + (pt.x - sx) * scale;
-      const py2 = sy + (pt.y - sy) * scale;
-      _lightGfx.lineTo(px2, py2);
+      _lightGfx.lineTo(sx + (pt.x - sx) * scale, sy + (pt.y - sy) * scale);
     }
-    _lightGfx.lineTo(
-      sx + (pts[0].x - sx) * scale,
-      sy + (pts[0].y - sy) * scale
-    );
+    // Close back to first point
+    _lightGfx.lineTo(sx + (pts[0].x - sx) * scale, sy + (pts[0].y - sy) * scale);
     _lightGfx.closePath();
     _lightGfx.endFill();
   }
-  // Hot center
+  // Bright warm hotspot at dead centre
   _lightGfx.beginFill(0xFFEEB0, 1);
-  _lightGfx.drawCircle(sx, sy, TILE_SIZE * 0.7);
+  _lightGfx.drawCircle(sx, sy, TILE_SIZE * 0.6);
   _lightGfx.endFill();
 }
 
-// ── Penumbra behind walls ─────────────────────────────────────
-// For each wall tile visible near a light, draw a dark trapezoid
-// extending away from the light, simulating a cast shadow.
-function _drawPenumbra(sx, sy, wcx, wcy, radius, darkVal) {
-  const shadowDark = Math.max(0, darkVal - 40);
-  const shadowCol  = (shadowDark << 16) | (shadowDark << 8) | shadowDark;
-  const wx0 = sx - wcx, wy0 = sy - wcy;
-  const tileR = Math.ceil(radius / TILE_SIZE);
-  const cx0 = Math.floor((wx0 - radius) / TILE_SIZE);
-  const cy0 = Math.floor((wy0 - radius) / TILE_SIZE);
-
-  for (let ty = cy0; ty <= cy0 + tileR * 2; ty++) {
-    for (let tx = cx0; tx <= cx0 + tileR * 2; tx++) {
-      const twx = tx * TILE_SIZE + TILE_SIZE / 2;
-      const twy = ty * TILE_SIZE + TILE_SIZE / 2;
-      const tileType = _pixiGetTileAt(twx, twy);
-      if (!_WALL_TILES.has(tileType)) continue;
-      const dist = Math.hypot(twx - wx0, twy - wy0);
-      if (dist > radius) continue;
-
-      // Direction from light through tile
-      const ddx = (twx - wx0) / Math.max(1, dist);
-      const ddy = (twy - wy0) / Math.max(1, dist);
-      const shadowLen = TILE_SIZE * 2.5 * (1 - dist / radius);
-
-      // Screen coords of tile edges perpendicular to shadow direction
-      const perpX = -ddy * TILE_SIZE * 0.55;
-      const perpY =  ddx * TILE_SIZE * 0.55;
-      const tsx = twx + wcx, tsy = twy + wcy;
-
-      _lightGfx.beginFill(shadowCol, 1);
-      _lightGfx.moveTo(tsx + perpX, tsy + perpY);
-      _lightGfx.lineTo(tsx - perpX, tsy - perpY);
-      _lightGfx.lineTo(tsx - perpX + ddx * shadowLen, tsy - perpY + ddy * shadowLen);
-      _lightGfx.lineTo(tsx + perpX + ddx * shadowLen, tsy + perpY + ddy * shadowLen);
-      _lightGfx.closePath();
-      _lightGfx.endFill();
-    }
-  }
-}
-
-// ── Surface tint: shift light color based on tile under source ─
+// ── Surface tint ──────────────────────────────────────────────
+// Shift a light colour based on the tile it's sitting on.
+// Only shifts HUE slightly — never darkens below the base colour.
 function _surfaceTintColor(baseColor, worldX, worldY) {
   const tile = _pixiGetTileAt(worldX, worldY);
+  let r = (baseColor >> 16) & 0xFF;
+  let g = (baseColor >> 8)  & 0xFF;
+  let b =  baseColor        & 0xFF;
   if (tile === 'water' || tile === 'beach') {
-    // Cool water shimmer — shift toward cyan
-    const r = (baseColor >> 16) & 0xFF;
-    const g = (baseColor >> 8)  & 0xFF;
-    const b =  baseColor        & 0xFF;
-    return (Math.round(r * 0.8) << 16) | (Math.round(g * 0.95) << 8) | Math.min(255, Math.round(b * 1.15));
+    // Slight cyan shift — don't darken
+    b = Math.min(255, b + 18);
+    r = Math.max(r - 10, 0);
+  } else if (tile === 'stone' || tile === 'path') {
+    // Neutral boost
+    r = Math.min(255, r + 10);
+    g = Math.min(255, g + 8);
+    b = Math.min(255, b + 6);
   }
-  if (tile === 'stone' || tile === 'path') {
-    // Stone bounces slightly brighter / neutral
-    const v = baseColor;
-    const r = Math.min(255, ((v >> 16) & 0xFF) + 15);
-    const g = Math.min(255, ((v >> 8)  & 0xFF) + 12);
-    const b = Math.min(255, ( v        & 0xFF) + 10);
-    return (r << 16) | (g << 8) | b;
-  }
-  // Grass: absorbs (slightly warmer, slightly darker)
-  const r = (baseColor >> 16) & 0xFF;
-  const g = (baseColor >> 8)  & 0xFF;
-  const b =  baseColor        & 0xFF;
-  return (Math.round(r * 0.97) << 16) | (Math.round(g * 0.93) << 8) | Math.round(b * 0.88);
+  // grass: no change — amber already looks good on grass
+  return (r << 16) | (g << 8) | b;
 }
 
 // ── Main update ───────────────────────────────────────────────
@@ -2703,90 +2651,77 @@ function _updateLighting(renderer, playerScreenX, playerScreenY, ambientAlpha, i
   const wcx = wc ? wc.x : 0;
   const wcy = wc ? wc.y : 0;
 
-  // ── 1. Moonlight directional gradient ─────────────────────
-  // Very slow angle drift over the night (full cycle ~8 in-game hours)
-  const nightFrac = (ingameMin || 0) / 1440;
-  const moonAngle = nightFrac * Math.PI * 2 * 0.33;
-  const moonDX = Math.cos(moonAngle), moonDY = Math.sin(moonAngle);
-  // Ambient darkness base (grey)
-  const darkVal  = Math.round((1 - ambientAlpha) * 255);
-  // Moonlight adds a faint cool-blue tint in the "lit" direction
-  // We draw the darkness fill with a slight gradient: lighter toward moon, darker away
-  const moonStrength = ambientAlpha * 28; // how many grey levels of variation
-  for (let band = 0; band < 8; band++) {
-    const t = band / 8; // 0=shadow side, 1=moon side
-    const bv = Math.round(darkVal + moonStrength * t);
-    const bR = Math.round(bv * 0.88);         // slightly warm on moon-shadowed side
-    const bG = Math.round(bv * 0.92);
-    const bB = Math.min(255, Math.round(bv * 1.10)); // cool blue on moon-lit side
-    const bandCol = (bR << 16) | (bG << 8) | bB;
+  // Ambient darkness value (0=black night, 255=full day)
+  const darkVal = Math.round((1 - ambientAlpha) * 255);
 
-    // Clip the screen into 8 horizontal strips oriented along moonAngle
-    const perpDX = -moonDY, perpDY = moonDX;
-    const stripW = Math.max(w, h) * 2.5 / 8;
-    const cx2 = w / 2 + moonDX * (t - 0.5) * Math.max(w, h) * 1.2;
-    const cy2 = h / 2 + moonDY * (t - 0.5) * Math.max(w, h) * 1.2;
-    _lightGfx.beginFill(bandCol, 1);
-    _lightGfx.moveTo(cx2 + perpDX * stripW - moonDX * stripW,
-                     cy2 + perpDY * stripW - moonDY * stripW);
-    _lightGfx.lineTo(cx2 - perpDX * stripW - moonDX * stripW,
-                     cy2 - perpDY * stripW - moonDY * stripW);
-    _lightGfx.lineTo(cx2 - perpDX * stripW + moonDX * stripW,
-                     cy2 - perpDY * stripW + moonDY * stripW);
-    _lightGfx.lineTo(cx2 + perpDX * stripW + moonDX * stripW,
-                     cy2 + perpDY * stripW + moonDY * stripW);
-    _lightGfx.closePath();
+  // ── 1. Moonlight ambient fill ──────────────────────────────
+  // Single rect with a cool-blue tint (no geometric bands).
+  // The darkness has a very slight blue cast to feel like moonlight,
+  // with the tiniest directional variation via two overlapping rects.
+  {
+    const nightFrac  = ((ingameMin || 0) % 1440) / 1440;
+    const moonAngle  = nightFrac * Math.PI * 0.5 + Math.PI * 1.1; // slow drift NW→SW
+    const moonDX     = Math.cos(moonAngle);
+    const moonDY     = Math.sin(moonAngle);
+    const variance   = Math.round(ambientAlpha * 14); // max variation in brightness
+
+    // Shadow-side colour (slightly warm)
+    const sv = Math.max(0, darkVal - variance);
+    const shadowCol = (Math.round(sv * 0.95) << 16) | (Math.round(sv * 0.97) << 8) | Math.round(sv * 1.0);
+
+    // Moon-side colour (slightly cool-blue)
+    const lv = Math.min(255, darkVal + variance);
+    const moonCol   = (Math.round(lv * 0.88) << 16) | (Math.round(lv * 0.93) << 8) | Math.min(255, Math.round(lv * 1.12));
+
+    // Draw shadow-side rect first (full screen), then moon-side triangle on the lit half
+    _lightGfx.beginFill(shadowCol, 1);
+    _lightGfx.drawRect(0, 0, w, h);
     _lightGfx.endFill();
-  }
-  // Clip to screen bounds (overdraw a grey rect so nothing leaks outside)
-  // Actually done by RenderTexture automatically.
 
-  // ── 2. Penumbra behind walls near world lights ─────────────
-  for (const lt of _worldLights) {
-    const sx = lt.wx + wcx, sy = lt.wy + wcy;
-    if (sx < -lt.radius || sx > w + lt.radius ||
-        sy < -lt.radius || sy > h + lt.radius) continue;
-    _drawPenumbra(sx, sy, wcx, wcy, lt.radius * 0.9, darkVal);
+    // Moon-lit half: a large soft ellipse offset toward the moon direction
+    const mx = w / 2 + moonDX * w * 0.6;
+    const my = h / 2 + moonDY * h * 0.6;
+    const mr = Math.max(w, h) * 0.85;
+    // Draw as a disk using _drawLightDisk but with moonCol as peak
+    // and shadowCol already filling behind it
+    _drawLightDisk(mx, my, mr, moonCol, sv, 8);
   }
-  // Penumbra from player lantern too
-  _drawPenumbra(playerScreenX, playerScreenY, wcx, wcy, LIGHT_RADIUS_PLAYER, darkVal);
 
-  // ── 3. World light disks (torches, campfires, windows) ─────
+  // ── 2. World light disks (torches, campfires, windows) ─────
   for (const lt of _worldLights) {
     const sx = lt.wx + wcx, sy = lt.wy + wcy;
     if (sx < -lt.radius * 2 || sx > w + lt.radius * 2 ||
         sy < -lt.radius * 2 || sy > h + lt.radius * 2) continue;
     let r = lt.radius;
     if (lt.flicker) {
-      const flick = Math.sin(lt.flickerPhase * 1.7) * 0.08
-                  + Math.sin(lt.flickerPhase * 3.3) * 0.04
-                  + Math.sin(lt.flickerPhase * 7.1) * 0.015;
-      r = lt.radius * (1 + flick);
+      const fp = lt.flickerPhase || 0;
+      r = lt.radius * (1 + Math.sin(fp * 1.7) * 0.07
+                         + Math.sin(fp * 3.3) * 0.035
+                         + Math.sin(fp * 7.1) * 0.012);
     }
-    const tintedColor = _surfaceTintColor(lt.color, lt.wx, lt.wy);
-    _drawLightDisk(sx, sy, r, tintedColor, darkVal, 22);
-    // Hot center
-    _lightGfx.beginFill(tintedColor, 1);
-    _lightGfx.drawCircle(sx, sy, r * 0.12);
+    const tinted = _surfaceTintColor(lt.color, lt.wx, lt.wy);
+    _drawLightDisk(sx, sy, r, tinted, darkVal, 18);
+    // Bright hotspot
+    _lightGfx.beginFill(tinted, 1);
+    _lightGfx.drawCircle(sx, sy, r * 0.1);
     _lightGfx.endFill();
   }
 
-  // ── 4. Player lantern — visibility polygon ──────────────────
+  // ── 3. Player lantern — visibility polygon ─────────────────
   {
-    const r = LIGHT_RADIUS_PLAYER * (1 + Math.sin(_lightTime * 2.1) * 0.02);
+    const flicker = 1 + Math.sin(_lightTime * 2.1) * 0.02;
+    const r = LIGHT_RADIUS_PLAYER * flicker;
     const playerWorldX = playerScreenX - wcx;
     const playerWorldY = playerScreenY - wcy;
-    const tintedAmber  = _surfaceTintColor(0xFFD080, playerWorldX, playerWorldY);
+    const amber = _surfaceTintColor(0xFFD080, playerWorldX, playerWorldY);
 
-    // Compute visibility polygon — rays stop at walls
     const visPoly = _computeVisibilityPoly(playerScreenX, playerScreenY, r, wcx, wcy);
     if (visPoly.length >= 3) {
-      _drawVisibilityPoly(playerScreenX, playerScreenY, visPoly, tintedAmber, darkVal);
+      _drawVisibilityPoly(playerScreenX, playerScreenY, visPoly, amber, darkVal);
     } else {
-      // Fallback to disk if poly fails
-      _drawLightDisk(playerScreenX, playerScreenY, r, tintedAmber, darkVal, 32);
+      _drawLightDisk(playerScreenX, playerScreenY, r, amber, darkVal, 24);
       _lightGfx.beginFill(0xFFEEB0, 1);
-      _lightGfx.drawCircle(playerScreenX, playerScreenY, TILE_SIZE * 0.65);
+      _lightGfx.drawCircle(playerScreenX, playerScreenY, TILE_SIZE * 0.6);
       _lightGfx.endFill();
     }
   }
