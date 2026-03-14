@@ -459,6 +459,7 @@ const LQ_KEY_SESSION = 'lq_keys_v1'; // sessionStorage cache key
 let CLAUDE_KEY      = '';  // anthropic_api_key
 let LQ_ELEVEN_KEY   = '';  // elevenlabs_api_key
 let LQ_GROQ_KEY     = '';  // groq_api_key
+let GEMINI_KEY      = '';  // gemini_api_key — used for chunk generation (cheaper/faster)
 let srsVocab   = [];   // [{word, translation, stage}]
 
 // ── STATE ────────────────────────────────────────────────────
@@ -919,6 +920,7 @@ async function loadConfig() {
       CLAUDE_KEY    = keys.anthropic_api_key    || '';
       LQ_ELEVEN_KEY = keys.elevenlabs_api_key   || '';
       LQ_GROQ_KEY   = keys.groq_api_key         || '';
+      GEMINI_KEY    = keys.gemini_api_key        || '';
       if (CLAUDE_KEY) return;
     } catch(e) { sessionStorage.removeItem(LQ_KEY_SESSION); }
   }
@@ -940,6 +942,7 @@ async function loadConfig() {
     CLAUDE_KEY    = map.anthropic_api_key  || '';
     LQ_ELEVEN_KEY = map.elevenlabs_api_key || '';
     LQ_GROQ_KEY   = map.groq_api_key       || '';
+    GEMINI_KEY    = map.gemini_api_key     || '';
 
     if (CLAUDE_KEY) sessionStorage.setItem(LQ_KEY_SESSION, JSON.stringify(map));
   } catch(e) {
@@ -1338,6 +1341,16 @@ async function loadSavedGame(campaignId) {
         if (slug) campaignNPCs[slug] = npc;
       }
     }
+    // Backfill region_map if this is an older campaign that doesn't have one
+    if (!activeCampaign.world_state?.region_map) {
+      console.log('Backfilling region_map for existing campaign...');
+      const regionMap = generateRegionMap(campaignId);
+      const newWorldState = { ...(activeCampaign.world_state || {}), region_map: regionMap, used_decorations: [] };
+      activeCampaign.world_state = newWorldState;
+      // Fire-and-forget — don't block game start
+      lqDB('PATCH', `lq_campaigns?id=eq.${campaignId}`, { world_state: newWorldState }).catch(() => {});
+    }
+
     return true;
   } catch(e) {
     console.warn('Load failed:', e.message);
@@ -1895,7 +1908,7 @@ class GameScene extends Phaser.Scene {
         const x  = offsetX + col * TILE_SIZE;
         const y  = offsetY + row * TILE_SIZE;
         // Use absolute row for depth sorting (so objects across chunks sort correctly)
-        const absRow = chunkY * CHUNK_ROWS + row;
+        const absRow = chunkY * CHUNK_ROWS + row + 10000;
 
         if (tileType === 'tree') {
           const variant = (row * 3 + col) % 4;
@@ -2004,7 +2017,7 @@ class GameScene extends Phaser.Scene {
           const roll = h % 100;
           const jx = ((h >> 8) % TILE_SIZE) - TILE_SIZE / 2;
           const jy = ((h >> 16) % TILE_SIZE) - TILE_SIZE / 2;
-          const absRow2 = chunkY * CHUNK_ROWS + row;
+          const absRow2 = chunkY * CHUNK_ROWS + row + 10000;
           const depth = absRow2 * 10 + 2;
 
           if (tileType === 'grass') {
@@ -2178,7 +2191,7 @@ class GameScene extends Phaser.Scene {
           const ay = offsetY + ar * TILE_SIZE + TILE_SIZE / 2;
           const aType = animalTypes[i % animalTypes.length];
           if (!this.textures.exists(aType.key)) continue;
-          const absRow = chunkY * CHUNK_ROWS + ar;
+          const absRow = chunkY * CHUNK_ROWS + ar + 10000;
 
           if (aType.static) {
             // Static image animal (duck, goose, horse — no animation yet)
@@ -2203,11 +2216,22 @@ class GameScene extends Phaser.Scene {
       const [nc, nr] = npcDef.position;
       const nx = offsetX + nc * TILE_SIZE + TILE_SIZE / 2;
       const ny = offsetY + nr * TILE_SIZE + TILE_SIZE / 2;
-      const absRow = chunkY * CHUNK_ROWS + nr;
+      const absRow = chunkY * CHUNK_ROWS + nr + 10000;
 
       // Make NPC ids unique across chunks
-      const uniqueId = `${key}_${npcDef.id}`;
-      const npcDefCopy = { ...npcDef, id: uniqueId };
+      const uniqueId = `${key}_${(npcDef.id || npcDef.name || 'npc')}`;
+      // Normalise fields — Claude returns dialogue[] and ai_context; openNPCDialogue needs greeting
+      const rawGreeting = npcDef.greeting
+        || (Array.isArray(npcDef.dialogue) && npcDef.dialogue[0])
+        || '...';
+      const npcDefCopy = {
+        ...npcDef,
+        id: uniqueId,
+        greeting: rawGreeting,
+        dialogue: npcDef.dialogue || [rawGreeting],
+        personality: npcDef.personality || npcDef.ai_context || '',
+        ai_context: npcDef.ai_context || npcDef.personality || '',
+      };
 
       let spriteKey, idleAnim, walkAnim, scale;
       switch (npcDef.sprite) {
@@ -2382,7 +2406,8 @@ class GameScene extends Phaser.Scene {
     // Sync player sprite
     this.playerSprite.x = this.player.x;
     this.playerSprite.y = this.player.y - 8;
-    const pRow = Math.floor(this.player.y / TILE_SIZE);
+    // Add large offset so depth never goes negative in northern chunks
+    const pRow = Math.floor(this.player.y / TILE_SIZE) + 10000;
     this.playerSprite.setDepth(pRow * 10 + 8);
 
     // Player animations + direction tracking for chunk pre-gen
@@ -2497,7 +2522,7 @@ class GameScene extends Phaser.Scene {
         }
 
         // Update NPC sprite depth
-        const npcRow = Math.floor(npc.ny / TILE_SIZE);
+        const npcRow = Math.floor(npc.ny / TILE_SIZE) + 10000;
         npc.sprite.setDepth(npcRow * 10 + 7);
         if (npc.label) npc.label.setDepth(npcRow * 10 + 9);
       }
@@ -3633,34 +3658,62 @@ Return ONLY raw JSON (no markdown, no fences):
 Valid tile types: grass, path, water, beach, sand, tree, building, building_door, farmland, stone, cliff, chest, rock, mountain
 Tiles array: exactly ${CHUNK_ROWS} rows × ${CHUNK_COLS} columns. Make it visually interesting — avoid monotonous repetition.`;
 
-  // Retry with exponential backoff on 429 rate limit errors
+  // Use Gemini Flash-Lite if key available (faster + ~10x cheaper), else fall back to Claude Haiku
+  const useGemini = !!GEMINI_KEY;
+
   for (let attempt = 0; attempt < 4; attempt++) {
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': CLAUDE_KEY,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 4000,
-          messages: [{ role: 'user', content: chunkPrompt }],
-        }),
-      });
+      let raw;
 
-      if (res.status === 429) {
-        const wait = 5000 * Math.pow(2, attempt);
-        console.warn(`Chunk (${cx},${cy}) rate limited — retrying in ${wait/1000}s (attempt ${attempt+1}/4)`);
-        await new Promise(r => setTimeout(r, wait));
-        continue;
+      if (useGemini) {
+        // Gemini 2.0 Flash-Lite via generateContent REST API
+        const geminiRes = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${GEMINI_KEY}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: chunkPrompt }] }],
+              generationConfig: { temperature: 0.7, maxOutputTokens: 4000 },
+            }),
+          }
+        );
+        if (geminiRes.status === 429) {
+          const wait = 3000 * Math.pow(2, attempt);
+          console.warn(`Chunk (${cx},${cy}) Gemini rate limited — retrying in ${wait/1000}s`);
+          await new Promise(r => setTimeout(r, wait));
+          continue;
+        }
+        if (!geminiRes.ok) { const e = await geminiRes.json(); throw new Error(e.error?.message || 'Gemini API error'); }
+        const gData = await geminiRes.json();
+        raw = (gData.candidates?.[0]?.content?.parts?.[0]?.text || '').trim()
+          .replace(/^```json?\n?/, '').replace(/\n?```$/, '');
+      } else {
+        // Fallback: Claude Haiku
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': CLAUDE_KEY,
+            'anthropic-version': '2023-06-01',
+            'anthropic-dangerous-direct-browser-access': 'true',
+          },
+          body: JSON.stringify({
+            model: 'claude-haiku-4-5-20251001',
+            max_tokens: 4000,
+            messages: [{ role: 'user', content: chunkPrompt }],
+          }),
+        });
+        if (res.status === 429) {
+          const wait = 5000 * Math.pow(2, attempt);
+          console.warn(`Chunk (${cx},${cy}) Haiku rate limited — retrying in ${wait/1000}s`);
+          await new Promise(r => setTimeout(r, wait));
+          continue;
+        }
+        if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || 'API error'); }
+        const data = await res.json();
+        raw = data.content[0].text.trim().replace(/^```json?\n?/, '').replace(/\n?```$/, '');
       }
-
-      if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || 'API error'); }
-      const data = await res.json();
-      const raw = data.content[0].text.trim().replace(/^```json?\n?/, '').replace(/\n?```$/, '');
 
       let worldDef;
       try { worldDef = JSON.parse(raw); }
