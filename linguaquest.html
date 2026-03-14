@@ -2467,7 +2467,7 @@ const LIGHT_RADIUS_PLAYER   = TILE_SIZE * 4.5;
 const LIGHT_RADIUS_TORCH    = TILE_SIZE * 3.0;
 const LIGHT_RADIUS_CAMPFIRE = TILE_SIZE * 5.0;
 const LIGHT_RADIUS_WINDOW   = TILE_SIZE * 2.2;
-const LIGHT_AMBIENT_NIGHT   = 0.78;  // nightAlpha = 1-0.78 = 0.22 (darkness strength)
+const LIGHT_AMBIENT_NIGHT   = 0.72;  // nightAlpha = 0.28 — dark enough for atmosphere
 const LIGHT_AMBIENT_DAY     = 0.0;
 
 // Light tint colours — used as MID-RING colour in the two-phase falloff.
@@ -2529,9 +2529,10 @@ function _drawLightDisk(sx, sy, radius, tint, nightAlpha, steps) {
     // Alpha: nightAlpha at edge → 0 at centre (transparent = lit)
     const alpha = nightAlpha * (1 - ease);
 
-    // Colour temperature: tint at ~40% radius, black elsewhere
-    // This creates a visible coloured fringe at the edge of the lit area
-    const colEase = Math.pow(Math.sin(ease * Math.PI * 0.85), 1.5);
+    // Colour: pure tint at mid-ring (ease≈0.5), black at extremes.
+    // This puts warm colour where alpha is mid-range (~50% dark),
+    // creating a visible glowing fringe at the light boundary.
+    const colEase = Math.pow(4 * ease * (1 - ease), 1.2); // peaks at ease=0.5
     const rv = Math.round(tr * colEase);
     const gv = Math.round(tg * colEase);
     const bv = Math.round(tb * colEase);
@@ -2622,8 +2623,8 @@ function _drawVisibilityPoly(sx, sy, pts, color, nightAlpha) {
     // Alpha: nightAlpha at edge → 0 at centre
     const alpha = nightAlpha * (1 - ease);
 
-    // Colour tint at transition zone
-    const colEase = Math.pow(Math.sin(ease * Math.PI * 0.85), 1.5);
+    // Colour tint peaks at mid-ring (ease≈0.5) where alpha is ~50% dark
+    const colEase = Math.pow(4 * ease * (1 - ease), 1.2);
     const rv = Math.round(cr * colEase);
     const gv = Math.round(cg * colEase);
     const bv = Math.round(cb * colEase);
