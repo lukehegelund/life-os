@@ -2545,7 +2545,9 @@ function _drawLightDisk(sx, sy, radius, tint, darkVal, steps) {
       bv = Math.round(tb  + p * (255 - tb));
     }
 
-    const ringR = radius * (1 - t * (N / (N + 1)));
+    // Ring shrinks from full radius (edge) down to 0 (centre)
+    const ringR = radius * (1 - t);
+    if (ringR < 0.5) break; // skip degenerate rings
     _lightGfx.beginFill((rv << 16) | (gv << 8) | bv, 1);
     _lightGfx.drawCircle(sx, sy, ringR);
     _lightGfx.endFill();
