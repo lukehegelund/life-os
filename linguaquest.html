@@ -1701,12 +1701,11 @@ class GameScene extends Phaser.Scene {
     this.load.spritesheet('goose_ss', ASSETS_FULL + 'Animals/Goose/Goose_01.png',
       { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('horse_ss', ASSETS_FULL + 'Animals/Horse/Horse_01.png',
-      { frameWidth: 32, frameHeight: 32 });
+      { frameWidth: 64, frameHeight: 48 }); // 4 cols x 10 rows; rows 0-3=brown idle/walk, 8-9=white
     // Static animal images (for biome-specific ambient decoration)
     this.load.image('duck_img',  ASSETS_FULL + 'Animals/Duck/Duck_01.png');
     this.load.image('frog_img',  ASSETS_FULL + 'Animals/Frog/Frog_01.png');
     this.load.image('goose_img', ASSETS_FULL + 'Animals/Goose/Goose_01.png');
-    this.load.image('horse_img', ASSETS_FULL + 'Animals/Horse/Horse_01.png');
 
     // ── Premade NPC sprites (for ambient flavor, not interactable) ──
     this.load.image('npc_farmer',    ASSETS_FULL + 'NPCs (Premade)/Farmer_Bob.png');
@@ -1743,6 +1742,10 @@ class GameScene extends Phaser.Scene {
     this._createAnim('pig_ss',     'pig_walk',      [2,3],     5);
     this._createAnim('sheep_ss',   'sheep_idle',    [0,1],     2);
     this._createAnim('sheep_ss',   'sheep_walk',    [2,3],     4);
+    // Horse: 64x48 sheet, 4 cols x 10 rows. Row 0=brown idle, row 1=brown walk
+    // Frame numbers: row*4+col. Row 0 (frames 0-3) = brown idle, Row 1 (4-7) = brown walk
+    this._createAnim('horse_ss',   'horse_idle',    [0,1,2,3], 4);
+    this._createAnim('horse_ss',   'horse_walk',    [4,5,6,7], 6);
 
     // ── Input ──
     this.cursors = this.input.keyboard.createCursorKeys();
@@ -2153,11 +2156,11 @@ class GameScene extends Phaser.Scene {
           { key:'frog_img', scale:1.2, name:'frog', static:true },
         ],
         camp:      [
-          { key:'horse_img',  scale:1.8, name:'horse', static:true },
+          { key:'horse_ss', idle:'horse_idle', walk:'horse_walk', scale:1.4, name:'horse' },
           { key:'chicken_ss', idle:'chicken_idle', walk:'chicken_walk', scale:1.6, name:'chicken' },
         ],
         road:      [
-          { key:'horse_img',  scale:1.8, name:'horse', static:true },
+          { key:'horse_ss', idle:'horse_idle', walk:'horse_walk', scale:1.4, name:'horse' },
           { key:'chicken_ss', idle:'chicken_idle', walk:'chicken_walk', scale:1.8, name:'chicken' },
         ],
         wilderness:[
@@ -3515,10 +3518,10 @@ function queueSurroundingChunks(cx, cy) {
     const nx = cx + dir.dx;
     const ny = cy + dir.dy;
     const key = `${nx},${ny}`;
-    if (chunks.has(key)) continue;
+    if (chunks.has(key)) continue; // already queued, generating, or loaded — don't reset
     if (chunkGenQueue.some(q => q.cx === nx && q.cy === ny)) continue;
     toQueue.push({ cx: nx, cy: ny, label: dir.label, priority: _chunkPriority(nx, ny) });
-    chunks.set(key, { worldDef: null, gameObjects: [], npcs: [], loaded: false, cx: nx, cy: ny });
+    chunks.set(key, { worldDef: null, gameObjects: [], npcs: [], loaded: false, generating: false, cx: nx, cy: ny });
   }
 
   // Also look 2 chunks ahead in the movement direction for early pre-generation
@@ -3531,7 +3534,7 @@ function queueSurroundingChunks(cx, cy) {
     const aKey = `${ax},${ay}`;
     if (!chunks.has(aKey) && !chunkGenQueue.some(q => q.cx === ax && q.cy === ay)) {
       toQueue.push({ cx: ax, cy: ay, label: facing + '+2', priority: 1 });
-      chunks.set(aKey, { worldDef: null, gameObjects: [], npcs: [], loaded: false, cx: ax, cy: ay });
+      chunks.set(aKey, { worldDef: null, gameObjects: [], npcs: [], loaded: false, generating: false, cx: ax, cy: ay });
     }
   }
 
@@ -3684,38 +3687,38 @@ function _generateProceduralTiles(cx, cy, biomeKey, campaignId) {
 
   // ── Per-biome generation ────────────────────────────────────────────────
   if (biomeKey === 'forest') {
-    _genForest(tiles, elev, moist, detail, fine, rng, ROWS, COLS);
+    _genForest(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy);
   } else if (biomeKey === 'wilderness') {
-    _genWilderness(tiles, elev, moist, detail, fine, rng, ROWS, COLS);
+    _genWilderness(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy);
   } else if (biomeKey === 'farmland') {
-    _genFarmland(tiles, elev, moist, detail, fine, rng, ROWS, COLS);
+    _genFarmland(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy);
   } else if (biomeKey === 'village') {
-    _genVillage(tiles, elev, moist, detail, fine, rng, ROWS, COLS);
+    _genVillage(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy);
   } else if (biomeKey === 'city') {
-    _genCity(tiles, elev, moist, detail, fine, rng, ROWS, COLS);
+    _genCity(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy);
   } else if (biomeKey === 'beach') {
-    _genBeach(tiles, elev, moist, detail, fine, rng, ROWS, COLS);
+    _genBeach(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy);
   } else if (biomeKey === 'ocean') {
-    _genOcean(tiles, elev, moist, detail, fine, rng, ROWS, COLS);
+    _genOcean(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy);
   } else if (biomeKey === 'cliffside') {
-    _genCliffside(tiles, elev, moist, detail, fine, rng, ROWS, COLS);
+    _genCliffside(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy);
   } else if (biomeKey === 'dungeon') {
-    _genDungeon(tiles, elev, moist, detail, fine, rng, ROWS, COLS);
+    _genDungeon(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy);
   } else if (biomeKey === 'ruins') {
-    _genRuins(tiles, elev, moist, detail, fine, rng, ROWS, COLS);
+    _genRuins(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy);
   } else if (biomeKey === 'camp') {
-    _genCamp(tiles, elev, moist, detail, fine, rng, ROWS, COLS);
+    _genCamp(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy);
   } else if (biomeKey === 'road') {
-    _genRoad(tiles, elev, moist, detail, fine, rng, ROWS, COLS);
+    _genRoad(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy);
   } else {
-    _genWilderness(tiles, elev, moist, detail, fine, rng, ROWS, COLS);
+    _genWilderness(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy);
   }
 
   return tiles;
 }
 
 // ── FOREST ──────────────────────────────────────────────────────────────────
-function _genForest(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
+function _genForest(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy) {
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
       const e = elev[r][c], d = detail[r][c];
@@ -3736,11 +3739,11 @@ function _genForest(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
     }
   }
   // Carve a winding path through the forest
-  _carvePath(tiles, rng, ROWS, COLS, 'horizontal', 0.35);
+  _carvePath(tiles, rng, ROWS, COLS, 'horizontal', 0.35, cx, cy);
 }
 
 // ── WILDERNESS ──────────────────────────────────────────────────────────────
-function _genWilderness(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
+function _genWilderness(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy) {
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
       const e = elev[r][c], m = moist[r][c], d = detail[r][c];
@@ -3760,7 +3763,7 @@ function _genWilderness(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
     }
   }
   // Occasional faint trail
-  if (rng() > 0.4) _carvePath(tiles, rng, ROWS, COLS, rng() > 0.5 ? 'horizontal' : 'vertical', 0.2);
+  if (rng() > 0.4) _carvePath(tiles, rng, ROWS, COLS, rng() > 0.5 ? 'horizontal' : 'vertical', 0.2, cx, cy);
 }
 
 // ── FARMLAND ────────────────────────────────────────────────────────────────
@@ -3895,7 +3898,7 @@ function _genOcean(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
 }
 
 // ── CLIFFSIDE ────────────────────────────────────────────────────────────────
-function _genCliffside(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
+function _genCliffside(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy) {
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
       const e = elev[r][c], d = detail[r][c];
@@ -3911,11 +3914,11 @@ function _genCliffside(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
     }
   }
   // Single dangerous winding ledge path
-  _carvePath(tiles, rng, ROWS, COLS, 'vertical', 0.25);
+  _carvePath(tiles, rng, ROWS, COLS, 'vertical', 0.25, cx, cy);
 }
 
 // ── DUNGEON ──────────────────────────────────────────────────────────────────
-function _genDungeon(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
+function _genDungeon(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy) {
   // Outer walls of cliff/mountain, stone courtyard approach
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
@@ -3945,7 +3948,7 @@ function _genDungeon(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
 }
 
 // ── RUINS ────────────────────────────────────────────────────────────────────
-function _genRuins(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
+function _genRuins(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy) {
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
       const e = elev[r][c], d = detail[r][c];
@@ -3974,7 +3977,7 @@ function _genRuins(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
             tiles[wr+dr][wc+dc] = 'cliff'; // broken wall
   }
   // Overgrown path through ruins
-  _carvePath(tiles, rng, ROWS, COLS, 'horizontal', 0.15);
+  _carvePath(tiles, rng, ROWS, COLS, 'horizontal', 0.15, cx, cy);
   // A hidden chest
   const cr = 2 + Math.floor(rng() * (ROWS-4));
   const cc = 2 + Math.floor(rng() * (COLS-4));
@@ -3982,7 +3985,7 @@ function _genRuins(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
 }
 
 // ── CAMP ─────────────────────────────────────────────────────────────────────
-function _genCamp(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
+function _genCamp(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy) {
   // Mostly open grass, some trees at edges
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
@@ -4005,7 +4008,7 @@ function _genCamp(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
 }
 
 // ── ROAD ─────────────────────────────────────────────────────────────────────
-function _genRoad(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
+function _genRoad(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy) {
   // Terrain flanking the road
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
@@ -4015,19 +4018,17 @@ function _genRoad(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
       else tiles[r][c] = 'grass';
     }
   }
-  // Main road through center — gently curving via sine
-  const roadR = Math.floor(ROWS / 2);
+  // Road entry R: seam-consistent hash on cy so all chunks in same row continue road at same height
+  const entryHash = (((cy * 2246822519) >>> 0) / 0xFFFFFFFF);
+  const roadBaseR = Math.floor(ROWS * 0.3 + entryHash * ROWS * 0.4);
   for (let c = 0; c < COLS; c++) {
-    const curve = Math.round(Math.sin(c * 0.25) * 1.5);
-    const r = roadR + curve;
+    // Gentle deterministic curve using cx offset — continuous across chunk boundaries
+    const curve = Math.round(Math.sin((cx * COLS + c) * 0.18) * 1.5);
+    const r = Math.max(1, Math.min(ROWS-2, roadBaseR + curve));
     for (let w = -1; w <= 1; w++) {
       if (tiles[r+w]?.[c] !== undefined) tiles[r+w][c] = 'path';
     }
-  }
-  // Road-side trees for atmosphere — line both sides
-  for (let c = 0; c < COLS; c++) {
-    const curve = Math.round(Math.sin(c * 0.25) * 1.5);
-    const r = roadR + curve;
+    // Road-side trees
     if (detail[r][c] > 0.4 && c % 3 === 0) {
       if (tiles[r-3]?.[c]) tiles[r-3][c] = 'tree';
       if (tiles[r+3]?.[c]) tiles[r+3][c] = 'tree';
@@ -4035,22 +4036,31 @@ function _genRoad(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
   }
 }
 
-// ── Helper: carve a winding path across the chunk ──────────────────────────
-function _carvePath(tiles, rng, ROWS, COLS, dir, width) {
+// ── Helper: carve a seam-consistent winding path across the chunk ──────────
+// cx/cy are chunk coords — used to derive deterministic entry/exit positions
+// so neighbouring chunks always continue the path at matching positions.
+function _carvePath(tiles, rng, ROWS, COLS, dir, width, cx, cy) {
   const pathWidth = 1 + Math.floor(width * 3); // 1-2 tiles wide
+  // Entry position: hash of the chunk coord perpendicular to travel direction
+  // This ensures chunk (2,3) horizontal path starts at same R as chunk (1,3) ends
   if (dir === 'horizontal') {
-    let r = Math.floor(ROWS * 0.3 + rng() * ROWS * 0.4);
+    // Entry R comes from cy hash — same for all chunks in the same row
+    const entryHash = (((cy * 2246822519) >>> 0) / 0xFFFFFFFF);
+    let r = Math.floor(ROWS * 0.25 + entryHash * ROWS * 0.5);
     for (let c = 0; c < COLS; c++) {
-      r += Math.round((rng() - 0.5) * 1.2);
-      r = Math.max(1, Math.min(ROWS-2, r));
+      // Gentle drift using noise-like formula — deterministic, not rng()
+      const drift = Math.sin(c * 0.4 + cy * 1.7) * 0.8;
+      r = Math.max(1, Math.min(ROWS-2, r + Math.round(drift * (c === 0 ? 0 : 0.4))));
       for (let w = 0; w < pathWidth; w++)
         if (tiles[r+w]?.[c] !== undefined) tiles[r+w][c] = 'path';
     }
   } else {
-    let c = Math.floor(COLS * 0.3 + rng() * COLS * 0.4);
+    // Entry C comes from cx hash — same for all chunks in the same column
+    const entryHash = (((cx * 2246822519) >>> 0) / 0xFFFFFFFF);
+    let c = Math.floor(COLS * 0.25 + entryHash * COLS * 0.5);
     for (let r = 0; r < ROWS; r++) {
-      c += Math.round((rng() - 0.5) * 1.2);
-      c = Math.max(1, Math.min(COLS-2, c));
+      const drift = Math.sin(r * 0.4 + cx * 1.7) * 0.8;
+      c = Math.max(1, Math.min(COLS-2, c + Math.round(drift * (r === 0 ? 0 : 0.4))));
       for (let w = 0; w < pathWidth; w++)
         if (tiles[r]?.[c+w] !== undefined) tiles[r][c+w] = 'path';
     }
