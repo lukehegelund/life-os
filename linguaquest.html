@@ -2459,9 +2459,12 @@ function _pixiGetTileAt(worldX, worldY) {
 //    • Moonlight tint (cool-blue ambient, no band geometry)
 //    • Surface tinting (water/stone/grass affect light colour)
 // ─────────────────────────────────────────────────────────────
-let _lightRT     = null;
+let _lightRT     = null;   // darkness mask (NORMAL blend — punches holes in darkness)
 let _lightGfx    = null;
 let _lightSprite = null;
+let _glowRT      = null;   // colour glow (ADD blend — adds warm tint on lit tiles)
+let _glowGfx     = null;
+let _glowSprite  = null;
 
 const LIGHT_RADIUS_PLAYER   = TILE_SIZE * 4.5;
 const LIGHT_RADIUS_TORCH    = TILE_SIZE * 3.0;
@@ -2485,18 +2488,27 @@ const LCOLOR_MOON     = 0x88AAFF;  // cool blue moonlight
 const _worldLights = [];
 
 function _initLighting(stage, w, h) {
+  // Layer 1: darkness mask — opaque black with transparent holes where lights are
   _lightRT     = PIXI.RenderTexture.create({ width: w, height: h });
   _lightGfx    = new PIXI.Graphics();
   _lightSprite = new PIXI.Sprite(_lightRT);
-  // Normal blend: RT is a darkness mask (black = dark, transparent = lit)
-  // Lights punch transparent holes; darkness alpha = night strength
   _lightSprite.blendMode = PIXI.BLEND_MODES.NORMAL;
   _lightSprite.zIndex = 50000;
   stage.addChild(_lightSprite);
+
+  // Layer 2: colour glow — additive warm/cool tint on lit tiles
+  _glowRT     = PIXI.RenderTexture.create({ width: w, height: h });
+  _glowGfx    = new PIXI.Graphics();
+  _glowSprite = new PIXI.Sprite(_glowRT);
+  _glowSprite.blendMode = PIXI.BLEND_MODES.ADD;
+  _glowSprite.zIndex = 50001;
+  stage.addChild(_glowSprite);
 }
 function _resizeLighting(w, h) {
   if (_lightRT) _lightRT.resize(w, h);
   if (_lightSprite) { _lightSprite.width = w; _lightSprite.height = h; }
+  if (_glowRT) _glowRT.resize(w, h);
+  if (_glowSprite) { _glowSprite.width = w; _glowSprite.height = h; }
 }
 
 // ── Flicker ───────────────────────────────────────────────────
@@ -2542,6 +2554,33 @@ function _drawLightDisk(sx, sy, radius, tint, nightAlpha, steps) {
     _lightGfx.beginFill((rv << 16) | (gv << 8) | bv, alpha);
     _lightGfx.drawCircle(sx, sy, ringR);
     _lightGfx.endFill();
+  }
+}
+
+// ── Additive glow disk (drawn to _glowRT with ADD blend) ─────
+// Adds warm/cool colour directly onto lit tiles.
+// Black (0) at edge and centre; tint colour peaks at ~40% radius.
+// nightAlpha scales glow intensity (stronger at night).
+function _drawGlowDisk(gfx, sx, sy, radius, tint, nightAlpha, steps) {
+  const tr = (tint >> 16) & 0xFF;
+  const tg = (tint >> 8)  & 0xFF;
+  const tb =  tint        & 0xFF;
+  const N = steps || 20;
+  for (let i = 0; i <= N; i++) {
+    const t    = i / N;
+    const s    = t * t * (3 - 2*t);
+    const ease = s;
+    // Glow peaks at ~35% from centre (ease≈0.65)
+    const glowEase = Math.pow(Math.sin(ease * Math.PI), 1.8);
+    const intensity = nightAlpha * 0.45 * glowEase;
+    const rv = Math.round(tr * intensity);
+    const gv = Math.round(tg * intensity);
+    const bv = Math.round(tb * intensity);
+    const ringR = radius * 0.65 * (1 - t); // glow covers inner 65% of light radius
+    if (ringR < 0.5) break;
+    gfx.beginFill((rv << 16) | (gv << 8) | bv, 1);
+    gfx.drawCircle(sx, sy, ringR);
+    gfx.endFill();
   }
 }
 
@@ -2672,9 +2711,11 @@ function _updateLighting(renderer, playerScreenX, playerScreenY, ambientAlpha, i
 
   if (ambientAlpha <= 0.02) {
     _lightSprite.visible = false;
+    if (_glowSprite) _glowSprite.visible = false;
     return;
   }
   _lightSprite.visible = true;
+  if (_glowSprite) _glowSprite.visible = true;
 
   const w = _lightRT.width, h = _lightRT.height;
   _lightGfx.clear();
@@ -2726,11 +2767,10 @@ function _updateLighting(renderer, playerScreenX, playerScreenY, ambientAlpha, i
                          + Math.sin(fp * 7.1) * 0.012);
     }
     const tinted = _surfaceTintColor(lt.color, lt.wx, lt.wy);
+    // Darkness mask layer
     _drawLightDisk(sx, sy, r, tinted, nightAlpha, 18);
-    // Fully transparent hotspot (completely lit at source)
-    _lightGfx.beginFill(0x000000, 0);
-    _lightGfx.drawCircle(sx, sy, r * 0.15);
-    _lightGfx.endFill();
+    // Colour glow layer (ADD)
+    if (_glowGfx) _drawGlowDisk(_glowGfx, sx, sy, r, tinted, nightAlpha, 14);
   }
 
   // ── 3. Player lantern — visibility polygon ─────────────────
@@ -2747,9 +2787,12 @@ function _updateLighting(renderer, playerScreenX, playerScreenY, ambientAlpha, i
     } else {
       _drawLightDisk(playerScreenX, playerScreenY, r, amber, nightAlpha, 24);
     }
+    // Player glow layer
+    if (_glowGfx) _drawGlowDisk(_glowGfx, playerScreenX, playerScreenY, r, amber, nightAlpha, 18);
   }
 
   renderer.render(_lightGfx, { renderTexture: _lightRT, clear: true });
+  if (_glowGfx && _glowRT) renderer.render(_glowGfx, { renderTexture: _glowRT, clear: true });
 }
 
 // ─────────────────────────────────────────────────────────────
