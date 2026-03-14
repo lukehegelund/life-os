@@ -256,6 +256,92 @@ html, body { background: #1a2a1a; overflow: hidden; font-family: 'Georgia', seri
   opacity: 0; transition: opacity .3s; pointer-events: none; letter-spacing: 1px;
   white-space: nowrap;
 }
+
+/* ── DEBUG PANEL ── */
+#dbg-toggle {
+  position: fixed; top: 50%; right: 0; transform: translateY(-50%);
+  z-index: 300; background: rgba(4,10,4,.85); border: 1px solid #2a5018;
+  border-right: none; color: #5a9030; font-size: 10px; letter-spacing: 2px;
+  padding: 18px 5px; cursor: pointer; border-radius: 4px 0 0 4px;
+  writing-mode: vertical-rl; text-orientation: mixed; user-select: none;
+  transition: color .2s, border-color .2s; display: none;
+}
+#dbg-toggle:hover { color: #90d050; border-color: #4a8030; }
+#dbg-panel {
+  position: fixed; top: 0; right: -420px; width: 420px; height: 100vh;
+  z-index: 299; background: rgba(4,9,4,.97); border-left: 1px solid #1e3a10;
+  display: flex; flex-direction: column; transition: right .25s ease;
+  font-family: 'Courier New', monospace; font-size: 11px; color: #6aaa40;
+}
+#dbg-panel.open { right: 0; }
+#dbg-header {
+  padding: 10px 14px 8px; border-bottom: 1px solid #1a3010;
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+}
+#dbg-header span { color: #3a6020; font-size: 9px; letter-spacing: 3px; text-transform: uppercase; flex: 1; }
+#dbg-refresh {
+  background: none; border: 1px solid #2a5018; color: #5a9030;
+  font-size: 9px; padding: 2px 8px; border-radius: 3px; cursor: pointer;
+  letter-spacing: 1px; font-family: inherit;
+}
+#dbg-refresh:hover { color: #90d050; border-color: #4a8030; }
+#dbg-tabs {
+  display: flex; border-bottom: 1px solid #1a3010; flex-shrink: 0; overflow-x: auto;
+}
+.dbg-tab {
+  padding: 6px 10px; font-size: 9px; letter-spacing: 1px; cursor: pointer;
+  color: #3a6020; text-transform: uppercase; white-space: nowrap;
+  border-bottom: 2px solid transparent; transition: color .15s, border-color .15s;
+  background: none; border-top: none; border-left: none; border-right: none;
+  font-family: inherit;
+}
+.dbg-tab:hover { color: #7ec850; }
+.dbg-tab.active { color: #90d050; border-bottom-color: #5a9030; }
+#dbg-body {
+  flex: 1; overflow-y: auto; padding: 10px 14px;
+  scrollbar-width: thin; scrollbar-color: #2a5018 transparent;
+}
+#dbg-body::-webkit-scrollbar { width: 4px; }
+#dbg-body::-webkit-scrollbar-track { background: transparent; }
+#dbg-body::-webkit-scrollbar-thumb { background: #2a5018; border-radius: 2px; }
+.dbg-loading { color: #2a5018; font-style: italic; padding: 20px 0; text-align: center; }
+.dbg-empty { color: #2a4a18; font-style: italic; padding: 20px 0; text-align: center; font-size: 10px; }
+.dbg-error { color: #a03020; padding: 10px 0; font-size: 10px; }
+.dbg-section { margin-bottom: 16px; }
+.dbg-section-title {
+  color: #3a7020; font-size: 9px; letter-spacing: 3px; text-transform: uppercase;
+  border-bottom: 1px solid #1a3010; padding-bottom: 4px; margin-bottom: 8px;
+}
+.dbg-card {
+  background: rgba(10,20,8,.6); border: 1px solid #1a3010; border-radius: 3px;
+  padding: 8px 10px; margin-bottom: 8px;
+}
+.dbg-card-title {
+  color: #7ec850; font-size: 10px; font-weight: bold; margin-bottom: 5px;
+  display: flex; align-items: center; gap: 6px;
+}
+.dbg-badge {
+  font-size: 8px; padding: 1px 5px; border-radius: 8px;
+  background: rgba(100,200,50,.1); border: 1px solid #2a5018;
+  color: #5a9030; letter-spacing: 1px; text-transform: uppercase; font-weight: normal;
+}
+.dbg-row { display: flex; gap: 6px; margin-bottom: 3px; line-height: 1.5; }
+.dbg-key { color: #3a6020; flex-shrink: 0; min-width: 110px; }
+.dbg-val { color: #90d050; word-break: break-all; }
+.dbg-val.dim { color: #3a6020; font-style: italic; }
+.dbg-val.warn { color: #a07030; }
+.dbg-json {
+  background: rgba(0,0,0,.4); border: 1px solid #1a2a10; border-radius: 2px;
+  padding: 6px 8px; margin-top: 4px; white-space: pre-wrap; font-size: 10px;
+  color: #5a8a30; max-height: 180px; overflow-y: auto; line-height: 1.6;
+}
+.dbg-event-row {
+  border-left: 2px solid #2a5018; padding: 4px 0 4px 8px; margin-bottom: 6px;
+}
+.dbg-event-row .dbg-time { color: #2a5018; font-size: 9px; margin-bottom: 2px; }
+.dbg-event-row .dbg-desc { color: #7ec850; font-size: 10px; }
+.dbg-event-row .dbg-meta { color: #3a6020; font-size: 9px; margin-top: 2px; }
+.dbg-campaign-id { color: #2a5018; font-size: 9px; word-break: break-all; margin-bottom: 6px; }
 </style>
 </head>
 <body>
@@ -2147,6 +2233,7 @@ function startGame(worldDef) {
   document.getElementById('menu').style.display = 'none';
   document.getElementById('top-hud').style.display = 'flex';
   document.getElementById('controls-hint').style.display = 'block';
+  document.getElementById('dbg-toggle').style.display = 'block';
 
   const config = {
     type: Phaser.AUTO,
@@ -3577,6 +3664,273 @@ document.addEventListener('keydown', e => {
 // ─────────────────────────────────────────────────────────────
 loadConfig();
 checkSavedGame();
+</script>
+
+<!-- DEBUG PANEL -->
+<button id="dbg-toggle" onclick="lqDbgToggle()">DEBUG</button>
+<div id="dbg-panel">
+  <div id="dbg-header">
+    <span>LQ Debug Console</span>
+    <button id="dbg-refresh" onclick="lqDbgLoad()">↺ Refresh</button>
+    <button id="dbg-refresh" onclick="lqDbgToggle()" style="border:none;background:none;color:#3a6020;cursor:pointer;font-size:14px;padding:0 2px;font-family:inherit">✕</button>
+  </div>
+  <div id="dbg-tabs">
+    <button class="dbg-tab active" onclick="lqDbgTab('campaign',this)">Campaign</button>
+    <button class="dbg-tab" onclick="lqDbgTab('souls',this)">Souls</button>
+    <button class="dbg-tab" onclick="lqDbgTab('events',this)">World Events</button>
+    <button class="dbg-tab" onclick="lqDbgTab('planned',this)">Planned</button>
+    <button class="dbg-tab" onclick="lqDbgTab('logs',this)">NPC Logs</button>
+    <button class="dbg-tab" onclick="lqDbgTab('player',this)">Player</button>
+    <button class="dbg-tab" onclick="lqDbgTab('chunks',this)">Chunks</button>
+  </div>
+  <div id="dbg-body"><div class="dbg-loading">Open a campaign to begin.</div></div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────
+//  DEBUG PANEL  (Phase 1.5)
+// ─────────────────────────────────────────────────────────────
+let _dbgTab = 'campaign';
+
+function lqDbgToggle() {
+  const panel = document.getElementById('dbg-panel');
+  const isOpen = panel.classList.toggle('open');
+  if (isOpen) lqDbgLoad();
+}
+
+function lqDbgTab(name, btn) {
+  _dbgTab = name;
+  document.querySelectorAll('.dbg-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  lqDbgLoad();
+}
+
+async function lqDbgLoad() {
+  const body = document.getElementById('dbg-body');
+  if (!activeCampaignId) {
+    body.innerHTML = '<div class="dbg-empty">No active campaign. Press Play first.</div>';
+    return;
+  }
+  body.innerHTML = '<div class="dbg-loading">Loading...</div>';
+  try {
+    switch (_dbgTab) {
+      case 'campaign': await _dbgCampaign(body); break;
+      case 'souls':    await _dbgSouls(body);    break;
+      case 'events':   await _dbgEvents(body);   break;
+      case 'planned':  await _dbgPlanned(body);  break;
+      case 'logs':     await _dbgLogs(body);     break;
+      case 'player':   await _dbgPlayer(body);   break;
+      case 'chunks':   await _dbgChunks(body);   break;
+    }
+  } catch(e) {
+    body.innerHTML = `<div class="dbg-error">Error: ${e.message}</div>`;
+  }
+}
+
+function _dbgH(str) {
+  return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function _dbgVal(v, dim=false) {
+  if (v === null || v === undefined || v === '') return `<span class="dbg-val dim">—</span>`;
+  if (typeof v === 'object') return `<span class="dbg-val dim">[object]</span>`;
+  const cls = dim ? 'dbg-val dim' : 'dbg-val';
+  return `<span class="${cls}">${_dbgH(v)}</span>`;
+}
+function _dbgRow(key, val, dim=false) {
+  return `<div class="dbg-row"><span class="dbg-key">${_dbgH(key)}</span>${_dbgVal(val, dim)}</div>`;
+}
+function _dbgJson(obj) {
+  if (!obj) return '';
+  const str = typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2);
+  return `<div class="dbg-json">${_dbgH(str)}</div>`;
+}
+function _dbgTs(ts) {
+  if (!ts) return '—';
+  try { return new Date(ts).toLocaleString(); } catch(e) { return ts; }
+}
+
+async function _dbgCampaign(body) {
+  const [camp] = await lqDB('GET','lq_campaigns',null,`?id=eq.${activeCampaignId}&limit=1`) || [null];
+  if (!camp) { body.innerHTML = '<div class="dbg-empty">Campaign row not found.</div>'; return; }
+  const ws = camp.world_state || {};
+  let html = `<div class="dbg-campaign-id">ID: ${_dbgH(camp.id)}</div>`;
+  html += `<div class="dbg-card">`;
+  html += `<div class="dbg-card-title">${_dbgH(camp.title || 'Untitled')} <span class="dbg-badge">${_dbgH(camp.status)}</span></div>`;
+  html += _dbgRow('Created', _dbgTs(camp.created_at));
+  html += _dbgRow('Language', camp.language_code);
+  html += _dbgRow('Current chunk', camp.current_chunk_key);
+  html += _dbgRow('World tick #', camp.world_tick_count);
+  html += `</div>`;
+  if (ws.premise) {
+    html += `<div class="dbg-section"><div class="dbg-section-title">Premise</div>`;
+    html += `<div style="color:#5a9030;font-size:10px;line-height:1.6">${_dbgH(ws.premise)}</div></div>`;
+  }
+  if (ws.truth) {
+    html += `<div class="dbg-section"><div class="dbg-section-title">The Truth</div>`;
+    html += `<div style="color:#5a9030;font-size:10px;line-height:1.6">${_dbgH(ws.truth)}</div></div>`;
+  }
+  if (ws.resolution_conditions) {
+    html += `<div class="dbg-section"><div class="dbg-section-title">Resolution Conditions</div>`;
+    html += _dbgJson(ws.resolution_conditions);
+  }
+  if (ws.active_leads?.length) {
+    html += `<div class="dbg-section"><div class="dbg-section-title">Active Leads (${ws.active_leads.length})</div>`;
+    ws.active_leads.forEach(l => {
+      html += `<div class="dbg-event-row"><div class="dbg-desc">${_dbgH(l)}</div></div>`;
+    });
+    html += `</div>`;
+  }
+  body.innerHTML = html;
+}
+
+async function _dbgSouls(body) {
+  const npcs = await lqDB('GET','lq_npcs',null,`?campaign_id=eq.${activeCampaignId}&order=created_at.asc`) || [];
+  if (!npcs.length) { body.innerHTML = '<div class="dbg-empty">No NPCs found.</div>'; return; }
+  let html = '';
+  for (const npc of npcs) {
+    const soul = npc.soul_document || {};
+    html += `<div class="dbg-card">`;
+    html += `<div class="dbg-card-title">${_dbgH(npc.display_name)} <span class="dbg-badge">${_dbgH(npc.slug)}</span>`;
+    if (npc.is_main_cast) html += ` <span class="dbg-badge" style="background:rgba(200,150,50,.1);border-color:#5a4010;color:#a07030">main cast</span>`;
+    html += `</div>`;
+    html += _dbgRow('Role', npc.role);
+    html += _dbgRow('Location', npc.current_location);
+    html += _dbgRow('Trust', npc.player_trust != null ? npc.player_trust.toFixed(2) : null);
+    html += _dbgRow('Emotional state', soul.emotional_state);
+    html += _dbgRow('Preoccupation', soul.current_preoccupation);
+    html += _dbgRow('Secret', soul.deepest_secret);
+    html += _dbgRow('Knows player', soul.knows_about_player);
+    if (soul.relationship_to_victim) html += _dbgRow('Rel. to victim', soul.relationship_to_victim);
+    if (soul.alibi) html += _dbgRow('Alibi', soul.alibi);
+    if (soul.daily_routine) {
+      html += `<div class="dbg-section-title" style="margin-top:8px">Daily Routine</div>`;
+      html += `<div style="color:#5a9030;font-size:10px;line-height:1.6">${_dbgH(soul.daily_routine)}</div>`;
+    }
+    if (soul.background) {
+      html += `<div class="dbg-section-title" style="margin-top:8px">Background</div>`;
+      html += `<div style="color:#5a9030;font-size:10px;line-height:1.6">${_dbgH(soul.background)}</div>`;
+    }
+    html += `</div>`;
+  }
+  body.innerHTML = html;
+}
+
+async function _dbgEvents(body) {
+  const rows = await lqDB('GET','lq_world_events',null,
+    `?campaign_id=eq.${activeCampaignId}&order=created_at.desc&limit=50`) || [];
+  if (!rows.length) { body.innerHTML = '<div class="dbg-empty">No world events yet. World Tick (Phase 2) will populate this.</div>'; return; }
+  let html = `<div class="dbg-section-title">${rows.length} events (most recent first)</div>`;
+  for (const ev of rows) {
+    html += `<div class="dbg-event-row">`;
+    html += `<div class="dbg-time">${_dbgTs(ev.created_at)}</div>`;
+    html += `<div class="dbg-desc">${_dbgH(ev.event_type)} — ${_dbgH(ev.description || '')}</div>`;
+    if (ev.npc_slug) html += `<div class="dbg-meta">NPC: ${_dbgH(ev.npc_slug)} · chunk: ${_dbgH(ev.chunk_key)}</div>`;
+    if (ev.consequences) html += _dbgJson(ev.consequences);
+    html += `</div>`;
+  }
+  body.innerHTML = html;
+}
+
+async function _dbgPlanned(body) {
+  const rows = await lqDB('GET','lq_planned_events',null,
+    `?campaign_id=eq.${activeCampaignId}&order=scheduled_tick.asc&limit=50`) || [];
+  if (!rows.length) { body.innerHTML = '<div class="dbg-empty">No planned events.</div>'; return; }
+  let html = `<div class="dbg-section-title">${rows.length} planned events</div>`;
+  for (const ev of rows) {
+    html += `<div class="dbg-event-row">`;
+    const statusColor = ev.status === 'pending' ? '#5a9030' : ev.status === 'done' ? '#2a5018' : '#a07030';
+    html += `<div class="dbg-time"><span style="color:${statusColor}">${_dbgH(ev.status)}</span> · tick ${_dbgH(ev.scheduled_tick)} · ${_dbgTs(ev.created_at)}</div>`;
+    html += `<div class="dbg-desc">${_dbgH(ev.event_type)}</div>`;
+    if (ev.npc_slug) html += `<div class="dbg-meta">NPC: ${_dbgH(ev.npc_slug)}</div>`;
+    if (ev.payload) html += _dbgJson(ev.payload);
+    html += `</div>`;
+  }
+  body.innerHTML = html;
+}
+
+async function _dbgLogs(body) {
+  const rows = await lqDB('GET','lq_npc_event_logs',null,
+    `?campaign_id=eq.${activeCampaignId}&order=created_at.desc&limit=60`) || [];
+  if (!rows.length) { body.innerHTML = '<div class="dbg-empty">No NPC interaction logs yet. Logs are written after each conversation.</div>'; return; }
+  let html = `<div class="dbg-section-title">${rows.length} log entries</div>`;
+  for (const log of rows) {
+    html += `<div class="dbg-event-row">`;
+    html += `<div class="dbg-time">${_dbgTs(log.created_at)} · <span style="color:#7ec850">${_dbgH(log.npc_slug)}</span></div>`;
+    html += `<div class="dbg-desc">${_dbgH(log.event_type)}: ${_dbgH(log.summary || '')}</div>`;
+    if (log.player_trust_delta != null) {
+      const col = log.player_trust_delta > 0 ? '#5a9030' : '#a03020';
+      html += `<div class="dbg-meta">Trust Δ: <span style="color:${col}">${log.player_trust_delta > 0 ? '+' : ''}${log.player_trust_delta}</span></div>`;
+    }
+    if (log.reasoning) {
+      html += `<div class="dbg-section-title" style="margin-top:6px;font-size:8px">Reasoning Loop</div>`;
+      html += _dbgJson(log.reasoning);
+    }
+    if (log.cascade_entries?.length) {
+      html += `<div class="dbg-section-title" style="margin-top:6px;font-size:8px">Cascades (${log.cascade_entries.length})</div>`;
+      html += _dbgJson(log.cascade_entries);
+    }
+    html += `</div>`;
+  }
+  body.innerHTML = html;
+}
+
+async function _dbgPlayer(body) {
+  const [ps] = await lqDB('GET','lq_player_state',null,`?campaign_id=eq.${activeCampaignId}&limit=1`) || [null];
+  if (!ps) { body.innerHTML = '<div class="dbg-empty">No player state found.</div>'; return; }
+  let html = `<div class="dbg-card">`;
+  html += `<div class="dbg-card-title">Player State</div>`;
+  html += _dbgRow('Name', ps.player_name);
+  html += _dbgRow('Position', ps.position ? `(${ps.position.x ?? '?'}, ${ps.position.y ?? '?'})` : null);
+  html += _dbgRow('Current chunk', ps.current_chunk_key);
+  html += _dbgRow('Health', ps.health);
+  html += _dbgRow('Language', ps.language_code);
+  html += _dbgRow('Saved at', _dbgTs(ps.updated_at));
+  html += `</div>`;
+  if (ps.inventory?.length) {
+    html += `<div class="dbg-section"><div class="dbg-section-title">Inventory</div>`;
+    ps.inventory.forEach(item => {
+      html += `<div class="dbg-event-row"><div class="dbg-desc">${_dbgH(item)}</div></div>`;
+    });
+    html += `</div>`;
+  }
+  if (ps.discovered_facts?.length) {
+    html += `<div class="dbg-section"><div class="dbg-section-title">Discovered Facts (${ps.discovered_facts.length})</div>`;
+    ps.discovered_facts.forEach(f => {
+      html += `<div class="dbg-event-row"><div class="dbg-desc">${_dbgH(f)}</div></div>`;
+    });
+    html += `</div>`;
+  }
+  if (ps.case_file_entries?.length) {
+    html += `<div class="dbg-section"><div class="dbg-section-title">Case File (${ps.case_file_entries.length})</div>`;
+    ps.case_file_entries.forEach(e => {
+      html += `<div class="dbg-event-row"><div class="dbg-time">${_dbgTs(e.ts)}</div><div class="dbg-desc">${_dbgH(e.text)}</div></div>`;
+    });
+    html += `</div>`;
+  }
+  body.innerHTML = html;
+}
+
+async function _dbgChunks(body) {
+  const rows = await lqDB('GET','lq_chunks',null,
+    `?campaign_id=eq.${activeCampaignId}&order=updated_at.desc&limit=20`) || [];
+  if (!rows.length) { body.innerHTML = '<div class="dbg-empty">No chunk snapshots yet.</div>'; return; }
+  let html = `<div class="dbg-section-title">${rows.length} chunks</div>`;
+  for (const chunk of rows) {
+    html += `<div class="dbg-card">`;
+    html += `<div class="dbg-card-title">${_dbgH(chunk.chunk_key)} <span class="dbg-badge">${chunk.is_generated ? 'generated' : 'hardcoded'}</span></div>`;
+    html += _dbgRow('Updated', _dbgTs(chunk.updated_at));
+    const wd = chunk.world_def || {};
+    html += _dbgRow('Tiles', wd.tiles ? `${wd.tiles.length} rows` : null);
+    const npcCount = wd.npcs?.length ?? 0;
+    html += _dbgRow('NPCs in chunk', npcCount || '0');
+    if (wd.npcs?.length) {
+      const names = wd.npcs.map(n => n.slug || n.name || '?').join(', ');
+      html += _dbgRow('  names', names, true);
+    }
+    html += `</div>`;
+  }
+  body.innerHTML = html;
+}
 </script>
 </body>
 </html>
