@@ -2467,7 +2467,7 @@ const LIGHT_RADIUS_PLAYER   = TILE_SIZE * 4.5;
 const LIGHT_RADIUS_TORCH    = TILE_SIZE * 3.0;
 const LIGHT_RADIUS_CAMPFIRE = TILE_SIZE * 5.0;
 const LIGHT_RADIUS_WINDOW   = TILE_SIZE * 2.2;
-const LIGHT_AMBIENT_NIGHT   = 0.92;  // Higher = less dark ring halo around lights
+const LIGHT_AMBIENT_NIGHT   = 0.78;  // nightAlpha = 1-0.78 = 0.22 (darkness strength)
 const LIGHT_AMBIENT_DAY     = 0.0;
 
 // Light tint colours — used as MID-RING colour in the two-phase falloff.
@@ -2488,7 +2488,9 @@ function _initLighting(stage, w, h) {
   _lightRT     = PIXI.RenderTexture.create({ width: w, height: h });
   _lightGfx    = new PIXI.Graphics();
   _lightSprite = new PIXI.Sprite(_lightRT);
-  _lightSprite.blendMode = PIXI.BLEND_MODES.MULTIPLY;
+  // Normal blend: RT is a darkness mask (black = dark, transparent = lit)
+  // Lights punch transparent holes; darkness alpha = night strength
+  _lightSprite.blendMode = PIXI.BLEND_MODES.NORMAL;
   _lightSprite.zIndex = 50000;
   stage.addChild(_lightSprite);
 }
@@ -2506,49 +2508,37 @@ function _tickLightFlicker(dt) {
   }
 }
 
-// ── Smooth falloff disk ───────────────────────────────────────
-// MULTIPLY model: white(255,255,255)=fully lit, black=fully dark.
+// ── Darkness-mask light disk ──────────────────────────────────
+// Alpha-mask model: RT is a darkness overlay (NORMAL blend).
+//   Outer ring: opaque tinted black (full darkness)
+//   Inner rings: transparent (scene shows through = fully lit)
+//   Mid ring:    semi-transparent tint (warm/cool colour glow)
 //
-// Two-phase colour lerp (edge→centre):
-//   Phase A (outer 60%): darkVal → tint  (darkness fades to coloured glow)
-//   Phase B (inner 40%): tint → white    (hotspot brightens to full scene)
-//
-// This ensures the centre is always near-white so MULTIPLY leaves the
-// scene at full brightness there, while the tint ring gives warm/cool cast.
-//
-// `tint` examples (colour temperature midpoint):
-//   0xFFCC80 = warm amber/torch
-//   0xFFAA60 = deep campfire orange
-//   0xBBCCFF = cool moonlight blue
-function _drawLightDisk(sx, sy, radius, tint, darkVal, steps) {
+// nightAlpha: how dark the outer ring is (0=day, 1=full night)
+// tint: glow colour at the transition zone (e.g. 0xFF8800 = torch)
+function _drawLightDisk(sx, sy, radius, tint, nightAlpha, steps) {
   const tr = (tint >> 16) & 0xFF;
   const tg = (tint >> 8)  & 0xFF;
   const tb =  tint        & 0xFF;
   const N = steps || 24;
   for (let i = 0; i <= N; i++) {
-    const t    = i / N;                    // 0=edge → 1=centre
-    const s    = t * t * (3 - 2 * t);     // smoothstep
-    const ease = Math.pow(s, 1.5);
+    const t    = i / N;              // 0=edge, 1=centre
+    const s    = t * t * (3 - 2*t); // smoothstep
+    const ease = Math.pow(s, 1.4);
 
-    let rv, gv, bv;
-    if (ease < 0.35) {
-      // Phase A: darkVal → tint (outer glow zone, compact)
-      const p = ease / 0.35;
-      rv = Math.round(darkVal + p * (tr - darkVal));
-      gv = Math.round(darkVal + p * (tg - darkVal));
-      bv = Math.round(darkVal + p * (tb - darkVal));
-    } else {
-      // Phase B: tint → white (inner hotspot, most of the disk)
-      const p = (ease - 0.35) / 0.65;
-      rv = Math.round(tr  + p * (255 - tr));
-      gv = Math.round(tg  + p * (255 - tg));
-      bv = Math.round(tb  + p * (255 - tb));
-    }
+    // Alpha: nightAlpha at edge → 0 at centre (transparent = lit)
+    const alpha = nightAlpha * (1 - ease);
 
-    // Ring shrinks from full radius (edge) down to 0 (centre)
+    // Colour temperature: tint at ~40% radius, black elsewhere
+    // This creates a visible coloured fringe at the edge of the lit area
+    const colEase = Math.pow(Math.sin(ease * Math.PI * 0.85), 1.5);
+    const rv = Math.round(tr * colEase);
+    const gv = Math.round(tg * colEase);
+    const bv = Math.round(tb * colEase);
+
     const ringR = radius * (1 - t);
-    if (ringR < 0.5) break; // skip degenerate rings
-    _lightGfx.beginFill((rv << 16) | (gv << 8) | bv, 1);
+    if (ringR < 0.5) break;
+    _lightGfx.beginFill((rv << 16) | (gv << 8) | bv, alpha);
     _lightGfx.drawCircle(sx, sy, ringR);
     _lightGfx.endFill();
   }
@@ -2612,13 +2602,11 @@ function _computeVisibilityPoly(sx, sy, radius, wcx, wcy) {
   return pts;
 }
 
-// Draw visibility polygon with smooth radial falloff.
-// Same two-phase colour model as _drawLightDisk:
-//   Phase A (outer passes): darkVal → color  (the tinted glow zone)
-//   Phase B (inner passes): color  → white   (centre brightens to full)
-// This ensures the player area directly under the lantern is fully lit
-// under MULTIPLY (white × scene = scene unchanged).
-function _drawVisibilityPoly(sx, sy, pts, color, darkVal) {
+// Draw visibility polygon — alpha-mask darkness model.
+// Each scaled pass of the polygon punches a transparent "window" in the darkness.
+// Outer pass: nightAlpha opacity (dark) → inner passes: alpha=0 (fully lit).
+// Tint colour gives warm/cool cast at the transition zone.
+function _drawVisibilityPoly(sx, sy, pts, color, nightAlpha) {
   if (pts.length < 3) return;
   const cr = (color >> 16) & 0xFF;
   const cg = (color >> 8)  & 0xFF;
@@ -2629,38 +2617,29 @@ function _drawVisibilityPoly(sx, sy, pts, color, darkVal) {
     const t    = p / PASSES;              // 0=outermost, 1=centre
     const s    = t * t * (3 - 2 * t);    // smoothstep
     const ease = Math.pow(s, 1.3);
-    // Scale: 1 at edge → 0 at centre
-    const scale = 1.0 - t;
+    const scale = 1.0 - t;               // polygon shrinks toward centre
 
-    let rv, gv, bv;
-    if (ease < 0.35) {
-      // Phase A: darkVal → color (compact outer glow)
-      const p2 = ease / 0.35;
-      rv = Math.round(darkVal + p2 * (cr - darkVal));
-      gv = Math.round(darkVal + p2 * (cg - darkVal));
-      bv = Math.round(darkVal + p2 * (cb - darkVal));
-    } else {
-      // Phase B: color → white (inner hotspot, most of the polygon)
-      const p2 = (ease - 0.35) / 0.65;
-      rv = Math.round(cr + p2 * (255 - cr));
-      gv = Math.round(cg + p2 * (255 - cg));
-      bv = Math.round(cb + p2 * (255 - cb));
-    }
+    // Alpha: nightAlpha at edge → 0 at centre
+    const alpha = nightAlpha * (1 - ease);
 
-    const col = (rv << 16) | (gv << 8) | bv;
-    _lightGfx.beginFill(col, 1);
+    // Colour tint at transition zone
+    const colEase = Math.pow(Math.sin(ease * Math.PI * 0.85), 1.5);
+    const rv = Math.round(cr * colEase);
+    const gv = Math.round(cg * colEase);
+    const bv = Math.round(cb * colEase);
+
+    _lightGfx.beginFill((rv << 16) | (gv << 8) | bv, alpha);
     _lightGfx.moveTo(sx, sy);
     for (const pt of pts) {
       _lightGfx.lineTo(sx + (pt.x - sx) * scale, sy + (pt.y - sy) * scale);
     }
-    // Close back to first point
     _lightGfx.lineTo(sx + (pts[0].x - sx) * scale, sy + (pts[0].y - sy) * scale);
     _lightGfx.closePath();
     _lightGfx.endFill();
   }
-  // Pure white hotspot at dead centre — MULTIPLY white = scene unchanged (fully lit)
-  _lightGfx.beginFill(0xFFFFFF, 1);
-  _lightGfx.drawCircle(sx, sy, TILE_SIZE * 0.55);
+  // Fully transparent hotspot at centre (completely lit right under player)
+  _lightGfx.beginFill(0x000000, 0);
+  _lightGfx.drawCircle(sx, sy, TILE_SIZE * 0.6);
   _lightGfx.endFill();
 }
 
@@ -2703,41 +2682,34 @@ function _updateLighting(renderer, playerScreenX, playerScreenY, ambientAlpha, i
   const wcx = wc ? wc.x : 0;
   const wcy = wc ? wc.y : 0;
 
-  // Ambient darkness value (0=black night, 255=full day)
-  const darkVal = Math.round((1 - ambientAlpha) * 255);
+  // Night strength: 0=day (no overlay), 1=pitch black
+  const nightAlpha = 1 - ambientAlpha;
 
-  // ── 1. Moonlight ambient fill ──────────────────────────────
-  // Single rect with a cool-blue tint (no geometric bands).
-  // The darkness has a very slight blue cast to feel like moonlight,
-  // with the tiniest directional variation via two overlapping rects.
+  // ── 1. Ambient darkness fill (alpha-mask model) ────────────
+  // The RT is a darkness overlay: opaque black areas = dark, transparent = lit.
+  // Fill with a cool-blue tinted darkness, then punch light holes into it.
   {
-    const nightFrac  = ((ingameMin || 0) % 1440) / 1440;
-    const moonAngle  = nightFrac * Math.PI * 0.5 + Math.PI * 1.1; // slow drift NW→SW
-    const moonDX     = Math.cos(moonAngle);
-    const moonDY     = Math.sin(moonAngle);
-    const variance   = Math.round(ambientAlpha * 14); // max variation in brightness
+    const nightFrac = ((ingameMin || 0) % 1440) / 1440;
+    const moonAngle = nightFrac * Math.PI * 0.5 + Math.PI * 1.1;
+    const moonDX    = Math.cos(moonAngle);
+    const moonDY    = Math.sin(moonAngle);
 
-    // Shadow-side colour (slightly warm)
-    const sv = Math.max(0, darkVal - variance);
-    const shadowCol = (Math.round(sv * 0.95) << 16) | (Math.round(sv * 0.97) << 8) | Math.round(sv * 1.0);
+    // Base darkness fill: slightly warm on shadow side, cool on moon side
+    // Use a subtle directional two-rect approach
+    const shadowAlpha = Math.min(1, nightAlpha * 1.05);
+    const moonAlpha   = Math.max(0, nightAlpha * 0.88);
 
-    // Moon-side colour (slightly cool-blue)
-    const lv = Math.min(255, darkVal + variance);
-    const moonCol   = (Math.round(lv * 0.88) << 16) | (Math.round(lv * 0.93) << 8) | Math.min(255, Math.round(lv * 1.12));
-
-    // Draw shadow-side rect first (full screen), then moon-side triangle on the lit half
-    _lightGfx.beginFill(shadowCol, 1);
+    // Fill full screen with moon-side colour (cool-blue tinted dark)
+    _lightGfx.beginFill(0x0a0a14, moonAlpha);
     _lightGfx.drawRect(0, 0, w, h);
     _lightGfx.endFill();
 
-    // Moon-lit half: a large soft disk offset toward the moon direction.
-    // Use LCOLOR_MOON (cool blue near-white) as the tint.
-    // Radius >> screen so the outer edge (which fades to darkVal) is always
-    // off-screen — no dark arc artifact at the boundary.
-    const mx = w / 2 + moonDX * w * 0.55;
-    const my = h / 2 + moonDY * h * 0.55;
-    const mr = Math.max(w, h) * 1.2;
-    _drawLightDisk(mx, my, mr, LCOLOR_MOON, darkVal, 10);
+    // Overlay shadow half (opposite moon direction) with slightly warmer darker fill
+    const smx = w/2 - moonDX * w * 0.3;
+    const smy = h/2 - moonDY * h * 0.3;
+    _lightGfx.beginFill(0x08060a, shadowAlpha * 0.25);
+    _lightGfx.drawCircle(smx, smy, Math.max(w, h) * 0.85);
+    _lightGfx.endFill();
   }
 
   // ── 2. World light disks (torches, campfires, windows) ─────
@@ -2753,10 +2725,10 @@ function _updateLighting(renderer, playerScreenX, playerScreenY, ambientAlpha, i
                          + Math.sin(fp * 7.1) * 0.012);
     }
     const tinted = _surfaceTintColor(lt.color, lt.wx, lt.wy);
-    _drawLightDisk(sx, sy, r, tinted, darkVal, 18);
-    // Pure white hotspot — MULTIPLY white = scene unchanged (fully lit at source)
-    _lightGfx.beginFill(0xFFFFFF, 1);
-    _lightGfx.drawCircle(sx, sy, r * 0.12);
+    _drawLightDisk(sx, sy, r, tinted, nightAlpha, 18);
+    // Fully transparent hotspot (completely lit at source)
+    _lightGfx.beginFill(0x000000, 0);
+    _lightGfx.drawCircle(sx, sy, r * 0.15);
     _lightGfx.endFill();
   }
 
@@ -2770,12 +2742,9 @@ function _updateLighting(renderer, playerScreenX, playerScreenY, ambientAlpha, i
 
     const visPoly = _computeVisibilityPoly(playerScreenX, playerScreenY, r, wcx, wcy);
     if (visPoly.length >= 3) {
-      _drawVisibilityPoly(playerScreenX, playerScreenY, visPoly, amber, darkVal);
+      _drawVisibilityPoly(playerScreenX, playerScreenY, visPoly, amber, nightAlpha);
     } else {
-      _drawLightDisk(playerScreenX, playerScreenY, r, amber, darkVal, 24);
-      _lightGfx.beginFill(amber, 1);
-      _lightGfx.drawCircle(playerScreenX, playerScreenY, TILE_SIZE * 0.55);
-      _lightGfx.endFill();
+      _drawLightDisk(playerScreenX, playerScreenY, r, amber, nightAlpha, 24);
     }
   }
 
@@ -2845,7 +2814,7 @@ let _dayNightFilter = null;
 const CM_DAY   = [1.0, 0, 0, 0, 0,   0, 1.0, 0, 0, 0,   0, 0, 1.0, 0, 0,   0, 0, 0, 1.0, 0]; // identity
 const CM_DAWN  = [1.1, 0.05, 0, 0, 0.02, 0, 0.9, 0.02, 0, -0.02, 0, 0, 0.8, 0, -0.04, 0, 0, 0, 1.0, 0]; // warm amber
 const CM_DUSK  = [1.05, 0.06, 0, 0, 0.03, 0, 0.85, 0.04, 0, -0.03, 0, 0, 0.75, 0, -0.05, 0, 0, 0, 1.0, 0];
-const CM_NIGHT = [0.38, 0.02, 0.1, 0, -0.05, 0.01, 0.42, 0.15, 0, -0.06, 0.09, 0.1, 0.58, 0, 0.08, 0, 0, 0, 1.0, 0]; // cool blue, darker to compensate lighter MULTIPLY ambient
+const CM_NIGHT = [0.55, 0.02, 0.1, 0, -0.05, 0.01, 0.6, 0.15, 0, -0.06, 0.12, 0.1, 0.8, 0, 0.08, 0, 0, 0, 1.0, 0]; // cool blue night tint
 
 function _lerp(a, b, t) {
   const r = [];
