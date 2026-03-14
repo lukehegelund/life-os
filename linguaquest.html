@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LinguaQuest — La Lengua del Culpable</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.3.2/pixi.min.js"></script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body { background: #1a2a1a; overflow: hidden; font-family: 'Georgia', serif; image-rendering: pixelated; width: 100%; height: 100%; }
@@ -463,13 +463,19 @@ let GEMINI_KEY      = '';  // gemini_api_key — used for chunk generation (chea
 let srsVocab   = [];   // [{word, translation, stage}]
 
 // ── STATE ────────────────────────────────────────────────────
-let phaserGame  = null;
-let _startingWorld = null;  // set by startGame(), read by Phaser create()
-let gameScene   = null;
+let pixiApp     = null;   // PIXI.Application
+let phaserGame  = null;   // kept as alias — set to pixiApp after init for portrait compat
+let _startingWorld = null;  // set by startGame(), read by PixiJS init
+let gameScene   = null;   // PixiJS engine state object (mirrors old GameScene interface)
 let currentNPC  = null;
 let currentWorld= null;
 let dialogueHistory = {};
 let lastNPCReply = '';   // for translation reveal
+
+// ── PIXI LOADED TEXTURES ─────────────────────────────────────
+// Map of assetKey -> PIXI.Texture (for spritesheets) or HTMLImageElement (for portraits)
+const pixiTextures = {};  // assetKey -> PIXI.Texture
+const pixiImages   = {};  // assetKey -> HTMLImageElement (for Canvas2D portrait / indoor sprite use)
 
 // ── CHUNK SYSTEM STATE ──────────────────────────────────────
 // Each chunk is identified by its grid coordinates (cx, cy) where (0,0) is the origin chunk.
@@ -1584,1085 +1590,1369 @@ async function checkSavedGame() {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  GAME SCENE
+//  PIXI ENGINE — replaces Phaser GameScene
+//  All non-rendering code (Supabase, Claude API, campaign system,
+//  dialogue, voice, indoor Canvas2D) is 100% unchanged.
 // ─────────────────────────────────────────────────────────────
-class GameScene extends Phaser.Scene {
-  constructor() {
-    super({ key: 'GameScene' });
-    this.player       = null;
-    this.playerSprite = null;
-    this.cursors      = null;
-    this.wasd         = null;
-    this.npcObjects   = [];
-    this.worldData    = null;
-    this.dialogueCooldown = false;
-    this.playerFacing = 'down';
-    this.playerMoving = false;
-    this._nearestNPC  = null;
-    this._interactPromptEl = null;
+
+// ── Asset manifest — all textures to preload ─────────────────
+const PIXI_ASSETS = {
+  // Base tiles
+  grass:         ASSETS + 'Tiles/Grass_Middle.png',
+  path:          ASSETS + 'Tiles/Path_Middle.png',
+  water:         ASSETS + 'Tiles/Water_Middle.png',
+  beach:         ASSETS + 'Tiles/Sand_Middle.png',
+  farmland:      ASSETS + 'Tiles/FarmLand_Tile.png',
+  path_tiles:    ASSETS + 'Tiles/Path_Tile.png',
+  water_tiles:   ASSETS + 'Tiles/Water_Tile.png',
+  // Decorations
+  oak_tree:        ASSETS + 'Outdoor decoration/Oak_Tree.png',
+  oak_tree_medium: ASSETS + 'Outdoor decoration/Oak_Tree_Medium.png',
+  oak_tree_large:  ASSETS + 'Outdoor decoration/Oak_Tree_Large.png',
+  house:           ASSETS + 'Outdoor decoration/House_1_Wood_Base_Blue.png',
+  chest_sprite:    ASSETS + 'Outdoor decoration/Chest.png',
+  rock_small:      ASSETS + 'Outdoor decoration/Rock_Small.png',
+  flower:          ASSETS + 'Outdoor decoration/Flower.png',
+  bridge:          ASSETS + 'Outdoor decoration/Bridge_Wood.png',
+  decor:           ASSETS + 'Outdoor decoration/Outdoor_Decor_Free.png',
+  // Characters
+  player_ss:   ASSETS + 'Player/Player.png',
+  skeleton_ss: ASSETS + 'Enemies/Skeleton.png',
+  slime_ss:    ASSETS + 'Enemies/Slime_Green.png',
+  chicken_ss:  ASSETS + 'Animals/Chicken/Chicken.png',
+  cow_ss:      ASSETS + 'Animals/Cow/Cow.png',
+  pig_ss:      ASSETS + 'Animals/Pig/Pig.png',
+  sheep_ss:    ASSETS + 'Animals/Sheep/Sheep.png',
+  // Full pack tiles
+  grass2:      ASSETS_FULL + 'Tiles/Grass/Grass_2_Middle.png',
+  grass3:      ASSETS_FULL + 'Tiles/Grass/Grass_3_Middle.png',
+  grass4:      ASSETS_FULL + 'Tiles/Grass/Grass_4_Middle.png',
+  cobble:      ASSETS_FULL + 'Tiles/Cobble_Road/Cobble_Road_1.png',
+  farmland_wet:ASSETS_FULL + 'Tiles/FarmLand/FarmLand_Wet_Tile.png',
+  decor_full:  ASSETS_FULL + 'Outdoor decoration/Outdoor_Decor.png',
+  // Buildings
+  inn:       ASSETS_FULL + 'Buildings/Buildings/Unique_Buildings/Inn/Inn_Blue.png',
+  church:    ASSETS_FULL + 'Buildings/Buildings/Unique_Buildings/Church/Church_Blue.png',
+  blacksmith:ASSETS_FULL + 'Buildings/Buildings/Unique_Buildings/Blacksmith_House/Blacksmith_House_Blue.png',
+  barn:      ASSETS_FULL + 'Buildings/Buildings/Unique_Buildings/Barn/Barn_Base_Red.png',
+  fisherman_house: ASSETS_FULL + 'Buildings/Buildings/Unique_Buildings/Fisherman_House/Fisherman_House_Base_Blue.png',
+  greenhouse:ASSETS_FULL + 'Buildings/Buildings/Unique_Buildings/Greenhouse/GreenHouse_Green.png',
+  shed:      ASSETS_FULL + 'Buildings/Buildings/Unique_Buildings/Shed/Shed_Base_Blue.png',
+  coop:      ASSETS_FULL + 'Buildings/Buildings/Unique_Buildings/Coop/Coop_Base_Red.png',
+  windmill:  ASSETS_FULL + 'Buildings/Buildings/Unique_Buildings/Windmill/Windmill.png',
+  tent_big:  ASSETS_FULL + 'Buildings/Buildings/Tent/Tent_Big.png',
+  tent_small:ASSETS_FULL + 'Buildings/Buildings/Tent/Tent_Small.png',
+  silo:      ASSETS_FULL + 'Buildings/Buildings/Unique_Buildings/Silo/Silo.png',
+  market_stalls: ASSETS_FULL + 'Buildings/Buildings/Unique_Buildings/Stalls/Market_Stalls.png',
+  house_2:   ASSETS_FULL + 'Buildings/Buildings/Houses/Wood/House_2_Wood_Base_Blue.png',
+  house_3:   ASSETS_FULL + 'Buildings/Buildings/Houses/Wood/House_3_Wood_Base_Blue.png',
+  house_stone:      ASSETS_FULL + 'Buildings/Buildings/Houses/Stone/House_1_Stone_Base_Blue.png',
+  house_limestone:  ASSETS_FULL + 'Buildings/Buildings/Houses/Limestone/House_1_Limestone_Base_Blue.png',
+  // Outdoor decorations
+  well:        ASSETS_FULL + 'Outdoor decoration/Well.png',
+  fountain:    ASSETS_FULL + 'Outdoor decoration/Fountain.png',
+  hay_bales:   ASSETS_FULL + 'Outdoor decoration/Hay_Bales.png',
+  scarecrow:   ASSETS_FULL + 'Outdoor decoration/Scarecrows.png',
+  bench:       ASSETS_FULL + 'Outdoor decoration/Benches.png',
+  boat:        ASSETS_FULL + 'Outdoor decoration/Boat.png',
+  barrels:     ASSETS_FULL + 'Outdoor decoration/barrels.png',
+  camp_decor:  ASSETS_FULL + 'Outdoor decoration/Camp_Decor.png',
+  apple_tree:  ASSETS_FULL + 'Crops/Apple_Tree.png',
+  cherry_tree: ASSETS_FULL + 'Crops/Cherry_Tree.png',
+  // Animals full pack
+  duck_ss:  ASSETS_FULL + 'Animals/Duck/Duck_01.png',
+  frog_ss:  ASSETS_FULL + 'Animals/Frog/Frog_01.png',
+  goose_ss: ASSETS_FULL + 'Animals/Goose/Goose_01.png',
+  horse_ss: ASSETS_FULL + 'Animals/Horse/Horse_01.png',
+  duck_img:  ASSETS_FULL + 'Animals/Duck/Duck_01.png',
+  frog_img:  ASSETS_FULL + 'Animals/Frog/Frog_01.png',
+  goose_img: ASSETS_FULL + 'Animals/Goose/Goose_01.png',
+  // NPC premade
+  npc_farmer:    ASSETS_FULL + 'NPCs (Premade)/Farmer_Bob.png',
+  npc_fisherman: ASSETS_FULL + 'NPCs (Premade)/Fisherman_Fin.png',
+  npc_bartender: ASSETS_FULL + 'NPCs (Premade)/Bartender_Bruno.png',
+};
+
+// Spritesheet frame configs (frameWidth × frameHeight)
+const PIXI_SS_FRAMES = {
+  path_tiles:  { frameWidth: 16, frameHeight: 16 },
+  water_tiles: { frameWidth: 16, frameHeight: 16 },
+  decor:       { frameWidth: 16, frameHeight: 16 },
+  decor_full:  { frameWidth: 16, frameHeight: 16 },
+  player_ss:   { frameWidth: 32, frameHeight: 32 },
+  skeleton_ss: { frameWidth: 32, frameHeight: 32 },
+  slime_ss:    { frameWidth: 64, frameHeight: 64 },
+  chicken_ss:  { frameWidth: 32, frameHeight: 32 },
+  cow_ss:      { frameWidth: 32, frameHeight: 32 },
+  pig_ss:      { frameWidth: 32, frameHeight: 32 },
+  sheep_ss:    { frameWidth: 32, frameHeight: 32 },
+  duck_ss:     { frameWidth: 32, frameHeight: 32 },
+  frog_ss:     { frameWidth: 32, frameHeight: 32 },
+  goose_ss:    { frameWidth: 32, frameHeight: 32 },
+  horse_ss:    { frameWidth: 64, frameHeight: 48 },
+};
+
+// ── Pre-slice a spritesheet into an array of PIXI.Texture frames ─────────────
+function _sliceSpritesheet(baseTexture, frameW, frameH) {
+  const src = baseTexture.resource?.source || baseTexture.baseTexture?.resource?.source;
+  if (!src) return [];
+  const imgW = src.naturalWidth || src.width || 0;
+  const imgH = src.naturalHeight || src.height || 0;
+  if (!imgW || !imgH) return [];
+  const frames = [];
+  for (let y = 0; y + frameH <= imgH; y += frameH) {
+    for (let x = 0; x + frameW <= imgW; x += frameW) {
+      frames.push(new PIXI.Texture(baseTexture, new PIXI.Rectangle(x, y, frameW, frameH)));
+    }
   }
+  return frames;
+}
 
-  preload() {
-    // Tiles (16x16 each)
-    // ── Base tiles (all 16x16 single images) ──
-    this.load.image('grass',    ASSETS + 'Tiles/Grass_Middle.png');
-    this.load.image('path',     ASSETS + 'Tiles/Path_Middle.png');
-    this.load.image('water',    ASSETS + 'Tiles/Water_Middle.png');
-    this.load.image('beach',    ASSETS + 'Tiles/Sand_Middle.png');
-    this.load.image('farmland', ASSETS + 'Tiles/FarmLand_Tile.png');
-    // Autotile tilesets (48x96, 16px cells = 3 cols x 6 rows)
-    this.load.spritesheet('path_tiles',  ASSETS + 'Tiles/Path_Tile.png',  { frameWidth: 16, frameHeight: 16 });
-    this.load.spritesheet('water_tiles', ASSETS + 'Tiles/Water_Tile.png', { frameWidth: 16, frameHeight: 16 });
-    // NOTE: 'building' and 'cliff' tiles are drawn via Phaser graphics (no texture file), not loaded here
+// Per-key sliced frame arrays
+const pixiFrames = {};  // key -> PIXI.Texture[]
 
-    // ── Decoration sprites ──
-    this.load.image('oak_tree',        ASSETS + 'Outdoor decoration/Oak_Tree.png');        // 64x80 single tree
-    this.load.image('oak_tree_medium', ASSETS + 'Outdoor decoration/Oak_Tree_Medium.png'); // 32x48 cropped
-    this.load.image('oak_tree_large',  ASSETS + 'Outdoor decoration/Oak_Tree_Large.png');  // 32x48 cropped
-    this.load.image('house',           ASSETS + 'Outdoor decoration/House_1_Wood_Base_Blue.png'); // 96x128
-    this.load.image('chest_sprite',    ASSETS + 'Outdoor decoration/Chest.png');
-    this.load.image('rock_small',      ASSETS + 'Outdoor decoration/Rock_Small.png');      // 16x16 cropped
-    this.load.image('flower',          ASSETS + 'Outdoor decoration/Flower.png');          // 16x16 cropped
-    this.load.image('bridge',          ASSETS + 'Outdoor decoration/Bridge_Wood.png');     // 144x64
-    // Outdoor decor spritesheet: 112x192, 7 cols x 12 rows, 16x16 frames
-    // F0-F2: grass tufts  F7-F9: flowers  F14: stump  F15-F16: rocks
-    // F21-F23: large rocks  F27: leaf  F49: log  F51: mushroom
-    this.load.spritesheet('decor', ASSETS + 'Outdoor decoration/Outdoor_Decor_Free.png', { frameWidth: 16, frameHeight: 16 });
-
-    // ── Characters — Player/Skeleton: 192x320, 6 cols x 10 rows, 32x32 frames ──
-    this.load.spritesheet('player_ss',   ASSETS + 'Player/Player.png',
-      { frameWidth: 32, frameHeight: 32 });
-    this.load.spritesheet('skeleton_ss', ASSETS + 'Enemies/Skeleton.png',
-      { frameWidth: 32, frameHeight: 32 });
-    // Slime: 512x192, 64x64 frames
-    this.load.spritesheet('slime_ss', ASSETS + 'Enemies/Slime_Green.png',
-      { frameWidth: 64, frameHeight: 64 });
-    // Chicken/Cow: 32x32 frames
-    this.load.spritesheet('chicken_ss', ASSETS + 'Animals/Chicken/Chicken.png',
-      { frameWidth: 32, frameHeight: 32 });
-    this.load.spritesheet('cow_ss', ASSETS + 'Animals/Cow/Cow.png',
-      { frameWidth: 32, frameHeight: 32 });
-    // Pig/Sheep: 64x64 spritesheets, 2x2 grid of 32x32 frames
-    this.load.spritesheet('pig_ss',   ASSETS + 'Animals/Pig/Pig.png',
-      { frameWidth: 32, frameHeight: 32 });
-    this.load.spritesheet('sheep_ss', ASSETS + 'Animals/Sheep/Sheep.png',
-      { frameWidth: 32, frameHeight: 32 });
-
-    // ── Full pack assets (Cute_Fantasy/) ──────────────────────────────────────
-    // Grass tile variants
-    this.load.image('grass2', ASSETS_FULL + 'Tiles/Grass/Grass_2_Middle.png');
-    this.load.image('grass3', ASSETS_FULL + 'Tiles/Grass/Grass_3_Middle.png');
-    this.load.image('grass4', ASSETS_FULL + 'Tiles/Grass/Grass_4_Middle.png');
-    // Cobble road tile
-    this.load.image('cobble', ASSETS_FULL + 'Tiles/Cobble_Road/Cobble_Road_1.png');
-    // Farmland wet variant
-    this.load.image('farmland_wet', ASSETS_FULL + 'Tiles/FarmLand/FarmLand_Wet_Tile.png');
-    // Full decor spritesheet (larger than free version)
-    this.load.spritesheet('decor_full', ASSETS_FULL + 'Outdoor decoration/Outdoor_Decor.png',
-      { frameWidth: 16, frameHeight: 16 });
-
-    // ── Unique buildings ──
-    this.load.image('inn',       ASSETS_FULL + 'Buildings/Buildings/Unique_Buildings/Inn/Inn_Blue.png');
-    this.load.image('church',    ASSETS_FULL + 'Buildings/Buildings/Unique_Buildings/Church/Church_Blue.png');
-    this.load.image('blacksmith',ASSETS_FULL + 'Buildings/Buildings/Unique_Buildings/Blacksmith_House/Blacksmith_House_Blue.png');
-    this.load.image('barn',      ASSETS_FULL + 'Buildings/Buildings/Unique_Buildings/Barn/Barn_Base_Red.png');
-    this.load.image('fisherman_house', ASSETS_FULL + 'Buildings/Buildings/Unique_Buildings/Fisherman_House/Fisherman_House_Base_Blue.png');
-    this.load.image('greenhouse',ASSETS_FULL + 'Buildings/Buildings/Unique_Buildings/Greenhouse/GreenHouse_Green.png');
-    this.load.image('shed',      ASSETS_FULL + 'Buildings/Buildings/Unique_Buildings/Shed/Shed_Base_Blue.png');
-    this.load.image('coop',      ASSETS_FULL + 'Buildings/Buildings/Unique_Buildings/Coop/Coop_Base_Red.png');
-    this.load.image('windmill',  ASSETS_FULL + 'Buildings/Buildings/Unique_Buildings/Windmill/Windmill.png');
-    this.load.image('tent_big',  ASSETS_FULL + 'Buildings/Buildings/Tent/Tent_Big.png');
-    this.load.image('tent_small',ASSETS_FULL + 'Buildings/Buildings/Tent/Tent_Small.png');
-    this.load.image('silo',      ASSETS_FULL + 'Buildings/Buildings/Unique_Buildings/Silo/Silo.png');
-    this.load.image('market_stalls', ASSETS_FULL + 'Buildings/Buildings/Unique_Buildings/Stalls/Market_Stalls.png');
-    // House variants (wood blue = default, limestone, stone)
-    this.load.image('house_2',   ASSETS_FULL + 'Buildings/Buildings/Houses/Wood/House_2_Wood_Base_Blue.png');
-    this.load.image('house_3',   ASSETS_FULL + 'Buildings/Buildings/Houses/Wood/House_3_Wood_Base_Blue.png');
-    this.load.image('house_stone', ASSETS_FULL + 'Buildings/Buildings/Houses/Stone/House_1_Stone_Base_Blue.png');
-    this.load.image('house_limestone', ASSETS_FULL + 'Buildings/Buildings/Houses/Limestone/House_1_Limestone_Base_Blue.png');
-
-    // ── Outdoor decorations (single sprites) ──
-    this.load.image('well',        ASSETS_FULL + 'Outdoor decoration/Well.png');
-    this.load.image('fountain',    ASSETS_FULL + 'Outdoor decoration/Fountain.png');
-    this.load.image('hay_bales',   ASSETS_FULL + 'Outdoor decoration/Hay_Bales.png');
-    this.load.image('scarecrow',   ASSETS_FULL + 'Outdoor decoration/Scarecrows.png');
-    this.load.image('bench',       ASSETS_FULL + 'Outdoor decoration/Benches.png');
-    this.load.image('boat',        ASSETS_FULL + 'Outdoor decoration/Boat.png');
-    this.load.image('barrels',     ASSETS_FULL + 'Outdoor decoration/barrels.png');
-    this.load.image('camp_decor',  ASSETS_FULL + 'Outdoor decoration/Camp_Decor.png');
-    this.load.image('apple_tree',  ASSETS_FULL + 'Crops/Apple_Tree.png');
-    this.load.image('cherry_tree', ASSETS_FULL + 'Crops/Cherry_Tree.png');
-
-    // ── Full pack animals (spritesheets where available, static for others) ──
-    this.load.spritesheet('duck_ss',  ASSETS_FULL + 'Animals/Duck/Duck_01.png',
-      { frameWidth: 32, frameHeight: 32 });
-    this.load.spritesheet('frog_ss',  ASSETS_FULL + 'Animals/Frog/Frog_01.png',
-      { frameWidth: 32, frameHeight: 32 });
-    this.load.spritesheet('goose_ss', ASSETS_FULL + 'Animals/Goose/Goose_01.png',
-      { frameWidth: 32, frameHeight: 32 });
-    this.load.spritesheet('horse_ss', ASSETS_FULL + 'Animals/Horse/Horse_01.png',
-      { frameWidth: 64, frameHeight: 48 }); // 4 cols x 10 rows; rows 0-3=brown idle/walk, 8-9=white
-    // Static animal images (for biome-specific ambient decoration)
-    this.load.image('duck_img',  ASSETS_FULL + 'Animals/Duck/Duck_01.png');
-    this.load.image('frog_img',  ASSETS_FULL + 'Animals/Frog/Frog_01.png');
-    this.load.image('goose_img', ASSETS_FULL + 'Animals/Goose/Goose_01.png');
-
-    // ── Premade NPC sprites (for ambient flavor, not interactable) ──
-    this.load.image('npc_farmer',    ASSETS_FULL + 'NPCs (Premade)/Farmer_Bob.png');
-    this.load.image('npc_fisherman', ASSETS_FULL + 'NPCs (Premade)/Fisherman_Fin.png');
-    this.load.image('npc_bartender', ASSETS_FULL + 'NPCs (Premade)/Bartender_Bruno.png');
-  }
-
-  create() {
-    gameScene = this;
-    this._interactPromptEl = document.getElementById('interact-prompt');
-
-    // ── Animations ──
-    this._createAnim('player_ss', 'player_idle_down',  [0,1,2],        5);
-    this._createAnim('player_ss', 'player_walk_down',  [24,25,26,27,28,29], 8);
-    this._createAnim('player_ss', 'player_walk_left',  [6,7,8,9,10,11],    8);
-    this._createAnim('player_ss', 'player_walk_right', [18,19,20,21,22,23],8);
-    this._createAnim('player_ss', 'player_walk_up',    [12,13,14,15,16,17],8);
-    this._createAnim('player_ss', 'player_idle_left',  [6],  4);
-    this._createAnim('player_ss', 'player_idle_right', [18], 4);
-    this._createAnim('player_ss', 'player_idle_up',    [12], 4);
-
-    this._createAnim('skeleton_ss', 'skel_idle',      [0,1,2],        4);
-    this._createAnim('skeleton_ss', 'skel_walk_down', [24,25,26,27],  6);
-    this._createAnim('skeleton_ss', 'skel_walk_left', [6,7,8,9],      6);
-    this._createAnim('skeleton_ss', 'skel_walk_right',[18,19,20,21],  6);
-    this._createAnim('skeleton_ss', 'skel_walk_up',   [12,13,14,15],  6);
-
-    this._createAnim('slime_ss',   'slime_idle',    [0,1,2,3], 5);
-    this._createAnim('chicken_ss', 'chicken_idle',  [0,1],   3);
-    this._createAnim('chicken_ss', 'chicken_walk',  [2,3],   6);
-    this._createAnim('cow_ss',     'cow_idle',      [0,1],   2);
-    this._createAnim('cow_ss',     'cow_walk',      [2,3],   5);
-    this._createAnim('pig_ss',     'pig_idle',      [0,1],     3);
-    this._createAnim('pig_ss',     'pig_walk',      [2,3],     5);
-    this._createAnim('sheep_ss',   'sheep_idle',    [0,1],     2);
-    this._createAnim('sheep_ss',   'sheep_walk',    [2,3],     4);
-    // Horse: 64x48 sheet, 4 cols x 10 rows. Row 0=brown idle, row 1=brown walk
-    // Frame numbers: row*4+col. Row 0 (frames 0-3) = brown idle, Row 1 (4-7) = brown walk
-    this._createAnim('horse_ss',   'horse_idle',    [0,1,2,3], 4);
-    this._createAnim('horse_ss',   'horse_walk',    [4,5,6,7], 6);
-
-    // ── Input ──
-    this.cursors = this.input.keyboard.createCursorKeys();
-    this.wasd = this.input.keyboard.addKeys({
-      up: Phaser.Input.Keyboard.KeyCodes.W,
-      down: Phaser.Input.Keyboard.KeyCodes.S,
-      left: Phaser.Input.Keyboard.KeyCodes.A,
-      right: Phaser.Input.Keyboard.KeyCodes.D,
-      interact: Phaser.Input.Keyboard.KeyCodes.E,
-    });
-
-    this.loadChunk(_startingWorld || ARENAS_BLANCAS_WORLD, 0, 0, true);
-  }
-
-  _createAnim(key, name, frames, frameRate, repeat = -1) {
-    if (this.anims.exists(name)) return;
-    if (!this.textures.exists(key)) return;
-    try {
-      this.anims.create({
-        key: name,
-        frames: this.anims.generateFrameNumbers(key, { frames }),
-        frameRate,
-        repeat,
-      });
-    } catch(e) { console.warn(`Anim "${name}" skipped:`, e.message); }
-  }
-
-  _safePlay(sprite, animKey, ignoreIfPlaying = false) {
-    if (!sprite) return;
-    if (this.anims.exists(animKey)) sprite.play(animKey, ignoreIfPlaying);
-  }
-
-  // ─────────────────────────────────────────────────────────────
-  //  AUTOTILE RENDERER  (RPG-Maker 4-quadrant style)
-  //
-  //  Draws one TILE_SIZE×TILE_SIZE tile by compositing 4 quadrants.
-  //  Each quadrant crops 8×8 from the correct 16×16 frame, scaled 3× to 24px.
-  //  A single RenderTexture per tile ensures no seams between quadrants.
-  //
-  //  Spritesheet frames (row*3+col from Path_Tile.png / Water_Tile.png):
-  //    F0 TL-outer  F1 T-edge   F2 TR-outer
-  //    F3 L-edge    F4 fill     F5 R-edge
-  //    F6 BL-outer  F7 B-edge   F8 BR-outer
-  //    F9 TL-inner  F10 TR-inner
-  //    F12 BL-inner F13 BR-inner
-  // ─────────────────────────────────────────────────────────────
-  _drawAutotile(texKey, x, y, depth, tiles, col, row, cols, rows, matchFn) {
-    if (!this.textures.exists(texKey)) return;
-
-    const TS = TILE_SIZE;
-    const QS = TS / 2;   // 24px per quadrant
-    const SC = QS / 16;  // 16px source → 24px = QS  (scale = 1.5)
-
-    const same = (dc, dr) => {
-      const nc = col + dc, nr = row + dr;
-      if (nc < 0 || nc >= cols || nr < 0 || nr >= rows) return true;
-      return matchFn(tiles[nr]?.[nc] || 'grass');
+// ── Preload all assets and build frame arrays ─────────────────
+async function pixiPreload() {
+  const keys = Object.keys(PIXI_ASSETS);
+  const promises = keys.map(key => new Promise(resolve => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      pixiImages[key] = img;
+      const bt = PIXI.BaseTexture.from(img);
+      const tex = new PIXI.Texture(bt);
+      pixiTextures[key] = tex;
+      if (PIXI_SS_FRAMES[key]) {
+        const { frameWidth: fw, frameHeight: fh } = PIXI_SS_FRAMES[key];
+        pixiFrames[key] = _sliceSpritesheet(bt, fw, fh);
+      }
+      resolve();
     };
-
-    // Frame indices in the 48×96 spritesheet (3 cols × 6 rows, 16×16 each):
-    //   F0 TL-outer  F1 T-edge   F2 TR-outer
-    //   F3 L-edge    F4 fill     F5 R-edge
-    //   F6 BL-outer  F7 B-edge   F8 BR-outer
-    //   F9 TL-inner  F10 TR-inner
-    //   F12 BL-inner F13 BR-inner
-    // Each frame is a COMPLETE 16×16 quadrant tile — no cropping needed.
-    // Scale each frame from 16px → 24px and place it at the quadrant offset (dx,dy).
-    const F = {
-      TL_out:0, T_edge:1, TR_out:2,
-      L_edge:3, fill:4,   R_edge:5,
-      BL_out:6, B_edge:7, BR_out:8,
-      TL_in:13, TR_in:12,
-      BL_in:10, BR_in:9,
-    };
-
-    // Each quadrant: output offset (dx,dy) and its 3 relevant neighbors.
-    // N = the cardinal neighbor toward the "open" edge of this quadrant,
-    // E = the other cardinal neighbor, D = the diagonal between N and E.
-    const quads = [
-      { dx:0,  dy:0,  N:same(0,-1), E:same(-1,0), D:same(-1,-1),
-        Fout:F.TL_out, FedgeN:F.T_edge, FedgeE:F.L_edge, Fin:F.TL_in },
-      { dx:QS, dy:0,  N:same(0,-1), E:same(1,0),  D:same(1,-1),
-        Fout:F.TR_out, FedgeN:F.T_edge, FedgeE:F.R_edge, Fin:F.TR_in },
-      { dx:0,  dy:QS, N:same(0,1),  E:same(-1,0), D:same(-1,1),
-        Fout:F.BL_out, FedgeN:F.B_edge, FedgeE:F.L_edge, Fin:F.BL_in },
-      { dx:QS, dy:QS, N:same(0,1),  E:same(1,0),  D:same(1,1),
-        Fout:F.BR_out, FedgeN:F.B_edge, FedgeE:F.R_edge, Fin:F.BR_in },
-    ];
-
-    // Composite all 4 quadrants into one RenderTexture to avoid inter-quadrant seams.
-    // Each 16×16 frame is scaled to 24×24 and drawn at its quadrant position (dx,dy).
-    const rt = this.add.renderTexture(x, y, TS, TS).setOrigin(0, 0).setDepth(depth);
-
-    for (const q of quads) {
-      let frame;
-      if      (!q.N && !q.E)           frame = q.Fout;
-      else if (!q.N &&  q.E)           frame = q.FedgeN;
-      else if ( q.N && !q.E)           frame = q.FedgeE;
-      else if ( q.N &&  q.E && !q.D)  frame = q.Fin;
-      else                              frame = F.fill;
-
-      const tmp = this.add.image(0, 0, texKey, frame).setOrigin(0,0).setScale(SC).setVisible(false);
-      rt.draw(tmp, q.dx, q.dy);
-      tmp.destroy();
-    }
-    return rt;
-  }
-
-  // ─────────────────────────────────────────────────────────────
-  //  CHUNK LOADING — renders a worldDef at chunk grid position (chunkX, chunkY)
-  //  All positions are offset into world-space by chunk coordinates.
-  //  isOrigin=true means this is the first chunk (spawn player here).
-  // ─────────────────────────────────────────────────────────────
-  loadChunk(worldDef, chunkX, chunkY, isOrigin = false) {
-    const key = `${chunkX},${chunkY}`;
-    if (chunks.has(key) && chunks.get(key).loaded) return; // already loaded
-
-    const { tiles, size } = worldDef.world;
-    const cols = size[0];
-    const rows = size[1];
-    const gameObjects = []; // track all Phaser objects for this chunk so we can unload
-
-    // World-space pixel offset for this chunk
-    const offsetX = chunkX * CHUNK_COLS * TILE_SIZE;
-    const offsetY = chunkY * CHUNK_ROWS * TILE_SIZE;
-
-    // ── TILE LAYER ──
-    for (let row = 0; row < rows; row++) {
-      for (let col = 0; col < cols; col++) {
-        const tileType = (tiles[row]?.[col]) || 'grass';
-        const def = TILE_DEFS[tileType] || TILE_DEFS.grass;
-        const x = offsetX + col * TILE_SIZE;
-        const y = offsetY + row * TILE_SIZE;
-
-        const isPath  = (t) => t === 'path' || t === 'stone' || t === 'building_door' || t === 'farmland' || t === 'sand' || t === 'beach';
-        const isWater = (t) => t === 'water' || t === 'water_deep';
-
-        if (isPath(tileType) && this.textures.exists('path_tiles')) {
-          const g = this.add.image(x, y, 'grass').setOrigin(0,0).setDisplaySize(TILE_SIZE, TILE_SIZE).setDepth(0);
-          gameObjects.push(g);
-          const rt = this._drawAutotile('path_tiles', x, y, 1, tiles, col, row, cols, rows, isPath);
-          if (rt) gameObjects.push(rt);
-        } else if (isWater(tileType) && this.textures.exists('water_tiles')) {
-          const g = this.add.image(x, y, 'grass').setOrigin(0,0).setDisplaySize(TILE_SIZE, TILE_SIZE).setDepth(0);
-          gameObjects.push(g);
-          const rt = this._drawAutotile('water_tiles', x, y, 1, tiles, col, row, cols, rows, isWater);
-          if (rt) gameObjects.push(rt);
-        } else {
-          const tile = this.add.image(x, y, def.key)
-            .setOrigin(0, 0).setDisplaySize(TILE_SIZE, TILE_SIZE).setDepth(0);
-          if (def.tint) tile.setTint(def.tint);
-          gameObjects.push(tile);
-        }
-      }
-    }
-
-    // ── DECORATION LAYER ──
-    for (let row = 0; row < rows; row++) {
-      for (let col = 0; col < cols; col++) {
-        const tileType = (tiles[row]?.[col]) || 'grass';
-        const cx = offsetX + col * TILE_SIZE + TILE_SIZE / 2;
-        const cy = offsetY + row * TILE_SIZE + TILE_SIZE / 2;
-        const x  = offsetX + col * TILE_SIZE;
-        const y  = offsetY + row * TILE_SIZE;
-        // Use absolute row for depth sorting (so objects across chunks sort correctly)
-        const absRow = chunkY * CHUNK_ROWS + row + 10000;
-
-        if (tileType === 'tree') {
-          const variant = (row * 3 + col) % 4;
-          let obj;
-          if (variant === 0) {
-            obj = this.add.image(cx, cy + TILE_SIZE * 0.2, 'oak_tree')
-              .setOrigin(0.5, 0.85).setScale(0.95).setDepth(absRow * 10 + 5);
-          } else if (variant === 1) {
-            obj = this.add.image(cx, cy + TILE_SIZE * 0.18, 'oak_tree_medium')
-              .setOrigin(0.5, 0.85).setScale(1.35).setDepth(absRow * 10 + 5);
-          } else if (variant === 2) {
-            obj = this.add.image(cx, cy + TILE_SIZE * 0.18, 'oak_tree_large')
-              .setOrigin(0.5, 0.85).setScale(1.45).setDepth(absRow * 10 + 5);
-          } else {
-            obj = this.add.image(cx, cy + TILE_SIZE * 0.18, 'oak_tree_medium')
-              .setOrigin(0.5, 0.85).setScale(1.15).setDepth(absRow * 10 + 5);
-          }
-          gameObjects.push(obj);
-        }
-
-        if (tileType === 'building' || tileType === 'building_door') {
-          const above = row > 0 ? (tiles[row-1]?.[col] || '') : '';
-          const left  = col > 0 ? (tiles[row]?.[col-1] || '') : '';
-          if (!(above === 'building' || above === 'building_door') &&
-              !(left === 'building' || left === 'building_door')) {
-            let clusterW = 1;
-            while (col + clusterW < cols) {
-              const right = tiles[row]?.[col + clusterW] || '';
-              if (right === 'building' || right === 'building_door') clusterW++;
-              else break;
-            }
-            const hcx = x + (clusterW * TILE_SIZE) / 2;
-            // Pick building sprite based on biome and hash for variety
-            const biome = worldDef.world?.biome || 'wilderness';
-            const biomePalette = BIOME_PALETTES[biome] || BIOME_PALETTES.wilderness;
-            const bHash = ((col * 2654435761 + row * 2246822519) >>> 0) % Math.max(1, biomePalette.buildings.length);
-            const bKey = biomePalette.buildings[bHash] || 'house';
-            // Determine scale based on building type
-            const bigBuildings = ['inn','church','blacksmith','barn','fisherman_house','greenhouse','windmill','market_stalls'];
-            const smallBuildings = ['shed','coop','silo','tent_small','tent_big','well','fountain','scarecrow','hay_bales'];
-            let hScale, originY;
-            if (bigBuildings.includes(bKey)) {
-              hScale = Math.max(1.1, Math.min(1.8, clusterW * 0.9));
-              originY = 0.78;
-            } else if (smallBuildings.includes(bKey)) {
-              hScale = Math.max(0.7, Math.min(1.2, clusterW * 0.7));
-              originY = 0.85;
-            } else {
-              hScale = Math.max(0.9, Math.min(1.6, clusterW * 0.8));
-              originY = 0.75;
-            }
-            // Use fallback to 'house' if texture not loaded
-            const texKey = this.textures.exists(bKey) ? bKey : 'house';
-            const obj = this.add.image(hcx, cy - TILE_SIZE * 0.15, texKey)
-              .setOrigin(0.5, originY).setScale(hScale).setDepth(absRow * 10 + 6);
-            gameObjects.push(obj);
-          }
-        }
-
-        if (tileType === 'cliff' || tileType === 'mountain') {
-          const g = this.add.graphics().setDepth(absRow * 10 + 5);
-          g.fillStyle(0x6a6a58, 1); g.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-          g.fillStyle(0x888878, 1); g.fillRect(x + 4, y + 4, TILE_SIZE - 8, TILE_SIZE / 2 - 4);
-          g.fillStyle(0xaaaaaa, 0.5); g.fillRect(x + 8, y + 6, 8, 4);
-          gameObjects.push(g);
-        }
-
-        if (tileType === 'rock') {
-          const obj = this.add.image(cx, cy, 'rock_small')
-            .setOrigin(0.5, 0.5).setDisplaySize(TILE_SIZE * 0.7, TILE_SIZE * 0.7).setDepth(absRow * 10 + 5);
-          gameObjects.push(obj);
-        }
-
-        if (tileType === 'chest') {
-          const obj = this.add.image(cx, cy, 'chest_sprite')
-            .setOrigin(0.5, 0.5).setScale(2.5).setDepth(absRow * 10 + 5);
-          gameObjects.push(obj);
-        }
-
-        if (tileType === 'farmland') {
-          const g = this.add.graphics().setDepth(1);
-          g.lineStyle(1, 0x8B6914, 0.40);
-          for (let i = 0; i < 3; i++) { g.lineBetween(x + 4, y + (i+1)*(TILE_SIZE/4), x + TILE_SIZE - 4, y + (i+1)*(TILE_SIZE/4)); }
-          gameObjects.push(g);
-        }
-
-        if (tileType === 'stone') {
-          const g = this.add.graphics().setDepth(1);
-          g.lineStyle(1, 0x888888, 0.25); g.strokeRect(x + 4, y + 4, TILE_SIZE - 8, TILE_SIZE - 8);
-          gameObjects.push(g);
-        }
-      }
-    }
-
-    // ── GROUND SCATTER ──
-    const chunkBiome = worldDef.world?.biome || 'wilderness';
-    if (this.textures.exists('decor')) {
-      const GRASS_TUFTS = [0,1,2], FLOWERS = [7,8,9], STUMPS = [14], SMALL_ROCKS = [15,16], MUSHROOM = [51], LOG = [49];
-      for (let row = 0; row < rows; row++) {
-        for (let col = 0; col < cols; col++) {
-          const tileType = (tiles[row]?.[col]) || 'grass';
-          const scx = offsetX + col * TILE_SIZE + TILE_SIZE / 2;
-          const scy = offsetY + row * TILE_SIZE + TILE_SIZE / 2;
-          // Include chunk coords in hash so scatter varies between chunks
-          const h = ((col + chunkX * 1000) * 2654435761 + (row + chunkY * 1000) * 2246822519) >>> 0;
-          const roll = h % 100;
-          const jx = ((h >> 8) % TILE_SIZE) - TILE_SIZE / 2;
-          const jy = ((h >> 16) % TILE_SIZE) - TILE_SIZE / 2;
-          const absRow2 = chunkY * CHUNK_ROWS + row + 10000;
-          const depth = absRow2 * 10 + 2;
-
-          if (tileType === 'grass') {
-            let frame, obj;
-            // Biome-specific scatter rates
-            const isForest  = chunkBiome === 'forest';
-            const isBeach   = chunkBiome === 'beach';
-            const isRuins   = chunkBiome === 'ruins';
-            const isVillage = chunkBiome === 'village';
-            if (isForest) {
-              // Forest: more stumps, logs, mushrooms; fewer flowers
-              if      (roll < 8)  { frame = STUMPS[0]; obj = this.add.image(scx+jx*0.4,scy+jy*0.4,'decor',frame).setOrigin(0.5,0.8).setScale(2.8).setDepth(depth); }
-              else if (roll < 16) { frame = LOG[0];    obj = this.add.image(scx+jx*0.4,scy+jy*0.4,'decor',frame).setOrigin(0.5,0.8).setScale(2.5).setDepth(depth); }
-              else if (roll < 24) { frame = MUSHROOM[0];obj= this.add.image(scx+jx*0.5,scy+jy*0.5,'decor',frame).setOrigin(0.5,0.8).setScale(2.5).setDepth(depth); }
-              else if (roll < 30) { frame = SMALL_ROCKS[h%SMALL_ROCKS.length]; obj = this.add.image(scx+jx*0.5,scy+jy*0.5,'decor',frame).setOrigin(0.5,0.8).setScale(2.2).setDepth(depth); }
-              else if (roll < 36) { frame = GRASS_TUFTS[h%GRASS_TUFTS.length]; obj = this.add.image(scx+jx*0.7,scy+jy*0.7,'decor',frame).setOrigin(0.5,0.8).setScale(2.2).setDepth(depth); }
-            } else if (isBeach) {
-              // Beach grass: mostly rocks and sparse tufts
-              if      (roll < 15) { frame = SMALL_ROCKS[h%SMALL_ROCKS.length]; obj = this.add.image(scx+jx*0.5,scy+jy*0.5,'decor',frame).setOrigin(0.5,0.8).setScale(2.5).setDepth(depth); }
-              else if (roll < 22) { frame = GRASS_TUFTS[h%GRASS_TUFTS.length]; obj = this.add.image(scx+jx*0.7,scy+jy*0.7,'decor',frame).setOrigin(0.5,0.8).setScale(2.0).setDepth(depth).setAlpha(0.8); }
-            } else if (isRuins) {
-              // Ruins: lots of rocks, stumps, mushrooms
-              if      (roll < 18) { frame = SMALL_ROCKS[h%SMALL_ROCKS.length]; obj = this.add.image(scx+jx*0.5,scy+jy*0.5,'decor',frame).setOrigin(0.5,0.8).setScale(2.5).setDepth(depth); }
-              else if (roll < 26) { frame = STUMPS[0]; obj = this.add.image(scx+jx*0.4,scy+jy*0.4,'decor',frame).setOrigin(0.5,0.8).setScale(2.8).setDepth(depth); }
-              else if (roll < 32) { frame = MUSHROOM[0];obj= this.add.image(scx+jx*0.5,scy+jy*0.5,'decor',frame).setOrigin(0.5,0.8).setScale(2.5).setDepth(depth); }
-              else if (roll < 36) { frame = FLOWERS[h%FLOWERS.length]; obj = this.add.image(scx+jx*0.6,scy+jy*0.6,'decor',frame).setOrigin(0.5,0.8).setScale(2.5).setDepth(depth).setAlpha(0.7); }
-            } else {
-              // Default / village / farmland / road / wilderness scatter
-              if      (roll < 12) { frame = FLOWERS[h%FLOWERS.length];     obj = this.add.image(scx+jx*0.6,scy+jy*0.6,'decor',frame).setOrigin(0.5,0.8).setScale(2.5).setDepth(depth); }
-              else if (roll < 22) { frame = GRASS_TUFTS[h%GRASS_TUFTS.length]; obj = this.add.image(scx+jx*0.7,scy+jy*0.7,'decor',frame).setOrigin(0.5,0.8).setScale(2.2).setDepth(depth); }
-              else if (roll < 27) { frame = SMALL_ROCKS[h%SMALL_ROCKS.length]; obj = this.add.image(scx+jx*0.5,scy+jy*0.5,'decor',frame).setOrigin(0.5,0.8).setScale(2.5).setDepth(depth); }
-              else if (roll < 30) { obj = this.add.image(scx+jx*0.4,scy+jy*0.4,'decor',STUMPS[0]).setOrigin(0.5,0.8).setScale(2.8).setDepth(depth); }
-              else if (roll < 32) { obj = this.add.image(scx+jx*0.5,scy+jy*0.5,'decor',MUSHROOM[0]).setOrigin(0.5,0.8).setScale(2.5).setDepth(depth); }
-              else if (roll < 34) { obj = this.add.image(scx+jx*0.4,scy+jy*0.4,'decor',LOG[0]).setOrigin(0.5,0.8).setScale(2.5).setDepth(depth); }
-            }
-            if (obj) gameObjects.push(obj);
-          }
-
-          // Beach scatter on beach/sand tiles
-          if (tileType === 'beach' || tileType === 'sand') {
-            let obj;
-            if (roll < 8) { obj = this.add.image(scx+jx*0.5,scy+jy*0.5,'decor',SMALL_ROCKS[h%SMALL_ROCKS.length]).setOrigin(0.5,0.8).setScale(2.0).setDepth(depth).setAlpha(0.9); }
-            if (obj) gameObjects.push(obj);
-          }
-
-          if (tileType === 'water' || tileType === 'water_deep') {
-            const isW = (t) => t === 'water' || t === 'water_deep';
-            if (roll < 6 && isW(tiles[row-1]?.[col]) && isW(tiles[row+1]?.[col]) && isW(tiles[row]?.[col-1]) && isW(tiles[row]?.[col+1])) {
-              const obj = this.add.image(scx+jx*0.5,scy+jy*0.5,'decor',SMALL_ROCKS[h%SMALL_ROCKS.length]).setOrigin(0.5,0.8).setScale(2.2).setDepth(depth).setAlpha(0.85);
-              gameObjects.push(obj);
-            }
-          }
-        }
-      }
-    }
-
-    // ── BIOME DECORATION PROPS — place single-sprite props on open grass tiles ──
-    // Each biome drops 1-3 characteristic props (well, hay bale, barrel, etc.)
-    {
-      const bioDecos = {
-        village:   ['well','fountain','bench','barrels'],
-        city:      ['well','fountain','bench','barrels'],
-        farmland:  ['hay_bales','scarecrow','barrels'],
-        forest:    ['camp_decor'],
-        beach:     ['boat'],
-        ocean:     ['boat'],
-        ruins:     ['barrels','camp_decor'],
-        dungeon:   ['barrels','camp_decor'],
-        camp:      ['camp_decor','barrels'],
-        road:      ['bench','barrels'],
-        wilderness:[],
-        cliffside: [],
-      };
-      const decoList = bioDecos[chunkBiome] || [];
-      if (decoList.length > 0) {
-        // Collect open grass tiles
-        const openTiles = [];
-        for (let row = 2; row < rows - 2; row++) {
-          for (let col = 2; col < cols - 2; col++) {
-            if ((tiles[row]?.[col] || 'grass') === 'grass') openTiles.push([col, row]);
-          }
-        }
-        // Place up to 2 props using deterministic hash
-        const seedH = ((chunkX * 7919 + chunkY * 6271) * 2654435761) >>> 0;
-        const propCount = Math.min(2, decoList.length, Math.floor(openTiles.length / 20));
-        for (let pi = 0; pi < propCount; pi++) {
-          const pIdx = (seedH * (pi + 1)) % Math.max(1, openTiles.length);
-          const [pc, pr] = openTiles[pIdx] || [0, 0];
-          const propKey = decoList[(seedH + pi) % decoList.length];
-          if (!this.textures.exists(propKey)) continue;
-          const px = offsetX + pc * TILE_SIZE + TILE_SIZE / 2;
-          const py = offsetY + pr * TILE_SIZE + TILE_SIZE / 2;
-          const pAbsRow = chunkY * CHUNK_ROWS + pr;
-          const prop = this.add.image(px, py, propKey)
-            .setOrigin(0.5, 0.85).setScale(1.5).setDepth(pAbsRow * 10 + 5);
-          gameObjects.push(prop);
-        }
-      }
-    }
-
-    // ── AMBIENT ANIMALS ──
-    const chunkNpcs = [];
-    {
-      // Biome-specific animal pools
-      const biomeAnimals = {
-        village:   [
-          { key:'chicken_ss', idle:'chicken_idle', walk:'chicken_walk', scale:1.8, name:'chicken' },
-          { key:'pig_ss',     idle:'pig_idle',     walk:'pig_walk',     scale:1.6, name:'pig' },
-        ],
-        city:      [
-          { key:'chicken_ss', idle:'chicken_idle', walk:'chicken_walk', scale:1.6, name:'chicken' },
-        ],
-        farmland:  [
-          { key:'cow_ss',   idle:'cow_idle',   walk:'cow_walk',   scale:1.7, name:'cow' },
-          { key:'sheep_ss', idle:'sheep_idle', walk:'sheep_walk', scale:1.6, name:'sheep' },
-          { key:'chicken_ss', idle:'chicken_idle', walk:'chicken_walk', scale:1.8, name:'chicken' },
-        ],
-        forest:    [
-          { key:'pig_ss',   idle:'pig_idle',   walk:'pig_walk',   scale:1.4, name:'pig' },
-          { key:'frog_img', scale:1.3, name:'frog', static:true },
-        ],
-        beach:     [
-          { key:'duck_img',  scale:1.5, name:'duck',  static:true },
-          { key:'goose_img', scale:1.6, name:'goose', static:true },
-        ],
-        ocean:     [
-          { key:'duck_img',  scale:1.5, name:'duck',  static:true },
-        ],
-        cliffside: [],
-        dungeon:   [],
-        ruins:     [
-          { key:'pig_ss',   idle:'pig_idle',   walk:'pig_walk',   scale:1.3, name:'pig' },
-          { key:'frog_img', scale:1.2, name:'frog', static:true },
-        ],
-        camp:      [
-          { key:'horse_ss', idle:'horse_idle', walk:'horse_walk', scale:1.4, name:'horse' },
-          { key:'chicken_ss', idle:'chicken_idle', walk:'chicken_walk', scale:1.6, name:'chicken' },
-        ],
-        road:      [
-          { key:'horse_ss', idle:'horse_idle', walk:'horse_walk', scale:1.4, name:'horse' },
-          { key:'chicken_ss', idle:'chicken_idle', walk:'chicken_walk', scale:1.8, name:'chicken' },
-        ],
-        wilderness:[
-          { key:'chicken_ss', idle:'chicken_idle', walk:'chicken_walk', scale:1.8, name:'chicken' },
-          { key:'pig_ss',     idle:'pig_idle',     walk:'pig_walk',     scale:1.6, name:'pig' },
-          { key:'sheep_ss',   idle:'sheep_idle',   walk:'sheep_walk',   scale:1.6, name:'sheep' },
-          { key:'cow_ss',     idle:'cow_idle',     walk:'cow_walk',     scale:1.7, name:'cow' },
-        ],
-      };
-      const animalTypes = biomeAnimals[chunkBiome] || biomeAnimals.wilderness;
-      if (animalTypes.length === 0) { /* no animals for this biome */ }
-      else {
-        // Pick suitable ground tiles (grass for land animals; beach/water for water birds)
-        const validTiles = ['grass'];
-        if (chunkBiome === 'beach' || chunkBiome === 'ocean') validTiles.push('beach', 'sand', 'water');
-        const spawnTiles = [];
-        for (let row = 0; row < rows; row++) {
-          for (let col = 0; col < cols; col++) {
-            if (validTiles.includes(tiles[row]?.[col] || 'grass')) spawnTiles.push([col, row]);
-          }
-        }
-        spawnTiles.sort((a,b) => {
-          const ha = ((a[0]+chunkX*1000)*2654435761 + (a[1]+chunkY*1000)*2246822519) >>> 0;
-          const hb = ((b[0]+chunkX*1000)*2654435761 + (b[1]+chunkY*1000)*2246822519) >>> 0;
-          return ha - hb;
-        });
-        const animalCount = Math.min(2, Math.floor(spawnTiles.length * 0.008));
-        // Use a chunk-seeded shuffle so each chunk gets a different mix of animal types
-        const shuffledTypes = [...animalTypes].sort((a, b) => {
-          const ha = ((chunkX * 31337 + chunkY * 92821 + animalTypes.indexOf(a)) * 2654435761) >>> 0;
-          const hb = ((chunkX * 31337 + chunkY * 92821 + animalTypes.indexOf(b)) * 2654435761) >>> 0;
-          return ha - hb;
-        });
-        for (let i = 0; i < animalCount; i++) {
-          const [ac, ar] = spawnTiles[i];
-          const ax = offsetX + ac * TILE_SIZE + TILE_SIZE / 2;
-          const ay = offsetY + ar * TILE_SIZE + TILE_SIZE / 2;
-          const aType = shuffledTypes[i % shuffledTypes.length];
-          if (!this.textures.exists(aType.key)) continue;
-          const absRow = chunkY * CHUNK_ROWS + ar + 10000;
-
-          if (aType.static) {
-            // Static image animal (duck, goose, horse — no animation yet)
-            const aImg = this.add.image(ax, ay, aType.key)
-              .setOrigin(0.5, 0.8).setScale(aType.scale).setDepth(absRow * 10 + 6);
-            gameObjects.push(aImg);
-          } else {
-            const aSprite = this.add.sprite(ax, ay, aType.key).setScale(aType.scale).setDepth(absRow * 10 + 6);
-            this._safePlay(aSprite, aType.idle);
-            gameObjects.push(aSprite);
-            const wander = { homeX:ax, homeY:ay, targetX:ax, targetY:ay, moving:false, timer:Math.random()*4000+1000, idleAnim:aType.idle, walkAnim:aType.walk };
-            const npcObj = { def:{name:'',dialogue:[],type:'ambient',sprite:aType.name}, sprite:aSprite, label:null, nx:ax, ny:ay, range:TILE_SIZE*2, wander, chunkKey:key };
-            chunkNpcs.push(npcObj);
-            this.npcObjects.push(npcObj);
-          }
-        }
-      }
-    }
-
-    // ── SPAWN NAMED NPCs ──
-    for (const npcDef of (worldDef.npcs || [])) {
-      const [nc, nr] = npcDef.position;
-      const nx = offsetX + nc * TILE_SIZE + TILE_SIZE / 2;
-      const ny = offsetY + nr * TILE_SIZE + TILE_SIZE / 2;
-      const absRow = chunkY * CHUNK_ROWS + nr + 10000;
-
-      // Make NPC ids unique across chunks
-      const uniqueId = `${key}_${(npcDef.id || npcDef.name || 'npc')}`;
-      // Normalise fields — Claude returns dialogue[] and ai_context; openNPCDialogue needs greeting
-      const rawGreeting = npcDef.greeting
-        || (Array.isArray(npcDef.dialogue) && npcDef.dialogue[0])
-        || '...';
-      const npcDefCopy = {
-        ...npcDef,
-        id: uniqueId,
-        greeting: rawGreeting,
-        dialogue: npcDef.dialogue || [rawGreeting],
-        personality: npcDef.personality || npcDef.ai_context || '',
-        ai_context: npcDef.ai_context || npcDef.personality || '',
-      };
-
-      let spriteKey, idleAnim, walkAnim, scale;
-      switch (npcDef.sprite) {
-        case 'skeleton': spriteKey='skeleton_ss'; idleAnim='skel_idle'; walkAnim='skel_walk_down'; scale=SPRITE_SCALE; break;
-        case 'slime':    spriteKey='slime_ss'; idleAnim='slime_idle'; walkAnim='slime_idle'; scale=1.0; break;
-        case 'chicken':  spriteKey='chicken_ss'; idleAnim='chicken_idle'; walkAnim='chicken_walk'; scale=2.0; break;
-        case 'cow':      spriteKey='cow_ss'; idleAnim='cow_idle'; walkAnim='cow_walk'; scale=1.8; break;
-        case 'pig':      spriteKey='pig_ss'; idleAnim='pig_idle'; walkAnim='pig_walk'; scale=1.8; break;
-        case 'sheep':    spriteKey='sheep_ss'; idleAnim='sheep_idle'; walkAnim='sheep_walk'; scale=1.8; break;
-        default:         spriteKey='player_ss'; idleAnim='player_idle_down'; walkAnim='player_walk_down'; scale=SPRITE_SCALE; break;
-      }
-
-      const npcSprite = this.add.sprite(nx, ny, spriteKey).setScale(scale).setDepth(absRow * 10 + 7);
-      this._safePlay(npcSprite, idleAnim);
-      gameObjects.push(npcSprite);
-
-      const label = this.add.text(nx, ny - FRAME_H * scale * 0.7, npcDef.name, {
-        fontSize:'11px', color:'#d0f890', stroke:'#000000', strokeThickness:3, fontFamily:'Georgia, serif',
-      }).setOrigin(0.5, 1).setDepth(absRow * 10 + 9);
-      gameObjects.push(label);
-
-      const wander = { homeX:nx, homeY:ny, targetX:nx, targetY:ny, moving:false, timer:Math.random()*3000, idleAnim, walkAnim };
-      const npcObj = { def:npcDefCopy, sprite:npcSprite, label, nx, ny, range:TILE_SIZE*1.6, wander, chunkKey:key };
-      chunkNpcs.push(npcObj);
-      this.npcObjects.push(npcObj);
-    }
-
-    // Store chunk data
-    chunks.set(key, { worldDef, gameObjects, npcs: chunkNpcs, loaded: true, cx: chunkX, cy: chunkY });
-
-    // House interiors are generated lazily — only when player tries to enter.
-    // No upfront queuing to avoid rate limit spikes.
-
-    // ── PLAYER (only on origin chunk) ──
-    if (isOrigin) {
-      // Clear old player if exists
-      if (this.player) { this.player.destroy(); this.player = null; }
-      if (this.playerSprite) { this.playerSprite.destroy(); this.playerSprite = null; }
-      this.cameras.main.stopFollow();
-
-      const [pCol, pRow] = worldDef.player_start;
-      const px = offsetX + pCol * TILE_SIZE + TILE_SIZE / 2;
-      const py = offsetY + pRow * TILE_SIZE + TILE_SIZE / 2;
-
-      this.playerSprite = this.add.sprite(px, py, 'player_ss', 0).setScale(SPRITE_SCALE).setDepth(99999);
-      this._safePlay(this.playerSprite, 'player_idle_down');
-
-      this.player = this.physics.add.image(px, py + 8, null).setDisplaySize(18, 12);
-      this.player.setVisible(false);
-      this.player.body.setCollideWorldBounds(false); // no world bounds in infinite world
-
-      this.cameras.main.startFollow(this.playerSprite, true, 1, 1);
-      this.cameras.main.setZoom(1.0);
-      this.cameras.main.setRoundPixels(true);
-      this.cameras.main.setBounds(-999999, -999999, 1999998, 1999998); // effectively unbounded
-
-      currentChunkX = chunkX;
-      currentChunkY = chunkY;
-      worldTheme = worldDef.world.theme || '';
-      worldLanguage = worldDef.world.language || 'es';
-      currentWorld = worldDef;
-
-      // HUD
-      const wname = (worldDef.world.theme || 'world').replace(/_/g, ' ');
-      document.getElementById('world-name').textContent = wname.toUpperCase();
-      document.getElementById('lang-badge').textContent = worldLanguage.toUpperCase();
-      document.getElementById('dialogue-input').placeholder = `Respond in ${getLangName(worldLanguage)}...`;
-      if (worldDef.world.description) showStatus(worldDef.world.description, 5000);
-
-      this.cameras.main.centerOn(px, py);
-
-      // Queue generation of surrounding chunks (only in auto-gen mode)
-      queueSurroundingChunks(chunkX, chunkY); processChunkQueue();
-    }
-
-    console.log(`Chunk (${chunkX},${chunkY}) loaded — ${gameObjects.length} objects`);
-  }
-
-  // ── UNLOAD a chunk — destroy all its game objects ──
-  unloadChunk(chunkX, chunkY) {
-    const key = `${chunkX},${chunkY}`;
-    const chunk = chunks.get(key);
-    if (!chunk || !chunk.loaded) return;
-
-    // Remove NPCs from the global list
-    this.npcObjects = this.npcObjects.filter(n => n.chunkKey !== key);
-
-    // Destroy all game objects
-    for (const obj of chunk.gameObjects) {
-      if (obj && obj.destroy) obj.destroy();
-    }
-    chunk.gameObjects = [];
-    chunk.npcs = [];
-    chunk.loaded = false;
-    chunks.delete(key);
-    console.log(`Chunk (${chunkX},${chunkY}) unloaded`);
-  }
-
-  // ── Get tile type at world pixel position, looking up the correct chunk ──
-  getTileAt(worldX, worldY) {
-    const cx = Math.floor(worldX / (CHUNK_COLS * TILE_SIZE));
-    const cy = Math.floor(worldY / (CHUNK_ROWS * TILE_SIZE));
-    const key = `${cx},${cy}`;
-    const chunk = chunks.get(key);
-    if (!chunk || !chunk.loaded) return 'grass'; // unloaded chunks treated as walkable grass
-    const localCol = Math.floor((worldX - cx * CHUNK_COLS * TILE_SIZE) / TILE_SIZE);
-    const localRow = Math.floor((worldY - cy * CHUNK_ROWS * TILE_SIZE) / TILE_SIZE);
-    return chunk.worldDef.world.tiles?.[localRow]?.[localCol] || 'grass';
-  }
-
-  update(time, delta) {
-    if (!this.player || !this.playerSprite || !this.cursors) return;
-
-    const dialogueOpen = document.getElementById('dialogue-box').style.display !== 'none'
-                      && document.getElementById('dialogue-box').style.display !== '';
-
-    const inputFocused = ['INPUT','TEXTAREA'].includes(document.activeElement?.tagName);
-
-    const speed = 120;
-    let vx = 0, vy = 0;
-
-    if (!dialogueOpen && !inputFocused) {
-      if (this.cursors.left.isDown  || this.wasd.left.isDown)  vx = -speed;
-      if (this.cursors.right.isDown || this.wasd.right.isDown) vx =  speed;
-      if (this.cursors.up.isDown    || this.wasd.up.isDown)    vy = -speed;
-      if (this.cursors.down.isDown  || this.wasd.down.isDown)  vy =  speed;
-    }
-
-    if (vx !== 0 && vy !== 0) { vx *= 0.707; vy *= 0.707; }
-
-    // Tile collision — now works across chunks
-    if (vx !== 0 || vy !== 0) {
-      const nx = this.player.x + vx * (delta / 1000) * 1.8;
-      const ny = this.player.y + vy * (delta / 1000) * 1.8;
-      const tileType = this.getTileAt(nx, ny);
-      const def = TILE_DEFS[tileType] || TILE_DEFS.grass;
-      if (!def.walkable) { vx = 0; vy = 0; }
-
-      // Manual mode: if walking toward an unloaded chunk, trigger generation for it
-      {
-        const ncx = Math.floor(nx / (CHUNK_COLS * TILE_SIZE));
-        const ncy = Math.floor(ny / (CHUNK_ROWS * TILE_SIZE));
-        if (!chunks.get(`${ncx},${ncy}`)?.loaded) {
-          queueSurroundingChunks(ncx, ncy);
-          processChunkQueue();
-        }
-      }
-    }
-
-    this.player.setVelocity(vx, vy);
-
-    // ── CHUNK TRACKING — detect when player enters a new chunk ──
-    const newCX = Math.floor(this.player.x / (CHUNK_COLS * TILE_SIZE));
-    const newCY = Math.floor(this.player.y / (CHUNK_ROWS * TILE_SIZE));
-    if (newCX !== currentChunkX || newCY !== currentChunkY) {
-      console.log(`Player entered chunk (${newCX},${newCY})`);
-      currentChunkX = newCX;
-      currentChunkY = newCY;
-
-      // Queue surrounding chunks for generation (only in auto-gen mode)
-      queueSurroundingChunks(newCX, newCY); processChunkQueue();
-
-      // Unload chunks that are too far away (more than 2 chunks distance)
-      for (const [key, chunk] of chunks) {
-        const dist = Math.max(Math.abs(chunk.cx - newCX), Math.abs(chunk.cy - newCY));
-        if (dist > 2 && chunk.loaded) {
-          this.unloadChunk(chunk.cx, chunk.cy);
-        }
-      }
-    }
-
-    // Sync player sprite
-    this.playerSprite.x = this.player.x;
-    this.playerSprite.y = this.player.y - 8;
-    // Add large offset so depth never goes negative in northern chunks
-    const pRow = Math.floor(this.player.y / TILE_SIZE) + 10000;
-    this.playerSprite.setDepth(pRow * 10 + 8);
-
-    // Player animations + direction tracking for chunk pre-gen
-    const moving = (vx !== 0 || vy !== 0);
-    if (moving) {
-      const prevFacing = this.playerFacing;
-      if (Math.abs(vx) > Math.abs(vy)) {
-        if (vx < 0) { this._safePlay(this.playerSprite,'player_walk_left',true);  this.playerFacing='left'; }
-        else         { this._safePlay(this.playerSprite,'player_walk_right',true); this.playerFacing='right'; }
-      } else {
-        if (vy < 0) { this._safePlay(this.playerSprite,'player_walk_up',true);    this.playerFacing='up'; }
-        else         { this._safePlay(this.playerSprite,'player_walk_down',true);  this.playerFacing='down'; }
-      }
-      // When direction changes, re-sort the queue so new lead chunk gets priority
-      if (this.playerFacing !== prevFacing && chunkGenQueue.length > 0) {
-        chunkGenQueue.forEach(q => { q.priority = _chunkPriority(q.cx, q.cy); });
-        chunkGenQueue.sort((a, b) => a.priority - b.priority);
-      }
-    } else if (this.playerMoving) {
-      this._safePlay(this.playerSprite, `player_idle_${this.playerFacing}`, true);
-    }
-    this.playerMoving = moving;
-
-    // ── NPC WANDER & PROXIMITY ──
-    let nearestDist = Infinity;
-    let nearestNPC  = null;
-
-    for (const npc of this.npcObjects) {
-      const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, npc.nx, npc.ny);
-
-      // Proximity highlight (only for named NPCs, not ambient animals)
-      const inRange = dist < npc.range;
-      if (npc.label) npc.label.setStyle({
-        fontSize: inRange ? '12px' : '11px',
-        color: inRange ? '#f0ff80' : '#d0f890',
-        stroke: '#000000', strokeThickness: 3, fontFamily: 'Georgia, serif',
-      });
-
-      if (inRange && dist < nearestDist && npc.def.type !== 'ambient') {
-        nearestDist = dist;
-        nearestNPC = npc;
-      }
-
-      // ── NPC WANDER AI ──
-      if (!dialogueOpen && !(currentNPC && currentNPC.id === npc.def.id)) {
-        const w = npc.wander;
-        w.timer -= delta;
-
-        if (w.moving) {
-          const dx = w.targetX - npc.sprite.x;
-          const dy = w.targetY - npc.sprite.y;
-          const dist2 = Math.sqrt(dx*dx + dy*dy);
-          const wanderSpeed = 30;
-
-          if (dist2 < 2) {
-            // Reached target — stop
-            npc.sprite.x = w.targetX;
-            npc.sprite.y = w.targetY;
-            npc.nx = w.targetX;
-            npc.ny = w.targetY;
-            if (npc.label) { npc.label.x = npc.nx; npc.label.y = npc.ny - FRAME_H * (npc.sprite.scaleX) * 0.7; }
-            w.moving = false;
-            w.timer = WANDER_INTERVAL_MS[0] + Math.random() * (WANDER_INTERVAL_MS[1] - WANDER_INTERVAL_MS[0]);
-            this._safePlay(npc.sprite, w.idleAnim, true);
-          } else {
-            const nx2 = npc.sprite.x + (dx / dist2) * wanderSpeed * (delta / 1000);
-            const ny2 = npc.sprite.y + (dy / dist2) * wanderSpeed * (delta / 1000);
-            npc.sprite.x = nx2;
-            npc.sprite.y = ny2;
-            npc.nx = nx2;
-            npc.ny = ny2;
-            if (npc.label) { npc.label.x = nx2; npc.label.y = ny2 - FRAME_H * (npc.sprite.scaleX) * 0.7; }
-          }
-        } else if (w.timer <= 0) {
-          // Pick a new wander target
-          const angle = Math.random() * Math.PI * 2;
-          const dist3 = Math.random() * WANDER_RADIUS * TILE_SIZE * 0.7;
-          const tx = w.homeX + Math.cos(angle) * dist3;
-          const ty = w.homeY + Math.sin(angle) * dist3;
-
-          // Check if target is walkable (now chunk-aware)
-          const tType = this.getTileAt(tx, ty);
-          const tDef  = TILE_DEFS[tType] || TILE_DEFS.grass;
-
-          if (tDef.walkable) {
-            w.targetX = tx;
-            w.targetY = ty;
-            w.moving = true;
-
-            // Pick walk anim direction
-            const dx = tx - npc.sprite.x;
-            const dy = ty - npc.sprite.y;
-            let walkKey = w.walkAnim;
-            // Only override walk anim for sprites that have directional walk anims
-            if (npc.def.sprite === 'skeleton') {
-              if (Math.abs(dx) > Math.abs(dy)) walkKey = dx < 0 ? 'skel_walk_left' : 'skel_walk_right';
-              else walkKey = dy < 0 ? 'skel_walk_up' : 'skel_walk_down';
-            } else if (npc.def.sprite === 'player') {
-              if (Math.abs(dx) > Math.abs(dy)) walkKey = dx < 0 ? 'player_walk_left' : 'player_walk_right';
-              else walkKey = dy < 0 ? 'player_walk_up' : 'player_walk_down';
-            }
-            // Animals (chicken, pig, sheep, cow, slime) and unknowns keep their stored w.walkAnim
-            // They flip horizontally based on direction instead
-            if (['chicken','pig','sheep','cow','slime'].includes(npc.def.sprite)) {
-              npc.sprite.setFlipX(dx < 0);
-            }
-            this._safePlay(npc.sprite, walkKey, true);
-          } else {
-            // Can't move there — wait again
-            w.timer = 1500 + Math.random() * 2000;
-          }
-        }
-
-        // Update NPC sprite depth
-        const npcRow = Math.floor(npc.ny / TILE_SIZE) + 10000;
-        npc.sprite.setDepth(npcRow * 10 + 7);
-        if (npc.label) npc.label.setDepth(npcRow * 10 + 9);
-      }
-    }
-
-    // ── INTERACT PROMPT ──
-    this._nearestNPC = nearestNPC;
-    const nearbyBuilding = this._findNearbyBuildingDoor();
-    if (!dialogueOpen && (nearestNPC || nearbyBuilding)) {
-      const cam = this.cameras.main;
-      const scaleX = window.innerWidth  / cam.width;
-      const scaleY = window.innerHeight / cam.height;
-      if (nearbyBuilding) {
-        // Show prompt above building tile
-        const px = this.player.x, py = this.player.y;
-        const sx = (px - cam.scrollX) * scaleX;
-        const sy = (py - cam.scrollY) * scaleY - TILE_SIZE * scaleY - 8;
-        this._interactPromptEl.textContent = '[E] Enter';
-        this._interactPromptEl.style.left = Math.round(sx - 32) + 'px';
-        this._interactPromptEl.style.top  = Math.round(sy - 20) + 'px';
-        this._interactPromptEl.style.opacity = '1';
-      } else if (nearestNPC) {
-        const sx = (nearestNPC.nx - cam.scrollX) * scaleX;
-        const sy = (nearestNPC.ny - cam.scrollY) * scaleY - FRAME_H * nearestNPC.sprite.scaleY * scaleY * 0.9 - 8;
-        this._interactPromptEl.textContent = '[E] Talk';
-        this._interactPromptEl.style.left = Math.round(sx - 28) + 'px';
-        this._interactPromptEl.style.top  = Math.round(sy - 20) + 'px';
-        this._interactPromptEl.style.opacity = '1';
-      }
-    } else {
-      this._interactPromptEl.style.opacity = '0';
-    }
-
-    // ── E TO INTERACT ──
-    if (!dialogueOpen && !this.dialogueCooldown) {
-      if (Phaser.Input.Keyboard.JustDown(this.wasd.interact)) {
-        // First check: are we standing on or adjacent to a building_door tile?
-        const buildingKey = this._findNearbyBuildingDoor();
-        if (buildingKey) {
-          // Found a building door — try to enter
-          const layout = indoorLayouts.get(buildingKey);
-          if (layout && layout.ready) {
-            enterHouse(buildingKey, layout);
-          } else if (layout && layout.loading) {
-            // Already generating — show a "come back soon" hint
-            const msg = HOUSE_NOT_READY_MSGS[Math.floor(Math.random() * HOUSE_NOT_READY_MSGS.length)];
-            showStatus(msg, 2500);
-          } else {
-            // Not yet started — kick off lazy generation now
-            // buildingKey format: "cx,cy_col_row" — parse chunk coords from it
-            const _bkParts = buildingKey.split('_')[0].split(',');
-            triggerLazyHouseGen(buildingKey, parseInt(_bkParts[0]), parseInt(_bkParts[1]));
-          }
-        } else if (nearestNPC) {
-          this.openNPCDialogue(nearestNPC.def, nearestNPC.sprite, nearestNPC.def.sprite);
-        }
-      }
-    }
-  }
-
-  // Find the key of a nearby building door tile
-  _findNearbyBuildingDoor() {
-    if (!this.player) return null;
-    // Check player tile and adjacent tiles for building or building_door
-    const px = this.player.x, py = this.player.y;
-    const SEARCH_RADIUS = TILE_SIZE * 1.2;
-    // Check 5 positions: current + 4 cardinal neighbors
-    const checks = [
-      [px, py],
-      [px, py - TILE_SIZE * 0.7],
-      [px, py + TILE_SIZE * 0.7],
-      [px - TILE_SIZE * 0.7, py],
-      [px + TILE_SIZE * 0.7, py],
-    ];
-    for (const [wx, wy] of checks) {
-      const tileType = this.getTileAt(wx, wy);
-      if (tileType === 'building_door' || tileType === 'building') {
-        // Find the chunk this belongs to
-        const cx = Math.floor(wx / (CHUNK_COLS * TILE_SIZE));
-        const cy = Math.floor(wy / (CHUNK_ROWS * TILE_SIZE));
-        const localCol = Math.floor((wx - cx * CHUNK_COLS * TILE_SIZE) / TILE_SIZE);
-        const localRow = Math.floor((wy - cy * CHUNK_ROWS * TILE_SIZE) / TILE_SIZE);
-        const chunk = chunks.get(`${cx},${cy}`);
-        if (!chunk || !chunk.worldDef) continue;
-        const tiles = chunk.worldDef.world.tiles;
-        // Walk up and left to find top-left of the building cluster
-        const isBuilding = v => v === 'building' || v === 'building_door';
-        let topRow = localRow, leftCol = localCol;
-        while (topRow > 0 && isBuilding(tiles[topRow-1]?.[leftCol])) topRow--;
-        while (leftCol > 0 && isBuilding(tiles[topRow]?.[leftCol-1])) leftCol--;
-        return `${cx},${cy}_${leftCol}_${topRow}`;
-      }
-    }
-    return null;
-  }
-
-  openNPCDialogue(npcDef, npcSprite, spriteType) {
-    if (this.dialogueCooldown) return;
-    currentNPC = npcDef;
-    if (this.player) this.player.setVelocity(0, 0);
-    if (this.playerSprite) this._safePlay(this.playerSprite, `player_idle_${this.playerFacing}`, true);
-    if (this._interactPromptEl) this._interactPromptEl.style.opacity = '0';
-
-    if (!dialogueHistory[npcDef.id]) dialogueHistory[npcDef.id] = [];
-
-    // Assign voice to this NPC (stored on npcDef so sendDialogue can use it)
-    if (!npcDef._voiceId) npcDef._voiceId = lqPickVoice(npcDef);
-
-    // Render NPC portrait into the small canvas
-    renderNPCPortrait(spriteType || npcDef.sprite, npcDef.id);
-
-    // Set NPC info
-    document.getElementById('dialogue-npc-name').textContent = npcDef.name;
-    document.getElementById('dialogue-npc-tag').textContent  = npcDef.personality
-      ? npcDef.personality.split('.')[0]
-      : 'Villager';
-    document.getElementById('dialogue-text').innerHTML = highlightVocab(npcDef.greeting);
-    document.getElementById('dialogue-translation').textContent = '(tap to translate)';
-    lastNPCReply = npcDef.greeting;
-
-    document.getElementById('dialogue-input').style.display = 'block';
-    document.getElementById('dialogue-send').style.display  = 'block';
-    document.getElementById('dialogue-input').value = '';
-    document.getElementById('dialogue-box').style.display = 'block';
-    setTimeout(() => document.getElementById('dialogue-input').focus(), 80);
-
-    // Init voice (loads keys, shows mic/mute buttons) + speak greeting
-    lqVoiceInit();
-    lqSpeak(npcDef.greeting, npcDef._voiceId);
+    img.onerror = () => resolve();
+    img.src = PIXI_ASSETS[key];
+  }));
+  await Promise.all(promises);
+}
+
+// ── Get a texture by key — returns PIXI.Texture or null ──────
+function pixiTex(key) {
+  return pixiTextures[key] || null;
+}
+
+// ── Get a single frame from a spritesheet ────────────────────
+// frameIndex is the flat frame number (row * frameCols + col)
+function pixiFrame(key, frameIndex) {
+  const frames = pixiFrames[key];
+  if (!frames || !frames.length) return pixiTex(key);
+  return frames[Math.max(0, frameIndex % frames.length)] || frames[0];
+}
+
+// ── Get a frame by row + col ──────────────────────────────────
+function pixiFrameRC(key, row, col) {
+  const cfg = PIXI_SS_FRAMES[key];
+  if (!cfg) return pixiTex(key);
+  const img = pixiImages[key];
+  if (!img) return null;
+  const frameCols = Math.floor((img.naturalWidth || img.width || cfg.frameWidth) / cfg.frameWidth);
+  return pixiFrame(key, row * frameCols + col);
+}
+
+// ─────────────────────────────────────────────────────────────
+//  PIXI GAME ENGINE  (replaces GameScene extends Phaser.Scene)
+// ─────────────────────────────────────────────────────────────
+
+// ── PixiJS animation ticker helpers ──
+// Each animated sprite has: { frames[], frameRate, elapsed, current }
+function _makeAnim(frames, frameRate) {
+  return { frames, frameRate, elapsed: 0, current: 0 };
+}
+
+function _tickAnim(anim, dt) {
+  if (!anim || anim.frames.length <= 1) return;
+  anim.elapsed += dt;
+  const interval = 1 / anim.frameRate;
+  while (anim.elapsed >= interval) {
+    anim.elapsed -= interval;
+    anim.current = (anim.current + 1) % anim.frames.length;
   }
 }
+
+// ── Spritesheet animation frame sets ─────────────────────────
+// player_ss: 6 cols × 10 rows, 32×32
+// Row 0=down, 1=left, 2=up, 3=right; cols 0-5 = walk frames; col 0 = idle
+function _playerFrames(dir, walking) {
+  const row = PLAYER_SS_ROW[dir] || 0;
+  if (!pixiFrames['player_ss']) return null;
+  const cols = 6;
+  if (walking) {
+    return [0,1,2,3,4,5].map(c => pixiFrame('player_ss', row * cols + c));
+  } else {
+    return [pixiFrame('player_ss', row * cols + 0)];
+  }
+}
+
+function _npcFrames(spriteKey, dir, walking) {
+  const row = PLAYER_SS_ROW[dir] || 0;
+  if (!pixiFrames[spriteKey]) return null;
+  const cfg = PIXI_SS_FRAMES[spriteKey];
+  if (!cfg) return null;
+  const img = pixiImages[spriteKey];
+  if (!img) return null;
+  const cols = Math.floor((img.naturalWidth || img.width || cfg.frameWidth) / cfg.frameWidth);
+  if (walking) {
+    return [0,1,2,3].map(c => pixiFrame(spriteKey, row * cols + (c % Math.min(cols, 6))));
+  } else {
+    return [pixiFrame(spriteKey, row * cols)];
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  AUTOTILE — PixiJS port of the RPG-Maker 4-quadrant system
+// ─────────────────────────────────────────────────────────────
+function _pixiDrawAutotile(worldContainer, texKey, x, y, depth, tiles, col, row, cols, rows, matchFn) {
+  const frames = pixiFrames[texKey];
+  if (!frames || frames.length === 0) return null;
+
+  const TS = TILE_SIZE;
+  const QS = TS / 2;
+  const SC = QS / 16;
+
+  const same = (dc, dr) => {
+    const nc = col + dc, nr = row + dr;
+    if (nc < 0 || nc >= cols || nr < 0 || nr >= rows) return true;
+    return matchFn(tiles[nr]?.[nc] || 'grass');
+  };
+
+  const F = {
+    TL_out:0, T_edge:1, TR_out:2,
+    L_edge:3, fill:4,   R_edge:5,
+    BL_out:6, B_edge:7, BR_out:8,
+    TL_in:13, TR_in:12,
+    BL_in:10, BR_in:9,
+  };
+
+  const quads = [
+    { dx:0,  dy:0,  N:same(0,-1), E:same(-1,0), D:same(-1,-1),
+      Fout:F.TL_out, FedgeN:F.T_edge, FedgeE:F.L_edge, Fin:F.TL_in },
+    { dx:QS, dy:0,  N:same(0,-1), E:same(1,0),  D:same(1,-1),
+      Fout:F.TR_out, FedgeN:F.T_edge, FedgeE:F.R_edge, Fin:F.TR_in },
+    { dx:0,  dy:QS, N:same(0,1),  E:same(-1,0), D:same(-1,1),
+      Fout:F.BL_out, FedgeN:F.B_edge, FedgeE:F.L_edge, Fin:F.BL_in },
+    { dx:QS, dy:QS, N:same(0,1),  E:same(1,0),  D:same(1,1),
+      Fout:F.BR_out, FedgeN:F.B_edge, FedgeE:F.R_edge, Fin:F.BR_in },
+  ];
+
+  // Create a container for the 4 quadrant sprites
+  const tileContainer = new PIXI.Container();
+  tileContainer.x = x;
+  tileContainer.y = y;
+  tileContainer.zIndex = depth;
+
+  for (const q of quads) {
+    let frameIdx;
+    if      (!q.N && !q.E)           frameIdx = q.Fout;
+    else if (!q.N &&  q.E)           frameIdx = q.FedgeN;
+    else if ( q.N && !q.E)           frameIdx = q.FedgeE;
+    else if ( q.N &&  q.E && !q.D)  frameIdx = q.Fin;
+    else                              frameIdx = F.fill;
+
+    const frame = frames[Math.min(frameIdx, frames.length - 1)];
+    if (!frame) continue;
+    const spr = new PIXI.Sprite(frame);
+    spr.x = q.dx;
+    spr.y = q.dy;
+    spr.width  = QS;
+    spr.height = QS;
+    tileContainer.addChild(spr);
+  }
+
+  worldContainer.addChild(tileContainer);
+  return tileContainer;
+}
+
+// ─────────────────────────────────────────────────────────────
+//  CHUNK LOADING — PixiJS version
+// ─────────────────────────────────────────────────────────────
+function _pixiLoadChunk(worldContainer, worldDef, chunkX, chunkY, isOrigin) {
+  const key = `${chunkX},${chunkY}`;
+  if (chunks.has(key) && chunks.get(key).loaded) return;
+
+  const { tiles, size } = worldDef.world;
+  const cols = size[0];
+  const rows = size[1];
+  const gameObjects = []; // PIXI display objects for this chunk
+
+  const offsetX = chunkX * CHUNK_COLS * TILE_SIZE;
+  const offsetY = chunkY * CHUNK_ROWS * TILE_SIZE;
+
+  const isPath  = (t) => t === 'path' || t === 'stone' || t === 'building_door' || t === 'farmland' || t === 'sand' || t === 'beach';
+  const isWater = (t) => t === 'water' || t === 'water_deep';
+
+  // ── BASE TILE LAYER ──
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const tileType = (tiles[row]?.[col]) || 'grass';
+      const def = TILE_DEFS[tileType] || TILE_DEFS.grass;
+      const x = offsetX + col * TILE_SIZE;
+      const y = offsetY + row * TILE_SIZE;
+
+      if ((isPath(tileType) || isWater(tileType)) && pixiTex(isPath(tileType) ? 'path_tiles' : 'water_tiles')) {
+        // Lay grass base underneath
+        const grassTex = pixiTex('grass');
+        if (grassTex) {
+          const g = new PIXI.Sprite(grassTex);
+          g.x = x; g.y = y;
+          g.width = TILE_SIZE; g.height = TILE_SIZE;
+          g.zIndex = 0;
+          worldContainer.addChild(g);
+          gameObjects.push(g);
+        }
+        const texKey = isPath(tileType) ? 'path_tiles' : 'water_tiles';
+        const rt = _pixiDrawAutotile(worldContainer, texKey, x, y, 1, tiles, col, row, cols, rows,
+          isPath(tileType) ? isPath : isWater);
+        if (rt) gameObjects.push(rt);
+      } else {
+        const tex = pixiTex(def.key) || pixiTex('grass');
+        if (tex) {
+          const spr = new PIXI.Sprite(tex);
+          spr.x = x; spr.y = y;
+          spr.width = TILE_SIZE; spr.height = TILE_SIZE;
+          spr.zIndex = 0;
+          if (def.tint) spr.tint = def.tint;
+          worldContainer.addChild(spr);
+          gameObjects.push(spr);
+        }
+        // Tag water tiles for shader
+        if (isWater(tileType)) {
+          gameObjects[gameObjects.length - 1]._isWater = true;
+        }
+      }
+    }
+  }
+
+  // ── DECORATION LAYER ──
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const tileType = (tiles[row]?.[col]) || 'grass';
+      const cx = offsetX + col * TILE_SIZE + TILE_SIZE / 2;
+      const cy = offsetY + row * TILE_SIZE + TILE_SIZE / 2;
+      const x  = offsetX + col * TILE_SIZE;
+      const y  = offsetY + row * TILE_SIZE;
+      const absRow = chunkY * CHUNK_ROWS + row + 10000;
+
+      if (tileType === 'tree') {
+        const variant = (row * 3 + col) % 4;
+        const treeKeys = ['oak_tree','oak_tree_medium','oak_tree_large','oak_tree_medium'];
+        const scales   = [0.95 * TILE_SIZE / 64, 1.35 * TILE_SIZE / 32, 1.45 * TILE_SIZE / 32, 1.15 * TILE_SIZE / 32];
+        const tKey = treeKeys[variant];
+        const tex = pixiTex(tKey);
+        if (tex) {
+          const spr = new PIXI.Sprite(tex);
+          spr.anchor.set(0.5, 0.85);
+          spr.x = cx; spr.y = cy + TILE_SIZE * 0.18;
+          spr.scale.set(scales[variant]);
+          spr.zIndex = absRow * 10 + 5;
+          worldContainer.addChild(spr);
+          gameObjects.push(spr);
+        }
+      }
+
+      if (tileType === 'building' || tileType === 'building_door') {
+        const above = row > 0 ? (tiles[row-1]?.[col] || '') : '';
+        const left  = col > 0 ? (tiles[row]?.[col-1] || '') : '';
+        if (!(above === 'building' || above === 'building_door') &&
+            !(left === 'building' || left === 'building_door')) {
+          let clusterW = 1;
+          while (col + clusterW < cols) {
+            const right = tiles[row]?.[col + clusterW] || '';
+            if (right === 'building' || right === 'building_door') clusterW++;
+            else break;
+          }
+          const hcx = x + (clusterW * TILE_SIZE) / 2;
+          const biome = worldDef.world?.biome || 'wilderness';
+          const biomePalette = BIOME_PALETTES[biome] || BIOME_PALETTES.wilderness;
+          const bHash = ((col * 2654435761 + row * 2246822519) >>> 0) % Math.max(1, biomePalette.buildings.length);
+          let bKey = biomePalette.buildings[bHash] || 'house';
+          const bigBuildings = ['inn','church','blacksmith','barn','fisherman_house','greenhouse','windmill','market_stalls'];
+          const smallBuildings = ['shed','coop','silo','tent_small','tent_big','well','fountain','scarecrow','hay_bales'];
+          let hScale, originY;
+          if (bigBuildings.includes(bKey)) { hScale = Math.max(1.1, Math.min(1.8, clusterW * 0.9)); originY = 0.78; }
+          else if (smallBuildings.includes(bKey)) { hScale = Math.max(0.7, Math.min(1.2, clusterW * 0.7)); originY = 0.85; }
+          else { hScale = Math.max(0.9, Math.min(1.6, clusterW * 0.8)); originY = 0.75; }
+          const tex = pixiTex(bKey) || pixiTex('house');
+          if (tex) {
+            const spr = new PIXI.Sprite(tex);
+            spr.anchor.set(0.5, originY);
+            spr.x = hcx; spr.y = cy - TILE_SIZE * 0.15;
+            spr.scale.set(hScale);
+            spr.zIndex = absRow * 10 + 6;
+            worldContainer.addChild(spr);
+            gameObjects.push(spr);
+          }
+        }
+      }
+
+      if (tileType === 'cliff' || tileType === 'mountain') {
+        const g = new PIXI.Graphics();
+        g.beginFill(0x6a6a58); g.drawRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4); g.endFill();
+        g.beginFill(0x888878); g.drawRect(x + 4, y + 4, TILE_SIZE - 8, TILE_SIZE / 2 - 4); g.endFill();
+        g.zIndex = absRow * 10 + 5;
+        worldContainer.addChild(g);
+        gameObjects.push(g);
+      }
+
+      if (tileType === 'rock') {
+        const tex = pixiTex('rock_small');
+        if (tex) {
+          const spr = new PIXI.Sprite(tex);
+          spr.anchor.set(0.5, 0.5);
+          spr.x = cx; spr.y = cy;
+          spr.width = TILE_SIZE * 0.7; spr.height = TILE_SIZE * 0.7;
+          spr.zIndex = absRow * 10 + 5;
+          worldContainer.addChild(spr);
+          gameObjects.push(spr);
+        }
+      }
+
+      if (tileType === 'chest') {
+        const tex = pixiTex('chest_sprite');
+        if (tex) {
+          const spr = new PIXI.Sprite(tex);
+          spr.anchor.set(0.5, 0.5);
+          spr.x = cx; spr.y = cy;
+          spr.scale.set(2.5);
+          spr.zIndex = absRow * 10 + 5;
+          worldContainer.addChild(spr);
+          gameObjects.push(spr);
+        }
+      }
+
+      if (tileType === 'farmland') {
+        const g = new PIXI.Graphics();
+        g.lineStyle(1, 0x8B6914, 0.40);
+        for (let i = 0; i < 3; i++) {
+          const lineY = y + (i + 1) * (TILE_SIZE / 4);
+          g.moveTo(x + 4, lineY); g.lineTo(x + TILE_SIZE - 4, lineY);
+        }
+        g.zIndex = 1;
+        worldContainer.addChild(g);
+        gameObjects.push(g);
+      }
+
+      if (tileType === 'stone') {
+        const g = new PIXI.Graphics();
+        g.lineStyle(1, 0x888888, 0.25);
+        g.drawRect(x + 4, y + 4, TILE_SIZE - 8, TILE_SIZE - 8);
+        g.zIndex = 1;
+        worldContainer.addChild(g);
+        gameObjects.push(g);
+      }
+    }
+  }
+
+  // ── GROUND SCATTER ──
+  const chunkBiome = worldDef.world?.biome || 'wilderness';
+  if (pixiFrames['decor']) {
+    const GRASS_TUFTS = [0,1,2], FLOWERS = [7,8,9], STUMPS = [14], SMALL_ROCKS = [15,16], MUSHROOM = [51], LOG = [49];
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const tileType = (tiles[row]?.[col]) || 'grass';
+        const scx = offsetX + col * TILE_SIZE + TILE_SIZE / 2;
+        const scy = offsetY + row * TILE_SIZE + TILE_SIZE / 2;
+        const h = ((col + chunkX * 1000) * 2654435761 + (row + chunkY * 1000) * 2246822519) >>> 0;
+        const roll = h % 100;
+        const jx = ((h >> 8) % TILE_SIZE) - TILE_SIZE / 2;
+        const jy = ((h >> 16) % TILE_SIZE) - TILE_SIZE / 2;
+        const absRow2 = chunkY * CHUNK_ROWS + row + 10000;
+        const depth = absRow2 * 10 + 2;
+
+        let frame = null;
+        if (tileType === 'grass') {
+          const isForest  = chunkBiome === 'forest';
+          const isBeach   = chunkBiome === 'beach';
+          const isRuins   = chunkBiome === 'ruins';
+          if (isForest) {
+            if      (roll < 8)  frame = STUMPS[0];
+            else if (roll < 16) frame = LOG[0];
+            else if (roll < 24) frame = MUSHROOM[0];
+            else if (roll < 30) frame = SMALL_ROCKS[h%SMALL_ROCKS.length];
+            else if (roll < 36) frame = GRASS_TUFTS[h%GRASS_TUFTS.length];
+          } else if (isBeach) {
+            if      (roll < 15) frame = SMALL_ROCKS[h%SMALL_ROCKS.length];
+            else if (roll < 22) frame = GRASS_TUFTS[h%GRASS_TUFTS.length];
+          } else if (isRuins) {
+            if      (roll < 18) frame = SMALL_ROCKS[h%SMALL_ROCKS.length];
+            else if (roll < 26) frame = STUMPS[0];
+            else if (roll < 32) frame = MUSHROOM[0];
+            else if (roll < 36) frame = FLOWERS[h%FLOWERS.length];
+          } else {
+            if      (roll < 12) frame = FLOWERS[h%FLOWERS.length];
+            else if (roll < 22) frame = GRASS_TUFTS[h%GRASS_TUFTS.length];
+            else if (roll < 27) frame = SMALL_ROCKS[h%SMALL_ROCKS.length];
+            else if (roll < 30) frame = STUMPS[0];
+            else if (roll < 32) frame = MUSHROOM[0];
+            else if (roll < 34) frame = LOG[0];
+          }
+        } else if ((tileType === 'beach' || tileType === 'sand') && roll < 8) {
+          frame = SMALL_ROCKS[h%SMALL_ROCKS.length];
+        }
+
+        if (frame !== null) {
+          const tex = pixiFrame('decor', frame);
+          if (tex) {
+            const spr = new PIXI.Sprite(tex);
+            spr.anchor.set(0.5, 0.8);
+            spr.x = scx + jx * 0.6; spr.y = scy + jy * 0.6;
+            spr.scale.set(2.4);
+            spr.zIndex = depth;
+            worldContainer.addChild(spr);
+            gameObjects.push(spr);
+          }
+        }
+      }
+    }
+  }
+
+  // ── BIOME DECORATION PROPS ──
+  {
+    const bioDecos = {
+      village:['well','fountain','bench','barrels'], city:['well','fountain','bench','barrels'],
+      farmland:['hay_bales','scarecrow','barrels'], forest:['camp_decor'], beach:['boat'],
+      ocean:['boat'], ruins:['barrels','camp_decor'], dungeon:['barrels','camp_decor'],
+      camp:['camp_decor','barrels'], road:['bench','barrels'], wilderness:[], cliffside:[],
+    };
+    const decoList = bioDecos[chunkBiome] || [];
+    if (decoList.length > 0) {
+      const openTiles = [];
+      for (let row = 2; row < rows - 2; row++)
+        for (let col = 2; col < cols - 2; col++)
+          if ((tiles[row]?.[col] || 'grass') === 'grass') openTiles.push([col, row]);
+      const seedH = ((chunkX * 7919 + chunkY * 6271) * 2654435761) >>> 0;
+      const propCount = Math.min(2, decoList.length, Math.floor(openTiles.length / 20));
+      for (let pi = 0; pi < propCount; pi++) {
+        const pIdx = (seedH * (pi + 1)) % Math.max(1, openTiles.length);
+        const [pc, pr] = openTiles[pIdx] || [0, 0];
+        const propKey = decoList[(seedH + pi) % decoList.length];
+        const tex = pixiTex(propKey);
+        if (!tex) continue;
+        const px = offsetX + pc * TILE_SIZE + TILE_SIZE / 2;
+        const py = offsetY + pr * TILE_SIZE + TILE_SIZE / 2;
+        const pAbsRow = chunkY * CHUNK_ROWS + pr;
+        const spr = new PIXI.Sprite(tex);
+        spr.anchor.set(0.5, 0.85);
+        spr.x = px; spr.y = py;
+        spr.scale.set(1.5);
+        spr.zIndex = pAbsRow * 10 + 5;
+        worldContainer.addChild(spr);
+        gameObjects.push(spr);
+      }
+    }
+  }
+
+  // ── AMBIENT ANIMALS ──
+  const chunkNpcs = [];
+  {
+    const biomeAnimals = {
+      village:[{key:'chicken_ss',idle:[0,1],walk:[2,3],scale:1.8,name:'chicken'},{key:'pig_ss',idle:[0,1],walk:[2,3],scale:1.6,name:'pig'}],
+      city:[{key:'chicken_ss',idle:[0,1],walk:[2,3],scale:1.6,name:'chicken'}],
+      farmland:[{key:'cow_ss',idle:[0,1],walk:[2,3],scale:1.7,name:'cow'},{key:'sheep_ss',idle:[0,1],walk:[2,3],scale:1.6,name:'sheep'},{key:'chicken_ss',idle:[0,1],walk:[2,3],scale:1.8,name:'chicken'}],
+      forest:[{key:'pig_ss',idle:[0,1],walk:[2,3],scale:1.4,name:'pig'},{key:'frog_img',scale:1.3,name:'frog',static:true}],
+      beach:[{key:'duck_img',scale:1.5,name:'duck',static:true},{key:'goose_img',scale:1.6,name:'goose',static:true}],
+      ocean:[{key:'duck_img',scale:1.5,name:'duck',static:true}],
+      cliffside:[],dungeon:[],
+      ruins:[{key:'pig_ss',idle:[0,1],walk:[2,3],scale:1.3,name:'pig'},{key:'frog_img',scale:1.2,name:'frog',static:true}],
+      camp:[{key:'horse_ss',idle:[0,1,2,3],walk:[4,5,6,7],scale:1.4,name:'horse'},{key:'chicken_ss',idle:[0,1],walk:[2,3],scale:1.6,name:'chicken'}],
+      road:[{key:'horse_ss',idle:[0,1,2,3],walk:[4,5,6,7],scale:1.4,name:'horse'},{key:'chicken_ss',idle:[0,1],walk:[2,3],scale:1.8,name:'chicken'}],
+      wilderness:[{key:'chicken_ss',idle:[0,1],walk:[2,3],scale:1.8,name:'chicken'},{key:'pig_ss',idle:[0,1],walk:[2,3],scale:1.6,name:'pig'},{key:'sheep_ss',idle:[0,1],walk:[2,3],scale:1.6,name:'sheep'},{key:'cow_ss',idle:[0,1],walk:[2,3],scale:1.7,name:'cow'}],
+    };
+    const animalTypes = biomeAnimals[chunkBiome] || biomeAnimals.wilderness;
+    const validTiles = ['grass'];
+    if (chunkBiome === 'beach' || chunkBiome === 'ocean') validTiles.push('beach','sand','water');
+    const spawnTiles = [];
+    for (let row = 0; row < rows; row++)
+      for (let col = 0; col < cols; col++)
+        if (validTiles.includes(tiles[row]?.[col] || 'grass')) spawnTiles.push([col, row]);
+    spawnTiles.sort((a,b) => {
+      const ha = ((a[0]+chunkX*1000)*2654435761+(a[1]+chunkY*1000)*2246822519)>>>0;
+      const hb = ((b[0]+chunkX*1000)*2654435761+(b[1]+chunkY*1000)*2246822519)>>>0;
+      return ha - hb;
+    });
+    const shuffledTypes = [...animalTypes].sort((a,b) => {
+      const ha = ((chunkX*31337+chunkY*92821+animalTypes.indexOf(a))*2654435761)>>>0;
+      const hb = ((chunkX*31337+chunkY*92821+animalTypes.indexOf(b))*2654435761)>>>0;
+      return ha - hb;
+    });
+    const animalCount = Math.min(2, Math.floor(spawnTiles.length * 0.008));
+    for (let i = 0; i < animalCount; i++) {
+      const [ac, ar] = spawnTiles[i];
+      const ax = offsetX + ac * TILE_SIZE + TILE_SIZE / 2;
+      const ay = offsetY + ar * TILE_SIZE + TILE_SIZE / 2;
+      const aType = shuffledTypes[i % shuffledTypes.length];
+      const tex = pixiTex(aType.key);
+      if (!tex) continue;
+      const absRow = chunkY * CHUNK_ROWS + ar + 10000;
+      const aSprite = new PIXI.Sprite(aType.static ? tex : (pixiFrame(aType.key, (aType.idle||[0])[0]) || tex));
+      aSprite.anchor.set(0.5, 0.8);
+      aSprite.x = ax; aSprite.y = ay;
+      aSprite.scale.set(aType.scale);
+      aSprite.zIndex = absRow * 10 + 6;
+      worldContainer.addChild(aSprite);
+      gameObjects.push(aSprite);
+      if (!aType.static && aType.idle && aType.walk) {
+        const idleFrames = aType.idle.map(f => pixiFrame(aType.key, f)).filter(Boolean);
+        const walkFrames = aType.walk.map(f => pixiFrame(aType.key, f)).filter(Boolean);
+        const anim = _makeAnim(idleFrames, 4);
+        const wander = { homeX:ax, homeY:ay, targetX:ax, targetY:ay, moving:false, timer:Math.random()*4000+1000,
+          idleFrames, walkFrames, anim };
+        const npcObj = { def:{name:'',dialogue:[],type:'ambient',sprite:aType.name}, sprite:aSprite, label:null,
+          nx:ax, ny:ay, range:TILE_SIZE*2, wander, chunkKey:key };
+        chunkNpcs.push(npcObj);
+        gameScene.npcObjects.push(npcObj);
+      }
+    }
+  }
+
+  // ── SPAWN NAMED NPCs ──
+  for (const npcDef of (worldDef.npcs || [])) {
+    const [nc, nr] = npcDef.position;
+    const nx = offsetX + nc * TILE_SIZE + TILE_SIZE / 2;
+    const ny = offsetY + nr * TILE_SIZE + TILE_SIZE / 2;
+    const absRow = chunkY * CHUNK_ROWS + nr + 10000;
+
+    const uniqueId = `${key}_${(npcDef.id || npcDef.name || 'npc')}`;
+    const rawGreeting = npcDef.greeting || (Array.isArray(npcDef.dialogue) && npcDef.dialogue[0]) || '...';
+    const npcDefCopy = {
+      ...npcDef,
+      id: uniqueId,
+      greeting: rawGreeting,
+      dialogue: npcDef.dialogue || [rawGreeting],
+      personality: npcDef.personality || npcDef.ai_context || '',
+      ai_context: npcDef.ai_context || npcDef.personality || '',
+    };
+
+    let spriteKey, idleFrameIdxs, walkFrameIdxs, scale;
+    switch (npcDef.sprite) {
+      case 'skeleton': spriteKey='skeleton_ss'; idleFrameIdxs=[0,1,2]; walkFrameIdxs=[24,25,26,27]; scale=SPRITE_SCALE; break;
+      case 'slime':    spriteKey='slime_ss';    idleFrameIdxs=[0,1,2,3]; walkFrameIdxs=[0,1,2,3]; scale=1.0; break;
+      case 'chicken':  spriteKey='chicken_ss';  idleFrameIdxs=[0,1]; walkFrameIdxs=[2,3]; scale=2.0; break;
+      case 'cow':      spriteKey='cow_ss';      idleFrameIdxs=[0,1]; walkFrameIdxs=[2,3]; scale=1.8; break;
+      case 'pig':      spriteKey='pig_ss';      idleFrameIdxs=[0,1]; walkFrameIdxs=[2,3]; scale=1.8; break;
+      case 'sheep':    spriteKey='sheep_ss';    idleFrameIdxs=[0,1]; walkFrameIdxs=[2,3]; scale=1.8; break;
+      default:         spriteKey='player_ss';   idleFrameIdxs=[0]; walkFrameIdxs=[0,1,2,3,4,5]; scale=SPRITE_SCALE; break;
+    }
+
+    const initTex = pixiFrame(spriteKey, (idleFrameIdxs||[0])[0]) || pixiTex(spriteKey);
+    if (!initTex) continue;
+    const npcSprite = new PIXI.Sprite(initTex);
+    npcSprite.anchor.set(0.5, 0.85);
+    npcSprite.x = nx; npcSprite.y = ny;
+    npcSprite.scale.set(scale);
+    npcSprite.zIndex = absRow * 10 + 7;
+    worldContainer.addChild(npcSprite);
+    gameObjects.push(npcSprite);
+
+    const labelStyle = new PIXI.TextStyle({ fontSize: 11, fill: '#d0f890', stroke: '#000000', strokeThickness: 3, fontFamily: 'Georgia, serif' });
+    const label = new PIXI.Text(npcDef.name, labelStyle);
+    label.anchor.set(0.5, 1);
+    label.x = nx;
+    label.y = ny - FRAME_H * scale * 0.7;
+    label.zIndex = absRow * 10 + 9;
+    worldContainer.addChild(label);
+    gameObjects.push(label);
+
+    const idleFrames = (idleFrameIdxs||[0]).map(f => pixiFrame(spriteKey, f)).filter(Boolean);
+    const walkFrames = (walkFrameIdxs||[0]).map(f => pixiFrame(spriteKey, f)).filter(Boolean);
+    const anim = _makeAnim(idleFrames.length ? idleFrames : [initTex], 5);
+
+    const wander = { homeX:nx, homeY:ny, targetX:nx, targetY:ny, moving:false, timer:Math.random()*3000,
+      idleFrames, walkFrames, anim };
+    const npcObj = { def:npcDefCopy, sprite:npcSprite, label, nx, ny, range:TILE_SIZE*1.6, wander, chunkKey:key };
+    chunkNpcs.push(npcObj);
+    gameScene.npcObjects.push(npcObj);
+  }
+
+  chunks.set(key, { worldDef, gameObjects, npcs: chunkNpcs, loaded: true, cx: chunkX, cy: chunkY });
+
+  // ── PLAYER (origin only) ──
+  if (isOrigin) {
+    const [pCol, pRow] = worldDef.player_start;
+    const px = offsetX + pCol * TILE_SIZE + TILE_SIZE / 2;
+    const py = offsetY + pRow * TILE_SIZE + TILE_SIZE / 2;
+
+    if (!gameScene.playerSprite) {
+      const initTex = pixiFrame('player_ss', 0) || pixiTex('player_ss');
+      gameScene.playerSprite = new PIXI.Sprite(initTex);
+      gameScene.playerSprite.anchor.set(0.5, 0.85);
+      gameScene.playerSprite.scale.set(SPRITE_SCALE);
+      worldContainer.addChild(gameScene.playerSprite);
+    }
+    gameScene.playerSprite.x = px;
+    gameScene.playerSprite.y = py;
+    gameScene.playerSprite.zIndex = 99999;
+    gameScene.playerAnim = _makeAnim([pixiFrame('player_ss', 0)], 8);
+
+    // Virtual player body (just a position, no physics)
+    gameScene.player = { x: px, y: py + 8, setVelocity: () => {} };
+
+    currentChunkX = chunkX;
+    currentChunkY = chunkY;
+    worldTheme = worldDef.world.theme || '';
+    worldLanguage = worldDef.world.language || 'es';
+    currentWorld = worldDef;
+
+    // Update camera
+    _pixiCenterCamera(px, py);
+
+    const wname = (worldDef.world.theme || 'world').replace(/_/g, ' ');
+    document.getElementById('world-name').textContent = wname.toUpperCase();
+    document.getElementById('lang-badge').textContent = worldLanguage.toUpperCase();
+    document.getElementById('dialogue-input').placeholder = `Respond in ${getLangName(worldLanguage)}...`;
+    if (worldDef.world.description) showStatus(worldDef.world.description, 5000);
+
+    queueSurroundingChunks(chunkX, chunkY);
+    processChunkQueue();
+  }
+
+  console.log(`Chunk (${chunkX},${chunkY}) loaded — ${gameObjects.length} objects`);
+}
+
+// ── Camera helpers ────────────────────────────────────────────
+function _pixiCenterCamera(worldX, worldY) {
+  if (!pixiApp) return;
+  const wc = gameScene._worldContainer;
+  if (!wc) return;
+  wc.x = Math.round(pixiApp.screen.width  / 2 - worldX);
+  wc.y = Math.round(pixiApp.screen.height / 2 - worldY);
+}
+
+// ── Unload a chunk ────────────────────────────────────────────
+function _pixiUnloadChunk(chunkX, chunkY) {
+  const key = `${chunkX},${chunkY}`;
+  const chunk = chunks.get(key);
+  if (!chunk || !chunk.loaded) return;
+  gameScene.npcObjects = gameScene.npcObjects.filter(n => n.chunkKey !== key);
+  const wc = gameScene._worldContainer;
+  for (const obj of chunk.gameObjects) {
+    if (obj && obj.destroy) obj.destroy();
+    else if (obj && wc) wc.removeChild(obj);
+  }
+  chunk.gameObjects = [];
+  chunk.npcs = [];
+  chunk.loaded = false;
+  chunks.delete(key);
+  console.log(`Chunk (${chunkX},${chunkY}) unloaded`);
+}
+
+// ── Get tile type at world pixel position ─────────────────────
+function _pixiGetTileAt(worldX, worldY) {
+  const cx = Math.floor(worldX / (CHUNK_COLS * TILE_SIZE));
+  const cy = Math.floor(worldY / (CHUNK_ROWS * TILE_SIZE));
+  const key = `${cx},${cy}`;
+  const chunk = chunks.get(key);
+  if (!chunk || !chunk.loaded) return 'grass';
+  const localCol = Math.floor((worldX - cx * CHUNK_COLS * TILE_SIZE) / TILE_SIZE);
+  const localRow = Math.floor((worldY - cy * CHUNK_ROWS * TILE_SIZE) / TILE_SIZE);
+  return chunk.worldDef.world.tiles?.[localRow]?.[localCol] || 'grass';
+}
+
+// ─────────────────────────────────────────────────────────────
+//  DYNAMIC LIGHTING  (R1.6)
+//  A RenderTexture filled black with ERASE-mode light circles
+//  overlaid on the world in MULTIPLY blend mode.
+// ─────────────────────────────────────────────────────────────
+let _lightRT    = null;  // PIXI.RenderTexture
+let _lightGfx   = null;  // PIXI.Graphics used to draw light circles
+let _lightSprite = null; // PIXI.Sprite of the render texture
+
+const LIGHT_RADIUS_PLAYER  = TILE_SIZE * 3.5;
+const LIGHT_RADIUS_TORCH   = TILE_SIZE * 2.2;
+const LIGHT_AMBIENT_NIGHT  = 0.72;  // how dark the night gets (0=pitch black, 1=full day)
+const LIGHT_AMBIENT_DAY    = 0.0;   // day: no darkness overlay at all
+
+function _initLighting(stage, w, h) {
+  _lightRT    = PIXI.RenderTexture.create({ width: w, height: h });
+  _lightGfx   = new PIXI.Graphics();
+  _lightSprite = new PIXI.Sprite(_lightRT);
+  _lightSprite.blendMode = PIXI.BLEND_MODES.MULTIPLY;
+  _lightSprite.zIndex = 50000;
+  stage.addChild(_lightSprite);
+}
+
+function _resizeLighting(w, h) {
+  if (_lightRT) _lightRT.resize(w, h);
+  if (_lightSprite) { _lightSprite.width = w; _lightSprite.height = h; }
+}
+
+function _updateLighting(renderer, playerScreenX, playerScreenY, ambientAlpha) {
+  if (!_lightRT || !_lightGfx || ambientAlpha <= 0.02) {
+    // Daytime — hide the overlay entirely
+    if (_lightSprite) _lightSprite.visible = (ambientAlpha > 0.02);
+    return;
+  }
+  _lightSprite.visible = true;
+
+  const w = _lightRT.width, h = _lightRT.height;
+  _lightGfx.clear();
+
+  // Fill screen with ambient darkness
+  _lightGfx.beginFill(0x000000, ambientAlpha);
+  _lightGfx.drawRect(0, 0, w, h);
+  _lightGfx.endFill();
+
+  // Erase light around the player (radial gradient effect via alpha rings)
+  const r = LIGHT_RADIUS_PLAYER;
+  _lightGfx.beginFill(0x000000, 0);
+  _lightGfx.lineStyle(0);
+  // Use a series of concentric circles with decreasing alpha fill for soft falloff
+  for (let i = 0; i < 8; i++) {
+    const frac = i / 8;
+    const alpha = ambientAlpha * (1 - Math.pow(1 - frac, 2));
+    _lightGfx.beginFill(0x000000, alpha - ambientAlpha * (1 - Math.pow(1 - (i+1)/8, 2)));
+    // Actually use blend erase approach: draw colored circles that "punch holes"
+  }
+  // Simpler soft-circle: draw black, then overdraw transparent circle
+  _lightGfx.beginFill(0x1a2a0a, ambientAlpha * 0.0);
+
+  // The real technique: draw gradient manually as concentric circles
+  const steps = 12;
+  for (let i = steps; i >= 0; i--) {
+    const t = i / steps;
+    const radius = r * (1 - t * 0.15);
+    const alpha = ambientAlpha * (t * t);
+    _lightGfx.beginFill(0x000000, alpha);
+    _lightGfx.drawCircle(playerScreenX, playerScreenY, radius);
+    _lightGfx.endFill();
+  }
+  // Hard clear at center
+  _lightGfx.beginFill(0x000000, 0);
+  _lightGfx.drawCircle(playerScreenX, playerScreenY, r * 0.35);
+  _lightGfx.endFill();
+
+  renderer.render(_lightGfx, { renderTexture: _lightRT, clear: true });
+}
+
+// ─────────────────────────────────────────────────────────────
+//  ANIMATED WATER SHADER  (R1.7)
+//  A PIXI.Filter applied to a container holding water tiles.
+// ─────────────────────────────────────────────────────────────
+const WATER_VERT = `
+attribute vec2 aVertexPosition;
+attribute vec2 aTextureCoord;
+uniform mat3 projectionMatrix;
+varying vec2 vTextureCoord;
+void main(void) {
+  gl_Position = vec4((projectionMatrix * vec3(aVertexPosition, 1.0)).xy, 0.0, 1.0);
+  vTextureCoord = aTextureCoord;
+}`;
+
+const WATER_FRAG = `
+varying vec2 vTextureCoord;
+uniform sampler2D uSampler;
+uniform float uTime;
+void main(void) {
+  vec2 uv = vTextureCoord;
+  float speed = 0.4;
+  float amp   = 0.008;
+  float freq  = 6.0;
+  uv.x += sin(uv.y * freq + uTime * speed) * amp;
+  uv.y += cos(uv.x * freq * 0.7 + uTime * speed * 0.8) * amp * 0.6;
+  vec4 color = texture2D(uSampler, uv);
+  // Slight blue tint + shimmer
+  color.b = min(1.0, color.b * 1.18);
+  color.g = min(1.0, color.g * 1.04);
+  float shimmer = 0.92 + 0.08 * sin(uv.x * 20.0 + uTime * 1.5) * cos(uv.y * 18.0 + uTime * 1.2);
+  color.rgb *= shimmer;
+  gl_FragColor = color;
+}`;
+
+let _waterFilter = null;
+let _waterTime   = 0;
+
+function _initWaterShader() {
+  try {
+    _waterFilter = new PIXI.Filter(WATER_VERT, WATER_FRAG, { uTime: 0.0 });
+  } catch(e) {
+    console.warn('Water shader compile failed — using fallback tint:', e.message);
+    _waterFilter = null;
+  }
+}
+
+// Apply water filter to a container holding water sprites
+function _updateWaterShader(dt) {
+  _waterTime += dt;
+  if (_waterFilter) _waterFilter.uniforms.uTime = _waterTime;
+}
+
+// ─────────────────────────────────────────────────────────────
+//  DAY / NIGHT CYCLE  (R1.8)
+//  Full-screen ColorMatrix filter on the world container.
+//  Cycles through warm daylight → blue moonlight over in-game time.
+// ─────────────────────────────────────────────────────────────
+let _dayNightFilter = null;
+
+// ColorMatrix values for different times of day
+const CM_DAY   = [1.0, 0, 0, 0, 0,   0, 1.0, 0, 0, 0,   0, 0, 1.0, 0, 0,   0, 0, 0, 1.0, 0]; // identity
+const CM_DAWN  = [1.1, 0.05, 0, 0, 0.02, 0, 0.9, 0.02, 0, -0.02, 0, 0, 0.8, 0, -0.04, 0, 0, 0, 1.0, 0]; // warm amber
+const CM_DUSK  = [1.05, 0.06, 0, 0, 0.03, 0, 0.85, 0.04, 0, -0.03, 0, 0, 0.75, 0, -0.05, 0, 0, 0, 1.0, 0];
+const CM_NIGHT = [0.55, 0.02, 0.1, 0, -0.05, 0.01, 0.6, 0.15, 0, -0.06, 0.12, 0.1, 0.8, 0, 0.08, 0, 0, 0, 1.0, 0]; // cool blue
+
+function _lerp(a, b, t) {
+  const r = [];
+  for (let i = 0; i < a.length; i++) r.push(a[i] * (1-t) + b[i] * t);
+  return r;
+}
+
+function _initDayNight(worldContainer) {
+  _dayNightFilter = new PIXI.filters.ColorMatrixFilter();
+  // Add to the world container so lighting affects the world only (not UI)
+  if (worldContainer.filters) worldContainer.filters = [...worldContainer.filters, _dayNightFilter];
+  else worldContainer.filters = [_dayNightFilter];
+}
+
+function _updateDayNight(inGameMinutes) {
+  if (!_dayNightFilter) return;
+  // In-game time: 0-1440 minutes = 24 hours
+  const hour = (inGameMinutes % 1440) / 60; // 0-24
+  let matrix;
+  if      (hour < 5)  matrix = CM_NIGHT;
+  else if (hour < 7)  matrix = _lerp(CM_NIGHT, CM_DAWN,  (hour-5)/2);
+  else if (hour < 9)  matrix = _lerp(CM_DAWN,  CM_DAY,   (hour-7)/2);
+  else if (hour < 17) matrix = CM_DAY;
+  else if (hour < 19) matrix = _lerp(CM_DAY,   CM_DUSK,  (hour-17)/2);
+  else if (hour < 21) matrix = _lerp(CM_DUSK,  CM_NIGHT, (hour-19)/2);
+  else                matrix = CM_NIGHT;
+  _dayNightFilter.matrix = matrix;
+}
+
+function _dayNightAmbientAlpha(inGameMinutes) {
+  const hour = (inGameMinutes % 1440) / 60;
+  if      (hour < 5)  return LIGHT_AMBIENT_NIGHT;
+  else if (hour < 7)  return LIGHT_AMBIENT_NIGHT * (1 - (hour-5)/2);
+  else if (hour < 17) return LIGHT_AMBIENT_DAY;
+  else if (hour < 19) return LIGHT_AMBIENT_NIGHT * ((hour-17)/2);
+  else                return LIGHT_AMBIENT_NIGHT;
+}
+
+// ─────────────────────────────────────────────────────────────
+//  PIXI MAIN LOOP  (replaces Phaser update())
+// ─────────────────────────────────────────────────────────────
+const _keysHeld = new Set();
+let   _eJustDown = false;
+let   _ePrevDown = false;
+
+function _initKeyboard() {
+  window.addEventListener('keydown', e => {
+    const k = e.key.toLowerCase();
+    _keysHeld.add(k);
+    if (k === 'e' || k === 'e') _eJustDown = true;
+  });
+  window.addEventListener('keyup', e => {
+    _keysHeld.delete(e.key.toLowerCase());
+  });
+}
+
+function _pixiUpdate(delta) {
+  // delta is in frames (Pixi default ticker gives frame count, not seconds)
+  const dt = delta / 60; // seconds
+  if (!gameScene || !gameScene.player) return;
+
+  const dialogueOpen = document.getElementById('dialogue-box').style.display !== 'none'
+                    && document.getElementById('dialogue-box').style.display !== '';
+  const inputFocused = ['INPUT','TEXTAREA'].includes(document.activeElement?.tagName);
+
+  // ── PLAYER MOVEMENT ──
+  const speed = TILE_SIZE * 2.5; // px/sec
+  let vx = 0, vy = 0;
+
+  if (!dialogueOpen && !inputFocused && !isIndoor) {
+    if (_keysHeld.has('arrowleft') || _keysHeld.has('a'))  vx = -speed;
+    if (_keysHeld.has('arrowright')|| _keysHeld.has('d'))  vx =  speed;
+    if (_keysHeld.has('arrowup')   || _keysHeld.has('w'))  vy = -speed;
+    if (_keysHeld.has('arrowdown') || _keysHeld.has('s'))  vy =  speed;
+  }
+
+  if (vx !== 0 && vy !== 0) { vx *= 0.707; vy *= 0.707; }
+
+  // Tile collision
+  if ((vx !== 0 || vy !== 0) && !isIndoor) {
+    const nx = gameScene.player.x + vx * dt * 1.8;
+    const ny = gameScene.player.y + vy * dt * 1.8;
+    const tileType = _pixiGetTileAt(nx, ny);
+    const def = TILE_DEFS[tileType] || TILE_DEFS.grass;
+    if (!def.walkable) { vx = 0; vy = 0; }
+    // Check for unloaded chunk ahead
+    const ncx = Math.floor(nx / (CHUNK_COLS * TILE_SIZE));
+    const ncy = Math.floor(ny / (CHUNK_ROWS * TILE_SIZE));
+    if (!chunks.get(`${ncx},${ncy}`)?.loaded) {
+      queueSurroundingChunks(ncx, ncy);
+      processChunkQueue();
+    }
+  }
+
+  if (!isIndoor) {
+    gameScene.player.x += vx * dt * 1.8;
+    gameScene.player.y += vy * dt * 1.8;
+  }
+
+  // ── CHUNK TRACKING ──
+  if (!isIndoor) {
+    const newCX = Math.floor(gameScene.player.x / (CHUNK_COLS * TILE_SIZE));
+    const newCY = Math.floor(gameScene.player.y / (CHUNK_ROWS * TILE_SIZE));
+    if (newCX !== currentChunkX || newCY !== currentChunkY) {
+      currentChunkX = newCX;
+      currentChunkY = newCY;
+      queueSurroundingChunks(newCX, newCY);
+      processChunkQueue();
+      for (const [key, chunk] of chunks) {
+        const dist = Math.max(Math.abs(chunk.cx - newCX), Math.abs(chunk.cy - newCY));
+        if (dist > 2 && chunk.loaded) _pixiUnloadChunk(chunk.cx, chunk.cy);
+      }
+    }
+  }
+
+  // ── SYNC PLAYER SPRITE ──
+  if (gameScene.playerSprite && !isIndoor) {
+    gameScene.playerSprite.x = gameScene.player.x;
+    gameScene.playerSprite.y = gameScene.player.y - 8;
+    const pRow = Math.floor(gameScene.player.y / TILE_SIZE) + 10000;
+    gameScene.playerSprite.zIndex = pRow * 10 + 8;
+
+    // Update player animation
+    const moving = (vx !== 0 || vy !== 0);
+    if (moving) {
+      const prevFacing = gameScene.playerFacing;
+      if (Math.abs(vx) > Math.abs(vy)) {
+        gameScene.playerFacing = vx < 0 ? 'left' : 'right';
+      } else {
+        gameScene.playerFacing = vy < 0 ? 'up' : 'down';
+      }
+      if (prevFacing !== gameScene.playerFacing || !gameScene.playerAnim?._walking) {
+        const frames = _playerFrames(gameScene.playerFacing, true);
+        if (frames) gameScene.playerAnim = { ..._makeAnim(frames, 8), _walking: true };
+      }
+    } else if (gameScene.playerAnim?._walking) {
+      const frames = _playerFrames(gameScene.playerFacing, false);
+      if (frames) gameScene.playerAnim = { ..._makeAnim(frames, 4), _walking: false };
+    }
+    gameScene.playerMoving = moving;
+    if (gameScene.playerAnim) {
+      _tickAnim(gameScene.playerAnim, dt);
+      const frames = gameScene.playerAnim.frames;
+      if (frames?.length) gameScene.playerSprite.texture = frames[gameScene.playerAnim.current];
+    }
+  }
+
+  // ── CAMERA ──
+  if (!isIndoor && gameScene.player) {
+    _pixiCenterCamera(gameScene.player.x, gameScene.player.y - 8);
+  }
+
+  // ── NPC WANDER & PROXIMITY ──
+  let nearestDist = Infinity;
+  let nearestNPC  = null;
+  for (const npc of gameScene.npcObjects) {
+    const dx = gameScene.player.x - npc.nx;
+    const dy = gameScene.player.y - npc.ny;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    const inRange = dist < npc.range;
+
+    // Label highlight
+    if (npc.label) {
+      npc.label.style.fontSize = inRange ? 12 : 11;
+      npc.label.style.fill = inRange ? '#f0ff80' : '#d0f890';
+    }
+
+    if (inRange && dist < nearestDist && npc.def.type !== 'ambient') {
+      nearestDist = dist; nearestNPC = npc;
+    }
+
+    // Wander AI
+    if (!dialogueOpen && !(currentNPC && currentNPC.id === npc.def.id)) {
+      const w = npc.wander;
+      w.timer -= dt * 1000;
+      if (w.moving) {
+        const wdx = w.targetX - npc.sprite.x;
+        const wdy = w.targetY - npc.sprite.y;
+        const dist2 = Math.sqrt(wdx*wdx + wdy*wdy);
+        const wanderSpeed = 30;
+        if (dist2 < 2) {
+          npc.sprite.x = w.targetX; npc.sprite.y = w.targetY;
+          npc.nx = w.targetX; npc.ny = w.targetY;
+          if (npc.label) { npc.label.x = npc.nx; npc.label.y = npc.ny - FRAME_H * (npc.sprite.scale.x) * 0.7; }
+          w.moving = false;
+          w.timer = WANDER_INTERVAL_MS[0] + Math.random() * (WANDER_INTERVAL_MS[1] - WANDER_INTERVAL_MS[0]);
+          // Switch to idle anim
+          if (w.idleFrames?.length && w.anim) { w.anim.frames = w.idleFrames; w.anim.current = 0; w.anim.elapsed = 0; }
+        } else {
+          const nx2 = npc.sprite.x + (wdx / dist2) * wanderSpeed * dt;
+          const ny2 = npc.sprite.y + (wdy / dist2) * wanderSpeed * dt;
+          npc.sprite.x = nx2; npc.sprite.y = ny2;
+          npc.nx = nx2; npc.ny = ny2;
+          if (npc.label) { npc.label.x = nx2; npc.label.y = ny2 - FRAME_H * npc.sprite.scale.x * 0.7; }
+          // Flip animals horizontally by direction
+          if (['chicken','pig','sheep','cow','slime'].includes(npc.def.sprite)) npc.sprite.scale.x = wdx < 0 ? -Math.abs(npc.sprite.scale.x) : Math.abs(npc.sprite.scale.x);
+        }
+      } else if (w.timer <= 0) {
+        const angle = Math.random() * Math.PI * 2;
+        const dist3 = Math.random() * WANDER_RADIUS * TILE_SIZE * 0.7;
+        const tx = w.homeX + Math.cos(angle) * dist3;
+        const ty = w.homeY + Math.sin(angle) * dist3;
+        const tType = _pixiGetTileAt(tx, ty);
+        const tDef  = TILE_DEFS[tType] || TILE_DEFS.grass;
+        if (tDef.walkable) {
+          w.targetX = tx; w.targetY = ty; w.moving = true;
+          if (w.walkFrames?.length && w.anim) { w.anim.frames = w.walkFrames; w.anim.current = 0; w.anim.elapsed = 0; }
+        } else {
+          w.timer = 1500 + Math.random() * 2000;
+        }
+      }
+      // Tick NPC animation
+      if (w.anim) {
+        _tickAnim(w.anim, dt);
+        if (w.anim.frames?.length) npc.sprite.texture = w.anim.frames[w.anim.current];
+      }
+      // Depth sort
+      const npcRow = Math.floor(npc.ny / TILE_SIZE) + 10000;
+      npc.sprite.zIndex = npcRow * 10 + 7;
+      if (npc.label) npc.label.zIndex = npcRow * 10 + 9;
+    }
+  }
+
+  // ── INTERACT PROMPT (E to talk / enter) ──
+  gameScene._nearestNPC = nearestNPC;
+  const nearbyBuilding = _pixiFindNearbyBuildingDoor();
+  const promptEl = document.getElementById('interact-prompt');
+  if (!isIndoor && !dialogueOpen && (nearestNPC || nearbyBuilding)) {
+    const wc = gameScene._worldContainer;
+    if (nearbyBuilding) {
+      const px = gameScene.player.x, py = gameScene.player.y;
+      const sx = Math.round(px + (wc?.x || 0));
+      const sy = Math.round(py + (wc?.y || 0) - TILE_SIZE - 28);
+      promptEl.textContent = '[E] Enter';
+      promptEl.style.left = (sx - 32) + 'px';
+      promptEl.style.top  = sy + 'px';
+      promptEl.style.opacity = '1';
+    } else if (nearestNPC) {
+      const sx = Math.round(nearestNPC.nx + (wc?.x || 0));
+      const sy = Math.round(nearestNPC.ny + (wc?.y || 0) - FRAME_H * nearestNPC.sprite.scale.x * 0.9 - 28);
+      promptEl.textContent = '[E] Talk';
+      promptEl.style.left = (sx - 28) + 'px';
+      promptEl.style.top  = sy + 'px';
+      promptEl.style.opacity = '1';
+    }
+  } else if (!isIndoor) {
+    promptEl.style.opacity = '0';
+  }
+
+  // ── E KEY INTERACT ──
+  if (!isIndoor && !dialogueOpen && !gameScene.dialogueCooldown && _eJustDown) {
+    _eJustDown = false;
+    const buildingKey = _pixiFindNearbyBuildingDoor();
+    if (buildingKey) {
+      const layout = indoorLayouts.get(buildingKey);
+      if (layout?.ready) {
+        enterHouse(buildingKey, layout);
+      } else if (layout?.loading) {
+        showStatus(HOUSE_NOT_READY_MSGS[Math.floor(Math.random() * HOUSE_NOT_READY_MSGS.length)], 2500);
+      } else {
+        const [gcx, gcy] = buildingKey.split('_')[0].split(',').map(Number);
+        triggerLazyHouseGen(buildingKey, gcx, gcy);
+      }
+    } else if (nearestNPC) {
+      _pixiOpenNPCDialogue(nearestNPC);
+    }
+  } else {
+    if (!_eJustDown) {} // reset is done on keydown only
+  }
+  _eJustDown = false; // consume the flag each frame
+
+  // ── WATER SHADER ──
+  _updateWaterShader(dt);
+
+  // ── DAY/NIGHT ──
+  const ingameMin = activeCampaign?.world_state?.in_game_minutes_elapsed || 0;
+  _updateDayNight(ingameMin);
+
+  // ── LIGHTING ──
+  if (pixiApp && !isIndoor) {
+    const px = gameScene.player.x + (gameScene._worldContainer?.x || 0);
+    const py = gameScene.player.y - 8 + (gameScene._worldContainer?.y || 0);
+    const ambientAlpha = _dayNightAmbientAlpha(ingameMin);
+    _updateLighting(pixiApp.renderer, px, py, ambientAlpha);
+  }
+
+  // ── SORT WORLD CONTAINER CHILDREN BY ZINDEX ──
+  if (gameScene._worldContainer) {
+    gameScene._worldContainer.sortChildren();
+  }
+}
+
+// ── Find nearby building door (PixiJS version) ────────────────
+function _pixiFindNearbyBuildingDoor() {
+  if (!gameScene?.player) return null;
+  const px = gameScene.player.x, py = gameScene.player.y;
+  const checks = [
+    [px, py], [px, py - TILE_SIZE * 0.7], [px, py + TILE_SIZE * 0.7],
+    [px - TILE_SIZE * 0.7, py], [px + TILE_SIZE * 0.7, py],
+  ];
+  for (const [wx, wy] of checks) {
+    const tileType = _pixiGetTileAt(wx, wy);
+    if (tileType === 'building_door' || tileType === 'building') {
+      const cx = Math.floor(wx / (CHUNK_COLS * TILE_SIZE));
+      const cy = Math.floor(wy / (CHUNK_ROWS * TILE_SIZE));
+      const localCol = Math.floor((wx - cx * CHUNK_COLS * TILE_SIZE) / TILE_SIZE);
+      const localRow = Math.floor((wy - cy * CHUNK_ROWS * TILE_SIZE) / TILE_SIZE);
+      const chunk = chunks.get(`${cx},${cy}`);
+      if (!chunk?.worldDef) continue;
+      const tiles = chunk.worldDef.world.tiles;
+      const isBuilding = v => v === 'building' || v === 'building_door';
+      let topRow = localRow, leftCol = localCol;
+      while (topRow > 0 && isBuilding(tiles[topRow-1]?.[leftCol])) topRow--;
+      while (leftCol > 0 && isBuilding(tiles[topRow]?.[leftCol-1])) leftCol--;
+      return `${cx},${cy}_${leftCol}_${topRow}`;
+    }
+  }
+  return null;
+}
+
+// ── Open NPC dialogue (PixiJS version) ───────────────────────
+function _pixiOpenNPCDialogue(npcObj) {
+  if (gameScene.dialogueCooldown) return;
+  currentNPC = npcObj.def;
+  if (gameScene.playerAnim) {
+    const frames = _playerFrames(gameScene.playerFacing, false);
+    if (frames) gameScene.playerAnim = { ..._makeAnim(frames, 4), _walking: false };
+  }
+  const promptEl = document.getElementById('interact-prompt');
+  if (promptEl) promptEl.style.opacity = '0';
+
+  if (!dialogueHistory[npcObj.def.id]) dialogueHistory[npcObj.def.id] = [];
+  if (!npcObj.def._voiceId) npcObj.def._voiceId = lqPickVoice(npcObj.def);
+
+  renderNPCPortrait(npcObj.def.sprite, npcObj.def.id);
+
+  document.getElementById('dialogue-npc-name').textContent = npcObj.def.name;
+  document.getElementById('dialogue-npc-tag').textContent  = npcObj.def.personality
+    ? npcObj.def.personality.split('.')[0] : 'Villager';
+  document.getElementById('dialogue-text').innerHTML = highlightVocab(npcObj.def.greeting);
+  document.getElementById('dialogue-translation').textContent = '(tap to translate)';
+  lastNPCReply = npcObj.def.greeting;
+
+  document.getElementById('dialogue-input').style.display = 'block';
+  document.getElementById('dialogue-send').style.display  = 'block';
+  document.getElementById('dialogue-input').value = '';
+  document.getElementById('dialogue-box').style.display = 'block';
+  setTimeout(() => document.getElementById('dialogue-input').focus(), 80);
+
+  lqVoiceInit();
+  lqSpeak(npcObj.def.greeting, npcObj.def._voiceId);
+}
+
+// ─────────────────────────────────────────────────────────────
+//  STARTGAME  (PixiJS version — replaces Phaser.Game bootstrap)
+// ─────────────────────────────────────────────────────────────
+function startGame(worldDef) {
+  if (!CLAUDE_KEY) { showStatus('Loading keys — try again in a moment', 3000); loadConfig(); return; }
+  _startingWorld = worldDef || ARENAS_BLANCAS_WORLD;
+
+  document.getElementById('menu').style.display = 'none';
+  document.getElementById('top-hud').style.display = 'flex';
+  document.getElementById('controls-hint').style.display = 'block';
+  document.getElementById('dbg-toggle').style.display = 'block';
+
+  // ── Init PixiJS Application ──
+  PIXI.utils.skipHello();
+  pixiApp = new PIXI.Application({
+    resizeTo: window,
+    backgroundColor: 0x1a2a1a,
+    antialias: false,
+    resolution: window.devicePixelRatio || 1,
+    autoDensity: true,
+  });
+  PIXI.settings.SCALE_MODE = PIXI.SCALE_MODES.NEAREST; // pixel-art crisp
+  document.getElementById('game-container').appendChild(pixiApp.view);
+
+  // phaserGame alias — for portrait renderer and indoor sprite compat
+  phaserGame = { textures: { get: (key) => ({ getSourceImage: () => pixiImages[key], key: pixiImages[key] ? key : '__MISSING' }) }, loop: { stop: () => pixiApp.ticker.stop(), wake: () => pixiApp.ticker.start() } };
+
+  // ── World container (camera = translate this) ──
+  const worldContainer = new PIXI.Container();
+  worldContainer.sortableChildren = true;
+  pixiApp.stage.addChild(worldContainer);
+
+  // ── Init game scene state object (mirrors old GameScene interface) ──
+  gameScene = {
+    player:          null,
+    playerSprite:    null,
+    playerAnim:      null,
+    playerFacing:    'down',
+    playerMoving:    false,
+    dialogueCooldown: false,
+    npcObjects:      [],
+    _nearestNPC:     null,
+    _worldContainer: worldContainer,
+    // Compat methods used by existing code
+    getTileAt:            (x, y) => _pixiGetTileAt(x, y),
+    _findNearbyBuildingDoor: () => _pixiFindNearbyBuildingDoor(),
+    loadChunk:            (wd, cx, cy, isOrigin) => _pixiLoadChunk(worldContainer, wd, cx, cy, isOrigin),
+    unloadChunk:          (cx, cy) => _pixiUnloadChunk(cx, cy),
+  };
+
+  // ── Init keyboard ──
+  _initKeyboard();
+
+  // ── Init shaders and lighting ──
+  _initWaterShader();
+  _initDayNight(worldContainer);
+  _initLighting(pixiApp.stage, pixiApp.screen.width, pixiApp.screen.height);
+
+  // ── Handle resize ──
+  window.addEventListener('resize', () => {
+    // pixiApp.resizeTo handles canvas resize automatically
+    _resizeLighting(pixiApp.screen.width, pixiApp.screen.height);
+    if (isIndoor && indoorData) {
+      const layout = indoorData;
+      const w = layout.cols * INDOOR_TS;
+      const h = layout.rows * INDOOR_TS;
+      const scale = Math.min(window.innerWidth / w, window.innerHeight / h, 3);
+      if (indoorCanvas) {
+        indoorCanvas.width  = Math.round(w * scale);
+        indoorCanvas.height = Math.round(h * scale);
+        if (indoorCtx) {
+          indoorCtx.imageSmoothingEnabled = false;
+          indoorCtx.setTransform(scale, 0, 0, scale, 0, 0);
+        }
+        drawIndoor();
+      }
+    }
+  });
+
+  // ── Auto-save ──
+  setInterval(() => { if (activeCampaignId) saveGame(); }, 30000);
+
+  // ── Init indoor canvas ──
+  setupIndoorCanvas();
+  loadIndoorImages().then(() => console.log('Indoor tileset preloaded'));
+  fetchSRSVocab();
+
+  // ── Load assets then start the world ──
+  showStatus('Loading assets...', 10000);
+  pixiPreload().then(() => {
+    showStatus('', 0);
+    gameScene.loadChunk(_startingWorld || ARENAS_BLANCAS_WORLD, 0, 0, true);
+    // Attach main loop
+    pixiApp.ticker.add(_pixiUpdate);
+  });
+}
+
+// ── Compat stubs that old Phaser-era code referenced ─────────
+// (saveGame references gameScene.player.x — that still works via the virtual player object)
+
+// ── OLD Phaser GameScene class placeholder (replaced above) ──
+// The class is removed; its methods are inlined in the PixiJS engine above.
+// Any code that calls gameScene.loadChunk() / gameScene.getTileAt() / etc.
+// still works because gameScene now exposes those as plain function properties.
+
 
 // ─────────────────────────────────────────────────────────────
 //  NPC PORTRAIT RENDERER (draws NPC sprite frame into <canvas>)
@@ -2732,74 +3022,7 @@ function getLangName(code) {
            pt:'Portuguese', ja:'Japanese', zh:'Chinese', ko:'Korean' }[code] || code;
 }
 
-// ─────────────────────────────────────────────────────────────
-//  GAME INIT
-// ─────────────────────────────────────────────────────────────
-function startGame(worldDef) {
-  if (!CLAUDE_KEY) { showStatus('Loading keys — try again in a moment', 3000); loadConfig(); return; }
-  _startingWorld = worldDef || ARENAS_BLANCAS_WORLD;
-
-  document.getElementById('menu').style.display = 'none';
-  document.getElementById('top-hud').style.display = 'flex';
-  document.getElementById('controls-hint').style.display = 'block';
-  document.getElementById('dbg-toggle').style.display = 'block';
-
-  const config = {
-    type: Phaser.AUTO,
-    parent: 'game-container',
-    width:  window.innerWidth,
-    height: window.innerHeight,
-    backgroundColor: '#1a2a1a',
-    scale: {
-      mode: Phaser.Scale.RESIZE,
-      autoCenter: Phaser.Scale.NO_CENTER,
-    },
-    physics: { default: 'arcade', arcade: { gravity: { y: 0 }, debug: false } },
-    input: {
-      keyboard: {
-        // Allow HTML inputs to receive keyboard events without Phaser intercepting them
-        capture: [],
-      },
-    },
-    scene: GameScene,
-    pixelArt: true,
-    antialias: false,
-  };
-
-  phaserGame = new Phaser.Game(config);
-
-  // Auto-save every 30 seconds
-  setInterval(() => { if (activeCampaignId) saveGame(); }, 30000);
-
-  // Force canvas to fill the window on resize
-  window.addEventListener('resize', () => {
-    if (phaserGame) {
-      phaserGame.scale.resize(window.innerWidth, window.innerHeight);
-    }
-    // Also resize indoor canvas if active
-    if (isIndoor && indoorData) {
-      const layout = indoorData;
-      const w = layout.cols * INDOOR_TS;
-      const h = layout.rows * INDOOR_TS;
-      const scale = Math.min(window.innerWidth / w, window.innerHeight / h, 3);
-      if (indoorCanvas) {
-        indoorCanvas.width  = Math.round(w * scale);
-        indoorCanvas.height = Math.round(h * scale);
-        if (indoorCtx) {
-          indoorCtx.imageSmoothingEnabled = false;
-          indoorCtx.setTransform(scale, 0, 0, scale, 0, 0);
-        }
-        drawIndoor();
-      }
-    }
-  });
-
-  // Init indoor canvas and preload images
-  setupIndoorCanvas();
-  loadIndoorImages().then(() => console.log('Indoor tileset preloaded'));
-
-  fetchSRSVocab();
-}
+// (startGame is defined above in the PixiJS engine section)
 
 // ─────────────────────────────────────────────────────────────
 //  INDOOR HOUSE GENERATION SYSTEM
@@ -3360,12 +3583,13 @@ function drawFurniture(ctx, f, TS, layout) {
 const PLAYER_SS_ROW = { down: 0, left: 1, up: 2, right: 3 };
 
 function drawSpriteFromSheet(ctx, texKey, row, col, x, y, TS, frameCols) {
-  if (!phaserGame) return false;
+  // PixiJS version — reads from pixiImages (HTMLImageElement) directly
+  const src = pixiImages[texKey];
+  if (!src) return false;
   try {
-    const tex = phaserGame.textures.get(texKey);
-    if (!tex || tex.key === '__MISSING') return false;
-    const src = tex.getSourceImage();
-    const fw = 32, fh = 32;
+    const cfg = PIXI_SS_FRAMES[texKey];
+    const fw = cfg ? cfg.frameWidth  : 32;
+    const fh = cfg ? cfg.frameHeight : 32;
     const sx = col * fw;
     const sy = row * fh;
     const scl = TS * 0.8 / fh;
@@ -4727,14 +4951,7 @@ document.addEventListener('keydown', e => {
   }
 });
 
-// Pause Phaser keyboard when typing in HTML inputs (dialogue only)
-{
-  const el = document.getElementById('dialogue-input');
-  if (el) {
-    el.addEventListener('focus', () => { if (phaserGame) phaserGame.input.keyboard.enabled = false; });
-    el.addEventListener('blur',  () => { if (phaserGame) phaserGame.input.keyboard.enabled = true; });
-  }
-}
+// (PixiJS doesn't intercept keyboard events, so no need to disable during HTML input focus)
 
 // ─────────────────────────────────────────────────────────────
 //  STARTUP
