@@ -3788,27 +3788,58 @@ async function _dbgSouls(body) {
   if (!npcs.length) { body.innerHTML = '<div class="dbg-empty">No NPCs found.</div>'; return; }
   let html = '';
   for (const npc of npcs) {
-    const soul = npc.soul_document || {};
+    const soul = npc.soul || {};
+    const hasSoul = Object.keys(soul).length > 0;
     html += `<div class="dbg-card">`;
-    html += `<div class="dbg-card-title">${_dbgH(npc.display_name)} <span class="dbg-badge">${_dbgH(npc.slug)}</span>`;
+    html += `<div class="dbg-card-title">${_dbgH(npc.name)}`;
+    if (npc.occupation) html += ` <span class="dbg-badge">${_dbgH(npc.occupation)}</span>`;
     if (npc.is_main_cast) html += ` <span class="dbg-badge" style="background:rgba(200,150,50,.1);border-color:#5a4010;color:#a07030">main cast</span>`;
+    if (!hasSoul) html += ` <span class="dbg-badge" style="color:#a03020;border-color:#5a1010">no soul</span>`;
     html += `</div>`;
-    html += _dbgRow('Role', npc.role);
-    html += _dbgRow('Location', npc.current_location);
+    html += _dbgRow('Current chunk', npc.current_chunk);
     html += _dbgRow('Trust', npc.player_trust != null ? npc.player_trust.toFixed(2) : null);
-    html += _dbgRow('Emotional state', soul.emotional_state);
-    html += _dbgRow('Preoccupation', soul.current_preoccupation);
-    html += _dbgRow('Secret', soul.deepest_secret);
-    html += _dbgRow('Knows player', soul.knows_about_player);
-    if (soul.relationship_to_victim) html += _dbgRow('Rel. to victim', soul.relationship_to_victim);
-    if (soul.alibi) html += _dbgRow('Alibi', soul.alibi);
-    if (soul.daily_routine) {
-      html += `<div class="dbg-section-title" style="margin-top:8px">Daily Routine</div>`;
-      html += `<div style="color:#5a9030;font-size:10px;line-height:1.6">${_dbgH(soul.daily_routine)}</div>`;
-    }
-    if (soul.background) {
-      html += `<div class="dbg-section-title" style="margin-top:8px">Background</div>`;
-      html += `<div style="color:#5a9030;font-size:10px;line-height:1.6">${_dbgH(soul.background)}</div>`;
+    html += _dbgRow('Trust broken', npc.trust_broken ? 'yes' : null, !npc.trust_broken);
+    if (hasSoul) {
+      html += _dbgRow('Emotional state', soul.emotional_state);
+      html += _dbgRow('Preoccupation', soul.current_preoccupation);
+      html += _dbgRow('Speech pattern', soul.speech_pattern);
+      html += _dbgRow('Spanish register', soul.spanish_register);
+      if (soul.secrets?.length) {
+        html += `<div class="dbg-section-title" style="margin-top:8px">Secrets</div>`;
+        soul.secrets.forEach(s => html += `<div class="dbg-event-row"><div class="dbg-desc">${_dbgH(s)}</div></div>`);
+      }
+      if (soul.fears?.length) {
+        html += `<div class="dbg-section-title" style="margin-top:8px">Fears</div>`;
+        soul.fears.forEach(f => html += `<div class="dbg-event-row"><div class="dbg-desc">${_dbgH(f)}</div></div>`);
+      }
+      if (soul.desires?.length) {
+        html += `<div class="dbg-section-title" style="margin-top:8px">Desires</div>`;
+        soul.desires.forEach(d => html += `<div class="dbg-event-row"><div class="dbg-desc">${_dbgH(d)}</div></div>`);
+      }
+      if (soul.contradictions?.length) {
+        html += `<div class="dbg-section-title" style="margin-top:8px">Contradictions</div>`;
+        soul.contradictions.forEach(c => html += `<div class="dbg-event-row"><div class="dbg-desc">${_dbgH(c)}</div></div>`);
+      }
+      if (soul.open_wounds?.length) {
+        html += `<div class="dbg-section-title" style="margin-top:8px">Open Wounds</div>`;
+        soul.open_wounds.forEach(w => html += `<div class="dbg-event-row"><div class="dbg-desc">${_dbgH(w)}</div></div>`);
+      }
+      if (soul.history) {
+        html += `<div class="dbg-section-title" style="margin-top:8px">History</div>`;
+        html += `<div style="color:#5a9030;font-size:10px;line-height:1.6">${_dbgH(soul.history)}</div>`;
+      }
+      if (soul.personality) {
+        html += `<div class="dbg-section-title" style="margin-top:8px">Personality</div>`;
+        html += `<div style="color:#5a9030;font-size:10px;line-height:1.6">${_dbgH(soul.personality)}</div>`;
+      }
+      if (soul.faction_ties) {
+        html += `<div class="dbg-section-title" style="margin-top:8px">Faction Ties</div>`;
+        html += `<div style="color:#5a9030;font-size:10px;line-height:1.6">${_dbgH(soul.faction_ties)}</div>`;
+      }
+      if (npc.relationships && Object.keys(npc.relationships).length) {
+        html += `<div class="dbg-section-title" style="margin-top:8px">Relationships</div>`;
+        html += _dbgJson(npc.relationships);
+      }
     }
     html += `</div>`;
   }
@@ -3833,15 +3864,17 @@ async function _dbgEvents(body) {
 
 async function _dbgPlanned(body) {
   const rows = await lqDB('GET','lq_planned_events',null,
-    `?campaign_id=eq.${activeCampaignId}&order=scheduled_tick.asc&limit=50`) || [];
+    `?campaign_id=eq.${activeCampaignId}&order=execute_at_ingame_minute.asc&limit=50`) || [];
   if (!rows.length) { body.innerHTML = '<div class="dbg-empty">No planned events.</div>'; return; }
   let html = `<div class="dbg-section-title">${rows.length} planned events</div>`;
   for (const ev of rows) {
     html += `<div class="dbg-event-row">`;
     const statusColor = ev.status === 'pending' ? '#5a9030' : ev.status === 'done' ? '#2a5018' : '#a07030';
-    html += `<div class="dbg-time"><span style="color:${statusColor}">${_dbgH(ev.status)}</span> · tick ${_dbgH(ev.scheduled_tick)} · ${_dbgTs(ev.created_at)}</div>`;
+    const minuteStr = ev.execute_at_ingame_minute != null ? ` · min ${ev.execute_at_ingame_minute}` : '';
+    html += `<div class="dbg-time"><span style="color:${statusColor}">${_dbgH(ev.status)}</span>${minuteStr} · ${_dbgTs(ev.created_at)}</div>`;
     html += `<div class="dbg-desc">${_dbgH(ev.event_type)}</div>`;
-    if (ev.npc_slug) html += `<div class="dbg-meta">NPC: ${_dbgH(ev.npc_slug)}</div>`;
+    if (ev.description) html += `<div class="dbg-meta">${_dbgH(ev.description)}</div>`;
+    if (ev.decided_by_npc) html += `<div class="dbg-meta">NPC: ${_dbgH(ev.decided_by_npc)}</div>`;
     if (ev.payload) html += _dbgJson(ev.payload);
     html += `</div>`;
   }
@@ -3855,8 +3888,9 @@ async function _dbgLogs(body) {
   let html = `<div class="dbg-section-title">${rows.length} log entries</div>`;
   for (const log of rows) {
     html += `<div class="dbg-event-row">`;
-    html += `<div class="dbg-time">${_dbgTs(log.created_at)} · <span style="color:#7ec850">${_dbgH(log.npc_slug)}</span></div>`;
-    html += `<div class="dbg-desc">${_dbgH(log.event_type)}: ${_dbgH(log.summary || '')}</div>`;
+    const npcLabel = log.npc_id || log.npc_slug || log.decided_by_npc || '?';
+    html += `<div class="dbg-time">${_dbgTs(log.created_at)} · <span style="color:#7ec850">${_dbgH(npcLabel)}</span></div>`;
+    html += `<div class="dbg-desc">${_dbgH(log.event_type || log.type || '')}: ${_dbgH(log.summary || log.description || '')}</div>`;
     if (log.player_trust_delta != null) {
       const col = log.player_trust_delta > 0 ? '#5a9030' : '#a03020';
       html += `<div class="dbg-meta">Trust Δ: <span style="color:${col}">${log.player_trust_delta > 0 ? '+' : ''}${log.player_trust_delta}</span></div>`;
@@ -3879,17 +3913,18 @@ async function _dbgPlayer(body) {
   if (!ps) { body.innerHTML = '<div class="dbg-empty">No player state found.</div>'; return; }
   let html = `<div class="dbg-card">`;
   html += `<div class="dbg-card-title">Player State</div>`;
-  html += _dbgRow('Name', ps.player_name);
-  html += _dbgRow('Position', ps.position ? `(${ps.position.x ?? '?'}, ${ps.position.y ?? '?'})` : null);
-  html += _dbgRow('Current chunk', ps.current_chunk_key);
-  html += _dbgRow('Health', ps.health);
-  html += _dbgRow('Language', ps.language_code);
+  html += _dbgRow('Position', `(${ps.player_x ?? '?'}, ${ps.player_y ?? '?'}) facing ${ps.last_facing ?? '?'}`);
+  html += _dbgRow('Current chunk', ps.current_chunk);
+  html += _dbgRow('Paused', ps.is_paused ? 'yes' : 'no');
+  html += _dbgRow('Session start', _dbgTs(ps.session_start_at));
   html += _dbgRow('Saved at', _dbgTs(ps.updated_at));
   html += `</div>`;
   if (ps.inventory?.length) {
-    html += `<div class="dbg-section"><div class="dbg-section-title">Inventory</div>`;
+    html += `<div class="dbg-section"><div class="dbg-section-title">Inventory (${ps.inventory.length})</div>`;
     ps.inventory.forEach(item => {
-      html += `<div class="dbg-event-row"><div class="dbg-desc">${_dbgH(item)}</div></div>`;
+      const label = item.name || item.id || JSON.stringify(item);
+      const desc = item.description ? ` — ${item.description}` : '';
+      html += `<div class="dbg-event-row"><div class="dbg-desc">${_dbgH(label)}</div><div class="dbg-meta">${_dbgH(desc)}</div></div>`;
     });
     html += `</div>`;
   }
@@ -3900,10 +3935,19 @@ async function _dbgPlayer(body) {
     });
     html += `</div>`;
   }
-  if (ps.case_file_entries?.length) {
-    html += `<div class="dbg-section"><div class="dbg-section-title">Case File (${ps.case_file_entries.length})</div>`;
-    ps.case_file_entries.forEach(e => {
-      html += `<div class="dbg-event-row"><div class="dbg-time">${_dbgTs(e.ts)}</div><div class="dbg-desc">${_dbgH(e.text)}</div></div>`;
+  if (ps.active_leads?.length) {
+    html += `<div class="dbg-section"><div class="dbg-section-title">Active Leads (${ps.active_leads.length})</div>`;
+    ps.active_leads.forEach(l => {
+      html += `<div class="dbg-event-row"><div class="dbg-desc">${_dbgH(typeof l === 'string' ? l : JSON.stringify(l))}</div></div>`;
+    });
+    html += `</div>`;
+  }
+  if (ps.case_file?.length) {
+    html += `<div class="dbg-section"><div class="dbg-section-title">Case File (${ps.case_file.length})</div>`;
+    ps.case_file.forEach(e => {
+      const text = e.entry || e.text || JSON.stringify(e);
+      const ts = e.ts || e.created_at || '';
+      html += `<div class="dbg-event-row"><div class="dbg-time">${_dbgTs(ts)}</div><div class="dbg-desc">${_dbgH(text)}</div></div>`;
     });
     html += `</div>`;
   }
