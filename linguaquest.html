@@ -377,6 +377,7 @@ let srsVocab   = [];   // [{word, translation, stage}]
 
 // ── STATE ────────────────────────────────────────────────────
 let phaserGame  = null;
+let _startingWorld = null;  // set by startGame(), read by Phaser create()
 let gameScene   = null;
 let currentNPC  = null;
 let currentWorld= null;
@@ -1190,7 +1191,6 @@ async function startDefaultCampaign() {
   if (!CLAUDE_KEY) {
     showStatus('Loading keys — please wait a moment', 2000);
     await loadConfig();
-checkSavedGame();
     if (!CLAUDE_KEY) { showStatus('Could not load API key', 3000); return; }
   }
 
@@ -2141,9 +2141,8 @@ function getLangName(code) {
 //  GAME INIT
 // ─────────────────────────────────────────────────────────────
 function startGame(worldDef) {
-  if (!CLAUDE_KEY) { showStatus('Loading keys — try again in a moment', 3000); loadConfig();
-checkSavedGame(); return; }
-  const startingWorld = worldDef || ARENAS_BLANCAS_WORLD;
+  if (!CLAUDE_KEY) { showStatus('Loading keys — try again in a moment', 3000); loadConfig(); return; }
+  _startingWorld = worldDef || ARENAS_BLANCAS_WORLD;
 
   document.getElementById('menu').style.display = 'none';
   document.getElementById('top-hud').style.display = 'flex';
@@ -3147,7 +3146,6 @@ async function lqLoadVoiceKeys() {
   // Keys already loaded by loadConfig() on page init.
   // If somehow not loaded yet (race), wait for loadConfig to finish.
   if (!LQ_ELEVEN_KEY || !LQ_GROQ_KEY) await loadConfig();
-checkSavedGame();
 }
 
 // ── Mute toggle ──
@@ -3286,7 +3284,6 @@ function lqMicStop() {
 
 async function lqTranscribe(blob) {
   if (!LQ_GROQ_KEY) await loadConfig();
-checkSavedGame();
   const groqKey = LQ_GROQ_KEY;
   if (!groqKey) throw new Error('No Groq key — check app_secrets table');
 
