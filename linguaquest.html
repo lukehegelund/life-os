@@ -479,8 +479,8 @@ const CHUNK_ROWS = 16;  // tiles per chunk (height)
 const chunks = new Map();  // key: "cx,cy" -> { worldDef, gameObjects: [], npcs: [], loaded: bool }
 const chunkGenQueue = [];  // queue of {cx,cy,label,priority} to generate
 let chunkGenInFlight = 0;  // number of concurrent API calls in progress
-const CHUNK_GEN_CONCURRENCY = 2; // run up to 2 chunk calls at once
-const CHUNK_GEN_DELAY_MS = 300;  // ms between starting each parallel slot
+const CHUNK_GEN_CONCURRENCY = 6; // proc gen is instant — can run many in parallel
+const CHUNK_GEN_DELAY_MS = 10;   // minimal stagger since no API bottleneck
 let currentChunkX = 0;   // which chunk the player is currently in
 let currentChunkY = 0;
 let worldTheme = '';     // the original prompt, used to generate coherent neighbor chunks
@@ -3587,8 +3587,543 @@ async function _generateOneChunk(cx, cy, label, key) {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+//  PROCEDURAL WORLD GENERATION ENGINE
+//  Generates tile grids locally — no API calls for terrain.
+//  NPC dialogue is still AI-generated via a separate lightweight call.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── Seeded value noise ──────────────────────────────────────────────────────
+// Fast 2D value noise with bilinear interpolation.
+// Returns float in [0,1]. Deterministic for the same (x, y, seed).
+function _valueNoise2D(x, y, seed) {
+  const ix = Math.floor(x), iy = Math.floor(y);
+  const fx = x - ix, fy = y - iy;
+  // Smooth step (Ken Perlin's quintic)
+  const ux = fx * fx * fx * (fx * (fx * 6 - 15) + 10);
+  const uy = fy * fy * fy * (fy * (fy * 6 - 15) + 10);
+  // Hash corners
+  const h = (a, b) => {
+    let v = (((a * 1619 + b * 31337 + seed * 1013) ^ (a * 4973 + b * 7919)) >>> 0);
+    v = ((v >> 16) ^ v) * 0x45d9f3b; v = ((v >> 16) ^ v) * 0x45d9f3b; v = (v >> 16) ^ v;
+    return (v >>> 0) / 0xFFFFFFFF;
+  };
+  const v00 = h(ix,   iy  );
+  const v10 = h(ix+1, iy  );
+  const v01 = h(ix,   iy+1);
+  const v11 = h(ix+1, iy+1);
+  return v00*(1-ux)*(1-uy) + v10*ux*(1-uy) + v01*(1-ux)*uy + v11*ux*uy;
+}
+
+// Fractional Brownian Motion — stacks octaves for rich, organic-looking noise
+function _fbm(x, y, seed, octaves=4, lacunarity=2.0, gain=0.5) {
+  let val = 0, amp = 0.5, freq = 1, max = 0;
+  for (let i = 0; i < octaves; i++) {
+    val += _valueNoise2D(x * freq, y * freq, seed + i * 7919) * amp;
+    max += amp; amp *= gain; freq *= lacunarity;
+  }
+  return val / max;
+}
+
+// Campaign-level noise seed derived from campaign_id string
+function _campaignSeed(campaignId) {
+  let s = 0;
+  const str = String(campaignId || 'default');
+  for (let i = 0; i < str.length; i++) s = (s * 31 + str.charCodeAt(i)) >>> 0;
+  return s;
+}
+
+// ── Fast chunk-local deterministic RNG ─────────────────────────────────────
+function _chunkRng(cx, cy, extra = 0) {
+  let s = (cx * 374761393 + cy * 668265263 + extra * 2246822519) >>> 0;
+  return () => { s ^= s << 13; s ^= s >> 17; s ^= s << 5; return (s >>> 0) / 0xFFFFFFFF; };
+}
+
+// ── Tile weight sampler ─────────────────────────────────────────────────────
+// Given a sorted array of [weight, tile] pairs, pick by cumulative weight
+function _weightedPick(rng, table) {
+  const total = table.reduce((s, [w]) => s + w, 0);
+  let r = rng() * total;
+  for (const [w, t] of table) { r -= w; if (r <= 0) return t; }
+  return table[table.length-1][1];
+}
+
+// ── Main procedural chunk tile generator ───────────────────────────────────
+function _generateProceduralTiles(cx, cy, biomeKey, campaignId) {
+  const ROWS = CHUNK_ROWS, COLS = CHUNK_COLS;
+  const cs = _campaignSeed(campaignId);
+  // Slight rotation offset per campaign — makes same biome feel different between campaigns
+  const offX = ((cs & 0xFFFF) / 0xFFFF) * 1000;
+  const offY = (((cs >> 16) & 0xFFFF) / 0xFFFF) * 1000;
+  const rng = _chunkRng(cx, cy);
+
+  // World-space noise coordinates for this chunk
+  // Small zoom = large features; large zoom = fine detail
+  const wx = (col) => (cx * COLS + col + offX) * 0.09;
+  const wy = (row) => (cy * ROWS + row + offY) * 0.09;
+  const wxFine = (col) => (cx * COLS + col + offX) * 0.28;
+  const wyFine = (row) => (cy * ROWS + row + offY) * 0.28;
+
+  // Sample noise layers once for the whole chunk
+  const elev  = [], moist = [], detail = [], fine = [];
+  for (let r = 0; r < ROWS; r++) {
+    elev[r] = []; moist[r] = []; detail[r] = []; fine[r] = [];
+    for (let c = 0; c < COLS; c++) {
+      elev[r][c]   = _fbm(wx(c),     wy(r),     cs,         4, 2.0, 0.5);
+      moist[r][c]  = _fbm(wx(c)+500, wy(r)+500, cs+99991,   3, 2.1, 0.5);
+      detail[r][c] = _fbm(wxFine(c), wyFine(r), cs+7331,    3, 2.0, 0.45);
+      fine[r][c]   = _valueNoise2D(wxFine(c)*2, wyFine(r)*2, cs+3571);
+    }
+  }
+
+  // Initialise tile grid with grass
+  const tiles = Array.from({length: ROWS}, () => Array(COLS).fill('grass'));
+
+  // ── Per-biome generation ────────────────────────────────────────────────
+  if (biomeKey === 'forest') {
+    _genForest(tiles, elev, moist, detail, fine, rng, ROWS, COLS);
+  } else if (biomeKey === 'wilderness') {
+    _genWilderness(tiles, elev, moist, detail, fine, rng, ROWS, COLS);
+  } else if (biomeKey === 'farmland') {
+    _genFarmland(tiles, elev, moist, detail, fine, rng, ROWS, COLS);
+  } else if (biomeKey === 'village') {
+    _genVillage(tiles, elev, moist, detail, fine, rng, ROWS, COLS);
+  } else if (biomeKey === 'city') {
+    _genCity(tiles, elev, moist, detail, fine, rng, ROWS, COLS);
+  } else if (biomeKey === 'beach') {
+    _genBeach(tiles, elev, moist, detail, fine, rng, ROWS, COLS);
+  } else if (biomeKey === 'ocean') {
+    _genOcean(tiles, elev, moist, detail, fine, rng, ROWS, COLS);
+  } else if (biomeKey === 'cliffside') {
+    _genCliffside(tiles, elev, moist, detail, fine, rng, ROWS, COLS);
+  } else if (biomeKey === 'dungeon') {
+    _genDungeon(tiles, elev, moist, detail, fine, rng, ROWS, COLS);
+  } else if (biomeKey === 'ruins') {
+    _genRuins(tiles, elev, moist, detail, fine, rng, ROWS, COLS);
+  } else if (biomeKey === 'camp') {
+    _genCamp(tiles, elev, moist, detail, fine, rng, ROWS, COLS);
+  } else if (biomeKey === 'road') {
+    _genRoad(tiles, elev, moist, detail, fine, rng, ROWS, COLS);
+  } else {
+    _genWilderness(tiles, elev, moist, detail, fine, rng, ROWS, COLS);
+  }
+
+  return tiles;
+}
+
+// ── FOREST ──────────────────────────────────────────────────────────────────
+function _genForest(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const e = elev[r][c], d = detail[r][c];
+      // Dense tree clusters where elevation+moisture both high
+      // Clearings at low elevation pockets — organic, not uniform
+      const treeDensity = e * 0.65 + moist[r][c] * 0.35;
+      if (treeDensity > 0.48) {
+        tiles[r][c] = 'tree';
+      } else if (treeDensity > 0.38 && d > 0.5) {
+        tiles[r][c] = 'tree'; // sparse fringe trees
+      } else if (e > 0.72) {
+        tiles[r][c] = 'rock';
+      } else if (e < 0.28 && moist[r][c] > 0.6) {
+        tiles[r][c] = 'water'; // forest pool
+      } else {
+        tiles[r][c] = 'grass';
+      }
+    }
+  }
+  // Carve a winding path through the forest
+  _carvePath(tiles, rng, ROWS, COLS, 'horizontal', 0.35);
+}
+
+// ── WILDERNESS ──────────────────────────────────────────────────────────────
+function _genWilderness(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const e = elev[r][c], m = moist[r][c], d = detail[r][c];
+      if (e > 0.75) {
+        tiles[r][c] = d > 0.5 ? 'mountain' : 'rock';
+      } else if (e > 0.62) {
+        tiles[r][c] = 'rock';
+      } else if (e > 0.42 && m > 0.55 && d > 0.45) {
+        tiles[r][c] = 'tree'; // scattered copses
+      } else if (e < 0.25 && m > 0.65) {
+        tiles[r][c] = m > 0.78 ? 'water' : 'grass';
+      } else if (e < 0.2 && m > 0.55) {
+        tiles[r][c] = 'water'; // natural ponds
+      } else {
+        tiles[r][c] = 'grass';
+      }
+    }
+  }
+  // Occasional faint trail
+  if (rng() > 0.4) _carvePath(tiles, rng, ROWS, COLS, rng() > 0.5 ? 'horizontal' : 'vertical', 0.2);
+}
+
+// ── FARMLAND ────────────────────────────────────────────────────────────────
+function _genFarmland(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
+  // Divide into field strips separated by paths
+  const stripDir = rng() > 0.5 ? 'h' : 'v';
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const stripPos = stripDir === 'h' ? r : c;
+      const stripSize = 3 + Math.floor(rng() * 3);
+      const inPath = (stripPos % (stripSize + 1) === 0);
+      if (inPath) {
+        tiles[r][c] = 'path';
+      } else if (elev[r][c] > 0.8) {
+        tiles[r][c] = 'rock';
+      } else if (elev[r][c] > 0.65 && (r < 2 || r > ROWS-3 || c < 2 || c > COLS-3)) {
+        tiles[r][c] = 'tree'; // edge windbreak trees
+      } else {
+        // Alternate farmland types per strip for visual variety
+        const stripIdx = Math.floor(stripPos / (stripSize + 1));
+        tiles[r][c] = (stripIdx % 3 === 2 && detail[r][c] > 0.4) ? 'grass' : 'farmland';
+      }
+    }
+  }
+  // Add a couple of path cross-streets
+  const crossAt = Math.floor(ROWS * 0.45 + rng() * ROWS * 0.1);
+  for (let c = 0; c < COLS; c++) tiles[crossAt][c] = 'path';
+}
+
+// ── VILLAGE ─────────────────────────────────────────────────────────────────
+function _genVillage(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
+  // Base: mostly grass
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++)
+      tiles[r][c] = elev[r][c] > 0.82 ? 'rock' : 'grass';
+
+  // Central plaza — stone square in center
+  const pr = Math.floor(ROWS * 0.35), pc = Math.floor(COLS * 0.35);
+  const pw = Math.floor(COLS * 0.3),  ph = Math.floor(ROWS * 0.3);
+  for (let r = pr; r < pr + ph; r++)
+    for (let c = pc; c < pc + pw; c++)
+      tiles[r][c] = (r === pr || r === pr+ph-1 || c === pc || c === pc+pw-1) ? 'path' : 'stone';
+
+  // Roads radiating out from plaza
+  const midR = Math.floor(ROWS/2), midC = Math.floor(COLS/2);
+  _carvePathBetween(tiles, midR, 0, midR, COLS-1, 'path');       // E-W road
+  _carvePathBetween(tiles, 0, midC, ROWS-1, midC, 'path');       // N-S road
+  // Diagonal connector paths for a lived-in feel
+  _carvePathBetween(tiles, pr, pc, 0, 0, 'path');
+  _carvePathBetween(tiles, pr, pc+pw, 0, COLS-1, 'path');
+
+  // Building footprints — replaced by actual sprites in loadChunk decoration layer
+  const bPositions = _scatterBuildings(rng, ROWS, COLS, 4, 6);
+  for (const [br, bc] of bPositions) {
+    if (tiles[br]?.[bc]) tiles[br][bc] = 'building';
+    if (tiles[br]?.[bc+1]) tiles[br][bc+1] = 'building';
+    if (tiles[br+1]?.[bc]) tiles[br+1][bc] = 'building_door';
+  }
+}
+
+// ── CITY ─────────────────────────────────────────────────────────────────────
+function _genCity(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
+  // Mostly stone and path — dense urban
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++) {
+      const d = detail[r][c];
+      tiles[r][c] = d > 0.55 ? 'stone' : (d > 0.35 ? 'path' : 'grass');
+    }
+
+  // Grid of streets
+  const gridR = 4, gridC = 5;
+  for (let r = 0; r < ROWS; r += gridR) for (let c = 0; c < COLS; c++) tiles[r][c] = 'path';
+  for (let c = 0; c < COLS; c += gridC) for (let r = 0; r < ROWS; r++) tiles[r][c] = 'path';
+
+  // Dense building footprints in the blocks between streets
+  const bPositions = _scatterBuildings(rng, ROWS, COLS, 6, 9);
+  for (const [br, bc] of bPositions) {
+    if (tiles[br]?.[bc]) tiles[br][bc] = 'building';
+    if (tiles[br]?.[bc+1]) tiles[br][bc+1] = 'building';
+    if (tiles[br+1]?.[bc]) tiles[br+1][bc] = 'building_door';
+  }
+}
+
+// ── BEACH ────────────────────────────────────────────────────────────────────
+function _genBeach(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
+  // Water is south (positive y), land is north
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const waterLine = ROWS * 0.55 + Math.sin(c * 0.7 + moist[r][c] * 3) * 2;
+      const e = elev[r][c];
+      if (r > waterLine + 2 + e * 1.5) {
+        tiles[r][c] = moist[r][c] > 0.7 ? 'water' : (detail[r][c] > 0.5 ? 'water' : 'sand');
+      } else if (r > waterLine - 1) {
+        tiles[r][c] = detail[r][c] > 0.6 ? 'rock' : 'beach';
+      } else if (r > waterLine - 3) {
+        tiles[r][c] = 'beach';
+      } else if (r > waterLine - 5) {
+        tiles[r][c] = e > 0.6 ? 'rock' : 'sand';
+      } else {
+        tiles[r][c] = e > 0.72 ? 'rock' : 'grass';
+      }
+    }
+  }
+  // Scatter rocks in water
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++)
+      if (tiles[r][c] === 'water' && fine[r][c] > 0.82) tiles[r][c] = 'rock';
+}
+
+// ── OCEAN ────────────────────────────────────────────────────────────────────
+function _genOcean(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const e = elev[r][c];
+      if (e > 0.78) {
+        tiles[r][c] = detail[r][c] > 0.5 ? 'rock' : 'beach'; // island or sandbar
+      } else if (e > 0.68) {
+        tiles[r][c] = 'beach';
+      } else {
+        // Open ocean — depth varies by distance from land
+        tiles[r][c] = 'water';
+      }
+    }
+  }
+  // Rocky outcrops
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++)
+      if (tiles[r][c] === 'water' && fine[r][c] > 0.9) tiles[r][c] = 'rock';
+}
+
+// ── CLIFFSIDE ────────────────────────────────────────────────────────────────
+function _genCliffside(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const e = elev[r][c], d = detail[r][c];
+      if (e > 0.58) {
+        tiles[r][c] = d > 0.6 ? 'mountain' : 'cliff';
+      } else if (e > 0.42) {
+        tiles[r][c] = d > 0.5 ? 'cliff' : 'rock';
+      } else if (e > 0.3) {
+        tiles[r][c] = 'rock';
+      } else {
+        tiles[r][c] = d > 0.7 ? 'grass' : 'rock'; // narrow ledges
+      }
+    }
+  }
+  // Single dangerous winding ledge path
+  _carvePath(tiles, rng, ROWS, COLS, 'vertical', 0.25);
+}
+
+// ── DUNGEON ──────────────────────────────────────────────────────────────────
+function _genDungeon(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
+  // Outer walls of cliff/mountain, stone courtyard approach
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const isEdge = (r < 2 || r >= ROWS-2 || c < 2 || c >= COLS-2);
+      const e = elev[r][c];
+      if (isEdge || e > 0.62) {
+        tiles[r][c] = detail[r][c] > 0.5 ? 'cliff' : 'mountain';
+      } else if (e > 0.42) {
+        tiles[r][c] = 'rock';
+      } else {
+        tiles[r][c] = detail[r][c] > 0.6 ? 'stone' : 'grass';
+      }
+    }
+  }
+  // Approach path from south
+  const midC = Math.floor(COLS / 2);
+  for (let r = Math.floor(ROWS * 0.4); r < ROWS; r++) {
+    tiles[r][midC] = 'path';
+    if (tiles[r]?.[midC-1]) tiles[r][midC-1] = 'stone';
+    if (tiles[r]?.[midC+1]) tiles[r][midC+1] = 'stone';
+  }
+  // Entrance gate area
+  const gateR = Math.floor(ROWS * 0.35);
+  for (let c = midC-2; c <= midC+2; c++) if (tiles[gateR]?.[c]) tiles[gateR][c] = 'stone';
+  // Treasure chest somewhere inside
+  tiles[Math.floor(ROWS*0.2)][midC] = 'chest';
+}
+
+// ── RUINS ────────────────────────────────────────────────────────────────────
+function _genRuins(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const e = elev[r][c], d = detail[r][c];
+      if (e > 0.65) {
+        tiles[r][c] = d > 0.5 ? 'cliff' : 'rock';
+      } else if (e > 0.5) {
+        tiles[r][c] = 'stone';
+      } else if (e > 0.4 && d > 0.6) {
+        tiles[r][c] = 'stone'; // cracked ruins floor
+      } else {
+        tiles[r][c] = 'grass'; // overgrown
+      }
+    }
+  }
+  // Ruined wall remnants — scattered rectangular outlines
+  const wallCount = 2 + Math.floor(rng() * 2);
+  for (let w = 0; w < wallCount; w++) {
+    const wr = 1 + Math.floor(rng() * (ROWS-5));
+    const wc = 1 + Math.floor(rng() * (COLS-5));
+    const wh = 2 + Math.floor(rng() * 3);
+    const ww = 3 + Math.floor(rng() * 4);
+    for (let dr = 0; dr < wh; dr++)
+      for (let dc = 0; dc < ww; dc++)
+        if (dr===0||dr===wh-1||dc===0||dc===ww-1)
+          if (tiles[wr+dr]?.[wc+dc] && rng() > 0.3)
+            tiles[wr+dr][wc+dc] = 'cliff'; // broken wall
+  }
+  // Overgrown path through ruins
+  _carvePath(tiles, rng, ROWS, COLS, 'horizontal', 0.15);
+  // A hidden chest
+  const cr = 2 + Math.floor(rng() * (ROWS-4));
+  const cc = 2 + Math.floor(rng() * (COLS-4));
+  tiles[cr][cc] = 'chest';
+}
+
+// ── CAMP ─────────────────────────────────────────────────────────────────────
+function _genCamp(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
+  // Mostly open grass, some trees at edges
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const e = elev[r][c];
+      const edgeTree = (r < 2 || r > ROWS-3 || c < 2 || c > COLS-3) && e > 0.5;
+      if (edgeTree) tiles[r][c] = 'tree';
+      else if (e > 0.75) tiles[r][c] = 'rock';
+      else tiles[r][c] = 'grass';
+    }
+  }
+  // Worn clearing in center
+  const cr = Math.floor(ROWS/2), cc = Math.floor(COLS/2);
+  for (let dr = -2; dr <= 2; dr++)
+    for (let dc = -3; dc <= 3; dc++)
+      if (tiles[cr+dr]?.[cc+dc]) tiles[cr+dr][cc+dc] = 'path';
+  // Approach paths
+  for (let r = 0; r < ROWS; r++) if (tiles[r]?.[cc]) tiles[r][cc] = 'path';
+  // Supply chest
+  tiles[cr-1][cc+3] = 'chest';
+}
+
+// ── ROAD ─────────────────────────────────────────────────────────────────────
+function _genRoad(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
+  // Terrain flanking the road
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const e = elev[r][c];
+      if (e > 0.72) tiles[r][c] = 'rock';
+      else if (e > 0.55 && detail[r][c] > 0.55) tiles[r][c] = 'tree';
+      else tiles[r][c] = 'grass';
+    }
+  }
+  // Main road through center — gently curving via sine
+  const roadR = Math.floor(ROWS / 2);
+  for (let c = 0; c < COLS; c++) {
+    const curve = Math.round(Math.sin(c * 0.25) * 1.5);
+    const r = roadR + curve;
+    for (let w = -1; w <= 1; w++) {
+      if (tiles[r+w]?.[c] !== undefined) tiles[r+w][c] = 'path';
+    }
+  }
+  // Road-side trees for atmosphere — line both sides
+  for (let c = 0; c < COLS; c++) {
+    const curve = Math.round(Math.sin(c * 0.25) * 1.5);
+    const r = roadR + curve;
+    if (detail[r][c] > 0.4 && c % 3 === 0) {
+      if (tiles[r-3]?.[c]) tiles[r-3][c] = 'tree';
+      if (tiles[r+3]?.[c]) tiles[r+3][c] = 'tree';
+    }
+  }
+}
+
+// ── Helper: carve a winding path across the chunk ──────────────────────────
+function _carvePath(tiles, rng, ROWS, COLS, dir, width) {
+  const pathWidth = 1 + Math.floor(width * 3); // 1-2 tiles wide
+  if (dir === 'horizontal') {
+    let r = Math.floor(ROWS * 0.3 + rng() * ROWS * 0.4);
+    for (let c = 0; c < COLS; c++) {
+      r += Math.round((rng() - 0.5) * 1.2);
+      r = Math.max(1, Math.min(ROWS-2, r));
+      for (let w = 0; w < pathWidth; w++)
+        if (tiles[r+w]?.[c] !== undefined) tiles[r+w][c] = 'path';
+    }
+  } else {
+    let c = Math.floor(COLS * 0.3 + rng() * COLS * 0.4);
+    for (let r = 0; r < ROWS; r++) {
+      c += Math.round((rng() - 0.5) * 1.2);
+      c = Math.max(1, Math.min(COLS-2, c));
+      for (let w = 0; w < pathWidth; w++)
+        if (tiles[r]?.[c+w] !== undefined) tiles[r][c+w] = 'path';
+    }
+  }
+}
+
+// ── Helper: carve a straight path between two points ──────────────────────
+function _carvePathBetween(tiles, r0, c0, r1, c1, tileType) {
+  const steps = Math.max(Math.abs(r1-r0), Math.abs(c1-c0));
+  if (steps === 0) return;
+  for (let i = 0; i <= steps; i++) {
+    const r = Math.round(r0 + (r1-r0) * i / steps);
+    const c = Math.round(c0 + (c1-c0) * i / steps);
+    if (tiles[r]?.[c] !== undefined) tiles[r][c] = tileType;
+  }
+}
+
+// ── Helper: scatter building positions with minimum spacing ───────────────
+function _scatterBuildings(rng, ROWS, COLS, minCount, maxCount) {
+  const count = minCount + Math.floor(rng() * (maxCount - minCount + 1));
+  const positions = [];
+  const MIN_DIST = 4;
+  let attempts = 0;
+  while (positions.length < count && attempts < 200) {
+    attempts++;
+    const br = 1 + Math.floor(rng() * (ROWS - 3));
+    const bc = 1 + Math.floor(rng() * (COLS - 3));
+    const tooClose = positions.some(([pr, pc]) =>
+      Math.abs(pr-br) < MIN_DIST && Math.abs(pc-bc) < MIN_DIST
+    );
+    if (!tooClose) positions.push([br, bc]);
+  }
+  return positions;
+}
+
+// ── NPC generation — still AI-powered ──────────────────────────────────────
+async function _generateNPCsForChunk(cx, cy, biomeKey, campaignId) {
+  const lang = worldLanguage || 'es';
+  const biome = BIOME_PALETTES[biomeKey] || BIOME_PALETTES.wilderness;
+  const npcCount = biome.npc_count ?? 1;
+  if (npcCount === 0) return [];
+  if (!CLAUDE_KEY && !GEMINI_KEY) return [];
+
+  const spriteOptions = 'player/skeleton/slime/chicken/cow/pig/sheep';
+  const prompt = `You are generating ${npcCount} NPC(s) for a ${biome.label} chunk in a Spanish-language narrative detective RPG.
+Chunk position: (${cx},${cy}). Biome atmosphere: ${biome.atmosphere}
+Return ONLY raw JSON array (no markdown):
+[{"name":"...","col":${Math.floor(CHUNK_COLS/2)},"row":${Math.floor(CHUNK_ROWS/2)},"sprite":"player","dialogue":["one greeting line in ${lang}","one follow-up line in ${lang}"],"ai_context":"personality and what this NPC knows"}]
+Sprite options: ${spriteOptions}. Names must fit the biome. Dialogue in ${lang} only.`;
+
+  try {
+    if (GEMINI_KEY) {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_KEY}`,
+        { method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ contents:[{parts:[{text:prompt}]}], generationConfig:{temperature:0.85, maxOutputTokens:800} }) }
+      );
+      if (!res.ok) throw new Error('Gemini NPC error');
+      const d = await res.json();
+      const raw = (d.candidates?.[0]?.content?.parts?.[0]?.text||'').trim().replace(/^```json?\n?/,'').replace(/\n?```$/,'');
+      return JSON.parse(raw);
+    } else {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method:'POST',
+        headers:{'Content-Type':'application/json','x-api-key':CLAUDE_KEY,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+        body: JSON.stringify({ model:'claude-haiku-4-5-20251001', max_tokens:800, messages:[{role:'user',content:prompt}] })
+      });
+      if (!res.ok) throw new Error('Haiku NPC error');
+      const d = await res.json();
+      const raw = d.content[0].text.trim().replace(/^```json?\n?/,'').replace(/\n?```$/,'');
+      return JSON.parse(raw);
+    }
+  } catch(e) {
+    console.warn(`NPC gen failed for (${cx},${cy}):`, e.message);
+    return [];
+  }
+}
+
 async function generateChunkAPI(cx, cy, dirLabel) {
-  if (!CLAUDE_KEY) return null;
   chunkGenCount++;
 
   const lang = worldLanguage || 'es';
@@ -3597,196 +4132,66 @@ async function generateChunkAPI(cx, cy, dirLabel) {
   const regionMap = activeCampaign?.world_state?.region_map || null;
   const biomeKey = getChunkBiome(cx, cy, regionMap);
   const biome = BIOME_PALETTES[biomeKey] || BIOME_PALETTES.wilderness;
+  const campaignId = activeCampaignId || 'default';
 
-  // ── 2. Collect used_decorations for variety nudge ─────────────────────────
-  const usedDecorations = activeCampaign?.world_state?.used_decorations || [];
-  const unusedBuildings = biome.buildings.filter(b => !usedDecorations.includes(b));
-  const buildingHint = unusedBuildings.length > 0
-    ? `Prioritize these not-yet-seen structures this chunk: ${unusedBuildings.slice(0,3).join(', ')}.`
-    : `Use any buildings from: ${biome.buildings.join(', ')}.`;
+  // ── 2. Procedural tile generation — instant, no API ───────────────────────
+  const tiles = _generateProceduralTiles(cx, cy, biomeKey, campaignId);
 
-  // ── 3. Hard seam injection — collect exact neighbor edges ────────────────
-  // These will be force-injected into the tile grid AFTER Claude generates it.
-  const seamData = {};
-  const northChunk = chunks.get(`${cx},${cy - 1}`);
-  const southChunk = chunks.get(`${cx},${cy + 1}`);
-  const westChunk  = chunks.get(`${cx - 1},${cy}`);
-  const eastChunk  = chunks.get(`${cx + 1},${cy}`);
+  // ── 3. Generate NPCs via AI (lightweight call — names/dialogue only) ───────
+  const npcs = await _generateNPCsForChunk(cx, cy, biomeKey, campaignId);
 
-  if (northChunk?.loaded && northChunk.worldDef) {
-    const t = northChunk.worldDef.world.tiles;
-    seamData.north = [...(t[t.length - 1] || [])]; // last row of north neighbor
+  // ── 4. Normalise NPC format to match what loadChunk expects ───────────────
+  const normalisedNpcs = npcs.map((npc, i) => {
+    const rawGreeting = npc.greeting || (Array.isArray(npc.dialogue) && npc.dialogue[0]) || '...';
+    return {
+      ...npc,
+      id: `${cx}_${cy}_npc${i}`,
+      greeting: rawGreeting,
+      dialogue: npc.dialogue || [rawGreeting],
+      personality: npc.personality || npc.ai_context || '',
+      ai_context: npc.ai_context || npc.personality || '',
+    };
+  });
+
+  // ── 5. Build description from biome atmosphere ────────────────────────────
+  const descriptions = {
+    village:   'A bustling village with cobbled paths and warm hearths.',
+    city:      'Dense city streets hum with activity and intrigue.',
+    farmland:  'Rolling fields stretch under an open sky.',
+    forest:    'Ancient trees loom over a shadowy forest floor.',
+    cliffside: 'Sheer cliffs and treacherous ledges pierce the sky.',
+    beach:     'Salt air and crashing waves define this coastal stretch.',
+    ocean:     'Open ocean stretches endlessly in every direction.',
+    ruins:     'Crumbling stones tell of a forgotten civilization.',
+    dungeon:   'A foreboding darkness radiates from the dungeon entrance.',
+    camp:      'The smell of campfire smoke hangs in the still air.',
+    road:      'A well-traveled road cuts through open countryside.',
+    wilderness:'Untamed wilderness, beautiful and unpredictable.',
+  };
+
+  // ── 6. Tag used_decorations ───────────────────────────────────────────────
+  if (activeCampaign?.world_state) {
+    const prevUsed = activeCampaign.world_state.used_decorations || [];
+    const newUsed = [...new Set([...prevUsed, ...biome.buildings])];
+    activeCampaign.world_state.used_decorations = newUsed;
+    lqDB('PATCH', `lq_campaigns?id=eq.${activeCampaignId}`, {
+      world_state: { ...activeCampaign.world_state, used_decorations: newUsed }
+    }).catch(() => {});
   }
-  if (southChunk?.loaded && southChunk.worldDef) {
-    const t = southChunk.worldDef.world.tiles;
-    seamData.south = [...(t[0] || [])]; // first row of south neighbor
-  }
-  if (westChunk?.loaded && westChunk.worldDef) {
-    const t = westChunk.worldDef.world.tiles;
-    seamData.west = t.map(r => r[r.length - 1] || 'grass'); // last col of west neighbor
-  }
-  if (eastChunk?.loaded && eastChunk.worldDef) {
-    const t = eastChunk.worldDef.world.tiles;
-    seamData.east = t.map(r => r[0] || 'grass'); // first col of east neighbor
-  }
 
-  // Build edge instructions for the prompt (informational — hard stitch done after)
-  const edgeLines = [];
-  if (seamData.north) edgeLines.push(`NORTH edge must match: [${seamData.north.join(',')}]`);
-  if (seamData.south) edgeLines.push(`SOUTH edge must match: [${seamData.south.join(',')}]`);
-  if (seamData.west)  edgeLines.push(`WEST edge must match:  [${seamData.west.join(',')}]`);
-  if (seamData.east)  edgeLines.push(`EAST edge must match:  [${seamData.east.join(',')}]`);
-  const edgeInstructions = edgeLines.length > 0
-    ? `\n\nEDGE SEAMS (match these exactly on your border rows/cols):\n${edgeLines.join('\n')}\nWhere neighbor has water → your border tile must be water or beach. Where path → continue path into chunk.`
-    : '';
-
-  const npcCount = biome.npc_count ?? 1;
-  const npcInstruction = npcCount === 0
-    ? `"npcs": []`
-    : `"npcs": [ /* ${npcCount} NPC(s) — each with name, position [col,row], sprite (player/skeleton/slime/chicken/cow/pig/sheep), dialogue array (1-2 lines in ${lang}), ai_context string describing their personality and what they know */ ]`;
-
-  const chunkPrompt = `You are generating a ${CHUNK_COLS}x${CHUNK_ROWS} tile chunk for a narrative detective RPG.
-Biome: "${biome.label}" | Direction: ${dirLabel} | Language: ${lang} | Chunk: (${cx},${cy})
-
-BIOME INSTRUCTIONS:
-${biome.tiles}
-Atmosphere: ${biome.atmosphere}
-Ground cover: ${biome.ground_cover}
-${buildingHint}${edgeInstructions}
-
-Return ONLY raw JSON (no markdown, no fences):
-{
-  "world": { "theme":"${biomeKey}", "language":"${lang}", "description":"one evocative sentence", "size":[${CHUNK_COLS},${CHUNK_ROWS}], "tiles": [[row0col0,...],[row1col0,...],...] },
-  ${npcInstruction},
-  "player_start": [${Math.floor(CHUNK_COLS/2)},${Math.floor(CHUNK_ROWS/2)}]
-}
-
-Valid tile types: grass, path, water, beach, sand, tree, building, building_door, farmland, stone, cliff, chest, rock, mountain
-Tiles array: exactly ${CHUNK_ROWS} rows × ${CHUNK_COLS} columns. Make it visually interesting — avoid monotonous repetition.`;
-
-  // Use Gemini Flash-Lite if key available (faster + ~10x cheaper), else fall back to Claude Haiku
-  const useGemini = !!GEMINI_KEY;
-
-  for (let attempt = 0; attempt < 4; attempt++) {
-    try {
-      let raw;
-
-      if (useGemini) {
-        // Gemini 2.5 Flash-Lite via generateContent REST API
-        const geminiRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_KEY}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: chunkPrompt }] }],
-              generationConfig: { temperature: 0.7, maxOutputTokens: 4000 },
-            }),
-          }
-        );
-        if (geminiRes.status === 429) {
-          const wait = 3000 * Math.pow(2, attempt);
-          console.warn(`Chunk (${cx},${cy}) Gemini rate limited — retrying in ${wait/1000}s`);
-          await new Promise(r => setTimeout(r, wait));
-          continue;
-        }
-        if (!geminiRes.ok) { const e = await geminiRes.json(); throw new Error(e.error?.message || 'Gemini API error'); }
-        const gData = await geminiRes.json();
-        raw = (gData.candidates?.[0]?.content?.parts?.[0]?.text || '').trim()
-          .replace(/^```json?\n?/, '').replace(/\n?```$/, '');
-      } else {
-        // Fallback: Claude Haiku
-        const res = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': CLAUDE_KEY,
-            'anthropic-version': '2023-06-01',
-            'anthropic-dangerous-direct-browser-access': 'true',
-          },
-          body: JSON.stringify({
-            model: 'claude-haiku-4-5-20251001',
-            max_tokens: 4000,
-            messages: [{ role: 'user', content: chunkPrompt }],
-          }),
-        });
-        if (res.status === 429) {
-          const wait = 5000 * Math.pow(2, attempt);
-          console.warn(`Chunk (${cx},${cy}) Haiku rate limited — retrying in ${wait/1000}s`);
-          await new Promise(r => setTimeout(r, wait));
-          continue;
-        }
-        if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || 'API error'); }
-        const data = await res.json();
-        raw = data.content[0].text.trim().replace(/^```json?\n?/, '').replace(/\n?```$/, '');
-      }
-
-      let worldDef;
-      try { worldDef = JSON.parse(raw); }
-      catch { console.error('Chunk JSON parse failed'); return null; }
-
-      if (!worldDef.world?.tiles) { console.error('Chunk missing tiles'); return null; }
-
-      // ── 4. Hard seam stitching — force border rows/cols to match neighbors ──
-      const tiles = worldDef.world.tiles;
-      const rows = tiles.length;
-      const cols = tiles[0]?.length || 0;
-
-      // Helper: map a neighbor tile to a compatible seam tile
-      const seamCompat = (t) => {
-        if (t === 'water' || t === 'water_deep') return t;
-        if (t === 'beach' || t === 'sand') return t;
-        if (t === 'path' || t === 'stone' || t === 'building_door') return t;
-        if (t === 'tree') return 'tree';
-        if (t === 'cliff' || t === 'mountain') return t;
-        if (t === 'farmland') return 'farmland';
-        return t; // keep as-is for grass, rock, etc.
-      };
-
-      if (seamData.north && rows > 0) {
-        for (let c = 0; c < Math.min(cols, seamData.north.length); c++) {
-          tiles[0][c] = seamCompat(seamData.north[c]);
-        }
-      }
-      if (seamData.south && rows > 0) {
-        const lastRow = rows - 1;
-        for (let c = 0; c < Math.min(cols, seamData.south.length); c++) {
-          tiles[lastRow][c] = seamCompat(seamData.south[c]);
-        }
-      }
-      if (seamData.west && rows > 0) {
-        for (let r = 0; r < Math.min(rows, seamData.west.length); r++) {
-          if (tiles[r]) tiles[r][0] = seamCompat(seamData.west[r]);
-        }
-      }
-      if (seamData.east && rows > 0) {
-        for (let r = 0; r < Math.min(rows, seamData.east.length); r++) {
-          if (tiles[r] && cols > 0) tiles[r][cols - 1] = seamCompat(seamData.east[r]);
-        }
-      }
-
-      // Tag with biome for decoration layer use
-      worldDef.world.biome = biomeKey;
-
-      // ── 5. Update used_decorations in campaign world_state ────────────────
-      if (activeCampaign?.world_state) {
-        const prevUsed = activeCampaign.world_state.used_decorations || [];
-        const newUsed = [...new Set([...prevUsed, ...biome.buildings])];
-        activeCampaign.world_state.used_decorations = newUsed;
-        // Fire-and-forget DB update (don't await — not critical path)
-        lqDB('PATCH', `lq_campaigns?id=eq.${activeCampaignId}`, {
-          world_state: { ...activeCampaign.world_state, used_decorations: newUsed }
-        }).catch(() => {});
-      }
-
-      return worldDef;
-    } catch (err) {
-      console.error('Chunk API error:', err);
-      return null;
-    }
-  }
-  console.warn(`Chunk (${cx},${cy}) failed after all retries`);
-  return null;
+  // ── 7. Return worldDef in the same format loadChunk expects ───────────────
+  return {
+    world: {
+      theme: biomeKey,
+      biome: biomeKey,
+      language: lang,
+      description: descriptions[biomeKey] || biome.atmosphere,
+      size: [CHUNK_COLS, CHUNK_ROWS],
+      tiles,
+    },
+    npcs: normalisedNpcs,
+    player_start: [Math.floor(CHUNK_COLS / 2), Math.floor(CHUNK_ROWS / 2)],
+  };
 }
 
 // ═══════════════════════════════════════════════════════════
