@@ -2477,12 +2477,12 @@ const LIGHT_AMBIENT_DAY     = 0.0;
 // Phase A: darkVal → tint (outer warm/cool glow)
 // Phase B: tint → white  (inner hotspot fully illuminated)
 // These values are the peak colour temperature before brightening to white.
-const LCOLOR_LANTERN  = 0xFFCC60;  // warm amber lantern (player)
-const LCOLOR_TORCH    = 0xFFAA40;  // orange torch
-const LCOLOR_CAMPFIRE = 0xFF8830;  // deep orange/red campfire
-const LCOLOR_WINDOW   = 0xFFCC70;  // warm window glow
-const LCOLOR_LAMP     = 0xAAC8FF;  // cool blue lamp post
-const LCOLOR_MOON     = 0x88AAFF;  // cool blue moonlight
+const LCOLOR_LANTERN  = 0xFFCC50;  // warm amber lantern (player)
+const LCOLOR_TORCH    = 0xFFAA30;  // orange torch
+const LCOLOR_CAMPFIRE = 0xFF7820;  // deep orange/red campfire
+const LCOLOR_WINDOW   = 0xFFBB40;  // warm golden window glow
+const LCOLOR_LAMP     = 0x88BBFF;  // cool blue lamp post
+const LCOLOR_MOON     = 0x6699FF;  // cool blue moonlight
 
 // World light sources — populated by chunk loader, cleared on unload
 const _worldLights = [];
@@ -2652,7 +2652,7 @@ function _drawVisibilityPoly(sx, sy, pts, color, nightAlpha) {
   const cg = (color >> 8)  & 0xFF;
   const cb =  color        & 0xFF;
 
-  const PASSES = 24;
+  const PASSES = 36;
   for (let p = 0; p <= PASSES; p++) {
     const t    = p / PASSES;              // 0=outermost, 1=centre
     const s    = t * t * (3 - 2 * t);    // smoothstep
@@ -2768,7 +2768,7 @@ function _updateLighting(renderer, playerScreenX, playerScreenY, ambientAlpha, i
     }
     const tinted = _surfaceTintColor(lt.color, lt.wx, lt.wy);
     // Darkness mask layer
-    _drawLightDisk(sx, sy, r, tinted, nightAlpha, 18);
+    _drawLightDisk(sx, sy, r, tinted, nightAlpha, 32);
     // Colour glow layer (ADD)
     if (_glowGfx) _drawGlowDisk(_glowGfx, sx, sy, r, tinted, nightAlpha, 14);
   }
@@ -2785,7 +2785,7 @@ function _updateLighting(renderer, playerScreenX, playerScreenY, ambientAlpha, i
     if (visPoly.length >= 3) {
       _drawVisibilityPoly(playerScreenX, playerScreenY, visPoly, amber, nightAlpha);
     } else {
-      _drawLightDisk(playerScreenX, playerScreenY, r, amber, nightAlpha, 24);
+      _drawLightDisk(playerScreenX, playerScreenY, r, amber, nightAlpha, 40);
     }
     // Player glow layer
     if (_glowGfx) _drawGlowDisk(_glowGfx, playerScreenX, playerScreenY, r, amber, nightAlpha, 18);
