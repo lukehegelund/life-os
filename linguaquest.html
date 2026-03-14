@@ -663,124 +663,242 @@ const TILE_DEFS = {
 const BIOME_PALETTES = {
   village: {
     label: 'Village',
-    tiles: 'Use: grass, path, stone, building, building_door, farmland, rock, chest. Cobblestone paths wind between buildings. Mix of house, inn, church, blacksmith. Include a well or fountain in the square. Market stalls near paths.',
+    tiles: 'Use: grass, path, stone, building, building_door, rock, chest. Cobblestone paths wind between clustered buildings. Include a well or fountain in the central square. Market stalls near paths. 3-5 buildings minimum.',
     buildings: ['inn','church','blacksmith','house','house_2','house_3','market_stalls','well','fountain'],
     animals: ['chicken','cow','pig'],
     decorations: ['bench','barrels','scarecrow'],
-    ground_cover: 'Flowers and grass tufts between buildings. Stone paths.',
-    atmosphere: 'Bustling village center. Multiple buildings clustered together.',
+    ground_cover: 'Flowers and grass tufts between buildings. Stone-paved paths.',
+    atmosphere: 'Bustling village center. Multiple buildings clustered together. A lived-in place with history.',
+    npc_count: 2,
+  },
+  city: {
+    label: 'City District',
+    tiles: 'Use: stone (cobbled roads dominate), building, building_door, path, chest, rock. Dense urban layout. Many buildings tightly packed. Broad stone roads. A church or inn as landmark. 5-7 buildings.',
+    buildings: ['inn','church','blacksmith','house','house_2','house_3','house_stone','house_limestone','market_stalls','well','fountain'],
+    animals: ['chicken','pig'],
+    decorations: ['bench','barrels'],
+    ground_cover: 'Mostly stone paving. Occasional flower box or shrub.',
+    atmosphere: 'Dense city district. Busy streets, stone architecture. Urban and slightly imposing.',
+    npc_count: 3,
   },
   farmland: {
     label: 'Farmland',
-    tiles: 'Use: farmland, grass, path, tree (sparse), building, building_door. Large open fields of farmland tiles. One or two farm buildings (barn, coop, shed, greenhouse, silo). Scarecrows and hay bales scattered.',
+    tiles: 'Use: farmland (40-50% of tiles), grass, path, tree (sparse at edges only). One or two farm buildings. Large open fields broken by footpaths. No more than 2 buildings.',
     buildings: ['barn','coop','shed','greenhouse','silo','hay_bales','scarecrow'],
     animals: ['chicken','cow','pig','sheep'],
     decorations: ['hay_bales','scarecrow'],
-    ground_cover: 'Mostly farmland tiles. Scattered grass patches. Apple or cherry trees at edges.',
-    atmosphere: 'Open agricultural land. Rolling fields. Working farm feel.',
+    ground_cover: 'Mostly farmland tiles with dirt paths. Apple and cherry trees at the field edges.',
+    atmosphere: 'Open working farmland. Rolling fields, fresh air, honest labor.',
+    npc_count: 1,
   },
   forest: {
     label: 'Forest',
-    tiles: 'Use: tree (50-60% of tiles), grass, rock, mountain (sparse), path (1-2 winding trails). Dense forest with occasional clearings. Rocks and stumps scattered. One chest hidden in a clearing.',
+    tiles: 'Use: tree (55-65% of tiles), grass (clearings), rock, mountain (sparse), path (1-2 narrow winding trails). One hidden chest in a clearing. Almost no buildings.',
     buildings: ['tent_small','chest'],
     animals: ['frog','goose'],
     decorations: [],
-    ground_cover: 'Stumps, logs, mushrooms, moss rocks everywhere. Very few open grass tiles.',
-    atmosphere: 'Dense ancient forest. Dappled light. Mysterious and enclosed.',
+    ground_cover: 'Stumps, logs, mushrooms, moss-covered rocks everywhere.',
+    atmosphere: 'Dense ancient forest. Mysterious, shadowy, enclosed. Things lurk here.',
+    npc_count: 1,
   },
   cliffside: {
     label: 'Cliffside',
-    tiles: 'Use: cliff, mountain, rock, grass (narrow ledges), path (dangerous trail). Dramatic elevation. Mostly cliff and mountain tiles with small walkable grass ledges. Very few flat areas.',
+    tiles: 'Use: cliff (40%+), mountain, rock, grass (narrow ledges only), path (dangerous winding trail). Dramatic. Mostly impassable terrain with thin walkable strips. Very exposed.',
     buildings: ['tent_small'],
     animals: [],
     decorations: [],
-    ground_cover: 'Cave rocks, boulders, sparse hardy grass.',
-    atmosphere: 'Dramatic high elevation. Dangerous narrow paths. Stunning but treacherous.',
+    ground_cover: 'Boulders, sheer drops, sparse wind-beaten grass.',
+    atmosphere: 'Dramatic high altitude. Dangerous footing. Breathtaking views, real peril.',
+    npc_count: 0,
   },
   beach: {
     label: 'Beach',
-    tiles: 'Use: beach/sand (60%+), water, water_deep, grass (inland edge only), rock. Wide sandy beach area meeting the water. Boat near water. Rocks in the water.',
+    tiles: 'Use: beach/sand (55%+), water, water_deep, grass (inland edge only), rock. Wide open beach. Boat near the waterline. Rocks jutting from the water.',
     buildings: ['boat','fisherman_house'],
     animals: ['duck','goose'],
     decorations: ['boat'],
-    ground_cover: 'Sandy beach with pebbles and small rocks near waterline. Cattails and water plants at edges.',
-    atmosphere: 'Open coastal beach. Salt air. Waves and calm.',
+    ground_cover: 'Sandy beach with pebble scatter near waterline.',
+    atmosphere: 'Open coastal beach. Salt air, crashing waves, horizon stretching away.',
+    npc_count: 1,
+  },
+  ocean: {
+    label: 'Open Ocean',
+    tiles: 'Use: water (70%+), water_deep (center), beach/sand (thin strip on one edge only), rock (scattered in water). Almost entirely water. A single rocky island or sandbar possible. No buildings.',
+    buildings: ['boat'],
+    animals: ['duck','goose'],
+    decorations: ['boat'],
+    ground_cover: 'Open water. Occasional rocky outcrop or floating debris.',
+    atmosphere: 'Vast open ocean. Lonely, beautiful, and terrifying. The horizon in every direction.',
+    npc_count: 0,
   },
   ruins: {
-    label: 'Ruins',
-    tiles: 'Use: stone, rock, mountain, grass (overgrown), cliff, building (crumbling), farmland (abandoned). Decayed stone structures half-buried. Overgrown paths. Mysterious abandoned feel.',
+    label: 'Ancient Ruins',
+    tiles: 'Use: stone (cracked paths), rock, mountain, grass (overgrown), cliff (collapsed walls), building (crumbling shells). Decayed structures half-swallowed by nature. Overgrown paths. 2-3 ruined buildings.',
     buildings: ['chest','tent_small'],
     animals: ['frog'],
     decorations: ['barrels','camp_decor'],
-    ground_cover: 'Cracked stone, weeds, mushrooms, overgrown grass everywhere.',
-    atmosphere: 'Ancient crumbling ruins. Overgrown and forgotten. Hints of old civilization.',
+    ground_cover: 'Cracked stone, weeds, mushrooms, vines over everything.',
+    atmosphere: 'Ancient crumbling ruins. Forgotten civilization. Something valuable — or dangerous — remains.',
+    npc_count: 1,
+  },
+  dungeon: {
+    label: 'Dungeon Entrance',
+    tiles: 'Use: cliff (dungeon walls), mountain, rock, stone (courtyard), grass (sparse), path (approach), chest (treasure nearby). Dark and foreboding. Mostly cliff and mountain creating a walled enclosure with a stone courtyard approach. One chest.',
+    buildings: ['tent_small','chest'],
+    animals: [],
+    decorations: ['barrels','camp_decor'],
+    ground_cover: 'Dark rock, cracked stone, no vegetation. Ominous.',
+    atmosphere: 'Dungeon entrance. Dark, oppressive, ancient. Something powerful guards what lies within.',
+    npc_count: 1,
+  },
+  camp: {
+    label: 'Traveler Camp',
+    tiles: 'Use: grass, path, tree (scattered), rock, chest (supply cache). A clearing with tents and a campfire. Small camp of travelers or bandits. 1-2 tents, supplies scattered.',
+    buildings: ['tent_big','tent_small','camp_decor','barrels','chest'],
+    animals: ['horse','chicken'],
+    decorations: ['camp_decor','barrels'],
+    ground_cover: 'Firepit clearing, worn grass, scattered supplies.',
+    atmosphere: 'Rough traveler camp. Campfire smoke. Either friendly or dangerous.',
+    npc_count: 2,
   },
   road: {
     label: 'Road',
-    tiles: 'Use: path (main road through center), grass, tree (flanking road), rock (roadside), building (waystation). A clear road runs east-west or north-south through the chunk. Flanked by trees and rocks.',
+    tiles: 'Use: path (wide road running through center of the chunk from one edge to the other), grass (flanking), tree (lining the road), rock (milestones). The road must enter and exit the chunk on opposite edges.',
     buildings: ['tent_big','shed','barn'],
     animals: ['horse','chicken'],
     decorations: ['barrels','bench'],
-    ground_cover: 'Roadside grass, wildflowers, scattered rocks.',
-    atmosphere: 'Traveling road. Open sky. Milestone feel.',
+    ground_cover: 'Roadside grass, wildflowers, milestone rocks.',
+    atmosphere: 'Traveled road. Open sky. The feeling of somewhere ahead.',
+    npc_count: 1,
   },
   wilderness: {
     label: 'Wilderness',
-    tiles: 'Use: grass, tree, water (ponds), rock, mountain (occasional), path (faint trail). Mixed open wilderness with small ponds, scattered trees, rocky outcrops.',
+    tiles: 'Use: grass, tree (clusters), water (ponds), rock, mountain (occasional), path (faint trail). Mixed open wilderness with variety — no one tile type should dominate.',
     buildings: ['chest','tent_small'],
     animals: ['chicken','pig','frog'],
     decorations: [],
-    ground_cover: 'Wild grass tufts, flowers, mushrooms, logs.',
-    atmosphere: 'Untamed open wilderness. Natural variety.',
+    ground_cover: 'Wild grass, flowers, mushrooms, logs, ponds.',
+    atmosphere: 'Untamed wilderness. Natural beauty. Something unexpected around each corner.',
+    npc_count: 1,
   },
 };
 
-// Generates a 7×7 region map seeded by campaign_id.
+// Generates a 21×21 region map seeded by campaign_id.
 // Returns a 2D array [row][col] of biome keys.
-// Center (3,3) is always 'village' (the origin chunk).
+// Center (10,10) = chunk (0,0) is always 'village'.
+// Beyond the 21×21 grid, getChunkBiome() uses a procedural noise fallback.
 function generateRegionMap(campaignId) {
-  // Deterministic hash seeded by campaign ID
   let seed = 0;
   const idStr = String(campaignId);
   for (let i = 0; i < idStr.length; i++) seed = (seed * 31 + idStr.charCodeAt(i)) >>> 0;
   const rng = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 0x100000000; };
 
-  const SIZE = 7;
-  const CENTER = 3;
+  const SIZE = 21;
+  const CENTER = 10;
   const map = [];
-  const biomeSeq = ['farmland','forest','beach','cliffside','ruins','road','wilderness'];
+
+  // Pre-place special landmark chunks at fixed relative offsets so they always
+  // exist but vary in exact position within a small jitter window.
+  // These make the world feel authored, not purely random.
+  const jitter = (base, range) => base + Math.floor(rng() * range * 2) - range;
+  const landmarks = [
+    // [chunkX, chunkY, biome]  — relative to origin
+    [jitter(4,1),  jitter(0,1),  'village'],   // east village
+    [jitter(-4,1), jitter(0,1),  'village'],   // west village
+    [jitter(0,1),  jitter(-4,1), 'village'],   // north village
+    [jitter(0,1),  jitter(4,1),  'village'],   // south village
+    [jitter(7,1),  jitter(2,1),  'city'],      // far-east city
+    [jitter(-7,1), jitter(-2,1), 'city'],      // far-west city
+    [jitter(2,1),  jitter(-7,1), 'city'],      // far-north city
+    [jitter(8,1),  jitter(8,1),  'ocean'],     // ocean to SE
+    [jitter(-8,1), jitter(8,1),  'ocean'],     // ocean to SW
+    [jitter(5,1),  jitter(-6,1), 'cliffside'], // northern cliffs
+    [jitter(-5,1), jitter(6,1),  'dungeon'],   // dungeon SW
+    [jitter(9,1),  jitter(-3,1), 'dungeon'],   // dungeon NE
+    [jitter(-3,1), jitter(-8,1), 'ruins'],     // far ruins
+    [jitter(3,1),  jitter(7,1),  'ruins'],     // southern ruins
+  ];
+
+  // Build landmark lookup
+  const landmarkMap = {};
+  for (const [lx, ly, lb] of landmarks) {
+    const row = ly + CENTER, col = lx + CENTER;
+    if (row >= 0 && row < SIZE && col >= 0 && col < SIZE) {
+      landmarkMap[`${row},${col}`] = lb;
+    }
+  }
+
+  // Ring biome weights — cumulative distributions
+  const ringWeights = {
+    1: ['village','village','farmland','farmland','road'],
+    2: ['farmland','farmland','forest','forest','road','village'],
+    3: ['forest','forest','farmland','beach','road','wilderness','camp'],
+    4: ['forest','wilderness','cliffside','ruins','camp','road','beach'],
+    5: ['wilderness','forest','cliffside','ruins','camp','dungeon','beach','ocean'],
+    6: ['wilderness','cliffside','ruins','dungeon','ocean','camp','forest'],
+    7: ['wilderness','ruins','dungeon','ocean','cliffside','camp','forest'],
+    8: ['ocean','wilderness','ruins','dungeon','cliffside'],
+    9: ['ocean','ocean','wilderness','ruins','dungeon'],
+    10:['ocean','ocean','ocean','wilderness','dungeon'],
+  };
 
   for (let row = 0; row < SIZE; row++) {
     map[row] = [];
     for (let col = 0; col < SIZE; col++) {
+      // Landmarks override everything
+      if (landmarkMap[`${row},${col}`]) {
+        map[row][col] = landmarkMap[`${row},${col}`];
+        continue;
+      }
       const dr = row - CENTER, dc = col - CENTER;
+      if (dr === 0 && dc === 0) { map[row][col] = 'village'; continue; }
       const dist = Math.max(Math.abs(dr), Math.abs(dc));
-      if (dist === 0) {
-        map[row][col] = 'village';
-      } else if (dist === 1) {
-        // Ring 1 — mostly village extensions and farmland
-        const ring1 = ['village','farmland','farmland','road'];
-        map[row][col] = ring1[Math.floor(rng() * ring1.length)];
-      } else if (dist === 2) {
-        // Ring 2 — varied biomes
-        const ring2 = ['forest','farmland','cliffside','beach','road','wilderness'];
-        map[row][col] = ring2[Math.floor(rng() * ring2.length)];
-      } else {
-        // Rings 3+ — wilder
-        map[row][col] = biomeSeq[Math.floor(rng() * biomeSeq.length)];
+      const ringKey = Math.min(dist, 10);
+      const pool = ringWeights[ringKey] || ['wilderness'];
+      map[row][col] = pool[Math.floor(rng() * pool.length)];
+    }
+  }
+
+  // Smooth pass: if a chunk is surrounded 5+ times by the same biome,
+  // it takes on that biome (prevents isolated single-tile anomalies for cliffs etc.)
+  // Skipping center to preserve village.
+  for (let row = 1; row < SIZE - 1; row++) {
+    for (let col = 1; col < SIZE - 1; col++) {
+      if (row === CENTER && col === CENTER) continue;
+      if (landmarkMap[`${row},${col}`]) continue;
+      const neighbors = [
+        map[row-1]?.[col], map[row+1]?.[col],
+        map[row]?.[col-1], map[row]?.[col+1],
+        map[row-1]?.[col-1], map[row-1]?.[col+1],
+        map[row+1]?.[col-1], map[row+1]?.[col+1],
+      ].filter(Boolean);
+      const counts = {};
+      for (const b of neighbors) counts[b] = (counts[b] || 0) + 1;
+      const [topBiome, topCount] = Object.entries(counts).sort((a,b) => b[1]-a[1])[0] || [];
+      // Only smooth very isolated anomalies (7 of 8 neighbors same biome)
+      if (topCount >= 7 && topBiome !== map[row][col]) {
+        map[row][col] = topBiome;
       }
     }
   }
+
   return map;
 }
 
 // Lookup biome for a given chunk coordinate (chunk coords relative to origin 0,0).
-// Region map is 7×7 centered at (3,3) = chunk (0,0).
+// Region map is 21×21 centered at (10,10) = chunk (0,0).
+// Beyond the map, use a deterministic procedural fallback.
 function getChunkBiome(cx, cy, regionMap) {
   if (!regionMap) return 'wilderness';
-  const row = cy + 3, col = cx + 3;
-  if (row < 0 || row >= 7 || col < 0 || col >= 7) return 'wilderness';
-  return regionMap[row][col] || 'wilderness';
+  const row = cy + 10, col = cx + 10;
+  if (row >= 0 && row < 21 && col >= 0 && col < 21) {
+    return regionMap[row][col] || 'wilderness';
+  }
+  // Procedural fallback for chunks beyond the 21×21 map
+  // Uses a simple hash to pick from outer-ring biomes
+  const h = (((cx * 73856093) ^ (cy * 19349663)) >>> 0);
+  const outerPool = ['ocean','ocean','ocean','wilderness','ruins','dungeon','cliffside','wilderness'];
+  return outerPool[h % outerPool.length];
 }
 
 // ── NPC WANDER CONFIG ────────────────────────────────────────
@@ -1945,14 +2063,18 @@ class GameScene extends Phaser.Scene {
     // Each biome drops 1-3 characteristic props (well, hay bale, barrel, etc.)
     {
       const bioDecos = {
-        village:  ['well','fountain','bench','barrels'],
-        farmland: ['hay_bales','scarecrow','barrels'],
-        forest:   ['camp_decor'],
-        beach:    ['boat'],
-        ruins:    ['barrels','camp_decor'],
-        road:     ['bench','barrels'],
-        wilderness: [],
-        cliffside:  [],
+        village:   ['well','fountain','bench','barrels'],
+        city:      ['well','fountain','bench','barrels'],
+        farmland:  ['hay_bales','scarecrow','barrels'],
+        forest:    ['camp_decor'],
+        beach:     ['boat'],
+        ocean:     ['boat'],
+        ruins:     ['barrels','camp_decor'],
+        dungeon:   ['barrels','camp_decor'],
+        camp:      ['camp_decor','barrels'],
+        road:      ['bench','barrels'],
+        wilderness:[],
+        cliffside: [],
       };
       const decoList = bioDecos[chunkBiome] || [];
       if (decoList.length > 0) {
@@ -1986,31 +2108,44 @@ class GameScene extends Phaser.Scene {
     {
       // Biome-specific animal pools
       const biomeAnimals = {
-        village:    [
+        village:   [
           { key:'chicken_ss', idle:'chicken_idle', walk:'chicken_walk', scale:1.8, name:'chicken' },
           { key:'pig_ss',     idle:'pig_idle',     walk:'pig_walk',     scale:1.6, name:'pig' },
         ],
-        farmland:   [
+        city:      [
+          { key:'chicken_ss', idle:'chicken_idle', walk:'chicken_walk', scale:1.6, name:'chicken' },
+        ],
+        farmland:  [
           { key:'cow_ss',   idle:'cow_idle',   walk:'cow_walk',   scale:1.7, name:'cow' },
           { key:'sheep_ss', idle:'sheep_idle', walk:'sheep_walk', scale:1.6, name:'sheep' },
           { key:'chicken_ss', idle:'chicken_idle', walk:'chicken_walk', scale:1.8, name:'chicken' },
         ],
-        forest:     [
+        forest:    [
           { key:'pig_ss',   idle:'pig_idle',   walk:'pig_walk',   scale:1.4, name:'pig' },
+          { key:'frog_img', scale:1.3, name:'frog', static:true },
         ],
-        beach:      [
-          { key:'duck_img', scale:1.5, name:'duck', static:true },
+        beach:     [
+          { key:'duck_img',  scale:1.5, name:'duck',  static:true },
           { key:'goose_img', scale:1.6, name:'goose', static:true },
         ],
-        cliffside:  [],
-        ruins:      [
-          { key:'pig_ss',   idle:'pig_idle',   walk:'pig_walk',   scale:1.3, name:'pig' },
+        ocean:     [
+          { key:'duck_img',  scale:1.5, name:'duck',  static:true },
         ],
-        road:       [
-          { key:'horse_img', scale:1.8, name:'horse', static:true },
+        cliffside: [],
+        dungeon:   [],
+        ruins:     [
+          { key:'pig_ss',   idle:'pig_idle',   walk:'pig_walk',   scale:1.3, name:'pig' },
+          { key:'frog_img', scale:1.2, name:'frog', static:true },
+        ],
+        camp:      [
+          { key:'horse_img',  scale:1.8, name:'horse', static:true },
+          { key:'chicken_ss', idle:'chicken_idle', walk:'chicken_walk', scale:1.6, name:'chicken' },
+        ],
+        road:      [
+          { key:'horse_img',  scale:1.8, name:'horse', static:true },
           { key:'chicken_ss', idle:'chicken_idle', walk:'chicken_walk', scale:1.8, name:'chicken' },
         ],
-        wilderness: [
+        wilderness:[
           { key:'chicken_ss', idle:'chicken_idle', walk:'chicken_walk', scale:1.8, name:'chicken' },
           { key:'pig_ss',     idle:'pig_idle',     walk:'pig_walk',     scale:1.6, name:'pig' },
           { key:'sheep_ss',   idle:'sheep_idle',   walk:'sheep_walk',   scale:1.6, name:'sheep' },
@@ -2020,9 +2155,9 @@ class GameScene extends Phaser.Scene {
       const animalTypes = biomeAnimals[chunkBiome] || biomeAnimals.wilderness;
       if (animalTypes.length === 0) { /* no animals for this biome */ }
       else {
-        // Pick suitable ground tiles (grass for land animals; beach/grass for water birds)
+        // Pick suitable ground tiles (grass for land animals; beach/water for water birds)
         const validTiles = ['grass'];
-        if (chunkBiome === 'beach') validTiles.push('beach', 'sand');
+        if (chunkBiome === 'beach' || chunkBiome === 'ocean') validTiles.push('beach', 'sand', 'water');
         const spawnTiles = [];
         for (let row = 0; row < rows; row++) {
           for (let col = 0; col < cols; col++) {
@@ -3415,9 +3550,13 @@ async function generateChunkAPI(cx, cy, dirLabel) {
     ? `\n\nEDGE SEAMS (match these exactly on your border rows/cols):\n${edgeLines.join('\n')}\nWhere neighbor has water → your border tile must be water or beach. Where path → continue path into chunk.`
     : '';
 
-  const chunkPrompt = `You are generating a ${CHUNK_COLS}x${CHUNK_ROWS} tile chunk for a narrative detective RPG world.
-Biome: "${biome.label}" | Direction: ${dirLabel} | Language: ${lang}
-Chunk coords: (${cx},${cy})
+  const npcCount = biome.npc_count ?? 1;
+  const npcInstruction = npcCount === 0
+    ? `"npcs": []`
+    : `"npcs": [ /* ${npcCount} NPC(s) — each with name, position [col,row], sprite (player/skeleton/slime/chicken/cow/pig/sheep), dialogue array (1-2 lines in ${lang}), ai_context string describing their personality and what they know */ ]`;
+
+  const chunkPrompt = `You are generating a ${CHUNK_COLS}x${CHUNK_ROWS} tile chunk for a narrative detective RPG.
+Biome: "${biome.label}" | Direction: ${dirLabel} | Language: ${lang} | Chunk: (${cx},${cy})
 
 BIOME INSTRUCTIONS:
 ${biome.tiles}
@@ -3427,14 +3566,13 @@ ${buildingHint}${edgeInstructions}
 
 Return ONLY raw JSON (no markdown, no fences):
 {
-  "world": { "theme":"${biomeKey}", "language":"${lang}", "description":"one sentence", "size":[${CHUNK_COLS},${CHUNK_ROWS}], "tiles": [[row0col0,...],[row1col0,...],...] },
-  "npcs": [],
+  "world": { "theme":"${biomeKey}", "language":"${lang}", "description":"one evocative sentence", "size":[${CHUNK_COLS},${CHUNK_ROWS}], "tiles": [[row0col0,...],[row1col0,...],...] },
+  ${npcInstruction},
   "player_start": [${Math.floor(CHUNK_COLS/2)},${Math.floor(CHUNK_ROWS/2)}]
 }
 
 Valid tile types: grass, path, water, beach, sand, tree, building, building_door, farmland, stone, cliff, chest, rock, mountain
-Tiles array must be exactly ${CHUNK_ROWS} rows × ${CHUNK_COLS} columns.
-NO npcs needed — leave npcs array empty. Focus entirely on the tile layout.`;
+Tiles array: exactly ${CHUNK_ROWS} rows × ${CHUNK_COLS} columns. Make it visually interesting — avoid monotonous repetition.`;
 
   // Retry with exponential backoff on 429 rate limit errors
   for (let attempt = 0; attempt < 4; attempt++) {
