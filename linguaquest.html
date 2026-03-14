@@ -657,6 +657,132 @@ const TILE_DEFS = {
   water_deep:    { key: 'water',    walkable: false, tint: 0x2266aa },
 };
 
+// ── BIOME PALETTES ──────────────────────────────────────────────────────────
+// Each biome defines which tile types and decoration tiles Claude should use,
+// and which ambient animals appear there. Used in generateChunkAPI().
+const BIOME_PALETTES = {
+  village: {
+    label: 'Village',
+    tiles: 'Use: grass, path, stone, building, building_door, farmland, rock, chest. Cobblestone paths wind between buildings. Mix of house, inn, church, blacksmith. Include a well or fountain in the square. Market stalls near paths.',
+    buildings: ['inn','church','blacksmith','house','house_2','house_3','market_stalls','well','fountain'],
+    animals: ['chicken','cow','pig'],
+    decorations: ['bench','barrels','scarecrow'],
+    ground_cover: 'Flowers and grass tufts between buildings. Stone paths.',
+    atmosphere: 'Bustling village center. Multiple buildings clustered together.',
+  },
+  farmland: {
+    label: 'Farmland',
+    tiles: 'Use: farmland, grass, path, tree (sparse), building, building_door. Large open fields of farmland tiles. One or two farm buildings (barn, coop, shed, greenhouse, silo). Scarecrows and hay bales scattered.',
+    buildings: ['barn','coop','shed','greenhouse','silo','hay_bales','scarecrow'],
+    animals: ['chicken','cow','pig','sheep'],
+    decorations: ['hay_bales','scarecrow'],
+    ground_cover: 'Mostly farmland tiles. Scattered grass patches. Apple or cherry trees at edges.',
+    atmosphere: 'Open agricultural land. Rolling fields. Working farm feel.',
+  },
+  forest: {
+    label: 'Forest',
+    tiles: 'Use: tree (50-60% of tiles), grass, rock, mountain (sparse), path (1-2 winding trails). Dense forest with occasional clearings. Rocks and stumps scattered. One chest hidden in a clearing.',
+    buildings: ['tent_small','chest'],
+    animals: ['frog','goose'],
+    decorations: [],
+    ground_cover: 'Stumps, logs, mushrooms, moss rocks everywhere. Very few open grass tiles.',
+    atmosphere: 'Dense ancient forest. Dappled light. Mysterious and enclosed.',
+  },
+  cliffside: {
+    label: 'Cliffside',
+    tiles: 'Use: cliff, mountain, rock, grass (narrow ledges), path (dangerous trail). Dramatic elevation. Mostly cliff and mountain tiles with small walkable grass ledges. Very few flat areas.',
+    buildings: ['tent_small'],
+    animals: [],
+    decorations: [],
+    ground_cover: 'Cave rocks, boulders, sparse hardy grass.',
+    atmosphere: 'Dramatic high elevation. Dangerous narrow paths. Stunning but treacherous.',
+  },
+  beach: {
+    label: 'Beach',
+    tiles: 'Use: beach/sand (60%+), water, water_deep, grass (inland edge only), rock. Wide sandy beach area meeting the water. Boat near water. Rocks in the water.',
+    buildings: ['boat','fisherman_house'],
+    animals: ['duck','goose'],
+    decorations: ['boat'],
+    ground_cover: 'Sandy beach with pebbles and small rocks near waterline. Cattails and water plants at edges.',
+    atmosphere: 'Open coastal beach. Salt air. Waves and calm.',
+  },
+  ruins: {
+    label: 'Ruins',
+    tiles: 'Use: stone, rock, mountain, grass (overgrown), cliff, building (crumbling), farmland (abandoned). Decayed stone structures half-buried. Overgrown paths. Mysterious abandoned feel.',
+    buildings: ['chest','tent_small'],
+    animals: ['frog'],
+    decorations: ['barrels','camp_decor'],
+    ground_cover: 'Cracked stone, weeds, mushrooms, overgrown grass everywhere.',
+    atmosphere: 'Ancient crumbling ruins. Overgrown and forgotten. Hints of old civilization.',
+  },
+  road: {
+    label: 'Road',
+    tiles: 'Use: path (main road through center), grass, tree (flanking road), rock (roadside), building (waystation). A clear road runs east-west or north-south through the chunk. Flanked by trees and rocks.',
+    buildings: ['tent_big','shed','barn'],
+    animals: ['horse','chicken'],
+    decorations: ['barrels','bench'],
+    ground_cover: 'Roadside grass, wildflowers, scattered rocks.',
+    atmosphere: 'Traveling road. Open sky. Milestone feel.',
+  },
+  wilderness: {
+    label: 'Wilderness',
+    tiles: 'Use: grass, tree, water (ponds), rock, mountain (occasional), path (faint trail). Mixed open wilderness with small ponds, scattered trees, rocky outcrops.',
+    buildings: ['chest','tent_small'],
+    animals: ['chicken','pig','frog'],
+    decorations: [],
+    ground_cover: 'Wild grass tufts, flowers, mushrooms, logs.',
+    atmosphere: 'Untamed open wilderness. Natural variety.',
+  },
+};
+
+// Generates a 7×7 region map seeded by campaign_id.
+// Returns a 2D array [row][col] of biome keys.
+// Center (3,3) is always 'village' (the origin chunk).
+function generateRegionMap(campaignId) {
+  // Deterministic hash seeded by campaign ID
+  let seed = 0;
+  const idStr = String(campaignId);
+  for (let i = 0; i < idStr.length; i++) seed = (seed * 31 + idStr.charCodeAt(i)) >>> 0;
+  const rng = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 0x100000000; };
+
+  const SIZE = 7;
+  const CENTER = 3;
+  const map = [];
+  const biomeSeq = ['farmland','forest','beach','cliffside','ruins','road','wilderness'];
+
+  for (let row = 0; row < SIZE; row++) {
+    map[row] = [];
+    for (let col = 0; col < SIZE; col++) {
+      const dr = row - CENTER, dc = col - CENTER;
+      const dist = Math.max(Math.abs(dr), Math.abs(dc));
+      if (dist === 0) {
+        map[row][col] = 'village';
+      } else if (dist === 1) {
+        // Ring 1 — mostly village extensions and farmland
+        const ring1 = ['village','farmland','farmland','road'];
+        map[row][col] = ring1[Math.floor(rng() * ring1.length)];
+      } else if (dist === 2) {
+        // Ring 2 — varied biomes
+        const ring2 = ['forest','farmland','cliffside','beach','road','wilderness'];
+        map[row][col] = ring2[Math.floor(rng() * ring2.length)];
+      } else {
+        // Rings 3+ — wilder
+        map[row][col] = biomeSeq[Math.floor(rng() * biomeSeq.length)];
+      }
+    }
+  }
+  return map;
+}
+
+// Lookup biome for a given chunk coordinate (chunk coords relative to origin 0,0).
+// Region map is 7×7 centered at (3,3) = chunk (0,0).
+function getChunkBiome(cx, cy, regionMap) {
+  if (!regionMap) return 'wilderness';
+  const row = cy + 3, col = cx + 3;
+  if (row < 0 || row >= 7 || col < 0 || col >= 7) return 'wilderness';
+  return regionMap[row][col] || 'wilderness';
+}
+
 // ── NPC WANDER CONFIG ────────────────────────────────────────
 const WANDER_RADIUS = 2.0;   // tiles
 const WANDER_INTERVAL_MS = [2800, 6000];  // min/max ms between wander steps
@@ -755,7 +881,9 @@ const DEFAULT_CAMPAIGN = {
     player_reputation: { overall: "neutral", by_faction: {}, notable_acts: [] },
     world_damage: {},
     in_game_date: "Day 1, Morning",
-    in_game_minutes_elapsed: 0
+    in_game_minutes_elapsed: 0,
+    region_map: null,
+    used_decorations: []
   }
 };
 
@@ -1126,6 +1254,13 @@ async function createCampaign() {
     activeCampaign = campaign;
     activeCampaignId = campaign.id;
 
+    // 1.1b — Generate region map and patch it into world_state
+    const regionMap = generateRegionMap(activeCampaignId);
+    await lqDB('PATCH', `lq_campaigns?id=eq.${activeCampaignId}`, {
+      world_state: { ...DEFAULT_CAMPAIGN.world_state, region_map: regionMap, used_decorations: [] }
+    });
+    activeCampaign.world_state = { ...DEFAULT_CAMPAIGN.world_state, region_map: regionMap, used_decorations: [] };
+
     // 1.2 — Generate soul documents for all 6 main cast NPCs (Template A via Claude)
     document.getElementById('loading-sub').textContent = 'Meeting the villagers...';
     const npcInserts = [];
@@ -1379,6 +1514,71 @@ class GameScene extends Phaser.Scene {
       { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('sheep_ss', ASSETS + 'Animals/Sheep/Sheep.png',
       { frameWidth: 32, frameHeight: 32 });
+
+    // ── Full pack assets (Cute_Fantasy/) ──────────────────────────────────────
+    // Grass tile variants
+    this.load.image('grass2', ASSETS_FULL + 'Tiles/Grass/Grass_2_Middle.png');
+    this.load.image('grass3', ASSETS_FULL + 'Tiles/Grass/Grass_3_Middle.png');
+    this.load.image('grass4', ASSETS_FULL + 'Tiles/Grass/Grass_4_Middle.png');
+    // Cobble road tile
+    this.load.image('cobble', ASSETS_FULL + 'Tiles/Cobble_Road/Cobble_Road_1.png');
+    // Farmland wet variant
+    this.load.image('farmland_wet', ASSETS_FULL + 'Tiles/FarmLand/FarmLand_Wet_Tile.png');
+    // Full decor spritesheet (larger than free version)
+    this.load.spritesheet('decor_full', ASSETS_FULL + 'Outdoor decoration/Outdoor_Decor.png',
+      { frameWidth: 16, frameHeight: 16 });
+
+    // ── Unique buildings ──
+    this.load.image('inn',       ASSETS_FULL + 'Buildings/Buildings/Unique_Buildings/Inn/Inn_Blue.png');
+    this.load.image('church',    ASSETS_FULL + 'Buildings/Buildings/Unique_Buildings/Church/Church_Blue.png');
+    this.load.image('blacksmith',ASSETS_FULL + 'Buildings/Buildings/Unique_Buildings/Blacksmith_House/Blacksmith_House_Blue.png');
+    this.load.image('barn',      ASSETS_FULL + 'Buildings/Buildings/Unique_Buildings/Barn/Barn_Base_Red.png');
+    this.load.image('fisherman_house', ASSETS_FULL + 'Buildings/Buildings/Unique_Buildings/Fisherman_House/Fisherman_House_Base_Blue.png');
+    this.load.image('greenhouse',ASSETS_FULL + 'Buildings/Buildings/Unique_Buildings/Greenhouse/GreenHouse_Green.png');
+    this.load.image('shed',      ASSETS_FULL + 'Buildings/Buildings/Unique_Buildings/Shed/Shed_Base_Blue.png');
+    this.load.image('coop',      ASSETS_FULL + 'Buildings/Buildings/Unique_Buildings/Coop/Coop_Base_Red.png');
+    this.load.image('windmill',  ASSETS_FULL + 'Buildings/Buildings/Unique_Buildings/Windmill/Windmill.png');
+    this.load.image('tent_big',  ASSETS_FULL + 'Buildings/Buildings/Tent/Tent_Big.png');
+    this.load.image('tent_small',ASSETS_FULL + 'Buildings/Buildings/Tent/Tent_Small.png');
+    this.load.image('silo',      ASSETS_FULL + 'Buildings/Buildings/Unique_Buildings/Silo/Silo.png');
+    this.load.image('market_stalls', ASSETS_FULL + 'Buildings/Buildings/Unique_Buildings/Stalls/Market_Stalls.png');
+    // House variants (wood blue = default, limestone, stone)
+    this.load.image('house_2',   ASSETS_FULL + 'Buildings/Buildings/Houses/Wood/House_2_Wood_Base_Blue.png');
+    this.load.image('house_3',   ASSETS_FULL + 'Buildings/Buildings/Houses/Wood/House_3_Wood_Base_Blue.png');
+    this.load.image('house_stone', ASSETS_FULL + 'Buildings/Buildings/Houses/Stone/House_1_Stone_Base_Blue.png');
+    this.load.image('house_limestone', ASSETS_FULL + 'Buildings/Buildings/Houses/Limestone/House_1_Limestone_Base_Blue.png');
+
+    // ── Outdoor decorations (single sprites) ──
+    this.load.image('well',        ASSETS_FULL + 'Outdoor decoration/Well.png');
+    this.load.image('fountain',    ASSETS_FULL + 'Outdoor decoration/Fountain.png');
+    this.load.image('hay_bales',   ASSETS_FULL + 'Outdoor decoration/Hay_Bales.png');
+    this.load.image('scarecrow',   ASSETS_FULL + 'Outdoor decoration/Scarecrows.png');
+    this.load.image('bench',       ASSETS_FULL + 'Outdoor decoration/Benches.png');
+    this.load.image('boat',        ASSETS_FULL + 'Outdoor decoration/Boat.png');
+    this.load.image('barrels',     ASSETS_FULL + 'Outdoor decoration/barrels.png');
+    this.load.image('camp_decor',  ASSETS_FULL + 'Outdoor decoration/Camp_Decor.png');
+    this.load.image('apple_tree',  ASSETS_FULL + 'Crops/Apple_Tree.png');
+    this.load.image('cherry_tree', ASSETS_FULL + 'Crops/Cherry_Tree.png');
+
+    // ── Full pack animals (spritesheets where available, static for others) ──
+    this.load.spritesheet('duck_ss',  ASSETS_FULL + 'Animals/Duck/Duck_01.png',
+      { frameWidth: 32, frameHeight: 32 });
+    this.load.spritesheet('frog_ss',  ASSETS_FULL + 'Animals/Frog/Frog_01.png',
+      { frameWidth: 32, frameHeight: 32 });
+    this.load.spritesheet('goose_ss', ASSETS_FULL + 'Animals/Goose/Goose_01.png',
+      { frameWidth: 32, frameHeight: 32 });
+    this.load.spritesheet('horse_ss', ASSETS_FULL + 'Animals/Horse/Horse_01.png',
+      { frameWidth: 32, frameHeight: 32 });
+    // Static animal images (for biome-specific ambient decoration)
+    this.load.image('duck_img',  ASSETS_FULL + 'Animals/Duck/Duck_01.png');
+    this.load.image('frog_img',  ASSETS_FULL + 'Animals/Frog/Frog_01.png');
+    this.load.image('goose_img', ASSETS_FULL + 'Animals/Goose/Goose_01.png');
+    this.load.image('horse_img', ASSETS_FULL + 'Animals/Horse/Horse_01.png');
+
+    // ── Premade NPC sprites (for ambient flavor, not interactable) ──
+    this.load.image('npc_farmer',    ASSETS_FULL + 'NPCs (Premade)/Farmer_Bob.png');
+    this.load.image('npc_fisherman', ASSETS_FULL + 'NPCs (Premade)/Fisherman_Fin.png');
+    this.load.image('npc_bartender', ASSETS_FULL + 'NPCs (Premade)/Bartender_Bruno.png');
   }
 
   create() {
@@ -1608,9 +1808,29 @@ class GameScene extends Phaser.Scene {
               else break;
             }
             const hcx = x + (clusterW * TILE_SIZE) / 2;
-            const hScale = Math.max(0.9, Math.min(1.6, clusterW * 0.8));
-            const obj = this.add.image(hcx, cy - TILE_SIZE * 0.15, 'house')
-              .setOrigin(0.5, 0.75).setScale(hScale).setDepth(absRow * 10 + 6);
+            // Pick building sprite based on biome and hash for variety
+            const biome = worldDef.world?.biome || 'wilderness';
+            const biomePalette = BIOME_PALETTES[biome] || BIOME_PALETTES.wilderness;
+            const bHash = ((col * 2654435761 + row * 2246822519) >>> 0) % Math.max(1, biomePalette.buildings.length);
+            const bKey = biomePalette.buildings[bHash] || 'house';
+            // Determine scale based on building type
+            const bigBuildings = ['inn','church','blacksmith','barn','fisherman_house','greenhouse','windmill','market_stalls'];
+            const smallBuildings = ['shed','coop','silo','tent_small','tent_big','well','fountain','scarecrow','hay_bales'];
+            let hScale, originY;
+            if (bigBuildings.includes(bKey)) {
+              hScale = Math.max(1.1, Math.min(1.8, clusterW * 0.9));
+              originY = 0.78;
+            } else if (smallBuildings.includes(bKey)) {
+              hScale = Math.max(0.7, Math.min(1.2, clusterW * 0.7));
+              originY = 0.85;
+            } else {
+              hScale = Math.max(0.9, Math.min(1.6, clusterW * 0.8));
+              originY = 0.75;
+            }
+            // Use fallback to 'house' if texture not loaded
+            const texKey = this.textures.exists(bKey) ? bKey : 'house';
+            const obj = this.add.image(hcx, cy - TILE_SIZE * 0.15, texKey)
+              .setOrigin(0.5, originY).setScale(hScale).setDepth(absRow * 10 + 6);
             gameObjects.push(obj);
           }
         }
@@ -1651,36 +1871,69 @@ class GameScene extends Phaser.Scene {
     }
 
     // ── GROUND SCATTER ──
+    const chunkBiome = worldDef.world?.biome || 'wilderness';
     if (this.textures.exists('decor')) {
       const GRASS_TUFTS = [0,1,2], FLOWERS = [7,8,9], STUMPS = [14], SMALL_ROCKS = [15,16], MUSHROOM = [51], LOG = [49];
       for (let row = 0; row < rows; row++) {
         for (let col = 0; col < cols; col++) {
           const tileType = (tiles[row]?.[col]) || 'grass';
-          const cx = offsetX + col * TILE_SIZE + TILE_SIZE / 2;
-          const cy = offsetY + row * TILE_SIZE + TILE_SIZE / 2;
+          const scx = offsetX + col * TILE_SIZE + TILE_SIZE / 2;
+          const scy = offsetY + row * TILE_SIZE + TILE_SIZE / 2;
           // Include chunk coords in hash so scatter varies between chunks
           const h = ((col + chunkX * 1000) * 2654435761 + (row + chunkY * 1000) * 2246822519) >>> 0;
           const roll = h % 100;
           const jx = ((h >> 8) % TILE_SIZE) - TILE_SIZE / 2;
           const jy = ((h >> 16) % TILE_SIZE) - TILE_SIZE / 2;
-          const absRow = chunkY * CHUNK_ROWS + row;
-          const depth = absRow * 10 + 2;
+          const absRow2 = chunkY * CHUNK_ROWS + row;
+          const depth = absRow2 * 10 + 2;
 
           if (tileType === 'grass') {
             let frame, obj;
-            if (roll < 12) { frame = FLOWERS[h % FLOWERS.length]; obj = this.add.image(cx+jx*0.6,cy+jy*0.6,'decor',frame).setOrigin(0.5,0.8).setScale(2.5).setDepth(depth); }
-            else if (roll < 22) { frame = GRASS_TUFTS[h % GRASS_TUFTS.length]; obj = this.add.image(cx+jx*0.7,cy+jy*0.7,'decor',frame).setOrigin(0.5,0.8).setScale(2.2).setDepth(depth); }
-            else if (roll < 27) { frame = SMALL_ROCKS[h % SMALL_ROCKS.length]; obj = this.add.image(cx+jx*0.5,cy+jy*0.5,'decor',frame).setOrigin(0.5,0.8).setScale(2.5).setDepth(depth); }
-            else if (roll < 30) { obj = this.add.image(cx+jx*0.4,cy+jy*0.4,'decor',STUMPS[0]).setOrigin(0.5,0.8).setScale(2.8).setDepth(depth); }
-            else if (roll < 32) { obj = this.add.image(cx+jx*0.5,cy+jy*0.5,'decor',MUSHROOM[0]).setOrigin(0.5,0.8).setScale(2.5).setDepth(depth); }
-            else if (roll < 34) { obj = this.add.image(cx+jx*0.4,cy+jy*0.4,'decor',LOG[0]).setOrigin(0.5,0.8).setScale(2.5).setDepth(depth); }
+            // Biome-specific scatter rates
+            const isForest  = chunkBiome === 'forest';
+            const isBeach   = chunkBiome === 'beach';
+            const isRuins   = chunkBiome === 'ruins';
+            const isVillage = chunkBiome === 'village';
+            if (isForest) {
+              // Forest: more stumps, logs, mushrooms; fewer flowers
+              if      (roll < 8)  { frame = STUMPS[0]; obj = this.add.image(scx+jx*0.4,scy+jy*0.4,'decor',frame).setOrigin(0.5,0.8).setScale(2.8).setDepth(depth); }
+              else if (roll < 16) { frame = LOG[0];    obj = this.add.image(scx+jx*0.4,scy+jy*0.4,'decor',frame).setOrigin(0.5,0.8).setScale(2.5).setDepth(depth); }
+              else if (roll < 24) { frame = MUSHROOM[0];obj= this.add.image(scx+jx*0.5,scy+jy*0.5,'decor',frame).setOrigin(0.5,0.8).setScale(2.5).setDepth(depth); }
+              else if (roll < 30) { frame = SMALL_ROCKS[h%SMALL_ROCKS.length]; obj = this.add.image(scx+jx*0.5,scy+jy*0.5,'decor',frame).setOrigin(0.5,0.8).setScale(2.2).setDepth(depth); }
+              else if (roll < 36) { frame = GRASS_TUFTS[h%GRASS_TUFTS.length]; obj = this.add.image(scx+jx*0.7,scy+jy*0.7,'decor',frame).setOrigin(0.5,0.8).setScale(2.2).setDepth(depth); }
+            } else if (isBeach) {
+              // Beach grass: mostly rocks and sparse tufts
+              if      (roll < 15) { frame = SMALL_ROCKS[h%SMALL_ROCKS.length]; obj = this.add.image(scx+jx*0.5,scy+jy*0.5,'decor',frame).setOrigin(0.5,0.8).setScale(2.5).setDepth(depth); }
+              else if (roll < 22) { frame = GRASS_TUFTS[h%GRASS_TUFTS.length]; obj = this.add.image(scx+jx*0.7,scy+jy*0.7,'decor',frame).setOrigin(0.5,0.8).setScale(2.0).setDepth(depth).setAlpha(0.8); }
+            } else if (isRuins) {
+              // Ruins: lots of rocks, stumps, mushrooms
+              if      (roll < 18) { frame = SMALL_ROCKS[h%SMALL_ROCKS.length]; obj = this.add.image(scx+jx*0.5,scy+jy*0.5,'decor',frame).setOrigin(0.5,0.8).setScale(2.5).setDepth(depth); }
+              else if (roll < 26) { frame = STUMPS[0]; obj = this.add.image(scx+jx*0.4,scy+jy*0.4,'decor',frame).setOrigin(0.5,0.8).setScale(2.8).setDepth(depth); }
+              else if (roll < 32) { frame = MUSHROOM[0];obj= this.add.image(scx+jx*0.5,scy+jy*0.5,'decor',frame).setOrigin(0.5,0.8).setScale(2.5).setDepth(depth); }
+              else if (roll < 36) { frame = FLOWERS[h%FLOWERS.length]; obj = this.add.image(scx+jx*0.6,scy+jy*0.6,'decor',frame).setOrigin(0.5,0.8).setScale(2.5).setDepth(depth).setAlpha(0.7); }
+            } else {
+              // Default / village / farmland / road / wilderness scatter
+              if      (roll < 12) { frame = FLOWERS[h%FLOWERS.length];     obj = this.add.image(scx+jx*0.6,scy+jy*0.6,'decor',frame).setOrigin(0.5,0.8).setScale(2.5).setDepth(depth); }
+              else if (roll < 22) { frame = GRASS_TUFTS[h%GRASS_TUFTS.length]; obj = this.add.image(scx+jx*0.7,scy+jy*0.7,'decor',frame).setOrigin(0.5,0.8).setScale(2.2).setDepth(depth); }
+              else if (roll < 27) { frame = SMALL_ROCKS[h%SMALL_ROCKS.length]; obj = this.add.image(scx+jx*0.5,scy+jy*0.5,'decor',frame).setOrigin(0.5,0.8).setScale(2.5).setDepth(depth); }
+              else if (roll < 30) { obj = this.add.image(scx+jx*0.4,scy+jy*0.4,'decor',STUMPS[0]).setOrigin(0.5,0.8).setScale(2.8).setDepth(depth); }
+              else if (roll < 32) { obj = this.add.image(scx+jx*0.5,scy+jy*0.5,'decor',MUSHROOM[0]).setOrigin(0.5,0.8).setScale(2.5).setDepth(depth); }
+              else if (roll < 34) { obj = this.add.image(scx+jx*0.4,scy+jy*0.4,'decor',LOG[0]).setOrigin(0.5,0.8).setScale(2.5).setDepth(depth); }
+            }
+            if (obj) gameObjects.push(obj);
+          }
+
+          // Beach scatter on beach/sand tiles
+          if (tileType === 'beach' || tileType === 'sand') {
+            let obj;
+            if (roll < 8) { obj = this.add.image(scx+jx*0.5,scy+jy*0.5,'decor',SMALL_ROCKS[h%SMALL_ROCKS.length]).setOrigin(0.5,0.8).setScale(2.0).setDepth(depth).setAlpha(0.9); }
             if (obj) gameObjects.push(obj);
           }
 
           if (tileType === 'water' || tileType === 'water_deep') {
             const isW = (t) => t === 'water' || t === 'water_deep';
             if (roll < 6 && isW(tiles[row-1]?.[col]) && isW(tiles[row+1]?.[col]) && isW(tiles[row]?.[col-1]) && isW(tiles[row]?.[col+1])) {
-              const obj = this.add.image(cx+jx*0.5,cy+jy*0.5,'decor',SMALL_ROCKS[h%SMALL_ROCKS.length]).setOrigin(0.5,0.8).setScale(2.2).setDepth(depth).setAlpha(0.85);
+              const obj = this.add.image(scx+jx*0.5,scy+jy*0.5,'decor',SMALL_ROCKS[h%SMALL_ROCKS.length]).setOrigin(0.5,0.8).setScale(2.2).setDepth(depth).setAlpha(0.85);
               gameObjects.push(obj);
             }
           }
@@ -1688,44 +1941,123 @@ class GameScene extends Phaser.Scene {
       }
     }
 
+    // ── BIOME DECORATION PROPS — place single-sprite props on open grass tiles ──
+    // Each biome drops 1-3 characteristic props (well, hay bale, barrel, etc.)
+    {
+      const bioDecos = {
+        village:  ['well','fountain','bench','barrels'],
+        farmland: ['hay_bales','scarecrow','barrels'],
+        forest:   ['camp_decor'],
+        beach:    ['boat'],
+        ruins:    ['barrels','camp_decor'],
+        road:     ['bench','barrels'],
+        wilderness: [],
+        cliffside:  [],
+      };
+      const decoList = bioDecos[chunkBiome] || [];
+      if (decoList.length > 0) {
+        // Collect open grass tiles
+        const openTiles = [];
+        for (let row = 2; row < rows - 2; row++) {
+          for (let col = 2; col < cols - 2; col++) {
+            if ((tiles[row]?.[col] || 'grass') === 'grass') openTiles.push([col, row]);
+          }
+        }
+        // Place up to 2 props using deterministic hash
+        const seedH = ((chunkX * 7919 + chunkY * 6271) * 2654435761) >>> 0;
+        const propCount = Math.min(2, decoList.length, Math.floor(openTiles.length / 20));
+        for (let pi = 0; pi < propCount; pi++) {
+          const pIdx = (seedH * (pi + 1)) % Math.max(1, openTiles.length);
+          const [pc, pr] = openTiles[pIdx] || [0, 0];
+          const propKey = decoList[(seedH + pi) % decoList.length];
+          if (!this.textures.exists(propKey)) continue;
+          const px = offsetX + pc * TILE_SIZE + TILE_SIZE / 2;
+          const py = offsetY + pr * TILE_SIZE + TILE_SIZE / 2;
+          const pAbsRow = chunkY * CHUNK_ROWS + pr;
+          const prop = this.add.image(px, py, propKey)
+            .setOrigin(0.5, 0.85).setScale(1.5).setDepth(pAbsRow * 10 + 5);
+          gameObjects.push(prop);
+        }
+      }
+    }
+
     // ── AMBIENT ANIMALS ──
     const chunkNpcs = [];
     {
-      const animalTypes = [
-        { key:'chicken_ss', idle:'chicken_idle', walk:'chicken_walk', scale:1.8, name:'chicken' },
-        { key:'pig_ss',     idle:'pig_idle',     walk:'pig_walk',     scale:1.6, name:'pig' },
-        { key:'sheep_ss',   idle:'sheep_idle',   walk:'sheep_walk',   scale:1.6, name:'sheep' },
-        { key:'cow_ss',     idle:'cow_idle',     walk:'cow_walk',     scale:1.7, name:'cow' },
-      ];
-      const grassTiles = [];
-      for (let row = 0; row < rows; row++) {
-        for (let col = 0; col < cols; col++) {
-          if ((tiles[row]?.[col] || 'grass') !== 'grass') continue;
-          grassTiles.push([col, row]);
+      // Biome-specific animal pools
+      const biomeAnimals = {
+        village:    [
+          { key:'chicken_ss', idle:'chicken_idle', walk:'chicken_walk', scale:1.8, name:'chicken' },
+          { key:'pig_ss',     idle:'pig_idle',     walk:'pig_walk',     scale:1.6, name:'pig' },
+        ],
+        farmland:   [
+          { key:'cow_ss',   idle:'cow_idle',   walk:'cow_walk',   scale:1.7, name:'cow' },
+          { key:'sheep_ss', idle:'sheep_idle', walk:'sheep_walk', scale:1.6, name:'sheep' },
+          { key:'chicken_ss', idle:'chicken_idle', walk:'chicken_walk', scale:1.8, name:'chicken' },
+        ],
+        forest:     [
+          { key:'pig_ss',   idle:'pig_idle',   walk:'pig_walk',   scale:1.4, name:'pig' },
+        ],
+        beach:      [
+          { key:'duck_img', scale:1.5, name:'duck', static:true },
+          { key:'goose_img', scale:1.6, name:'goose', static:true },
+        ],
+        cliffside:  [],
+        ruins:      [
+          { key:'pig_ss',   idle:'pig_idle',   walk:'pig_walk',   scale:1.3, name:'pig' },
+        ],
+        road:       [
+          { key:'horse_img', scale:1.8, name:'horse', static:true },
+          { key:'chicken_ss', idle:'chicken_idle', walk:'chicken_walk', scale:1.8, name:'chicken' },
+        ],
+        wilderness: [
+          { key:'chicken_ss', idle:'chicken_idle', walk:'chicken_walk', scale:1.8, name:'chicken' },
+          { key:'pig_ss',     idle:'pig_idle',     walk:'pig_walk',     scale:1.6, name:'pig' },
+          { key:'sheep_ss',   idle:'sheep_idle',   walk:'sheep_walk',   scale:1.6, name:'sheep' },
+          { key:'cow_ss',     idle:'cow_idle',     walk:'cow_walk',     scale:1.7, name:'cow' },
+        ],
+      };
+      const animalTypes = biomeAnimals[chunkBiome] || biomeAnimals.wilderness;
+      if (animalTypes.length === 0) { /* no animals for this biome */ }
+      else {
+        // Pick suitable ground tiles (grass for land animals; beach/grass for water birds)
+        const validTiles = ['grass'];
+        if (chunkBiome === 'beach') validTiles.push('beach', 'sand');
+        const spawnTiles = [];
+        for (let row = 0; row < rows; row++) {
+          for (let col = 0; col < cols; col++) {
+            if (validTiles.includes(tiles[row]?.[col] || 'grass')) spawnTiles.push([col, row]);
+          }
         }
-      }
-      grassTiles.sort((a,b) => {
-        const ha = ((a[0]+chunkX*1000)*2654435761 + (a[1]+chunkY*1000)*2246822519) >>> 0;
-        const hb = ((b[0]+chunkX*1000)*2654435761 + (b[1]+chunkY*1000)*2246822519) >>> 0;
-        return ha - hb;
-      });
-      const animalCount = Math.min(6, Math.floor(grassTiles.length * 0.03));
-      for (let i = 0; i < animalCount; i++) {
-        const [ac, ar] = grassTiles[i];
-        const ax = offsetX + ac * TILE_SIZE + TILE_SIZE / 2;
-        const ay = offsetY + ar * TILE_SIZE + TILE_SIZE / 2;
-        const aType = animalTypes[i % animalTypes.length];
-        if (!this.textures.exists(aType.key)) continue;
-        const absRow = chunkY * CHUNK_ROWS + ar;
+        spawnTiles.sort((a,b) => {
+          const ha = ((a[0]+chunkX*1000)*2654435761 + (a[1]+chunkY*1000)*2246822519) >>> 0;
+          const hb = ((b[0]+chunkX*1000)*2654435761 + (b[1]+chunkY*1000)*2246822519) >>> 0;
+          return ha - hb;
+        });
+        const animalCount = Math.min(5, Math.floor(spawnTiles.length * 0.03));
+        for (let i = 0; i < animalCount; i++) {
+          const [ac, ar] = spawnTiles[i];
+          const ax = offsetX + ac * TILE_SIZE + TILE_SIZE / 2;
+          const ay = offsetY + ar * TILE_SIZE + TILE_SIZE / 2;
+          const aType = animalTypes[i % animalTypes.length];
+          if (!this.textures.exists(aType.key)) continue;
+          const absRow = chunkY * CHUNK_ROWS + ar;
 
-        const aSprite = this.add.sprite(ax, ay, aType.key).setScale(aType.scale).setDepth(absRow * 10 + 6);
-        this._safePlay(aSprite, aType.idle);
-        gameObjects.push(aSprite);
-
-        const wander = { homeX:ax, homeY:ay, targetX:ax, targetY:ay, moving:false, timer:Math.random()*4000+1000, idleAnim:aType.idle, walkAnim:aType.walk };
-        const npcObj = { def:{name:'',dialogue:[],type:'ambient',sprite:aType.name}, sprite:aSprite, label:null, nx:ax, ny:ay, range:TILE_SIZE*2, wander, chunkKey:key };
-        chunkNpcs.push(npcObj);
-        this.npcObjects.push(npcObj);
+          if (aType.static) {
+            // Static image animal (duck, goose, horse — no animation yet)
+            const aImg = this.add.image(ax, ay, aType.key)
+              .setOrigin(0.5, 0.8).setScale(aType.scale).setDepth(absRow * 10 + 6);
+            gameObjects.push(aImg);
+          } else {
+            const aSprite = this.add.sprite(ax, ay, aType.key).setScale(aType.scale).setDepth(absRow * 10 + 6);
+            this._safePlay(aSprite, aType.idle);
+            gameObjects.push(aSprite);
+            const wander = { homeX:ax, homeY:ay, targetX:ax, targetY:ay, moving:false, timer:Math.random()*4000+1000, idleAnim:aType.idle, walkAnim:aType.walk };
+            const npcObj = { def:{name:'',dialogue:[],type:'ambient',sprite:aType.name}, sprite:aSprite, label:null, nx:ax, ny:ay, range:TILE_SIZE*2, wander, chunkKey:key };
+            chunkNpcs.push(npcObj);
+            this.npcObjects.push(npcObj);
+          }
+        }
       }
     }
 
@@ -3034,90 +3366,75 @@ async function generateChunkAPI(cx, cy, dirLabel) {
   if (!CLAUDE_KEY) return null;
   chunkGenCount++;
 
-  // Gather edge tiles from adjacent loaded chunks for seamless transitions
-  const edgeContext = [];
-  for (const dir of NEIGHBOR_DIRS) {
-    const adjKey = `${cx + dir.dx},${cy + dir.dy}`;
-    const adj = chunks.get(adjKey);
-    if (adj && adj.loaded && adj.worldDef) {
-      const tiles = adj.worldDef.world.tiles;
-      const rows = tiles.length;
-      const cols = tiles[0]?.length || 0;
-      let edgeTiles = [];
-
-      // Get the edge of the adjacent chunk that faces us
-      if (dir.dx === -1 && dir.dy === 0) {
-        // Chunk to our west — get its east edge (last column)
-        edgeTiles = tiles.map(r => r[cols - 1] || 'grass');
-        edgeContext.push(`West neighbor east-edge: [${edgeTiles.join(',')}]`);
-      } else if (dir.dx === 1 && dir.dy === 0) {
-        edgeTiles = tiles.map(r => r[0] || 'grass');
-        edgeContext.push(`East neighbor west-edge: [${edgeTiles.join(',')}]`);
-      } else if (dir.dy === -1 && dir.dx === 0) {
-        edgeTiles = tiles[rows - 1] || [];
-        edgeContext.push(`North neighbor south-edge: [${edgeTiles.join(',')}]`);
-      } else if (dir.dy === 1 && dir.dx === 0) {
-        edgeTiles = tiles[0] || [];
-        edgeContext.push(`South neighbor north-edge: [${edgeTiles.join(',')}]`);
-      }
-    }
-  }
-
-  // Also get OUR OWN adjacent chunks' edges that touch this chunk
-  const originChunk = chunks.get('0,0');
-  const theme = worldTheme || 'wilderness';
   const lang = worldLanguage || 'es';
 
-  // Get direct neighbor edges (the chunks that border this one and are loaded)
-  const directEdges = [];
-  // North neighbor of this chunk
-  const northKey = `${cx},${cy - 1}`;
-  const northChunk = chunks.get(northKey);
+  // ── 1. Biome identity ──────────────────────────────────────────────────────
+  const regionMap = activeCampaign?.world_state?.region_map || null;
+  const biomeKey = getChunkBiome(cx, cy, regionMap);
+  const biome = BIOME_PALETTES[biomeKey] || BIOME_PALETTES.wilderness;
+
+  // ── 2. Collect used_decorations for variety nudge ─────────────────────────
+  const usedDecorations = activeCampaign?.world_state?.used_decorations || [];
+  const unusedBuildings = biome.buildings.filter(b => !usedDecorations.includes(b));
+  const buildingHint = unusedBuildings.length > 0
+    ? `Prioritize these not-yet-seen structures this chunk: ${unusedBuildings.slice(0,3).join(', ')}.`
+    : `Use any buildings from: ${biome.buildings.join(', ')}.`;
+
+  // ── 3. Hard seam injection — collect exact neighbor edges ────────────────
+  // These will be force-injected into the tile grid AFTER Claude generates it.
+  const seamData = {};
+  const northChunk = chunks.get(`${cx},${cy - 1}`);
+  const southChunk = chunks.get(`${cx},${cy + 1}`);
+  const westChunk  = chunks.get(`${cx - 1},${cy}`);
+  const eastChunk  = chunks.get(`${cx + 1},${cy}`);
+
   if (northChunk?.loaded && northChunk.worldDef) {
     const t = northChunk.worldDef.world.tiles;
-    directEdges.push(`Your NORTH edge must connect to: [${(t[t.length - 1] || []).join(',')}]`);
+    seamData.north = [...(t[t.length - 1] || [])]; // last row of north neighbor
   }
-  // South neighbor
-  const southKey = `${cx},${cy + 1}`;
-  const southChunk = chunks.get(southKey);
   if (southChunk?.loaded && southChunk.worldDef) {
     const t = southChunk.worldDef.world.tiles;
-    directEdges.push(`Your SOUTH edge must connect to: [${(t[0] || []).join(',')}]`);
+    seamData.south = [...(t[0] || [])]; // first row of south neighbor
   }
-  // West neighbor
-  const westKey = `${cx - 1},${cy}`;
-  const westChunk = chunks.get(westKey);
   if (westChunk?.loaded && westChunk.worldDef) {
     const t = westChunk.worldDef.world.tiles;
-    directEdges.push(`Your WEST edge must connect to: [${t.map(r => r[r.length - 1]).join(',')}]`);
+    seamData.west = t.map(r => r[r.length - 1] || 'grass'); // last col of west neighbor
   }
-  // East neighbor
-  const eastKey = `${cx + 1},${cy}`;
-  const eastChunk = chunks.get(eastKey);
   if (eastChunk?.loaded && eastChunk.worldDef) {
     const t = eastChunk.worldDef.world.tiles;
-    directEdges.push(`Your EAST edge must connect to: [${t.map(r => r[0]).join(',')}]`);
+    seamData.east = t.map(r => r[0] || 'grass'); // first col of east neighbor
   }
 
-  const edgeInstructions = directEdges.length > 0
-    ? `\n\nCRITICAL — EDGE MATCHING:\nThis chunk borders existing chunks. Your edges MUST match seamlessly:\n${directEdges.join('\n')}\n- Where the neighbor has water at an edge, your matching edge tile must be water or beach\n- Where the neighbor has grass, match with grass, path, or tree\n- Where the neighbor has path, continue the path into your chunk\n- Transitions should feel natural, not abrupt`
+  // Build edge instructions for the prompt (informational — hard stitch done after)
+  const edgeLines = [];
+  if (seamData.north) edgeLines.push(`NORTH edge must match: [${seamData.north.join(',')}]`);
+  if (seamData.south) edgeLines.push(`SOUTH edge must match: [${seamData.south.join(',')}]`);
+  if (seamData.west)  edgeLines.push(`WEST edge must match:  [${seamData.west.join(',')}]`);
+  if (seamData.east)  edgeLines.push(`EAST edge must match:  [${seamData.east.join(',')}]`);
+  const edgeInstructions = edgeLines.length > 0
+    ? `\n\nEDGE SEAMS (match these exactly on your border rows/cols):\n${edgeLines.join('\n')}\nWhere neighbor has water → your border tile must be water or beach. Where path → continue path into chunk.`
     : '';
 
-  const chunkPrompt = `You are generating a ${CHUNK_COLS}x${CHUNK_ROWS} chunk for an infinite world.
-Theme: "${theme}" | Direction: ${dirLabel} from origin | Language: ${lang}
-This is chunk (${cx},${cy}) in a seamless infinite world.${edgeInstructions}
+  const chunkPrompt = `You are generating a ${CHUNK_COLS}x${CHUNK_ROWS} tile chunk for a narrative detective RPG world.
+Biome: "${biome.label}" | Direction: ${dirLabel} | Language: ${lang}
+Chunk coords: (${cx},${cy})
+
+BIOME INSTRUCTIONS:
+${biome.tiles}
+Atmosphere: ${biome.atmosphere}
+Ground cover: ${biome.ground_cover}
+${buildingHint}${edgeInstructions}
 
 Return ONLY raw JSON (no markdown, no fences):
 {
-  "world": { "theme":"${theme}", "language":"${lang}", "description":"brief", "size":[${CHUNK_COLS},${CHUNK_ROWS}], "tiles": [...] },
-  "npcs": [ ... 1-2 NPCs max ... ],
+  "world": { "theme":"${biomeKey}", "language":"${lang}", "description":"one sentence", "size":[${CHUNK_COLS},${CHUNK_ROWS}], "tiles": [[row0col0,...],[row1col0,...],...] },
+  "npcs": [],
   "player_start": [${Math.floor(CHUNK_COLS/2)},${Math.floor(CHUNK_ROWS/2)}]
 }
 
-Valid tiles: grass, path, water, beach, sand, tree, building, building_door, farmland, stone, cliff, chest, rock, mountain
-NPC sprites: player, skeleton, slime, chicken, cow, pig, sheep
-NPC greetings/vocab in ${lang}. 1-2 NPCs with rich ai_context.
-Make it feel like a natural continuation of the ${theme} world — vary the landscape.`;
+Valid tile types: grass, path, water, beach, sand, tree, building, building_door, farmland, stone, cliff, chest, rock, mountain
+Tiles array must be exactly ${CHUNK_ROWS} rows × ${CHUNK_COLS} columns.
+NO npcs needed — leave npcs array empty. Focus entirely on the tile layout.`;
 
   // Retry with exponential backoff on 429 rate limit errors
   for (let attempt = 0; attempt < 4; attempt++) {
@@ -3138,7 +3455,6 @@ Make it feel like a natural continuation of the ${theme} world — vary the land
       });
 
       if (res.status === 429) {
-        // Rate limited — wait and retry with backoff: 5s, 10s, 20s
         const wait = 5000 * Math.pow(2, attempt);
         console.warn(`Chunk (${cx},${cy}) rate limited — retrying in ${wait/1000}s (attempt ${attempt+1}/4)`);
         await new Promise(r => setTimeout(r, wait));
@@ -3154,6 +3470,59 @@ Make it feel like a natural continuation of the ${theme} world — vary the land
       catch { console.error('Chunk JSON parse failed'); return null; }
 
       if (!worldDef.world?.tiles) { console.error('Chunk missing tiles'); return null; }
+
+      // ── 4. Hard seam stitching — force border rows/cols to match neighbors ──
+      const tiles = worldDef.world.tiles;
+      const rows = tiles.length;
+      const cols = tiles[0]?.length || 0;
+
+      // Helper: map a neighbor tile to a compatible seam tile
+      const seamCompat = (t) => {
+        if (t === 'water' || t === 'water_deep') return t;
+        if (t === 'beach' || t === 'sand') return t;
+        if (t === 'path' || t === 'stone' || t === 'building_door') return t;
+        if (t === 'tree') return 'tree';
+        if (t === 'cliff' || t === 'mountain') return t;
+        if (t === 'farmland') return 'farmland';
+        return t; // keep as-is for grass, rock, etc.
+      };
+
+      if (seamData.north && rows > 0) {
+        for (let c = 0; c < Math.min(cols, seamData.north.length); c++) {
+          tiles[0][c] = seamCompat(seamData.north[c]);
+        }
+      }
+      if (seamData.south && rows > 0) {
+        const lastRow = rows - 1;
+        for (let c = 0; c < Math.min(cols, seamData.south.length); c++) {
+          tiles[lastRow][c] = seamCompat(seamData.south[c]);
+        }
+      }
+      if (seamData.west && rows > 0) {
+        for (let r = 0; r < Math.min(rows, seamData.west.length); r++) {
+          if (tiles[r]) tiles[r][0] = seamCompat(seamData.west[r]);
+        }
+      }
+      if (seamData.east && rows > 0) {
+        for (let r = 0; r < Math.min(rows, seamData.east.length); r++) {
+          if (tiles[r] && cols > 0) tiles[r][cols - 1] = seamCompat(seamData.east[r]);
+        }
+      }
+
+      // Tag with biome for decoration layer use
+      worldDef.world.biome = biomeKey;
+
+      // ── 5. Update used_decorations in campaign world_state ────────────────
+      if (activeCampaign?.world_state) {
+        const prevUsed = activeCampaign.world_state.used_decorations || [];
+        const newUsed = [...new Set([...prevUsed, ...biome.buildings])];
+        activeCampaign.world_state.used_decorations = newUsed;
+        // Fire-and-forget DB update (don't await — not critical path)
+        lqDB('PATCH', `lq_campaigns?id=eq.${activeCampaignId}`, {
+          world_state: { ...activeCampaign.world_state, used_decorations: newUsed }
+        }).catch(() => {});
+      }
+
       return worldDef;
     } catch (err) {
       console.error('Chunk API error:', err);
