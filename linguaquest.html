@@ -2271,6 +2271,90 @@ function _pixiLoadChunk(worldContainer, worldDef, chunkX, chunkY, isOrigin) {
     gameScene.npcObjects.push(npcObj);
   }
 
+  // ── LIGHT SOURCES for this chunk ──
+  {
+    const chunkSeed = ((chunkX * 73856093) ^ (chunkY * 19349663)) >>> 0;
+    const biome = worldDef.world?.biome || 'wilderness';
+
+    // Helper: register a light source
+    const addLight = (col, row, color, radius, flicker) => {
+      const wx = offsetX + col * TILE_SIZE + TILE_SIZE / 2;
+      const wy = offsetY + row * TILE_SIZE + TILE_SIZE / 2;
+      _worldLights.push({ wx, wy, color, radius, flicker, flickerPhase: Math.random() * 99, chunkKey: key });
+    };
+
+    // 1. Building tiles → warm window glow at night
+    //    Place a dim amber light on every building_door tile (ground level window)
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const t = tiles[row]?.[col];
+        if (t === 'building_door') {
+          addLight(col, row - 0.5, 0xFFCC66, LIGHT_RADIUS_WINDOW, false);
+        }
+      }
+    }
+
+    // 2. Torches on path tiles — village/city/road biomes get 1 torch per ~6 path tiles
+    if (biome === 'village' || biome === 'city' || biome === 'road') {
+      const pathTiles = [];
+      for (let row = 1; row < rows - 1; row++)
+        for (let col = 1; col < cols - 1; col++)
+          if (tiles[row]?.[col] === 'path' || tiles[row]?.[col] === 'stone') {
+            // Only place near a building (check 2-tile radius)
+            let nearBuilding = false;
+            for (let dr = -2; dr <= 2 && !nearBuilding; dr++)
+              for (let dc = -2; dc <= 2 && !nearBuilding; dc++) {
+                const nt = tiles[row+dr]?.[col+dc];
+                if (nt === 'building' || nt === 'building_door') nearBuilding = true;
+              }
+            if (nearBuilding) pathTiles.push([col, row]);
+          }
+      // Seed-stable selection: every ~5th tile gets a torch
+      for (let i = 0; i < pathTiles.length; i++) {
+        const h = ((chunkSeed + i * 2654435761) >>> 0);
+        if (h % 5 === 0) {
+          const [tc, tr] = pathTiles[i];
+          addLight(tc, tr - 0.3, 0xFF9933, LIGHT_RADIUS_TORCH, true);
+        }
+      }
+    }
+
+    // 3. Campfire light — camp biome + forest clearings
+    if (biome === 'camp' || biome === 'ruins' || biome === 'dungeon' || biome === 'forest') {
+      // Find a central open grass tile for the campfire
+      const grassTiles = [];
+      for (let row = 3; row < rows - 3; row++)
+        for (let col = 3; col < cols - 3; col++)
+          if ((tiles[row]?.[col] || 'grass') === 'grass') grassTiles.push([col, row]);
+      if (grassTiles.length > 0) {
+        const pick = (chunkSeed * 1234567) % grassTiles.length;
+        const [fc, fr] = grassTiles[pick];
+        addLight(fc, fr, 0xFF6600, LIGHT_RADIUS_CAMPFIRE, true);
+        // Embers nearby
+        for (let e = 0; e < 2; e++) {
+          const ep = (chunkSeed * (e + 7) * 987654) % grassTiles.length;
+          const [ec, er] = grassTiles[ep];
+          addLight(ec, er, 0xFF4400, LIGHT_RADIUS_TORCH * 0.6, true);
+        }
+      }
+    }
+
+    // 4. Standing lamps in farmland/wilderness (moonlit lantern posts)
+    if (biome === 'farmland' || biome === 'wilderness' || biome === 'cliffside') {
+      const pathT = [];
+      for (let row = 0; row < rows; row++)
+        for (let col = 0; col < cols; col++)
+          if (tiles[row]?.[col] === 'path') pathT.push([col, row]);
+      for (let i = 0; i < pathT.length; i++) {
+        const h = ((chunkSeed + i * 999983) >>> 0);
+        if (h % 8 === 0) {
+          const [lc, lr] = pathT[i];
+          addLight(lc, lr, 0xDDEEFF, LIGHT_RADIUS_TORCH * 0.85, false);
+        }
+      }
+    }
+  }
+
   chunks.set(key, { worldDef, gameObjects, npcs: chunkNpcs, loaded: true, cx: chunkX, cy: chunkY });
 
   // ── PLAYER (origin only) ──
@@ -2331,6 +2415,10 @@ function _pixiUnloadChunk(chunkX, chunkY) {
   const chunk = chunks.get(key);
   if (!chunk || !chunk.loaded) return;
   gameScene.npcObjects = gameScene.npcObjects.filter(n => n.chunkKey !== key);
+  // Remove light sources belonging to this chunk
+  for (let i = _worldLights.length - 1; i >= 0; i--) {
+    if (_worldLights[i].chunkKey === key) _worldLights.splice(i, 1);
+  }
   const wc = gameScene._worldContainer;
   for (const obj of chunk.gameObjects) {
     if (obj && obj.destroy) obj.destroy();
@@ -2364,10 +2452,16 @@ let _lightRT    = null;  // PIXI.RenderTexture
 let _lightGfx   = null;  // PIXI.Graphics used to draw light circles
 let _lightSprite = null; // PIXI.Sprite of the render texture
 
-const LIGHT_RADIUS_PLAYER  = TILE_SIZE * 3.5;
-const LIGHT_RADIUS_TORCH   = TILE_SIZE * 2.2;
-const LIGHT_AMBIENT_NIGHT  = 0.72;  // how dark the night gets (0=pitch black, 1=full day)
+const LIGHT_RADIUS_PLAYER  = TILE_SIZE * 3.8;
+const LIGHT_RADIUS_TORCH   = TILE_SIZE * 2.8;
+const LIGHT_RADIUS_CAMPFIRE = TILE_SIZE * 4.0;
+const LIGHT_RADIUS_WINDOW  = TILE_SIZE * 2.0;
+const LIGHT_AMBIENT_NIGHT  = 0.78;  // how dark the night gets (0=pitch black, 1=full day)
 const LIGHT_AMBIENT_DAY    = 0.0;   // day: no darkness overlay at all
+
+// World light sources — populated by chunk loader, cleared on unload
+// Each entry: { wx, wy, color, radius, type, flicker, flickerPhase, chunkKey }
+const _worldLights = [];
 
 function _initLighting(stage, w, h) {
   _lightRT    = PIXI.RenderTexture.create({ width: w, height: h });
@@ -2383,6 +2477,38 @@ function _resizeLighting(w, h) {
   if (_lightSprite) { _lightSprite.width = w; _lightSprite.height = h; }
 }
 
+// Tick flicker timers for fire lights (call each frame before _updateLighting)
+let _lightTime = 0;
+function _tickLightFlicker(dt) {
+  _lightTime += dt * 0.016; // approx seconds
+  for (const lt of _worldLights) {
+    if (lt.flicker) {
+      lt.flickerPhase = (lt.flickerPhase || Math.random() * 99) + dt * 0.016 * (8 + Math.random());
+    }
+  }
+}
+
+// Draw a single soft light disk onto _lightGfx using the MULTIPLY overlay technique.
+// color: 0xRRGGBB warm tint for the light, darkVal: background grey level (0=black, 255=day)
+function _drawLightDisk(sx, sy, radius, color, darkVal, steps) {
+  const cr = (color >> 16) & 0xFF;
+  const cg = (color >> 8)  & 0xFF;
+  const cb =  color        & 0xFF;
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps; // 1=center, 0=edge
+    const ease = Math.pow(t, 1.6);
+    // Lerp from darkVal (edge) toward the light color (center)
+    const r = Math.round(darkVal + ease * (cr - darkVal));
+    const g = Math.round(darkVal + ease * (cg - darkVal));
+    const b = Math.round(darkVal + ease * (cb - darkVal));
+    const col = ((Math.max(darkVal,r) << 16) | (Math.max(darkVal,g) << 8) | Math.max(darkVal,b));
+    const ringRadius = radius * (1 - t * (1 - 1/steps));
+    _lightGfx.beginFill(col, 1);
+    _lightGfx.drawCircle(sx, sy, ringRadius);
+    _lightGfx.endFill();
+  }
+}
+
 function _updateLighting(renderer, playerScreenX, playerScreenY, ambientAlpha) {
   if (!_lightRT || !_lightGfx) return;
 
@@ -2396,43 +2522,51 @@ function _updateLighting(renderer, playerScreenX, playerScreenY, ambientAlpha) {
   const w = _lightRT.width, h = _lightRT.height;
   _lightGfx.clear();
 
-  // MULTIPLY blend technique:
-  //   • White (0xFFFFFF) × scene = scene (fully lit — no change)
-  //   • Black (0x000000) × scene = black (fully dark)
-  //   • Grey  (0x808080) × scene = half-brightness (dim)
-  //
-  // Strategy:
-  //   1. Fill entire screen with a dark grey (= the ambient darkness level)
-  //   2. Overdraw the player lantern area with white fading to grey at the edges
-  //      so the scene shines through fully at the center and dims gradually.
-
-  // 1. Ambient darkness fill — grey value: 1-ambientAlpha → 0 is pitch black, 1 is no effect
+  // MULTIPLY blend: white=lit, darkGrey=dim, black=dark
+  // 1. Fill screen with ambient darkness grey
   const darkVal = Math.round((1 - ambientAlpha) * 255);
   const darkColor = (darkVal << 16) | (darkVal << 8) | darkVal;
   _lightGfx.beginFill(darkColor, 1);
   _lightGfx.drawRect(0, 0, w, h);
   _lightGfx.endFill();
 
-  // 2. Player lantern — concentric circles from white (center) to darkColor (edge)
-  //    Draw from outer ring inward so inner rings overdraw outer
-  const r = LIGHT_RADIUS_PLAYER;
-  const steps = 16;
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps;           // 0=edge, 1=center
-    // Ease: bright at center, falloff curve toward edge
-    const brightness = Math.pow(t, 1.5);
-    // Lerp from darkColor (at edge, t=0) to 0xFFFFFF (at center, t=1)
-    const v = Math.round(darkVal + brightness * (255 - darkVal));
-    const col = (v << 16) | (v << 8) | v;
-    const radius = r * (1 - t * (1 - 1/steps));
-    _lightGfx.beginFill(col, 1);
-    _lightGfx.drawCircle(playerScreenX, playerScreenY, radius);
+  // 2. World light sources (torches, campfires, windows, lamps)
+  //    Convert world coords → screen coords via worldContainer offset
+  const wc = gameScene?._worldContainer;
+  const wcx = wc ? wc.x : 0;
+  const wcy = wc ? wc.y : 0;
+  for (const lt of _worldLights) {
+    const sx = lt.wx + wcx;
+    const sy = lt.wy + wcy;
+    // Cull lights far off screen
+    if (sx < -lt.radius * 2 || sx > w + lt.radius * 2 ||
+        sy < -lt.radius * 2 || sy > h + lt.radius * 2) continue;
+    // Flicker: vary radius slightly for fire sources
+    let r = lt.radius;
+    if (lt.flicker) {
+      const flick = Math.sin(lt.flickerPhase * 1.7) * 0.07 +
+                    Math.sin(lt.flickerPhase * 3.1) * 0.04;
+      r = lt.radius * (1 + flick);
+    }
+    _drawLightDisk(sx, sy, r, lt.color, darkVal, 14);
+    // Bright hotspot at center
+    const hc = lt.color;
+    _lightGfx.beginFill(hc, 1);
+    _lightGfx.drawCircle(sx, sy, r * 0.15);
     _lightGfx.endFill();
   }
-  // Pure white at very center for a bright hotspot
-  _lightGfx.beginFill(0xFFFFFF, 1);
-  _lightGfx.drawCircle(playerScreenX, playerScreenY, r * 0.18);
-  _lightGfx.endFill();
+
+  // 3. Player lantern — warm amber, soft falloff
+  {
+    const r = LIGHT_RADIUS_PLAYER;
+    // Subtle flicker on player lantern too
+    const rf = r * (1 + Math.sin(_lightTime * 2.3) * 0.025);
+    _drawLightDisk(playerScreenX, playerScreenY, rf, 0xFFD080, darkVal, 18);
+    // Bright warm center
+    _lightGfx.beginFill(0xFFEEB0, 1);
+    _lightGfx.drawCircle(playerScreenX, playerScreenY, rf * 0.2);
+    _lightGfx.endFill();
+  }
 
   renderer.render(_lightGfx, { renderTexture: _lightRT, clear: true });
 }
@@ -2780,6 +2914,7 @@ function _pixiUpdate(delta) {
   _updateDayNight(ingameMin);
 
   // ── LIGHTING ──
+  _tickLightFlicker(dt);
   if (pixiApp && !isIndoor) {
     const px = gameScene.player.x + (gameScene._worldContainer?.x || 0);
     const py = gameScene.player.y - 8 + (gameScene._worldContainer?.y || 0);
