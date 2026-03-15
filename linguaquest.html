@@ -2532,21 +2532,23 @@ function _drawLightDisk(sx, sy, radius, tint, nightAlpha, steps) {
   const tr = (tint >> 16) & 0xFF;
   const tg = (tint >> 8)  & 0xFF;
   const tb =  tint        & 0xFF;
+  // Ambient base colour (must match the fill colour in _updateLighting)
+  const ar = 0x0a, ag = 0x0a, ab = 0x14;
   const N = steps || 24;
   for (let i = 0; i <= N; i++) {
     const t    = i / N;              // 0=edge, 1=centre
     const s    = t * t * (3 - 2*t); // smoothstep
-    const ease = s; // linear-ish for smooth gradient
+    const ease = s;
 
     // Alpha: nightAlpha at edge → 0 at centre (transparent = lit)
-    // pow(0.55) = fast initial falloff = brighter-feeling centre area
-    const alpha = nightAlpha * Math.pow(1 - ease, 0.55);
+    const alpha = nightAlpha * Math.pow(1 - ease, 0.6);
 
-    // Colour: pure tint at mid-ring, black at extremes.
-    const colEase = Math.pow(4 * ease * (1 - ease), 1.0); // peaks at ease=0.5
-    const rv = Math.round(tr * colEase);
-    const gv = Math.round(tg * colEase);
-    const bv = Math.round(tb * colEase);
+    // Colour: ambient colour at edge, tint at mid-ring, ambient at centre.
+    // Edge matches ambient fill so no visible dark halo seam.
+    const tintPeak = Math.pow(Math.sin(ease * Math.PI), 1.2); // 0→1→0 bell
+    const rv = Math.round(ar + (tr - ar) * tintPeak);
+    const gv = Math.round(ag + (tg - ag) * tintPeak);
+    const bv = Math.round(ab + (tb - ab) * tintPeak);
 
     const ringR = radius * (1 - t);
     if (ringR < 0.5) break;
@@ -2650,6 +2652,8 @@ function _drawVisibilityPoly(sx, sy, pts, color, nightAlpha) {
   const cr = (color >> 16) & 0xFF;
   const cg = (color >> 8)  & 0xFF;
   const cb =  color        & 0xFF;
+  // Ambient base colour (must match fill colour in _updateLighting)
+  const ar = 0x0a, ag = 0x0a, ab = 0x14;
 
   const PASSES = 36;
   for (let p = 0; p <= PASSES; p++) {
@@ -2658,14 +2662,14 @@ function _drawVisibilityPoly(sx, sy, pts, color, nightAlpha) {
     const ease = s;
     const scale = 1.0 - t;               // polygon shrinks toward centre
 
-    // Alpha: nightAlpha at edge → 0 at centre (fast falloff = bright centre)
-    const alpha = nightAlpha * Math.pow(1 - ease, 0.55);
+    // Alpha: nightAlpha at edge → 0 at centre
+    const alpha = nightAlpha * Math.pow(1 - ease, 0.6);
 
-    // Colour tint peaks at mid-ring
-    const colEase = Math.pow(4 * ease * (1 - ease), 1.0);
-    const rv = Math.round(cr * colEase);
-    const gv = Math.round(cg * colEase);
-    const bv = Math.round(cb * colEase);
+    // Colour: ambient at edge, tint bell-peaks at mid, back to ambient at centre
+    const tintPeak = Math.pow(Math.sin(ease * Math.PI), 1.2);
+    const rv = Math.round(ar + (cr - ar) * tintPeak);
+    const gv = Math.round(ag + (cg - ag) * tintPeak);
+    const bv = Math.round(ab + (cb - ab) * tintPeak);
 
     _lightGfx.beginFill((rv << 16) | (gv << 8) | bv, alpha);
     _lightGfx.moveTo(sx, sy);
