@@ -2541,7 +2541,7 @@ void main(void) {
   vec3  col = mix(scene.rgb, uAmbientColor, nightStrength);
 
   // Warm glow additive on lit areas
-  col += clamp(glow, 0.0, 0.5) * uNightAlpha;
+  col += clamp(glow, 0.0, 1.0) * uNightAlpha * 1.5;
 
   gl_FragColor = vec4(clamp(col, 0.0, 1.0), scene.a);
 }`;
@@ -2720,7 +2720,7 @@ function _updateLighting(renderer, playerScreenX, playerScreenY, ambientAlpha, i
   // Positions are in CSS pixels, matching uResolution and filterArea
   const u = _lightFilter.uniforms;
   u.uNightAlpha   = nightAlpha;
-  u.uAmbientColor = [0.04, 0.04, 0.08];
+  u.uAmbientColor = [0.12, 0.15, 0.28];
   const count = Math.min(lights.length, 16);
   for (let i = 0; i < 16; i++) {
     if (i < count) {
