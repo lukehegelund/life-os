@@ -694,47 +694,47 @@ const TILE_DEFS = {
 const BIOME_PALETTES = {
   village: {
     label: 'Village',
-    tiles: 'Use: grass, path, stone, building, building_door, rock, chest. Cobblestone paths wind between clustered buildings. Include a well or fountain in the central square. Market stalls near paths. 3-5 buildings minimum.',
-    buildings: ['inn','church','blacksmith','house','house_2','house_3','market_stalls','well','fountain'],
-    animals: ['chicken','cow','pig'],
+    tiles: 'Use: grass, path, stone, cobble (main square), building, building_door, rock, chest. Cobblestone paths wind between clustered buildings. Include a well or fountain in the central square. Market stalls near paths. 3-5 buildings minimum.',
+    buildings: ['inn','church','blacksmith','house','house_2','house_3','house_stone','market_stalls','well','fountain','apple_tree','cherry_tree'],
+    animals: ['chicken','cow','pig','sheep'],
     decorations: ['bench','barrels','scarecrow'],
-    ground_cover: 'Flowers and grass tufts between buildings. Stone-paved paths.',
+    ground_cover: 'Flowers and grass tufts between buildings. Cobblestone-paved paths.',
     atmosphere: 'Bustling village center. Multiple buildings clustered together. A lived-in place with history.',
     npc_count: 2,
   },
   city: {
     label: 'City District',
-    tiles: 'Use: stone (cobbled roads dominate), building, building_door, path, chest, rock. Dense urban layout. Many buildings tightly packed. Broad stone roads. A church or inn as landmark. 5-7 buildings.',
+    tiles: 'Use: stone (cobbled roads dominate), cobble (central plaza), building, building_door, path, chest, rock. Dense urban layout. Many buildings tightly packed. Broad stone roads. A church or inn as landmark. 5-7 buildings.',
     buildings: ['inn','church','blacksmith','house','house_2','house_3','house_stone','house_limestone','market_stalls','well','fountain'],
     animals: ['chicken','pig'],
-    decorations: ['bench','barrels'],
-    ground_cover: 'Mostly stone paving. Occasional flower box or shrub.',
+    decorations: ['bench','barrels','fountain'],
+    ground_cover: 'Mostly cobblestone paving. Occasional flower box or shrub.',
     atmosphere: 'Dense city district. Busy streets, stone architecture. Urban and slightly imposing.',
     npc_count: 3,
   },
   farmland: {
     label: 'Farmland',
-    tiles: 'Use: farmland (40-50% of tiles), grass, path, tree (sparse at edges only). One or two farm buildings. Large open fields broken by footpaths. No more than 2 buildings.',
-    buildings: ['barn','coop','shed','greenhouse','silo','hay_bales','scarecrow'],
+    tiles: 'Use: farmland (40%), farmland_wet (near water), grass, path, tree (sparse at edges only). One or two farm buildings. Large open fields broken by footpaths. No more than 2 buildings.',
+    buildings: ['barn','coop','shed','greenhouse','windmill','silo','hay_bales','scarecrow'],
     animals: ['chicken','cow','pig','sheep'],
-    decorations: ['hay_bales','scarecrow'],
-    ground_cover: 'Mostly farmland tiles with dirt paths. Apple and cherry trees at the field edges.',
+    decorations: ['hay_bales','scarecrow','apple_tree','cherry_tree'],
+    ground_cover: 'Mostly farmland tiles with dirt paths. Apple and cherry trees at the field edges. Windmill on a hill.',
     atmosphere: 'Open working farmland. Rolling fields, fresh air, honest labor.',
     npc_count: 1,
   },
   forest: {
     label: 'Forest',
-    tiles: 'Use: tree (55-65% of tiles), grass (clearings), rock, mountain (sparse), path (1-2 narrow winding trails). One hidden chest in a clearing. Almost no buildings.',
+    tiles: 'Use: tree (55-65% of tiles), grass2 and grass3 (clearings), rock, mountain (sparse), path (1-2 narrow winding trails). One hidden chest in a clearing. Almost no buildings.',
     buildings: ['tent_small','chest'],
-    animals: ['frog','goose'],
-    decorations: [],
-    ground_cover: 'Stumps, logs, mushrooms, moss-covered rocks everywhere.',
+    animals: ['frog','goose','duck'],
+    decorations: ['apple_tree','cherry_tree'],
+    ground_cover: 'Stumps, logs, mushrooms, moss-covered rocks everywhere. Variant grass in clearings.',
     atmosphere: 'Dense ancient forest. Mysterious, shadowy, enclosed. Things lurk here.',
     npc_count: 1,
   },
   cliffside: {
     label: 'Cliffside',
-    tiles: 'Use: cliff (40%+), mountain, rock, grass (narrow ledges only), path (dangerous winding trail). Dramatic. Mostly impassable terrain with thin walkable strips. Very exposed.',
+    tiles: 'Use: cliff (40%+), mountain, rock, grass4 (narrow ledges only), path (dangerous winding trail). Dramatic. Mostly impassable terrain with thin walkable strips. Very exposed.',
     buildings: ['tent_small'],
     animals: [],
     decorations: [],
@@ -744,17 +744,17 @@ const BIOME_PALETTES = {
   },
   beach: {
     label: 'Beach',
-    tiles: 'Use: beach/sand (55%+), water, water_deep, grass (inland edge only), rock. Wide open beach. Boat near the waterline. Rocks jutting from the water.',
-    buildings: ['boat','fisherman_house'],
+    tiles: 'Use: beach/sand (55%+), water, water_tiles (edge), grass (inland edge only), rock. Wide open beach. Boat near the waterline. Bridge over tidal channel. Rocks jutting from the water.',
+    buildings: ['boat','fisherman_house','bridge'],
     animals: ['duck','goose'],
-    decorations: ['boat'],
+    decorations: ['boat','bridge'],
     ground_cover: 'Sandy beach with pebble scatter near waterline.',
     atmosphere: 'Open coastal beach. Salt air, crashing waves, horizon stretching away.',
     npc_count: 1,
   },
   ocean: {
     label: 'Open Ocean',
-    tiles: 'Use: water (70%+), water_deep (center), beach/sand (thin strip on one edge only), rock (scattered in water). Almost entirely water. A single rocky island or sandbar possible. No buildings.',
+    tiles: 'Use: water (70%+), water_tiles (edge), beach/sand (thin strip on one edge only), rock (scattered in water). Almost entirely water. A single rocky island or sandbar possible. No buildings.',
     buildings: ['boat'],
     animals: ['duck','goose'],
     decorations: ['boat'],
@@ -764,7 +764,7 @@ const BIOME_PALETTES = {
   },
   ruins: {
     label: 'Ancient Ruins',
-    tiles: 'Use: stone (cracked paths), rock, mountain, grass (overgrown), cliff (collapsed walls), building (crumbling shells). Decayed structures half-swallowed by nature. Overgrown paths. 2-3 ruined buildings.',
+    tiles: 'Use: stone (cracked paths), cobble (old roads), rock, mountain, grass3 (overgrown), cliff (collapsed walls), building (crumbling shells). Decayed structures half-swallowed by nature. Overgrown paths. 2-3 ruined buildings.',
     buildings: ['chest','tent_small'],
     animals: ['frog'],
     decorations: ['barrels','camp_decor'],
@@ -784,32 +784,83 @@ const BIOME_PALETTES = {
   },
   camp: {
     label: 'Traveler Camp',
-    tiles: 'Use: grass, path, tree (scattered), rock, chest (supply cache). A clearing with tents and a campfire. Small camp of travelers or bandits. 1-2 tents, supplies scattered.',
+    tiles: 'Use: grass2, path, tree (scattered), rock, chest (supply cache). A clearing with tents and a campfire. Small camp of travelers or bandits. 1-2 tents, supplies scattered.',
     buildings: ['tent_big','tent_small','camp_decor','barrels','chest'],
     animals: ['horse','chicken'],
     decorations: ['camp_decor','barrels'],
-    ground_cover: 'Firepit clearing, worn grass, scattered supplies.',
+    ground_cover: 'Firepit clearing, worn grass variant, scattered supplies.',
     atmosphere: 'Rough traveler camp. Campfire smoke. Either friendly or dangerous.',
     npc_count: 2,
   },
   road: {
     label: 'Road',
-    tiles: 'Use: path (wide road running through center of the chunk from one edge to the other), grass (flanking), tree (lining the road), rock (milestones). The road must enter and exit the chunk on opposite edges.',
-    buildings: ['tent_big','shed','barn'],
+    tiles: 'Use: path (wide road), cobble (near towns), grass, grass2 (roadside verge), tree (lining the road), rock (milestones). The road must enter and exit the chunk on opposite edges.',
+    buildings: ['tent_big','shed','barn','bridge'],
     animals: ['horse','chicken'],
     decorations: ['barrels','bench'],
-    ground_cover: 'Roadside grass, wildflowers, milestone rocks.',
+    ground_cover: 'Roadside grass variants, wildflowers, milestone rocks. Cobble near settlements.',
     atmosphere: 'Traveled road. Open sky. The feeling of somewhere ahead.',
     npc_count: 1,
   },
   wilderness: {
     label: 'Wilderness',
-    tiles: 'Use: grass, tree (clusters), water (ponds), rock, mountain (occasional), path (faint trail). Mixed open wilderness with variety — no one tile type should dominate.',
+    tiles: 'Use: grass, grass2 (patches), tree (clusters), water (ponds), rock, mountain (occasional), path (faint trail). Mixed open wilderness with variety — no one tile type should dominate.',
     buildings: ['chest','tent_small'],
-    animals: ['chicken','pig','frog'],
+    animals: ['chicken','pig','frog','duck'],
     decorations: [],
-    ground_cover: 'Wild grass, flowers, mushrooms, logs, ponds.',
+    ground_cover: 'Wild grass variants, flowers, mushrooms, logs, ponds.',
     atmosphere: 'Untamed wilderness. Natural beauty. Something unexpected around each corner.',
+    npc_count: 1,
+  },
+  // ── NEW BIOMES ────────────────────────────────────────────────────────────────
+  swamp: {
+    label: 'Swamp',
+    tiles: 'Use: water (30%, stagnant pools), grass4 (soggy ground), tree (gnarled overhanging), rock, path (raised plank boardwalk). Murky, half-submerged terrain. Everything is waterlogged.',
+    buildings: ['tent_small','chest'],
+    animals: ['frog','duck','goose'],
+    decorations: ['camp_decor'],
+    ground_cover: 'Waterlogged soggy grass, gnarled tree roots, stagnant pools everywhere.',
+    atmosphere: 'Dark fetid swamp. Biting insects, strange sounds, treacherous footing. Something watches.',
+    npc_count: 1,
+  },
+  meadow: {
+    label: 'Meadow',
+    tiles: 'Use: grass3 (lush meadow dominant), grass2, grass, flower (scattered), path (winding trail), water (brook). Open rolling meadow. Gentle and bright. Wildflowers everywhere.',
+    buildings: ['greenhouse','shed','apple_tree','cherry_tree'],
+    animals: ['sheep','cow','horse','duck'],
+    decorations: ['bench','hay_bales','apple_tree','cherry_tree'],
+    ground_cover: 'Lush variant grass, wildflowers, babbling brook, scattered fruit trees.',
+    atmosphere: 'Open sunny meadow. Peaceful and gentle. A welcome rest after dark places.',
+    npc_count: 1,
+  },
+  cave: {
+    label: 'Cave',
+    tiles: 'Use: cliff (cave walls dominant), mountain, rock, stone (cavern floor), path (main passage), grass (mossy patches sparse). Underground cavern. Confined, dark, dangerous.',
+    buildings: ['chest','tent_small'],
+    animals: [],
+    decorations: ['barrels','camp_decor'],
+    ground_cover: 'Bare rock and stone. Stalactite shadows. Mossy patches near water seeps.',
+    atmosphere: 'Dark underground cave. Dripping water, echoing silence, gleam of ore. Something lives here.',
+    npc_count: 1,
+  },
+  fishing_village: {
+    label: 'Fishing Village',
+    tiles: 'Use: beach/sand (coastal edge), water_tiles (harbor), path (boardwalk), grass (inland), rock, bridge (pier). Small coastal settlement. Boats at dock. Fish everywhere.',
+    buildings: ['fisherman_house','inn','boat','bridge','shed','well'],
+    animals: ['duck','goose','chicken'],
+    decorations: ['boat','bridge','barrels','bench'],
+    ground_cover: 'Sandy paths, driftwood, nets and barrels stacked at waterfront.',
+    atmosphere: 'Quiet fishing village. Salt-crusted timber, smell of the sea, weathered faces.',
+    npc_count: 2,
+  },
+  mountain_pass: {
+    label: 'Mountain Pass',
+    tiles: 'Use: mountain (50%+), cliff, rock, grass4 (ledges), path (treacherous pass), stone (waystation). Narrow mountain corridor. Imposing walls on both sides. The only way through.',
+    buildings: ['tent_big','shed','chest'],
+    animals: [],
+    decorations: ['barrels','camp_decor'],
+    ground_cover: 'Bare mountain rock, wind-scoured ledges, patches of hardy grass.',
+    atmosphere: 'High mountain pass. Wind howls. The weight of mountains on both sides. One path through.',
     npc_count: 1,
   },
 };
@@ -1146,7 +1197,7 @@ const MAIN_CAST_SOULS = {
     name: "Doña Petra",
     age: 52,
     occupation: "Innkeeper",
-    sprite_key: "player",
+    sprite_key: "bartender",
     home_chunk: "0,0",
     soul: {
       personality: "Direct, warmly guarded, speaks in dry observation. Runs the only inn in Arenas Blancas with quiet pride.",
@@ -1173,7 +1224,7 @@ const MAIN_CAST_SOULS = {
     name: "El Viejo Ramos",
     age: 71,
     occupation: "Fisherman",
-    sprite_key: "player",
+    sprite_key: "fisherman",
     home_chunk: "0,0",
     soul: {
       personality: "Weathered, evasive, speaks in fragments. Has been trying to convince himself he didn't see what he saw.",
@@ -2344,17 +2395,23 @@ function _pixiLoadChunk(worldContainer, worldDef, chunkX, chunkY, isOrigin) {
   const chunkNpcs = [];
   {
     const biomeAnimals = {
-      village:[{key:'chicken_ss',idle:[0,1],walk:[2,3],scale:1.8,name:'chicken'},{key:'pig_ss',idle:[0,1],walk:[2,3],scale:1.6,name:'pig'}],
-      city:[{key:'chicken_ss',idle:[0,1],walk:[2,3],scale:1.6,name:'chicken'}],
-      farmland:[{key:'cow_ss',idle:[0,1],walk:[2,3],scale:1.7,name:'cow'},{key:'sheep_ss',idle:[0,1],walk:[2,3],scale:1.6,name:'sheep'},{key:'chicken_ss',idle:[0,1],walk:[2,3],scale:1.8,name:'chicken'}],
-      forest:[{key:'pig_ss',idle:[0,1],walk:[2,3],scale:1.4,name:'pig'},{key:'frog_img',scale:1.3,name:'frog',static:true}],
-      beach:[{key:'duck_img',scale:1.5,name:'duck',static:true},{key:'goose_img',scale:1.6,name:'goose',static:true}],
-      ocean:[{key:'duck_img',scale:1.5,name:'duck',static:true}],
+      village:[{key:'chicken_ss',idle:[0,1],walk:[2,3],scale:1.8,name:'chicken'},{key:'pig_ss',idle:[0,1],walk:[2,3],scale:1.6,name:'pig'},{key:'cow_ss',idle:[0,1],walk:[2,3],scale:1.6,name:'cow'}],
+      city:[{key:'chicken_ss',idle:[0,1],walk:[2,3],scale:1.6,name:'chicken'},{key:'pig_ss',idle:[0,1],walk:[2,3],scale:1.5,name:'pig'}],
+      farmland:[{key:'cow_ss',idle:[0,1],walk:[2,3],scale:1.7,name:'cow'},{key:'sheep_ss',idle:[0,1],walk:[2,3],scale:1.6,name:'sheep'},{key:'chicken_ss',idle:[0,1],walk:[2,3],scale:1.8,name:'chicken'},{key:'horse_ss',idle:[0,1,2,3],walk:[4,5,6,7],scale:1.4,name:'horse'}],
+      forest:[{key:'frog_ss',idle:[0,1],walk:[2,3],scale:1.3,name:'frog'},{key:'goose_ss',idle:[0,1],walk:[2,3],scale:1.5,name:'goose'},{key:'duck_ss',idle:[0,1],walk:[2,3],scale:1.4,name:'duck'}],
+      beach:[{key:'duck_ss',idle:[0,1],walk:[2,3],scale:1.5,name:'duck'},{key:'goose_ss',idle:[0,1],walk:[2,3],scale:1.6,name:'goose'}],
+      ocean:[{key:'duck_ss',idle:[0,1],walk:[2,3],scale:1.5,name:'duck'},{key:'goose_ss',idle:[0,1],walk:[2,3],scale:1.4,name:'goose'}],
       cliffside:[],dungeon:[],
-      ruins:[{key:'pig_ss',idle:[0,1],walk:[2,3],scale:1.3,name:'pig'},{key:'frog_img',scale:1.2,name:'frog',static:true}],
+      ruins:[{key:'frog_ss',idle:[0,1],walk:[2,3],scale:1.3,name:'frog'}],
       camp:[{key:'horse_ss',idle:[0,1,2,3],walk:[4,5,6,7],scale:1.4,name:'horse'},{key:'chicken_ss',idle:[0,1],walk:[2,3],scale:1.6,name:'chicken'}],
       road:[{key:'horse_ss',idle:[0,1,2,3],walk:[4,5,6,7],scale:1.4,name:'horse'},{key:'chicken_ss',idle:[0,1],walk:[2,3],scale:1.8,name:'chicken'}],
-      wilderness:[{key:'chicken_ss',idle:[0,1],walk:[2,3],scale:1.8,name:'chicken'},{key:'pig_ss',idle:[0,1],walk:[2,3],scale:1.6,name:'pig'},{key:'sheep_ss',idle:[0,1],walk:[2,3],scale:1.6,name:'sheep'},{key:'cow_ss',idle:[0,1],walk:[2,3],scale:1.7,name:'cow'}],
+      wilderness:[{key:'chicken_ss',idle:[0,1],walk:[2,3],scale:1.8,name:'chicken'},{key:'pig_ss',idle:[0,1],walk:[2,3],scale:1.6,name:'pig'},{key:'duck_ss',idle:[0,1],walk:[2,3],scale:1.4,name:'duck'},{key:'frog_ss',idle:[0,1],walk:[2,3],scale:1.3,name:'frog'}],
+      // New biomes
+      swamp:[{key:'frog_ss',idle:[0,1],walk:[2,3],scale:1.4,name:'frog'},{key:'duck_ss',idle:[0,1],walk:[2,3],scale:1.5,name:'duck'},{key:'goose_ss',idle:[0,1],walk:[2,3],scale:1.5,name:'goose'}],
+      meadow:[{key:'sheep_ss',idle:[0,1],walk:[2,3],scale:1.7,name:'sheep'},{key:'cow_ss',idle:[0,1],walk:[2,3],scale:1.7,name:'cow'},{key:'horse_ss',idle:[0,1,2,3],walk:[4,5,6,7],scale:1.5,name:'horse'},{key:'duck_ss',idle:[0,1],walk:[2,3],scale:1.4,name:'duck'}],
+      cave:[],
+      fishing_village:[{key:'duck_ss',idle:[0,1],walk:[2,3],scale:1.5,name:'duck'},{key:'goose_ss',idle:[0,1],walk:[2,3],scale:1.6,name:'goose'},{key:'chicken_ss',idle:[0,1],walk:[2,3],scale:1.6,name:'chicken'}],
+      mountain_pass:[],
     };
     const animalTypes = biomeAnimals[chunkBiome] || biomeAnimals.wilderness;
     const validTiles = ['grass'];
@@ -3958,39 +4015,54 @@ function startGame(worldDef) {
 // ─────────────────────────────────────────────────────────────
 function renderNPCPortrait(spriteType, npcId) {
   const canvas = document.getElementById('dialogue-portrait');
-  if (!canvas || !phaserGame) return;
+  if (!canvas) return;
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, 48, 48);
   ctx.fillStyle = '#0a1208';
   ctx.fillRect(0, 0, 48, 48);
 
-  const texKey = {
-    skeleton: 'skeleton_ss',
-    slime:    'slime_ss',
-    chicken:  'chicken_ss',
-    cow:      'cow_ss',
-    pig:      'pig_ss',
-    sheep:    'sheep_ss',
-  }[spriteType] || 'player_ss';
+  // Map sprite_key → PIXI asset key
+  const PORTRAIT_KEY_MAP = {
+    skeleton:   'skeleton_ss',
+    slime:      'slime_ss',
+    chicken:    'chicken_ss',
+    cow:        'cow_ss',
+    pig:        'pig_ss',
+    sheep:      'sheep_ss',
+    horse:      'horse_ss',
+    duck:       'duck_ss',
+    frog:       'frog_ss',
+    goose:      'goose_ss',
+    farmer:     'npc_farmer',
+    fisherman:  'npc_fisherman',
+    bartender:  'npc_bartender',
+    player:     'player_ss',
+  };
+  const texKey = PORTRAIT_KEY_MAP[spriteType] || 'player_ss';
 
+  // Use PixiJS texture source (renderer-agnostic)
   try {
-    const tex = phaserGame.textures.get(texKey);
-    if (!tex || tex.key === '__MISSING') return;
-    const src = tex.getSourceImage();
-    // Draw just the first idle frame (col 0, row 0 = face-down frame)
-    const fw = spriteType === 'slime' ? 64 : 32;
-    const fh = spriteType === 'slime' ? 64 : 32;
-    // Scale to fit 44x44 centered in 48x48
+    const pixiT = PIXI?.utils?.TextureCache?.[texKey];
+    const src = pixiT?.baseTexture?.resource?.source;
+    if (!src) throw new Error('no src');
+    // Premade NPC sprites are full images (not spritesheets) — draw whole image
+    const isPremade = ['npc_farmer','npc_fisherman','npc_bartender'].includes(texKey);
+    const fw = isPremade ? src.naturalWidth  : 32;
+    const fh = isPremade ? src.naturalHeight : 32;
     const scale = 44 / Math.max(fw, fh);
     const dw = fw * scale, dh = fh * scale;
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(src, 0, 0, fw, fh, (48 - dw) / 2, (48 - dh) / 2, dw, dh);
   } catch(e) {
-    // fallback: draw emoji
+    // Fallback: draw emoji
     ctx.font = '28px serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    const emoji = { skeleton:'💀', slime:'🟢', chicken:'🐔', cow:'🐄', pig:'🐷', sheep:'🐑' }[spriteType] || '🧑';
+    const emoji = {
+      skeleton:'💀', slime:'🟢', chicken:'🐔', cow:'🐄', pig:'🐷', sheep:'🐑',
+      horse:'🐴', duck:'🦆', frog:'🐸', goose:'🪿',
+      farmer:'👨‍🌾', fisherman:'🎣', bartender:'🍺',
+    }[spriteType] || '🧑';
     ctx.fillText(emoji, 24, 24);
   }
 }
@@ -6025,15 +6097,28 @@ function _buildTerrainMap(campaignId, size = 21) {
 }
 
 // Derive biome from terrain elevation/temperature/moisture
+// Returns one of: ocean, beach, fishing_village, swamp, meadow, farmland,
+//                 forest, wilderness, ruins, cave, dungeon, cliffside, mountain_pass, camp
 function _terrainToBiome(elev, temp, moist) {
-  if (elev < 0.2 && moist > 0.7) return 'ocean';
-  if (elev < 0.3 && moist > 0.6) return 'beach';
-  if (elev > 0.75) return 'cliffside';
-  if (elev > 0.6 && moist < 0.3) return 'wilderness';
-  if (elev > 0.55 && moist < 0.4) return 'ruins';
-  if (moist > 0.7 && elev > 0.4 && elev < 0.7) return 'forest';
-  if (moist < 0.35 && elev < 0.5) return 'farmland';
-  if (elev > 0.65) return 'dungeon';
+  // ── Water biomes ────────────────────────────────────────────────────────────
+  if (elev < 0.18 && moist > 0.72) return 'ocean';
+  if (elev < 0.28 && moist > 0.62) return 'beach';
+  // ── Coastal settlements ─────────────────────────────────────────────────────
+  if (elev >= 0.28 && elev < 0.38 && moist > 0.65) return 'fishing_village';
+  // ── Wetlands ─────────────────────────────────────────────────────────────────
+  if (moist > 0.78 && elev >= 0.28 && elev < 0.5 && temp > 0.45) return 'swamp';
+  // ── High terrain ─────────────────────────────────────────────────────────────
+  if (elev > 0.82) return 'cliffside';
+  if (elev > 0.72 && moist < 0.4) return 'mountain_pass';
+  if (elev > 0.68) return 'cave';
+  if (elev > 0.60 && moist < 0.28) return 'dungeon';
+  // ── Mid elevation ────────────────────────────────────────────────────────────
+  if (elev > 0.54 && moist < 0.38) return 'ruins';
+  if (moist > 0.62 && elev > 0.38 && elev < 0.7) return 'forest';
+  // ── Lowlands ─────────────────────────────────────────────────────────────────
+  if (moist < 0.32 && elev < 0.5) return 'farmland';
+  if (moist > 0.45 && elev > 0.28 && elev < 0.55 && temp > 0.5) return 'meadow';
+  // ── Fallback ─────────────────────────────────────────────────────────────────
   return 'wilderness';
 }
 
@@ -6341,9 +6426,11 @@ function _generateNPCStubs(settlements) {
     const npcCount = settle.type === 'city' ? 6 : (2 + Math.floor(Math.random() * 2));
 
     for (let i = 0; i < npcCount; i++) {
+      const occupation = _generateOccupation(settle, i);
       settle.npcs.push({
         name: _generateNPCName(settle, i),
-        occupation: _generateOccupation(settle, i),
+        occupation,
+        sprite_key: _occupationToSpriteKey(occupation),
         home_chunk: `${settle.cx},${settle.cy}`,
         workplace_chunk: `${settle.cx + Math.floor(Math.random()*3 - 1)},${settle.cy + Math.floor(Math.random()*3 - 1)}`,
         personality_seed: Math.random()
@@ -6364,6 +6451,23 @@ function _generateOccupation(settle, index) {
     ? ['merchant', 'smith', 'baker', 'guard', 'farmer', 'healer']
     : ['farmer', 'fisherman', 'carpenter', 'weaver'];
   return occupations[index % occupations.length];
+}
+
+// Map occupation string → sprite_key (uses premade NPCs where appropriate)
+function _occupationToSpriteKey(occupation) {
+  const map = {
+    farmer:     'farmer',
+    fisherman:  'fisherman',
+    bartender:  'bartender',
+    merchant:   'bartender',   // merchant uses bartender sprite
+    baker:      'farmer',      // baker uses farmer sprite
+    weaver:     'farmer',      // weaver uses farmer sprite
+    carpenter:  'farmer',
+    healer:     'player',
+    smith:      'player',
+    guard:      'skeleton',    // guard uses skeleton sprite (armored look)
+  };
+  return map[occupation] || 'player';
 }
 
 // ── Fast chunk-local deterministic RNG ─────────────────────────────────────
@@ -6437,6 +6541,16 @@ function _generateProceduralTiles(cx, cy, biomeKey, campaignId) {
     _genCamp(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy);
   } else if (biomeKey === 'road') {
     _genRoad(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy);
+  } else if (biomeKey === 'swamp') {
+    _genSwamp(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy);
+  } else if (biomeKey === 'meadow') {
+    _genMeadow(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy);
+  } else if (biomeKey === 'cave') {
+    _genCave(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy);
+  } else if (biomeKey === 'fishing_village') {
+    _genFishingVillage(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy);
+  } else if (biomeKey === 'mountain_pass') {
+    _genMountainPass(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy);
   } else {
     _genWilderness(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy);
   }
@@ -6449,8 +6563,6 @@ function _genForest(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy) {
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
       const e = elev[r][c], d = detail[r][c];
-      // Dense tree clusters where elevation+moisture both high
-      // Clearings at low elevation pockets — organic, not uniform
       const treeDensity = e * 0.65 + moist[r][c] * 0.35;
       if (treeDensity > 0.48) {
         tiles[r][c] = 'tree';
@@ -6461,11 +6573,11 @@ function _genForest(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy) {
       } else if (e < 0.28 && moist[r][c] > 0.6) {
         tiles[r][c] = 'water'; // forest pool
       } else {
-        tiles[r][c] = 'grass';
+        // Clearings use variant grass for visual richness
+        tiles[r][c] = d > 0.55 ? 'grass2' : (d > 0.35 ? 'grass3' : 'grass');
       }
     }
   }
-  // Carve a winding path through the forest
   _carvePath(tiles, rng, ROWS, COLS, 'horizontal', 0.35, cx, cy);
 }
 
@@ -6479,24 +6591,21 @@ function _genWilderness(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, c
       } else if (e > 0.62) {
         tiles[r][c] = 'rock';
       } else if (e > 0.42 && m > 0.55 && d > 0.45) {
-        tiles[r][c] = 'tree'; // scattered copses
+        tiles[r][c] = 'tree';
       } else if (e < 0.25 && m > 0.65) {
         tiles[r][c] = m > 0.78 ? 'water' : 'grass';
       } else if (e < 0.2 && m > 0.55) {
-        tiles[r][c] = 'water'; // natural ponds
+        tiles[r][c] = 'water';
       } else {
-        tiles[r][c] = 'grass';
+        tiles[r][c] = d > 0.6 ? 'grass2' : (fine[r][c] > 0.7 ? 'grass3' : 'grass');
       }
     }
   }
-  // Occasional faint trail
   if (rng() > 0.4) _carvePath(tiles, rng, ROWS, COLS, rng() > 0.5 ? 'horizontal' : 'vertical', 0.2, cx, cy);
 }
 
 // ── FARMLAND ────────────────────────────────────────────────────────────────
-function _genFarmland(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
-  // Noise-driven field patches — farmland blends with grass so it never looks
-  // like a flat desert. Fields are organic patches, not mechanical strips.
+function _genFarmland(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy) {
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
       const e = elev[r][c], d = detail[r][c], m = moist[r][c];
@@ -6505,18 +6614,15 @@ function _genFarmland(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
       } else if (e > 0.68 && (r < 3 || r > ROWS-4 || c < 3 || c > COLS-4)) {
         tiles[r][c] = 'tree'; // windbreak trees at field edges
       } else if (e > 0.52 && d > 0.45) {
-        // Core farmland — only where noise is elevated AND detail agrees
-        // This creates patchy fields rather than wall-to-wall brown
-        tiles[r][c] = 'farmland';
+        // Wet farmland near moisture pockets, dry elsewhere
+        tiles[r][c] = m > 0.6 ? 'farmland_wet' : 'farmland';
       } else if (e > 0.45 && d > 0.6) {
         tiles[r][c] = 'farmland';
       } else {
-        // Everything else is grassy — fields sit IN grass, not the other way around
         tiles[r][c] = 'grass';
       }
     }
   }
-  // Footpaths between fields — one E-W, one N-S, naturally placed
   const pathR = Math.floor(ROWS * 0.4 + rng() * ROWS * 0.2);
   const pathC = Math.floor(COLS * 0.4 + rng() * COLS * 0.2);
   for (let c = 0; c < COLS; c++) tiles[pathR][c] = 'path';
@@ -6524,28 +6630,24 @@ function _genFarmland(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
 }
 
 // ── VILLAGE ─────────────────────────────────────────────────────────────────
-function _genVillage(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
-  // Base: mostly grass
+function _genVillage(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy) {
   for (let r = 0; r < ROWS; r++)
     for (let c = 0; c < COLS; c++)
       tiles[r][c] = elev[r][c] > 0.82 ? 'rock' : 'grass';
 
-  // Central plaza — stone square in center
+  // Central plaza — cobblestone
   const pr = Math.floor(ROWS * 0.35), pc = Math.floor(COLS * 0.35);
   const pw = Math.floor(COLS * 0.3),  ph = Math.floor(ROWS * 0.3);
   for (let r = pr; r < pr + ph; r++)
     for (let c = pc; c < pc + pw; c++)
-      tiles[r][c] = (r === pr || r === pr+ph-1 || c === pc || c === pc+pw-1) ? 'path' : 'stone';
+      tiles[r][c] = (r === pr || r === pr+ph-1 || c === pc || c === pc+pw-1) ? 'path' : 'cobble';
 
-  // Roads radiating out from plaza
   const midR = Math.floor(ROWS/2), midC = Math.floor(COLS/2);
-  _carvePathBetween(tiles, midR, 0, midR, COLS-1, 'path');       // E-W road
-  _carvePathBetween(tiles, 0, midC, ROWS-1, midC, 'path');       // N-S road
-  // Diagonal connector paths for a lived-in feel
+  _carvePathBetween(tiles, midR, 0, midR, COLS-1, 'path');
+  _carvePathBetween(tiles, 0, midC, ROWS-1, midC, 'path');
   _carvePathBetween(tiles, pr, pc, 0, 0, 'path');
   _carvePathBetween(tiles, pr, pc+pw, 0, COLS-1, 'path');
 
-  // Building footprints — replaced by actual sprites in loadChunk decoration layer
   const bPositions = _scatterBuildings(rng, ROWS, COLS, 4, 6);
   for (const [br, bc] of bPositions) {
     if (tiles[br]?.[bc]) tiles[br][bc] = 'building';
@@ -6555,20 +6657,17 @@ function _genVillage(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
 }
 
 // ── CITY ─────────────────────────────────────────────────────────────────────
-function _genCity(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
-  // Mostly stone and path — dense urban
+function _genCity(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy) {
   for (let r = 0; r < ROWS; r++)
     for (let c = 0; c < COLS; c++) {
       const d = detail[r][c];
-      tiles[r][c] = d > 0.55 ? 'stone' : (d > 0.35 ? 'path' : 'grass');
+      tiles[r][c] = d > 0.55 ? 'cobble' : (d > 0.35 ? 'stone' : 'path');
     }
 
-  // Grid of streets
   const gridR = 4, gridC = 5;
   for (let r = 0; r < ROWS; r += gridR) for (let c = 0; c < COLS; c++) tiles[r][c] = 'path';
   for (let c = 0; c < COLS; c += gridC) for (let r = 0; r < ROWS; r++) tiles[r][c] = 'path';
 
-  // Dense building footprints in the blocks between streets
   const bPositions = _scatterBuildings(rng, ROWS, COLS, 6, 9);
   for (const [br, bc] of bPositions) {
     if (tiles[br]?.[bc]) tiles[br][bc] = 'building';
@@ -6578,14 +6677,16 @@ function _genCity(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
 }
 
 // ── BEACH ────────────────────────────────────────────────────────────────────
-function _genBeach(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
-  // Water is south (positive y), land is north
+function _genBeach(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy) {
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
       const waterLine = ROWS * 0.55 + Math.sin(c * 0.7 + moist[r][c] * 3) * 2;
       const e = elev[r][c];
       if (r > waterLine + 2 + e * 1.5) {
         tiles[r][c] = moist[r][c] > 0.7 ? 'water' : (detail[r][c] > 0.5 ? 'water' : 'sand');
+      } else if (r > waterLine + 0.5) {
+        // Shallow edge — water_tiles variant
+        tiles[r][c] = detail[r][c] > 0.65 ? 'rock' : 'water_tiles';
       } else if (r > waterLine - 1) {
         tiles[r][c] = detail[r][c] > 0.6 ? 'rock' : 'beach';
       } else if (r > waterLine - 3) {
@@ -6597,28 +6698,26 @@ function _genBeach(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
       }
     }
   }
-  // Scatter rocks in water
   for (let r = 0; r < ROWS; r++)
     for (let c = 0; c < COLS; c++)
       if (tiles[r][c] === 'water' && fine[r][c] > 0.82) tiles[r][c] = 'rock';
 }
 
 // ── OCEAN ────────────────────────────────────────────────────────────────────
-function _genOcean(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
+function _genOcean(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy) {
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
       const e = elev[r][c];
       if (e > 0.78) {
-        tiles[r][c] = detail[r][c] > 0.5 ? 'rock' : 'beach'; // island or sandbar
+        tiles[r][c] = detail[r][c] > 0.5 ? 'rock' : 'beach';
       } else if (e > 0.68) {
         tiles[r][c] = 'beach';
       } else {
-        // Open ocean — depth varies by distance from land
-        tiles[r][c] = 'water';
+        const edgeDist = Math.min(r, c, ROWS-1-r, COLS-1-c);
+        tiles[r][c] = edgeDist < 2 ? 'water_tiles' : 'water';
       }
     }
   }
-  // Rocky outcrops
   for (let r = 0; r < ROWS; r++)
     for (let c = 0; c < COLS; c++)
       if (tiles[r][c] === 'water' && fine[r][c] > 0.9) tiles[r][c] = 'rock';
@@ -6636,17 +6735,15 @@ function _genCliffside(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy
       } else if (e > 0.3) {
         tiles[r][c] = 'rock';
       } else {
-        tiles[r][c] = d > 0.7 ? 'grass' : 'rock'; // narrow ledges
+        tiles[r][c] = d > 0.7 ? 'grass4' : 'rock'; // narrow ledges
       }
     }
   }
-  // Single dangerous winding ledge path
   _carvePath(tiles, rng, ROWS, COLS, 'vertical', 0.25, cx, cy);
 }
 
 // ── DUNGEON ──────────────────────────────────────────────────────────────────
 function _genDungeon(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy) {
-  // Outer walls of cliff/mountain, stone courtyard approach
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
       const isEdge = (r < 2 || r >= ROWS-2 || c < 2 || c >= COLS-2);
@@ -6660,17 +6757,14 @@ function _genDungeon(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy) 
       }
     }
   }
-  // Approach path from south
   const midC = Math.floor(COLS / 2);
   for (let r = Math.floor(ROWS * 0.4); r < ROWS; r++) {
     tiles[r][midC] = 'path';
     if (tiles[r]?.[midC-1]) tiles[r][midC-1] = 'stone';
     if (tiles[r]?.[midC+1]) tiles[r][midC+1] = 'stone';
   }
-  // Entrance gate area
   const gateR = Math.floor(ROWS * 0.35);
   for (let c = midC-2; c <= midC+2; c++) if (tiles[gateR]?.[c]) tiles[gateR][c] = 'stone';
-  // Treasure chest somewhere inside
   tiles[Math.floor(ROWS*0.2)][midC] = 'chest';
 }
 
@@ -6682,15 +6776,14 @@ function _genRuins(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy) {
       if (e > 0.65) {
         tiles[r][c] = d > 0.5 ? 'cliff' : 'rock';
       } else if (e > 0.5) {
-        tiles[r][c] = 'stone';
+        tiles[r][c] = d > 0.6 ? 'cobble' : 'stone'; // old cobble roads
       } else if (e > 0.4 && d > 0.6) {
-        tiles[r][c] = 'stone'; // cracked ruins floor
+        tiles[r][c] = 'stone';
       } else {
-        tiles[r][c] = 'grass'; // overgrown
+        tiles[r][c] = d > 0.5 ? 'grass3' : 'grass'; // lush overgrowth
       }
     }
   }
-  // Ruined wall remnants — scattered rectangular outlines
   const wallCount = 2 + Math.floor(rng() * 2);
   for (let w = 0; w < wallCount; w++) {
     const wr = 1 + Math.floor(rng() * (ROWS-5));
@@ -6701,11 +6794,9 @@ function _genRuins(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy) {
       for (let dc = 0; dc < ww; dc++)
         if (dr===0||dr===wh-1||dc===0||dc===ww-1)
           if (tiles[wr+dr]?.[wc+dc] && rng() > 0.3)
-            tiles[wr+dr][wc+dc] = 'cliff'; // broken wall
+            tiles[wr+dr][wc+dc] = 'cliff';
   }
-  // Overgrown path through ruins
   _carvePath(tiles, rng, ROWS, COLS, 'horizontal', 0.15, cx, cy);
-  // A hidden chest
   const cr = 2 + Math.floor(rng() * (ROWS-4));
   const cc = 2 + Math.floor(rng() * (COLS-4));
   tiles[cr][cc] = 'chest';
@@ -6713,53 +6804,161 @@ function _genRuins(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy) {
 
 // ── CAMP ─────────────────────────────────────────────────────────────────────
 function _genCamp(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy) {
-  // Mostly open grass, some trees at edges
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
       const e = elev[r][c];
       const edgeTree = (r < 2 || r > ROWS-3 || c < 2 || c > COLS-3) && e > 0.5;
       if (edgeTree) tiles[r][c] = 'tree';
       else if (e > 0.75) tiles[r][c] = 'rock';
-      else tiles[r][c] = 'grass';
+      else tiles[r][c] = detail[r][c] > 0.55 ? 'grass2' : 'grass';
     }
   }
-  // Worn clearing in center
   const cr = Math.floor(ROWS/2), cc = Math.floor(COLS/2);
   for (let dr = -2; dr <= 2; dr++)
     for (let dc = -3; dc <= 3; dc++)
       if (tiles[cr+dr]?.[cc+dc]) tiles[cr+dr][cc+dc] = 'path';
-  // Approach paths
   for (let r = 0; r < ROWS; r++) if (tiles[r]?.[cc]) tiles[r][cc] = 'path';
-  // Supply chest
   tiles[cr-1][cc+3] = 'chest';
 }
 
 // ── ROAD ─────────────────────────────────────────────────────────────────────
 function _genRoad(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy) {
-  // Terrain flanking the road
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
       const e = elev[r][c];
       if (e > 0.72) tiles[r][c] = 'rock';
       else if (e > 0.55 && detail[r][c] > 0.55) tiles[r][c] = 'tree';
-      else tiles[r][c] = 'grass';
+      else tiles[r][c] = detail[r][c] > 0.45 ? 'grass2' : 'grass';
     }
   }
-  // Road entry R: seam-consistent hash on cy so all chunks in same row continue road at same height
   const entryHash = (((cy * 2246822519) >>> 0) / 0xFFFFFFFF);
   const roadBaseR = Math.floor(ROWS * 0.3 + entryHash * ROWS * 0.4);
   for (let c = 0; c < COLS; c++) {
-    // Gentle deterministic curve using cx offset — continuous across chunk boundaries
     const curve = Math.round(Math.sin((cx * COLS + c) * 0.18) * 1.5);
     const r = Math.max(1, Math.min(ROWS-2, roadBaseR + curve));
     for (let w = -1; w <= 1; w++) {
       if (tiles[r+w]?.[c] !== undefined) tiles[r+w][c] = 'path';
     }
-    // Road-side trees
     if (detail[r][c] > 0.4 && c % 3 === 0) {
       if (tiles[r-3]?.[c]) tiles[r-3][c] = 'tree';
       if (tiles[r+3]?.[c]) tiles[r+3][c] = 'tree';
     }
+  }
+}
+
+// ── SWAMP ────────────────────────────────────────────────────────────────────
+function _genSwamp(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy) {
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const e = elev[r][c], m = moist[r][c], d = detail[r][c];
+      if (m > 0.72 || (e < 0.35 && m > 0.55)) {
+        tiles[r][c] = fine[r][c] > 0.6 ? 'water' : 'water_tiles';
+      } else if (e > 0.65) {
+        tiles[r][c] = 'rock';
+      } else if (e > 0.5 && d > 0.5) {
+        tiles[r][c] = 'tree'; // gnarled swamp trees
+      } else {
+        tiles[r][c] = d > 0.55 ? 'grass4' : (d > 0.35 ? 'grass3' : 'grass4');
+      }
+    }
+  }
+  _carvePath(tiles, rng, ROWS, COLS, 'horizontal', 0.2, cx, cy);
+}
+
+// ── MEADOW ───────────────────────────────────────────────────────────────────
+function _genMeadow(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy) {
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const e = elev[r][c], m = moist[r][c], d = detail[r][c];
+      if (e > 0.78) {
+        tiles[r][c] = 'rock';
+      } else if (e > 0.6 && d > 0.6) {
+        tiles[r][c] = 'tree'; // occasional lone tree
+      } else if (e < 0.25 && m > 0.6) {
+        tiles[r][c] = 'water'; // brook
+      } else {
+        const v = fine[r][c];
+        tiles[r][c] = v > 0.6 ? 'grass3' : (v > 0.3 ? 'grass2' : 'grass');
+      }
+    }
+  }
+  _carvePath(tiles, rng, ROWS, COLS, 'horizontal', 0.25, cx, cy);
+}
+
+// ── CAVE ─────────────────────────────────────────────────────────────────────
+function _genCave(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy) {
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const e = elev[r][c], d = detail[r][c];
+      const isWall = (r < 2 || r >= ROWS-2 || c < 2 || c >= COLS-2);
+      if (isWall || e > 0.6) {
+        tiles[r][c] = d > 0.55 ? 'cliff' : 'mountain';
+      } else if (e > 0.45) {
+        tiles[r][c] = 'rock';
+      } else if (e < 0.28 && moist[r][c] > 0.55) {
+        tiles[r][c] = 'water';
+      } else {
+        tiles[r][c] = d > 0.7 ? 'grass4' : 'stone'; // mossy cave floor
+      }
+    }
+  }
+  _carvePath(tiles, rng, ROWS, COLS, 'horizontal', 0.3, cx, cy);
+  const chestR = 2 + Math.floor(rng() * (ROWS-4));
+  const chestC = 2 + Math.floor(rng() * (COLS-4));
+  tiles[chestR][chestC] = 'chest';
+}
+
+// ── FISHING VILLAGE ──────────────────────────────────────────────────────────
+function _genFishingVillage(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy) {
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const harborLine = ROWS * 0.6;
+      const e = elev[r][c], d = detail[r][c];
+      if (r > harborLine + 1) {
+        tiles[r][c] = (r > harborLine + 3) ? 'water' : 'water_tiles';
+      } else if (r > harborLine - 1) {
+        tiles[r][c] = 'path'; // dock/wharf
+      } else if (r > harborLine - 4) {
+        tiles[r][c] = d > 0.5 ? 'beach' : 'sand';
+      } else if (e > 0.72) {
+        tiles[r][c] = 'rock';
+      } else {
+        tiles[r][c] = d > 0.6 ? 'cobble' : 'grass';
+      }
+    }
+  }
+  const midC = Math.floor(COLS / 2);
+  for (let r = 0; r < Math.floor(ROWS * 0.65); r++) tiles[r][midC] = 'cobble';
+  const bPositions = _scatterBuildings(rng, Math.floor(ROWS * 0.6), COLS, 2, 4);
+  for (const [br, bc] of bPositions) {
+    if (tiles[br]?.[bc]) tiles[br][bc] = 'building';
+    if (tiles[br]?.[bc+1]) tiles[br][bc+1] = 'building';
+    if (tiles[br+1]?.[bc]) tiles[br+1][bc] = 'building_door';
+  }
+}
+
+// ── MOUNTAIN PASS ────────────────────────────────────────────────────────────
+function _genMountainPass(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy) {
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const e = elev[r][c], d = detail[r][c];
+      if (e > 0.65) {
+        tiles[r][c] = d > 0.55 ? 'mountain' : 'cliff';
+      } else if (e > 0.45) {
+        tiles[r][c] = d > 0.5 ? 'rock' : 'cliff';
+      } else if (e > 0.3) {
+        tiles[r][c] = 'rock';
+      } else {
+        tiles[r][c] = d > 0.65 ? 'grass4' : 'stone';
+      }
+    }
+  }
+  _carvePath(tiles, rng, ROWS, COLS, 'horizontal', 0.15, cx, cy);
+  const entryHash = (((cy * 2246822519) >>> 0) / 0xFFFFFFFF);
+  const passR = Math.floor(ROWS * 0.25 + entryHash * ROWS * 0.5);
+  for (let c = 0; c < COLS; c++) {
+    if (tiles[passR-3]?.[c]) tiles[passR-3][c] = 'mountain';
+    if (tiles[passR+3]?.[c]) tiles[passR+3][c] = 'mountain';
   }
 }
 
