@@ -2500,8 +2500,8 @@ const _LIGHT_FRAG = (() => {
     float _r${n} = uLightRadius${n};
     float _t${n} = clamp(_d${n} / max(_r${n}, 0.001), 0.0, 1.0);
     float _s${n} = _t${n} * _t${n} * (3.0 - 2.0 * _t${n});
-    float _f${n} = pow(1.0 - _s${n}, 1.8) * uLightActive${n};
-    darkness = min(darkness, 1.0 - _f${n} * uLightIntensity${n});
+    float _f${n} = pow(1.0 - _s${n}, 1.8) * uLightActive${n} * uLightIntensity${n};
+    lit = max(lit, _f${n});
     float _gt${n} = clamp(_d${n} / max(_r${n} * 0.7, 0.001), 0.0, 1.0);
     float _gf${n} = pow(1.0 - _gt${n} * _gt${n}, 2.5) * uLightActive${n};
     glow += uLightColor${n} * _gf${n} * uLightIntensity${n} * 0.38;
@@ -2519,18 +2519,30 @@ uniform float uLightActive${i};`).join('');
 
   return `precision mediump float;
 varying vec2 vTextureCoord;
+uniform sampler2D uSampler;
 uniform vec2  uResolution;
 uniform float uNightAlpha;
 uniform vec3  uAmbientColor;
 ${uniforms}
 void main(void) {
-  vec2  fragPx  = vTextureCoord * uResolution;
-  float darkness = 1.0;
+  // Sample the scene rendered so far
+  vec4 scene = texture2D(uSampler, vTextureCoord);
+
+  vec2  fragPx   = vTextureCoord * uResolution;
+  float lit      = 0.0;  // 0=dark, 1=fully lit
   vec3  glow     = vec3(0.0);
   ${blocks}
-  float alpha = uNightAlpha * darkness;
-  vec3  col   = uAmbientColor - clamp(glow, 0.0, 1.0) * uNightAlpha;
-  gl_FragColor  = vec4(clamp(col, 0.0, 1.0), alpha);
+
+  // How dark this pixel is: blend scene toward ambient night colour
+  // lit=1 → scene unchanged; lit=0 → ambient night colour at full darkness
+  float nightStrength = uNightAlpha * (1.0 - lit);
+  vec3  nightCol = uAmbientColor;
+  vec3  col = mix(scene.rgb, nightCol, nightStrength);
+
+  // Add warm glow on top of lit areas
+  col += clamp(glow, 0.0, 1.0) * uNightAlpha * lit;
+
+  gl_FragColor = vec4(clamp(col, 0.0, 1.0), scene.a);
 }`;
 })();
 
