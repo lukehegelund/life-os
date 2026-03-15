@@ -1374,8 +1374,10 @@ async function loadSavedGame(campaignId) {
       }
     }
     // Backfill in_game_minutes_elapsed to 6:00 AM if it's 0 (old save)
+    // Also persist so the corrected value survives future reloads.
     if (!activeCampaign.world_state?.in_game_minutes_elapsed) {
       activeCampaign.world_state = { ...(activeCampaign.world_state || {}), in_game_minutes_elapsed: 360 };
+      lqDB('PATCH', 'lq_campaigns', { world_state: activeCampaign.world_state }, `?id=eq.${campaignId}`).catch(() => {});
     }
 
     // Backfill region_map if this is an older campaign that doesn't have one
@@ -3123,6 +3125,7 @@ let _idleTimer        = null;   // setTimeout handle for idle detection
 let _worldTickHandle  = null;   // setInterval handle for World Tick loop
 let _tickInFlight     = false;  // guard against overlapping tick calls
 let _lastActivityMs   = 0;      // performance.now() of last player input
+let _clockStartMs     = 0;      // performance.now() when startWorldClock() was called — guard against early idle fire
 
 // ── 2.1 HUD helpers ──────────────────────────────────────────
 function _ingameMinutesToDisplay(totalMinutes) {
@@ -3163,6 +3166,12 @@ function _resetIdleTimer() {
 
 function _onIdle() {
   if (_clockPaused) return;
+  // Don't fire the idle overlay in the first 15 seconds after game start
+  // (prevents false-pause from page load / tab switching / DevTools opening)
+  if (performance.now() - _clockStartMs < 15000) {
+    _resetIdleTimer();
+    return;
+  }
   _clockPaused = true;
   _clockLastRealMs = null;
   document.getElementById('idle-overlay').style.display = 'flex';
@@ -3195,11 +3204,13 @@ function _tickWorldClock(dt) {
 
 // ── 2.1 Startup ─────────────────────────────────────────────
 function startWorldClock() {
-  _clockLastRealMs = performance.now();
-  _clockPaused = false;
+  _clockStartMs     = performance.now();
+  _clockLastRealMs  = _clockStartMs;
+  _clockPaused      = false;
 
-  // Page Visibility API — pause when tab loses focus
-  // Delay listener attachment to avoid false-pause on initial page load
+  // Page Visibility API — pause when tab loses focus.
+  // Delay 3 s to avoid false-pause caused by page load, DevTools open, or focus
+  // blipping during asset preload.
   setTimeout(() => {
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
@@ -3210,14 +3221,15 @@ function startWorldClock() {
         _resetIdleTimer();
       }
     });
-  }, 500);
+  }, 3000);
 
-  // Track player activity to reset idle timer
-  ['keydown','mousemove','touchstart'].forEach(evt => {
+  // Track player activity to reset idle timer.
+  // Do NOT call _resetIdleTimer() here — wait for the first real input so
+  // the 2-min countdown only starts once the player is actually at the keyboard.
+  ['keydown','mousemove','click','touchstart'].forEach(evt => {
     window.addEventListener(evt, _resetIdleTimer, { passive: true });
   });
 
-  _resetIdleTimer(); // start the initial idle countdown
   _updateTimeHUD();  // render initial value immediately
   console.log('[WorldClock] Started');
 }
