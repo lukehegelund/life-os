@@ -2290,12 +2290,24 @@ function _pixiLoadChunk(worldContainer, worldDef, chunkX, chunkY, isOrigin) {
     };
 
     // 1. Building tiles → warm window glow at night
-    //    Place a dim amber light on every building_door tile (ground level window)
+    //    Find the building centre by scanning left/right from each door row
+    const _windowLightAdded = new Set();
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
         const t = tiles[row]?.[col];
         if (t === 'building_door') {
-          addLight(col, row - 0.5, LCOLOR_WINDOW, LIGHT_RADIUS_WINDOW, false);
+          // Find horizontal extent of this building row
+          let left = col;
+          while (left > 0 && (tiles[row]?.[left - 1] === 'building' || tiles[row]?.[left - 1] === 'building_door')) left--;
+          let right = col;
+          while (right < cols - 1 && (tiles[row]?.[right + 1] === 'building' || tiles[row]?.[right + 1] === 'building_door')) right++;
+          const centerCol = (left + right) / 2;
+          const key = `${row}_${centerCol}`;
+          if (!_windowLightAdded.has(key)) {
+            _windowLightAdded.add(key);
+            // Place light at the building centre, 1 row above the door (where windows are)
+            addLight(centerCol, row - 1, LCOLOR_WINDOW, LIGHT_RADIUS_WINDOW, false);
+          }
         }
       }
     }
