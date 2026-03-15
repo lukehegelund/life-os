@@ -1467,21 +1467,47 @@ async function loadSavedGame(campaignId) {
         if (slug) campaignNPCs[slug] = npc;
       }
     }
-    // Backfill in_game_minutes_elapsed to 6:00 AM if it's 0 (old save)
-    // Also persist so the corrected value survives future reloads.
-    if (!activeCampaign.world_state?.in_game_minutes_elapsed) {
-      activeCampaign.world_state = { ...(activeCampaign.world_state || {}), in_game_minutes_elapsed: 360 };
-      lqDB('PATCH', 'lq_campaigns', { world_state: activeCampaign.world_state }, `?id=eq.${campaignId}`).catch(() => {});
-    }
+    // ── W1–W6 terrain migration ──────────────────────────────────────────────
+    // Every campaign must have a terrain_map before the game starts.
+    // If it's missing (old save, or fresh Play before any terrain gen ran),
+    // run the full W1–W6 pipeline now and persist the result.
+    // This also regenerates region_map from terrain so the chunk generator
+    // always uses physics-based biomes — not the old ring-weight random system.
+    if (!activeCampaign.world_state?.terrain_map) {
+      console.log('[W1–W6] No terrain_map found — running migration...');
+      const ws = activeCampaign.world_state || {};
 
-    // Backfill region_map if this is an older campaign that doesn't have one
-    if (!activeCampaign.world_state?.region_map) {
-      console.log('Backfilling region_map for existing campaign...');
-      const regionMap = generateRegionMap(campaignId);
-      const newWorldState = { ...(activeCampaign.world_state || {}), region_map: regionMap, used_decorations: [] };
-      activeCampaign.world_state = newWorldState;
-      // Fire-and-forget — don't block game start
-      lqDB('PATCH', `lq_campaigns?id=eq.${campaignId}`, { world_state: newWorldState }).catch(() => {});
+      const terrainMap  = _buildTerrainMap(campaignId);
+      const rivers      = _computeRivers(terrainMap);
+      let   settlements = _placeSettlements(terrainMap);
+      settlements       = _defineVillageLayout(settlements);
+      const roads       = _buildRoads(terrainMap, settlements);
+      _addSatelliteFeatures(settlements, roads, terrainMap);
+      settlements       = _generateNPCStubs(settlements);
+      const regionMap   = generateRegionMap(campaignId, terrainMap, settlements, roads);
+
+      activeCampaign.world_state = {
+        ...ws,
+        terrain_map:             terrainMap,
+        rivers:                  rivers,
+        settlements:             settlements,
+        roads:                   roads,
+        region_map:              regionMap,
+        used_decorations:        ws.used_decorations || [],
+        in_game_minutes_elapsed: ws.in_game_minutes_elapsed || 360,
+      };
+
+      // Persist — fire-and-forget so it doesn't block game start
+      lqDB('PATCH', 'lq_campaigns', { world_state: activeCampaign.world_state }, `?id=eq.${campaignId}`)
+        .then(() => console.log('[W1–W6] Migration saved to Supabase'))
+        .catch(e  => console.warn('[W1–W6] Migration persist failed:', e));
+
+    } else {
+      // terrain_map present — still backfill in_game_minutes_elapsed if 0
+      if (!activeCampaign.world_state.in_game_minutes_elapsed) {
+        activeCampaign.world_state = { ...activeCampaign.world_state, in_game_minutes_elapsed: 360 };
+        lqDB('PATCH', 'lq_campaigns', { world_state: activeCampaign.world_state }, `?id=eq.${campaignId}`).catch(() => {});
+      }
     }
 
     return true;
