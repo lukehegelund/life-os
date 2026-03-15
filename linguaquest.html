@@ -839,7 +839,11 @@ function generateRegionMap(campaignId, terrainMap, settlements, roads) {
     const roadCells = new Set();
     if (roads) {
       for (const path of roads) {
-        for (const [r, c] of path) roadCells.add(`${r},${c}`);
+        for (const step of path) {
+          // _astarPath returns {r, c} objects; rivers return [r,c] arrays — handle both
+          const r = step.r ?? step[0], c = step.c ?? step[1];
+          roadCells.add(`${r},${c}`);
+        }
       }
     }
 
