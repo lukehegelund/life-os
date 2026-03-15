@@ -2855,8 +2855,9 @@ function _initDayNight(worldContainer) {
 
 function _updateDayNight(inGameMinutes) {
   if (!_dayNightFilter) return;
-  // In-game time: 0-1440 minutes = 24 hours
-  const hour = (inGameMinutes % 1440) / 60; // 0-24
+  _dayNightFilter.matrix = CM_DAY; // Day/night disabled — always daytime
+  /*
+  const hour = (inGameMinutes % 1440) / 60;
   let matrix;
   if      (hour < 5)  matrix = CM_NIGHT;
   else if (hour < 7)  matrix = _lerp(CM_NIGHT, CM_DAWN,  (hour-5)/2);
@@ -2866,6 +2867,7 @@ function _updateDayNight(inGameMinutes) {
   else if (hour < 21) matrix = _lerp(CM_DUSK,  CM_NIGHT, (hour-19)/2);
   else                matrix = CM_NIGHT;
   _dayNightFilter.matrix = matrix;
+  */
 }
 
 function _dayNightAmbientAlpha(inGameMinutes) {
