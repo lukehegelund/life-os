@@ -818,48 +818,156 @@ const BIOME_PALETTES = {
 // Returns a 2D array [row][col] of biome keys.
 // Center (10,10) = chunk (0,0) is always 'village'.
 // Beyond the 21×21 grid, getChunkBiome() uses a procedural noise fallback.
-function generateRegionMap(campaignId) {
+// ── generateRegionMap ────────────────────────────────────────────────────────
+// Builds a 21×21 array of biome strings centered on chunk (0,0) = cell [10,10].
+//
+// When called with W1–W6 data (terrainMap, settlements, roads), biomes are derived
+// entirely from the physics-based terrain simulation — elevation, moisture, river
+// cells, settlement positions, and road paths.
+//
+// When called without terrain data (legacy save backfill), falls back to the
+// deterministic ring-weight system so old saves remain playable.
+function generateRegionMap(campaignId, terrainMap, settlements, roads) {
+  const SIZE   = 21;
+  const CENTER = 10;
+  const map    = [];
+
+  // ── PATH A: terrain-driven (W1–W6 data available) ─────────────────────────
+  if (terrainMap && Array.isArray(terrainMap) && terrainMap.length === SIZE) {
+
+    // Build road cell lookup (row,col cells that lie on any road path)
+    const roadCells = new Set();
+    if (roads) {
+      for (const path of roads) {
+        for (const [r, c] of path) roadCells.add(`${r},${c}`);
+      }
+    }
+
+    // Build river cell lookup
+    // (rivers is not passed here but is stored in world_state; re-derive cheaply
+    //  from terrain if needed — rivers follow elevation gradient, so we mark any
+    //  cell tagged by _computeRivers. Since we don't have the array here, we
+    //  approximate: low-elevation cells surrounded by higher elevation are river
+    //  candidates. We skip this for now — river biome overlay is handled by the
+    //  chunk generator reading world_state.rivers directly.)
+
+    // Build settlement lookup: cell → {type, ring}
+    // ring 0 = town square, ring 1 = residential, ring 2 = outskirts
+    const settleCells = {};
+    if (settlements) {
+      for (const s of settlements) {
+        const r0 = s.cy, c0 = s.cx;
+        // Centre cell
+        settleCells[`${r0},${c0}`] = { type: s.type, ring: 0, settle: s };
+        // Ring 1 (adjacent 8 cells)
+        for (let dr = -1; dr <= 1; dr++) {
+          for (let dc = -1; dc <= 1; dc++) {
+            if (dr === 0 && dc === 0) continue;
+            const key = `${r0+dr},${c0+dc}`;
+            if (!settleCells[key]) settleCells[key] = { type: s.type, ring: 1, settle: s };
+          }
+        }
+        // Ring 2 (Chebyshev distance 2)
+        for (let dr = -2; dr <= 2; dr++) {
+          for (let dc = -2; dc <= 2; dc++) {
+            if (Math.max(Math.abs(dr),Math.abs(dc)) !== 2) continue;
+            const key = `${r0+dr},${c0+dc}`;
+            if (!settleCells[key]) settleCells[key] = { type: s.type, ring: 2, settle: s };
+          }
+        }
+      }
+    }
+
+    for (let row = 0; row < SIZE; row++) {
+      map[row] = [];
+      for (let col = 0; col < SIZE; col++) {
+        const cell     = terrainMap[row]?.[col] || { elevation: 0.5, temperature: 0.5, moisture: 0.5 };
+        const { elevation: elev, temperature: temp, moisture: moist } = cell;
+        const cellKey  = `${row},${col}`;
+
+        // Settlement cells override terrain
+        if (settleCells[cellKey]) {
+          const { type, ring } = settleCells[cellKey];
+          if (ring === 0 || ring === 1) {
+            map[row][col] = (type === 'city') ? 'city' : 'village';
+          } else {
+            // Ring 2 outskirts: farmland near water, road if on a road path, else wilderness edge
+            map[row][col] = roadCells.has(cellKey) ? 'road'
+              : (moist > 0.5 ? 'farmland' : 'wilderness');
+          }
+          continue;
+        }
+
+        // Road cells
+        if (roadCells.has(cellKey)) {
+          map[row][col] = 'road';
+          continue;
+        }
+
+        // Origin (0,0) is always village if not already set by settlement seed
+        if (row === CENTER && col === CENTER) {
+          map[row][col] = 'village';
+          continue;
+        }
+
+        // Terrain-derived biome
+        map[row][col] = _terrainToBiome(elev, temp, moist);
+      }
+    }
+
+    // Smooth pass: prevent single-cell biome islands (Chebyshev 7-of-8 rule)
+    // Protected: settlement centres and road cells stay fixed.
+    for (let row = 1; row < SIZE - 1; row++) {
+      for (let col = 1; col < SIZE - 1; col++) {
+        const cellKey = `${row},${col}`;
+        if (settleCells[cellKey]?.ring === 0) continue; // settlement centre immutable
+        if (roadCells.has(cellKey)) continue;
+        const neighbors = [
+          map[row-1]?.[col], map[row+1]?.[col],
+          map[row]?.[col-1], map[row]?.[col+1],
+          map[row-1]?.[col-1], map[row-1]?.[col+1],
+          map[row+1]?.[col-1], map[row+1]?.[col+1],
+        ].filter(Boolean);
+        const counts = {};
+        for (const b of neighbors) counts[b] = (counts[b] || 0) + 1;
+        const sorted = Object.entries(counts).sort((a,b) => b[1]-a[1]);
+        if (sorted[0]?.[1] >= 7 && sorted[0][0] !== map[row][col]) {
+          map[row][col] = sorted[0][0];
+        }
+      }
+    }
+
+    return map;
+  }
+
+  // ── PATH B: legacy fallback (no terrain data — old save or backfill) ────────
   let seed = 0;
   const idStr = String(campaignId);
   for (let i = 0; i < idStr.length; i++) seed = (seed * 31 + idStr.charCodeAt(i)) >>> 0;
   const rng = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 0x100000000; };
 
-  const SIZE = 21;
-  const CENTER = 10;
-  const map = [];
-
-  // Pre-place special landmark chunks at fixed relative offsets so they always
-  // exist but vary in exact position within a small jitter window.
-  // These make the world feel authored, not purely random.
   const jitter = (base, range) => base + Math.floor(rng() * range * 2) - range;
   const landmarks = [
-    // [chunkX, chunkY, biome]  — relative to origin
-    [jitter(4,1),  jitter(0,1),  'village'],   // east village
-    [jitter(-4,1), jitter(0,1),  'village'],   // west village
-    [jitter(0,1),  jitter(-4,1), 'village'],   // north village
-    [jitter(0,1),  jitter(4,1),  'village'],   // south village
-    [jitter(7,1),  jitter(2,1),  'city'],      // far-east city
-    [jitter(-7,1), jitter(-2,1), 'city'],      // far-west city
-    [jitter(2,1),  jitter(-7,1), 'city'],      // far-north city
-    [jitter(8,1),  jitter(8,1),  'ocean'],     // ocean to SE
-    [jitter(-8,1), jitter(8,1),  'ocean'],     // ocean to SW
-    [jitter(5,1),  jitter(-6,1), 'cliffside'], // northern cliffs
-    [jitter(-5,1), jitter(6,1),  'dungeon'],   // dungeon SW
-    [jitter(9,1),  jitter(-3,1), 'dungeon'],   // dungeon NE
-    [jitter(-3,1), jitter(-8,1), 'ruins'],     // far ruins
-    [jitter(3,1),  jitter(7,1),  'ruins'],     // southern ruins
+    [jitter(4,1),  jitter(0,1),  'village'],
+    [jitter(-4,1), jitter(0,1),  'village'],
+    [jitter(0,1),  jitter(-4,1), 'village'],
+    [jitter(0,1),  jitter(4,1),  'village'],
+    [jitter(7,1),  jitter(2,1),  'city'],
+    [jitter(-7,1), jitter(-2,1), 'city'],
+    [jitter(2,1),  jitter(-7,1), 'city'],
+    [jitter(8,1),  jitter(8,1),  'ocean'],
+    [jitter(-8,1), jitter(8,1),  'ocean'],
+    [jitter(5,1),  jitter(-6,1), 'cliffside'],
+    [jitter(-5,1), jitter(6,1),  'dungeon'],
+    [jitter(9,1),  jitter(-3,1), 'dungeon'],
+    [jitter(-3,1), jitter(-8,1), 'ruins'],
+    [jitter(3,1),  jitter(7,1),  'ruins'],
   ];
-
-  // Build landmark lookup
   const landmarkMap = {};
   for (const [lx, ly, lb] of landmarks) {
     const row = ly + CENTER, col = lx + CENTER;
-    if (row >= 0 && row < SIZE && col >= 0 && col < SIZE) {
-      landmarkMap[`${row},${col}`] = lb;
-    }
+    if (row >= 0 && row < SIZE && col >= 0 && col < SIZE) landmarkMap[`${row},${col}`] = lb;
   }
-
-  // Ring biome weights — cumulative distributions
   const ringWeights = {
     1: ['village','village','farmland','farmland','road'],
     2: ['farmland','farmland','forest','forest','road','village'],
@@ -872,27 +980,17 @@ function generateRegionMap(campaignId) {
     9: ['ocean','ocean','wilderness','ruins','dungeon'],
     10:['ocean','ocean','ocean','wilderness','dungeon'],
   };
-
   for (let row = 0; row < SIZE; row++) {
     map[row] = [];
     for (let col = 0; col < SIZE; col++) {
-      // Landmarks override everything
-      if (landmarkMap[`${row},${col}`]) {
-        map[row][col] = landmarkMap[`${row},${col}`];
-        continue;
-      }
+      if (landmarkMap[`${row},${col}`]) { map[row][col] = landmarkMap[`${row},${col}`]; continue; }
       const dr = row - CENTER, dc = col - CENTER;
       if (dr === 0 && dc === 0) { map[row][col] = 'village'; continue; }
       const dist = Math.max(Math.abs(dr), Math.abs(dc));
-      const ringKey = Math.min(dist, 10);
-      const pool = ringWeights[ringKey] || ['wilderness'];
+      const pool = ringWeights[Math.min(dist, 10)] || ['wilderness'];
       map[row][col] = pool[Math.floor(rng() * pool.length)];
     }
   }
-
-  // Smooth pass: if a chunk is surrounded 5+ times by the same biome,
-  // it takes on that biome (prevents isolated single-tile anomalies for cliffs etc.)
-  // Skipping center to preserve village.
   for (let row = 1; row < SIZE - 1; row++) {
     for (let col = 1; col < SIZE - 1; col++) {
       if (row === CENTER && col === CENTER) continue;
@@ -906,13 +1004,9 @@ function generateRegionMap(campaignId) {
       const counts = {};
       for (const b of neighbors) counts[b] = (counts[b] || 0) + 1;
       const [topBiome, topCount] = Object.entries(counts).sort((a,b) => b[1]-a[1])[0] || [];
-      // Only smooth very isolated anomalies (7 of 8 neighbors same biome)
-      if (topCount >= 7 && topBiome !== map[row][col]) {
-        map[row][col] = topBiome;
-      }
+      if (topCount >= 7 && topBiome !== map[row][col]) map[row][col] = topBiome;
     }
   }
-
   return map;
 }
 
