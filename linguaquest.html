@@ -1958,8 +1958,7 @@ function _pixiLoadChunk(worldContainer, worldDef, chunkX, chunkY, isOrigin) {
           spr.x = cx; spr.y = cy + TILE_SIZE * 0.18;
           spr.scale.set(scales[variant]);
           spr.zIndex = absRow * 10 + 5;
-          worldContainer.addChild(spr);
-          gameObjects.push(spr);
+          windContainer.addChild(spr); // trees sway in wind
         }
       }
 
@@ -2056,6 +2055,13 @@ function _pixiLoadChunk(worldContainer, worldDef, chunkX, chunkY, isOrigin) {
     }
   }
 
+  // ── WIND CONTAINER — grass tufts and trees sway in the breeze ──
+  const windContainer = new PIXI.Container();
+  windContainer.sortableChildren = false;
+  if (_windFilter) windContainer.filters = [_windFilter];
+  worldContainer.addChild(windContainer);
+  gameObjects.push(windContainer);
+
   // ── GROUND SCATTER ──
   const chunkBiome = worldDef.world?.biome || 'wilderness';
   if (pixiFrames['decor']) {
@@ -2111,8 +2117,14 @@ function _pixiLoadChunk(worldContainer, worldDef, chunkX, chunkY, isOrigin) {
             spr.x = scx + jx * 0.6; spr.y = scy + jy * 0.6;
             spr.scale.set(2.4);
             spr.zIndex = depth;
-            worldContainer.addChild(spr);
-            gameObjects.push(spr);
+            // Grass tufts and flowers sway in wind; rocks/stumps/logs don't
+            const swayFrames = [0,1,2,7,8,9]; // GRASS_TUFTS + FLOWERS
+            if (swayFrames.includes(frame)) {
+              windContainer.addChild(spr);
+            } else {
+              worldContainer.addChild(spr);
+              gameObjects.push(spr);
+            }
           }
         }
       }
@@ -2828,6 +2840,174 @@ function _updateWaterShader(dt) {
 }
 
 // ─────────────────────────────────────────────────────────────
+//  POST-PROCESS SHADERS — daytime visual effects
+// ─────────────────────────────────────────────────────────────
+
+// ── 1. VIGNETTE — soft dark edge around the screen ────────────
+const VIGNETTE_FRAG = `
+precision mediump float;
+varying vec2 vTextureCoord;
+uniform sampler2D uSampler;
+uniform vec2 uResolution;
+void main(void) {
+  vec4 color = texture2D(uSampler, vTextureCoord);
+  vec2 uv = vTextureCoord;
+  // Distance from centre, elliptical
+  vec2 d = (uv - 0.5) * vec2(1.0, uResolution.y / uResolution.x);
+  float dist = length(d) * 1.35;
+  float vignette = smoothstep(0.45, 1.05, dist);
+  color.rgb = mix(color.rgb, vec3(0.0), vignette * 0.52);
+  gl_FragColor = color;
+}`;
+let _vignetteFilter = null;
+function _initVignette(stage, w, h) {
+  try {
+    _vignetteFilter = new PIXI.Filter(undefined, VIGNETTE_FRAG, { uResolution: [w, h] });
+    stage.filterArea = new PIXI.Rectangle(0, 0, w, h);
+    stage.filters = [...(stage.filters || []), _vignetteFilter];
+  } catch(e) { console.warn('Vignette shader failed:', e.message); _vignetteFilter = null; }
+}
+function _resizeVignette(w, h) {
+  if (_vignetteFilter) _vignetteFilter.uniforms.uResolution = [w, h];
+}
+
+// ── 2. WIND SWAY — subtle vertex wobble on grass/tree tiles ───
+const WIND_VERT = `
+attribute vec2 aVertexPosition;
+attribute vec2 aTextureCoord;
+uniform mat3 projectionMatrix;
+uniform float uTime;
+uniform vec2  uWorldOffset;
+varying vec2 vTextureCoord;
+void main(void) {
+  vec2 pos = aVertexPosition;
+  // World-space Y drives sway amount (top of tile sways more)
+  float worldY = pos.y + uWorldOffset.y;
+  float sway = sin(pos.x * 0.018 + uWorldOffset.x * 0.004 + uTime * 1.1) * 0.9
+             + sin(pos.x * 0.031 + uTime * 0.7) * 0.4;
+  // Only sway top half of each sprite (aTextureCoord.y < 0.5)
+  float topWeight = clamp(1.0 - aTextureCoord.y * 2.0, 0.0, 1.0);
+  pos.x += sway * topWeight;
+  gl_Position = vec4((projectionMatrix * vec3(pos, 1.0)).xy, 0.0, 1.0);
+  vTextureCoord = aTextureCoord;
+}`;
+const WIND_FRAG = `
+precision mediump float;
+varying vec2 vTextureCoord;
+uniform sampler2D uSampler;
+void main(void) {
+  gl_FragColor = texture2D(uSampler, vTextureCoord);
+}`;
+let _windFilter = null;
+let _windTime   = 0;
+function _initWindShader() {
+  try {
+    _windFilter = new PIXI.Filter(WIND_VERT, WIND_FRAG, { uTime: 0.0, uWorldOffset: [0, 0] });
+  } catch(e) { console.warn('Wind shader failed:', e.message); _windFilter = null; }
+}
+function _updateWindShader(dt, wcx, wcy) {
+  _windTime += dt * 0.016;
+  if (_windFilter) {
+    _windFilter.uniforms.uTime = _windTime;
+    _windFilter.uniforms.uWorldOffset = [wcx, wcy];
+  }
+}
+
+// ── 3. BLOOM — brighten highlights with a soft glow ───────────
+const BLOOM_FRAG = `
+precision mediump float;
+varying vec2 vTextureCoord;
+uniform sampler2D uSampler;
+uniform vec2 uResolution;
+void main(void) {
+  vec4 center = texture2D(uSampler, vTextureCoord);
+  // Sample neighbours for simple box blur
+  vec2 px = 1.5 / uResolution;
+  vec4 blur = vec4(0.0);
+  blur += texture2D(uSampler, vTextureCoord + vec2(-px.x, -px.y));
+  blur += texture2D(uSampler, vTextureCoord + vec2( 0.0,  -px.y));
+  blur += texture2D(uSampler, vTextureCoord + vec2( px.x, -px.y));
+  blur += texture2D(uSampler, vTextureCoord + vec2(-px.x,  0.0 ));
+  blur += texture2D(uSampler, vTextureCoord + vec2( px.x,  0.0 ));
+  blur += texture2D(uSampler, vTextureCoord + vec2(-px.x,  px.y));
+  blur += texture2D(uSampler, vTextureCoord + vec2( 0.0,   px.y));
+  blur += texture2D(uSampler, vTextureCoord + vec2( px.x,  px.y));
+  blur /= 8.0;
+  // Extract highlights and add glow
+  float bright = dot(blur.rgb, vec3(0.299, 0.587, 0.114));
+  float highlight = smoothstep(0.55, 1.0, bright);
+  vec3 glow = blur.rgb * highlight * 0.22;
+  gl_FragColor = vec4(clamp(center.rgb + glow, 0.0, 1.0), center.a);
+}`;
+let _bloomFilter = null;
+function _initBloom(stage, w, h) {
+  try {
+    _bloomFilter = new PIXI.Filter(undefined, BLOOM_FRAG, { uResolution: [w, h] });
+    stage.filters = [...(stage.filters || []), _bloomFilter];
+  } catch(e) { console.warn('Bloom shader failed:', e.message); _bloomFilter = null; }
+}
+function _resizeBloom(w, h) {
+  if (_bloomFilter) _bloomFilter.uniforms.uResolution = [w, h];
+}
+
+// ── 4. CHROMATIC ABERRATION — subtle RGB fringe on edges ──────
+const CHROMA_FRAG = `
+precision mediump float;
+varying vec2 vTextureCoord;
+uniform sampler2D uSampler;
+uniform vec2 uResolution;
+void main(void) {
+  vec2 uv = vTextureCoord;
+  vec2 dir = (uv - 0.5);
+  float dist = length(dir);
+  float amount = dist * dist * 0.0028;
+  vec2 offset = normalize(dir) * amount;
+  float r = texture2D(uSampler, uv + offset).r;
+  float g = texture2D(uSampler, uv         ).g;
+  float b = texture2D(uSampler, uv - offset).b;
+  float a = texture2D(uSampler, uv         ).a;
+  gl_FragColor = vec4(r, g, b, a);
+}`;
+let _chromaFilter = null;
+function _initChroma(stage) {
+  try {
+    _chromaFilter = new PIXI.Filter(undefined, CHROMA_FRAG, {});
+    stage.filters = [...(stage.filters || []), _chromaFilter];
+  } catch(e) { console.warn('Chroma shader failed:', e.message); _chromaFilter = null; }
+}
+
+// ── 5. SCANLINE / PIXEL GRAIN — adds pixel-art texture depth ──
+const GRAIN_FRAG = `
+precision mediump float;
+varying vec2 vTextureCoord;
+uniform sampler2D uSampler;
+uniform vec2  uResolution;
+uniform float uTime;
+void main(void) {
+  vec4 color = texture2D(uSampler, vTextureCoord);
+  vec2 px = floor(vTextureCoord * uResolution);
+  // Subtle scanline every 2 pixels
+  float scan = mod(px.y, 2.0) < 1.0 ? 0.97 : 1.0;
+  // Very light noise grain
+  float n = fract(sin(dot(px + uTime * 0.3, vec2(127.1, 311.7))) * 43758.5453);
+  float grain = 1.0 + (n - 0.5) * 0.03;
+  color.rgb *= scan * grain;
+  gl_FragColor = color;
+}`;
+let _grainFilter = null;
+let _grainTime   = 0;
+function _initGrain(stage) {
+  try {
+    _grainFilter = new PIXI.Filter(undefined, GRAIN_FRAG, { uResolution: [window.innerWidth, window.innerHeight], uTime: 0.0 });
+    stage.filters = [...(stage.filters || []), _grainFilter];
+  } catch(e) { console.warn('Grain shader failed:', e.message); _grainFilter = null; }
+}
+function _updateGrain(dt) {
+  _grainTime += dt * 0.016;
+  if (_grainFilter) _grainFilter.uniforms.uTime = _grainTime;
+}
+
+// ─────────────────────────────────────────────────────────────
 //  DAY / NIGHT CYCLE  (R1.8)
 //  Full-screen ColorMatrix filter on the world container.
 //  Cycles through warm daylight → blue moonlight over in-game time.
@@ -3118,6 +3298,11 @@ function _pixiUpdate(delta) {
   // ── WATER SHADER ──
   _updateWaterShader(dt);
 
+  // ── POST-PROCESS SHADERS ──
+  _updateGrain(dt);
+  const _wc = gameScene?._worldContainer;
+  if (_wc) _updateWindShader(dt, _wc.x, _wc.y);
+
   // ── DAY/NIGHT ──
   const ingameMin = activeCampaign?.world_state?.in_game_minutes_elapsed || 0;
   _updateDayNight(ingameMin);
@@ -3253,13 +3438,21 @@ function startGame(worldDef) {
 
   // ── Init shaders and lighting ──
   _initWaterShader();
+  _initWindShader();
   _initDayNight(worldContainer);
   _initLighting(pixiApp.stage, pixiApp.screen.width, pixiApp.screen.height);
+  // Post-process stack (order: bloom → chroma → grain → vignette)
+  _initBloom(pixiApp.stage, pixiApp.screen.width, pixiApp.screen.height);
+  _initChroma(pixiApp.stage);
+  _initGrain(pixiApp.stage);
+  _initVignette(pixiApp.stage, pixiApp.screen.width, pixiApp.screen.height);
 
   // ── Handle resize ──
   window.addEventListener('resize', () => {
     // pixiApp.resizeTo handles canvas resize automatically
     _resizeLighting(pixiApp.screen.width, pixiApp.screen.height);
+    _resizeVignette(pixiApp.screen.width, pixiApp.screen.height);
+    _resizeBloom(pixiApp.screen.width, pixiApp.screen.height);
     if (isIndoor && indoorData) {
       const layout = indoorData;
       const w = layout.cols * INDOOR_TS;
