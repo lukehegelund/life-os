@@ -2869,12 +2869,15 @@ function _updateDayNight(inGameMinutes) {
 }
 
 function _dayNightAmbientAlpha(inGameMinutes) {
+  return 0.0; // Lighting system disabled — always daytime until redesigned
+  /*
   const hour = (inGameMinutes % 1440) / 60;
   if      (hour < 5)  return LIGHT_AMBIENT_NIGHT;
   else if (hour < 7)  return LIGHT_AMBIENT_NIGHT * (1 - (hour-5)/2);
   else if (hour < 17) return LIGHT_AMBIENT_DAY;
   else if (hour < 19) return LIGHT_AMBIENT_NIGHT * ((hour-17)/2);
   else                return LIGHT_AMBIENT_NIGHT;
+  */
 }
 
 // ─────────────────────────────────────────────────────────────
