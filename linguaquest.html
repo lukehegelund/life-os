@@ -1936,6 +1936,13 @@ function _pixiLoadChunk(worldContainer, worldDef, chunkX, chunkY, isOrigin) {
     }
   }
 
+  // ── WIND CONTAINER — grass tufts and trees sway in the breeze ──
+  const windContainer = new PIXI.Container();
+  windContainer.sortableChildren = false;
+  if (_windFilter) windContainer.filters = [_windFilter];
+  worldContainer.addChild(windContainer);
+  gameObjects.push(windContainer);
+
   // ── DECORATION LAYER ──
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
@@ -2054,13 +2061,6 @@ function _pixiLoadChunk(worldContainer, worldDef, chunkX, chunkY, isOrigin) {
       }
     }
   }
-
-  // ── WIND CONTAINER — grass tufts and trees sway in the breeze ──
-  const windContainer = new PIXI.Container();
-  windContainer.sortableChildren = false;
-  if (_windFilter) windContainer.filters = [_windFilter];
-  worldContainer.addChild(windContainer);
-  gameObjects.push(windContainer);
 
   // ── GROUND SCATTER ──
   const chunkBiome = worldDef.world?.biome || 'wilderness';
