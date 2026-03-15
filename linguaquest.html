@@ -2462,11 +2462,11 @@ function _pixiGetTileAt(worldX, worldY) {
 //    but only computes angles — no drawing loops)
 // ─────────────────────────────────────────────────────────────
 
-const LIGHT_RADIUS_PLAYER   = TILE_SIZE * 4.5;
-const LIGHT_RADIUS_TORCH    = TILE_SIZE * 3.0;
-const LIGHT_RADIUS_CAMPFIRE = TILE_SIZE * 5.0;
-const LIGHT_RADIUS_WINDOW   = TILE_SIZE * 2.2;
-const LIGHT_AMBIENT_NIGHT   = 0.72;
+const LIGHT_RADIUS_PLAYER   = TILE_SIZE * 5.5;
+const LIGHT_RADIUS_TORCH    = TILE_SIZE * 4.0;
+const LIGHT_RADIUS_CAMPFIRE = TILE_SIZE * 6.0;
+const LIGHT_RADIUS_WINDOW   = TILE_SIZE * 3.0;
+const LIGHT_AMBIENT_NIGHT   = 0.28;  // nightAlpha = 0.72 → properly dark nights
 const LIGHT_AMBIENT_DAY     = 0.0;
 
 const LCOLOR_LANTERN  = 0xFFCC50;
