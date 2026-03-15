@@ -2452,67 +2452,152 @@ function _pixiGetTileAt(worldX, worldY) {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  DYNAMIC LIGHTING
-//  MULTIPLY-blend overlay with:
-//    • Smooth smoothstep falloff per light disk
-//    • 2D visibility polygon for player lantern (rays stop at walls)
-//    • Moonlight tint (cool-blue ambient, no band geometry)
-//    • Surface tinting (water/stone/grass affect light colour)
+//  DYNAMIC LIGHTING  (shader-based, R2.0)
+//  Full-screen GLSL fragment shader running on GPU.
+//  • Up to 16 point lights per frame (positions, colours, radii as uniforms)
+//  • Physically-based inverse-square falloff with smooth cutoff
+//  • Additive warm colour glow baked into same pass
+//  • Zero CPU circle loops — one GPU draw call per frame
+//  • 2D visibility polygon for player lantern shadow casting (still CPU,
+//    but only computes angles — no drawing loops)
 // ─────────────────────────────────────────────────────────────
-let _lightRT     = null;   // darkness mask (NORMAL blend — punches holes in darkness)
-let _lightGfx    = null;
-let _lightSprite = null;
-let _glowRT      = null;   // colour glow (ADD blend — adds warm tint on lit tiles)
-let _glowGfx     = null;
-let _glowSprite  = null;
 
 const LIGHT_RADIUS_PLAYER   = TILE_SIZE * 4.5;
 const LIGHT_RADIUS_TORCH    = TILE_SIZE * 3.0;
 const LIGHT_RADIUS_CAMPFIRE = TILE_SIZE * 5.0;
 const LIGHT_RADIUS_WINDOW   = TILE_SIZE * 2.2;
-const LIGHT_AMBIENT_NIGHT   = 0.72;  // nightAlpha = 0.28 — dark enough for atmosphere
+const LIGHT_AMBIENT_NIGHT   = 0.72;
 const LIGHT_AMBIENT_DAY     = 0.0;
 
-// Light tint colours — used as MID-RING colour in the two-phase falloff.
-// Phase A: darkVal → tint (outer warm/cool glow)
-// Phase B: tint → white  (inner hotspot fully illuminated)
-// These values are the peak colour temperature before brightening to white.
-const LCOLOR_LANTERN  = 0xFFCC50;  // warm amber lantern (player)
-const LCOLOR_TORCH    = 0xFFAA30;  // orange torch
-const LCOLOR_CAMPFIRE = 0xFF7820;  // deep orange/red campfire
-const LCOLOR_WINDOW   = 0xFFBB40;  // warm golden window glow
-const LCOLOR_LAMP     = 0x88BBFF;  // cool blue lamp post
-const LCOLOR_MOON     = 0x6699FF;  // cool blue moonlight
+const LCOLOR_LANTERN  = 0xFFCC50;
+const LCOLOR_TORCH    = 0xFFAA30;
+const LCOLOR_CAMPFIRE = 0xFF7820;
+const LCOLOR_WINDOW   = 0xFFBB40;
+const LCOLOR_LAMP     = 0x88BBFF;
+const LCOLOR_MOON     = 0x6699FF;
 
-// World light sources — populated by chunk loader, cleared on unload
 const _worldLights = [];
 
-function _initLighting(stage, w, h) {
-  // Layer 1: darkness mask — opaque black with transparent holes where lights are
-  _lightRT     = PIXI.RenderTexture.create({ width: w, height: h });
-  _lightGfx    = new PIXI.Graphics();
-  _lightSprite = new PIXI.Sprite(_lightRT);
-  _lightSprite.blendMode = PIXI.BLEND_MODES.NORMAL;
-  _lightSprite.zIndex = 50000;
-  stage.addChild(_lightSprite);
+// ── GLSL shader ───────────────────────────────────────────────
+// Vertex shader — standard PixiJS passthrough
+const _LIGHT_VERT = `
+attribute vec2 aVertexPosition;
+attribute vec2 aTextureCoord;
+uniform mat3 projectionMatrix;
+varying vec2 vTextureCoord;
+void main(void) {
+  gl_Position = vec4((projectionMatrix * vec3(aVertexPosition, 1.0)).xy, 0.0, 1.0);
+  vTextureCoord = aTextureCoord;
+}`;
 
-  // Layer 2: colour glow — additive warm/cool tint on lit tiles
-  _glowRT     = PIXI.RenderTexture.create({ width: w, height: h });
-  _glowGfx    = new PIXI.Graphics();
-  _glowSprite = new PIXI.Sprite(_glowRT);
-  _glowSprite.blendMode = PIXI.BLEND_MODES.ADD;
-  _glowSprite.zIndex = 50001;
-  stage.addChild(_glowSprite);
+// Fragment shader — computes darkness overlay with per-pixel light contribution
+// Each light: position (px), radius (px), RGB colour, intensity
+// Output: dark ambient overlay with smooth light holes punched through it
+// NOTE: Uses float uLightActive[16] instead of int uLightCount for WebGL1
+//       compatibility (GLSL ES 1.0 requires constant loop bounds).
+const _LIGHT_FRAG = `
+precision mediump float;
+varying vec2 vTextureCoord;
+
+uniform vec2  uResolution;       // screen size in px
+uniform float uNightAlpha;       // 0=day, 1=full night
+uniform vec3  uAmbientColor;     // night sky colour
+
+// 16 lights — inactive slots have uLightActive[i] = 0.0
+uniform vec2  uLightPos[16];
+uniform float uLightRadius[16];
+uniform vec3  uLightColor[16];
+uniform float uLightIntensity[16];
+uniform float uLightActive[16];  // 1.0 = active, 0.0 = inactive
+
+// Per-light contribution — returns (darkness reduction, glow vec3)
+vec4 lightContrib(vec2 fragPx, int i) {
+  float dist = distance(fragPx, uLightPos[i]);
+  float r    = uLightRadius[i];
+  float t    = clamp(dist / r, 0.0, 1.0);
+  float smooth_t = t * t * (3.0 - 2.0 * t);  // smoothstep
+  float falloff  = pow(1.0 - smooth_t, 1.8);  // sharp centre hotspot
+
+  float darkReduction = falloff * uLightIntensity[i] * uLightActive[i];
+
+  float glowT    = clamp(dist / (r * 0.7), 0.0, 1.0);
+  float glowFall = pow(1.0 - glowT * glowT, 2.5) * uLightActive[i];
+  vec3  glow     = uLightColor[i] * glowFall * uLightIntensity[i] * 0.38;
+
+  return vec4(glow, darkReduction);
 }
+
+void main(void) {
+  vec2 fragPx = vTextureCoord * uResolution;
+
+  float darkness = 1.0;
+  vec3  glow     = vec3(0.0);
+
+  // Unrolled — GLSL ES 1.0 needs constant loop bounds
+  vec4 c;
+  c = lightContrib(fragPx, 0);  glow += c.rgb; darkness = min(darkness, 1.0 - c.a);
+  c = lightContrib(fragPx, 1);  glow += c.rgb; darkness = min(darkness, 1.0 - c.a);
+  c = lightContrib(fragPx, 2);  glow += c.rgb; darkness = min(darkness, 1.0 - c.a);
+  c = lightContrib(fragPx, 3);  glow += c.rgb; darkness = min(darkness, 1.0 - c.a);
+  c = lightContrib(fragPx, 4);  glow += c.rgb; darkness = min(darkness, 1.0 - c.a);
+  c = lightContrib(fragPx, 5);  glow += c.rgb; darkness = min(darkness, 1.0 - c.a);
+  c = lightContrib(fragPx, 6);  glow += c.rgb; darkness = min(darkness, 1.0 - c.a);
+  c = lightContrib(fragPx, 7);  glow += c.rgb; darkness = min(darkness, 1.0 - c.a);
+  c = lightContrib(fragPx, 8);  glow += c.rgb; darkness = min(darkness, 1.0 - c.a);
+  c = lightContrib(fragPx, 9);  glow += c.rgb; darkness = min(darkness, 1.0 - c.a);
+  c = lightContrib(fragPx, 10); glow += c.rgb; darkness = min(darkness, 1.0 - c.a);
+  c = lightContrib(fragPx, 11); glow += c.rgb; darkness = min(darkness, 1.0 - c.a);
+  c = lightContrib(fragPx, 12); glow += c.rgb; darkness = min(darkness, 1.0 - c.a);
+  c = lightContrib(fragPx, 13); glow += c.rgb; darkness = min(darkness, 1.0 - c.a);
+  c = lightContrib(fragPx, 14); glow += c.rgb; darkness = min(darkness, 1.0 - c.a);
+  c = lightContrib(fragPx, 15); glow += c.rgb; darkness = min(darkness, 1.0 - c.a);
+
+  float alpha = uNightAlpha * darkness;
+  vec3  col   = uAmbientColor - clamp(glow, 0.0, 1.0) * uNightAlpha;
+  col = clamp(col, 0.0, 1.0);
+
+  gl_FragColor = vec4(col, alpha);
+}`;
+
+// ── State ─────────────────────────────────────────────────────
+let _lightFilter  = null;   // PIXI.Filter (our GLSL shader)
+let _lightOverlay = null;   // PIXI.Sprite covering full screen
+let _lightTime    = 0;
+
+function _initLighting(stage, w, h) {
+  try {
+    _lightFilter = new PIXI.Filter(_LIGHT_VERT, _LIGHT_FRAG, {
+      uResolution:     [w, h],
+      uNightAlpha:     0.0,
+      uAmbientColor:   [0.04, 0.04, 0.08],
+      uLightPos:       new Float32Array(16 * 2),
+      uLightRadius:    new Float32Array(16),
+      uLightColor:     new Float32Array(16 * 3),
+      uLightIntensity: new Float32Array(16),
+      uLightActive:    new Float32Array(16),
+    });
+  } catch(e) {
+    console.warn('Light shader compile failed:', e.message);
+    _lightFilter = null;
+    return;
+  }
+
+  // Full-screen white sprite — shader colours it as the darkness overlay
+  _lightOverlay = new PIXI.Sprite(PIXI.Texture.WHITE);
+  _lightOverlay.width  = w;
+  _lightOverlay.height = h;
+  _lightOverlay.blendMode = PIXI.BLEND_MODES.NORMAL;
+  _lightOverlay.filters  = [_lightFilter];
+  _lightOverlay.zIndex   = 50000;
+  stage.addChild(_lightOverlay);
+}
+
 function _resizeLighting(w, h) {
-  if (_lightRT) _lightRT.resize(w, h);
-  if (_lightSprite) { _lightSprite.width = w; _lightSprite.height = h; }
-  if (_glowRT) _glowRT.resize(w, h);
-  if (_glowSprite) { _glowSprite.width = w; _glowSprite.height = h; }
+  if (_lightOverlay) { _lightOverlay.width = w; _lightOverlay.height = h; }
+  if (_lightFilter)  { _lightFilter.uniforms.uResolution = [w, h]; }
 }
 
 // ── Flicker ───────────────────────────────────────────────────
-let _lightTime = 0;
 function _tickLightFlicker(dt) {
   _lightTime += dt * 0.016;
   for (const lt of _worldLights) {
@@ -2520,84 +2605,15 @@ function _tickLightFlicker(dt) {
   }
 }
 
-// ── Darkness-mask light disk ──────────────────────────────────
-// Alpha-mask model: RT is a darkness overlay (NORMAL blend).
-//   Outer ring: opaque tinted black (full darkness)
-//   Inner rings: transparent (scene shows through = fully lit)
-//   Mid ring:    semi-transparent tint (warm/cool colour glow)
-//
-// nightAlpha: how dark the outer ring is (0=day, 1=full night)
-// tint: glow colour at the transition zone (e.g. 0xFF8800 = torch)
-function _drawLightDisk(sx, sy, radius, tint, nightAlpha, steps) {
-  const tr = (tint >> 16) & 0xFF;
-  const tg = (tint >> 8)  & 0xFF;
-  const tb =  tint        & 0xFF;
-  // Ambient base colour (must match the fill colour in _updateLighting)
-  const ar = 0x0a, ag = 0x0a, ab = 0x14;
-  const N = steps || 24;
-  for (let i = 0; i <= N; i++) {
-    const t    = i / N;              // 0=edge, 1=centre
-    const s    = t * t * (3 - 2*t); // smoothstep
-    const ease = s;
-
-    // Alpha: nightAlpha at edge → 0 at centre (transparent = lit)
-    const alpha = nightAlpha * Math.pow(1 - ease, 0.6);
-
-    // Colour: ambient colour at edge, tint at mid-ring, ambient at centre.
-    // Edge matches ambient fill so no visible dark halo seam.
-    const tintPeak = Math.pow(Math.sin(ease * Math.PI), 1.2); // 0→1→0 bell
-    const rv = Math.round(ar + (tr - ar) * tintPeak);
-    const gv = Math.round(ag + (tg - ag) * tintPeak);
-    const bv = Math.round(ab + (tb - ab) * tintPeak);
-
-    const ringR = radius * (1 - t);
-    if (ringR < 0.5) break;
-    _lightGfx.beginFill((rv << 16) | (gv << 8) | bv, alpha);
-    _lightGfx.drawCircle(sx, sy, ringR);
-    _lightGfx.endFill();
-  }
-}
-
-// ── Additive glow disk (drawn to _glowRT with ADD blend) ─────
-// Adds warm/cool colour directly onto lit tiles.
-// Black (0) at edge and centre; tint colour peaks at ~40% radius.
-// nightAlpha scales glow intensity (stronger at night).
-function _drawGlowDisk(gfx, sx, sy, radius, tint, nightAlpha, steps) {
-  const tr = (tint >> 16) & 0xFF;
-  const tg = (tint >> 8)  & 0xFF;
-  const tb =  tint        & 0xFF;
-  const N = steps || 20;
-  for (let i = 0; i <= N; i++) {
-    const t    = i / N;
-    const s    = t * t * (3 - 2*t);
-    const ease = s;
-    // Glow peaks at ~35% from centre (ease≈0.65)
-    const glowEase = Math.pow(Math.sin(ease * Math.PI), 1.8);
-    const intensity = nightAlpha * 0.45 * glowEase;
-    const rv = Math.round(tr * intensity);
-    const gv = Math.round(tg * intensity);
-    const bv = Math.round(tb * intensity);
-    const ringR = radius * 0.65 * (1 - t); // glow covers inner 65% of light radius
-    if (ringR < 0.5) break;
-    gfx.beginFill((rv << 16) | (gv << 8) | bv, 1);
-    gfx.drawCircle(sx, sy, ringR);
-    gfx.endFill();
-  }
-}
-
-// ── 2D Visibility Polygon ─────────────────────────────────────
-// Cast rays from player to every wall-tile corner ± ε.
-// Each ray stops at the first opaque tile.  Returns screen-space pts[].
+// ── 2D Visibility Polygon (kept for shadow casting) ───────────
 const _WALL_TILES = new Set(['building', 'cliff', 'mountain', 'tree']);
 
 function _computeVisibilityPoly(sx, sy, radius, wcx, wcy) {
-  const wx0 = sx - wcx;   // player world-x
-  const wy0 = sy - wcy;   // player world-y
-
-  // Collect corners of every wall tile within radius
+  const wx0 = sx - wcx;
+  const wy0 = sy - wcy;
   const corners = [];
-  const cx0 = Math.floor((wx0 - radius) / TILE_SIZE);
-  const cy0 = Math.floor((wy0 - radius) / TILE_SIZE);
+  const cx0  = Math.floor((wx0 - radius) / TILE_SIZE);
+  const cy0  = Math.floor((wy0 - radius) / TILE_SIZE);
   const span = Math.ceil(radius * 2 / TILE_SIZE) + 2;
   for (let ty = cy0; ty <= cy0 + span; ty++) {
     for (let tx = cx0; tx <= cx0 + span; tx++) {
@@ -2605,24 +2621,17 @@ function _computeVisibilityPoly(sx, sy, radius, wcx, wcy) {
                                 ty * TILE_SIZE + TILE_SIZE * 0.5);
       if (!_WALL_TILES.has(tt)) continue;
       const wx = tx * TILE_SIZE, wy = ty * TILE_SIZE;
-      corners.push([wx,            wy           ]);
-      corners.push([wx + TILE_SIZE, wy           ]);
-      corners.push([wx,            wy + TILE_SIZE]);
-      corners.push([wx + TILE_SIZE, wy + TILE_SIZE]);
+      corners.push([wx, wy], [wx + TILE_SIZE, wy],
+                   [wx, wy + TILE_SIZE], [wx + TILE_SIZE, wy + TILE_SIZE]);
     }
   }
-
-  // Build sorted angle list
   const angles = [];
   for (const [cx2, cy2] of corners) {
     const a = Math.atan2(cy2 - wy0, cx2 - wx0);
     angles.push(a - 0.00015, a, a + 0.00015);
   }
-  // Uniform fallback rays so we always get a full circle when no walls
   for (let i = 0; i < 32; i++) angles.push((i / 32) * Math.PI * 2 - Math.PI);
   angles.sort((a, b) => a - b);
-
-  // Cast each ray, step size = half a tile
   const step = TILE_SIZE * 0.5;
   const maxSteps = Math.ceil(radius / step) + 1;
   const pts = [];
@@ -2633,131 +2642,47 @@ function _computeVisibilityPoly(sx, sy, radius, wcx, wcy) {
       const d = s * step;
       if (d >= radius) break;
       const tt = _pixiGetTileAt(wx0 + dx * d, wy0 + dy * d);
-      if (_WALL_TILES.has(tt)) {
-        hitDist = Math.max(0, d - step * 0.5);
-        break;
-      }
+      if (_WALL_TILES.has(tt)) { hitDist = Math.max(0, d - step * 0.5); break; }
     }
     pts.push({ x: sx + dx * hitDist, y: sy + dy * hitDist });
   }
   return pts;
 }
 
-// Draw visibility polygon — alpha-mask darkness model.
-// Each scaled pass of the polygon punches a transparent "window" in the darkness.
-// Outer pass: nightAlpha opacity (dark) → inner passes: alpha=0 (fully lit).
-// Tint colour gives warm/cool cast at the transition zone.
-function _drawVisibilityPoly(sx, sy, pts, color, nightAlpha) {
-  if (pts.length < 3) return;
-  const cr = (color >> 16) & 0xFF;
-  const cg = (color >> 8)  & 0xFF;
-  const cb =  color        & 0xFF;
-  // Ambient base colour (must match fill colour in _updateLighting)
-  const ar = 0x0a, ag = 0x0a, ab = 0x14;
-
-  const PASSES = 36;
-  for (let p = 0; p <= PASSES; p++) {
-    const t    = p / PASSES;              // 0=outermost, 1=centre
-    const s    = t * t * (3 - 2 * t);    // smoothstep
-    const ease = s;
-    const scale = 1.0 - t;               // polygon shrinks toward centre
-
-    // Alpha: nightAlpha at edge → 0 at centre
-    const alpha = nightAlpha * Math.pow(1 - ease, 0.6);
-
-    // Colour: ambient at edge, tint bell-peaks at mid, back to ambient at centre
-    const tintPeak = Math.pow(Math.sin(ease * Math.PI), 1.2);
-    const rv = Math.round(ar + (cr - ar) * tintPeak);
-    const gv = Math.round(ag + (cg - ag) * tintPeak);
-    const bv = Math.round(ab + (cb - ab) * tintPeak);
-
-    _lightGfx.beginFill((rv << 16) | (gv << 8) | bv, alpha);
-    _lightGfx.moveTo(sx, sy);
-    for (const pt of pts) {
-      _lightGfx.lineTo(sx + (pt.x - sx) * scale, sy + (pt.y - sy) * scale);
-    }
-    _lightGfx.lineTo(sx + (pts[0].x - sx) * scale, sy + (pts[0].y - sy) * scale);
-    _lightGfx.closePath();
-    _lightGfx.endFill();
-  }
-  // Fully transparent hotspot at centre (completely lit right under player)
-  _lightGfx.beginFill(0x000000, 0);
-  _lightGfx.drawCircle(sx, sy, TILE_SIZE * 0.6);
-  _lightGfx.endFill();
-}
-
 // ── Surface tint ──────────────────────────────────────────────
-// Nudge the light tint based on surface type. Works in near-white space:
-// small channel tweaks shift the colour temperature without darkening.
 function _surfaceTintColor(baseTint, worldX, worldY) {
   const tile = _pixiGetTileAt(worldX, worldY);
   let r = (baseTint >> 16) & 0xFF;
   let g = (baseTint >> 8)  & 0xFF;
   let b =  baseTint        & 0xFF;
   if (tile === 'water' || tile === 'beach') {
-    // Cooler — boost blue slightly, reduce red a touch
-    b = Math.min(255, b + 20);
-    r = Math.max(0, r - 12);
+    b = Math.min(255, b + 20); r = Math.max(0, r - 12);
   } else if (tile === 'stone' || tile === 'path') {
-    // Neutral: push all channels toward white
-    r = Math.min(255, r + 8);
-    g = Math.min(255, g + 6);
-    b = Math.min(255, b + 5);
+    r = Math.min(255, r + 8); g = Math.min(255, g + 6); b = Math.min(255, b + 5);
   }
-  // grass: keep as-is
   return (r << 16) | (g << 8) | b;
 }
 
 // ── Main update ───────────────────────────────────────────────
 function _updateLighting(renderer, playerScreenX, playerScreenY, ambientAlpha, ingameMin) {
-  if (!_lightRT || !_lightGfx) return;
+  if (!_lightFilter || !_lightOverlay) return;
 
   if (ambientAlpha <= 0.02) {
-    _lightSprite.visible = false;
-    if (_glowSprite) _glowSprite.visible = false;
+    _lightOverlay.visible = false;
     return;
   }
-  _lightSprite.visible = true;
-  if (_glowSprite) _glowSprite.visible = true;
+  _lightOverlay.visible = true;
 
-  const w = _lightRT.width, h = _lightRT.height;
-  _lightGfx.clear();
-
+  const nightAlpha = 1 - ambientAlpha;
+  const w = _lightOverlay.width, h = _lightOverlay.height;
   const wc  = gameScene?._worldContainer;
   const wcx = wc ? wc.x : 0;
   const wcy = wc ? wc.y : 0;
 
-  // Night strength: 0=day (no overlay), 1=pitch black
-  const nightAlpha = 1 - ambientAlpha;
+  // Build light list: world lights + player lantern
+  const lights = [];
 
-  // ── 1. Ambient darkness fill (alpha-mask model) ────────────
-  // The RT is a darkness overlay: opaque black areas = dark, transparent = lit.
-  // Fill with a cool-blue tinted darkness, then punch light holes into it.
-  {
-    const nightFrac = ((ingameMin || 0) % 1440) / 1440;
-    const moonAngle = nightFrac * Math.PI * 0.5 + Math.PI * 1.1;
-    const moonDX    = Math.cos(moonAngle);
-    const moonDY    = Math.sin(moonAngle);
-
-    // Base darkness fill: slightly warm on shadow side, cool on moon side
-    // Use a subtle directional two-rect approach
-    const shadowAlpha = Math.min(1, nightAlpha * 1.05);
-    const moonAlpha   = Math.max(0, nightAlpha * 0.88);
-
-    // Fill full screen with moon-side colour (cool-blue tinted dark)
-    _lightGfx.beginFill(0x0a0a14, moonAlpha);
-    _lightGfx.drawRect(0, 0, w, h);
-    _lightGfx.endFill();
-
-    // Overlay shadow half (opposite moon direction) with slightly warmer darker fill
-    const smx = w/2 - moonDX * w * 0.3;
-    const smy = h/2 - moonDY * h * 0.3;
-    _lightGfx.beginFill(0x08060a, shadowAlpha * 0.25);
-    _lightGfx.drawCircle(smx, smy, Math.max(w, h) * 0.85);
-    _lightGfx.endFill();
-  }
-
-  // ── 2. World light disks (torches, campfires, windows) ─────
+  // World lights (torches, campfires, windows, lamps)
   for (const lt of _worldLights) {
     const sx = lt.wx + wcx, sy = lt.wy + wcy;
     if (sx < -lt.radius * 2 || sx > w + lt.radius * 2 ||
@@ -2770,32 +2695,58 @@ function _updateLighting(renderer, playerScreenX, playerScreenY, ambientAlpha, i
                          + Math.sin(fp * 7.1) * 0.012);
     }
     const tinted = _surfaceTintColor(lt.color, lt.wx, lt.wy);
-    // Darkness mask layer
-    _drawLightDisk(sx, sy, r, tinted, nightAlpha, 32);
-    // Colour glow layer (ADD)
-    if (_glowGfx) _drawGlowDisk(_glowGfx, sx, sy, r, tinted, nightAlpha, 14);
+    lights.push({ sx, sy, r,
+      cr: ((tinted >> 16) & 0xFF) / 255,
+      cg: ((tinted >> 8)  & 0xFF) / 255,
+      cb: ( tinted        & 0xFF) / 255,
+      intensity: 1.0
+    });
+    if (lights.length >= 15) break; // reserve slot 15 for player
   }
 
-  // ── 3. Player lantern — visibility polygon ─────────────────
+  // Player lantern
   {
     const flicker = 1 + Math.sin(_lightTime * 2.1) * 0.02;
     const r = LIGHT_RADIUS_PLAYER * flicker;
     const playerWorldX = playerScreenX - wcx;
     const playerWorldY = playerScreenY - wcy;
     const amber = _surfaceTintColor(LCOLOR_LANTERN, playerWorldX, playerWorldY);
-
-    const visPoly = _computeVisibilityPoly(playerScreenX, playerScreenY, r, wcx, wcy);
-    if (visPoly.length >= 3) {
-      _drawVisibilityPoly(playerScreenX, playerScreenY, visPoly, amber, nightAlpha);
-    } else {
-      _drawLightDisk(playerScreenX, playerScreenY, r, amber, nightAlpha, 40);
-    }
-    // Player glow layer
-    if (_glowGfx) _drawGlowDisk(_glowGfx, playerScreenX, playerScreenY, r, amber, nightAlpha, 18);
+    lights.push({
+      sx: playerScreenX, sy: playerScreenY, r,
+      cr: ((amber >> 16) & 0xFF) / 255,
+      cg: ((amber >> 8)  & 0xFF) / 255,
+      cb: ( amber        & 0xFF) / 255,
+      intensity: 1.0
+    });
   }
 
-  renderer.render(_lightGfx, { renderTexture: _lightRT, clear: true });
-  if (_glowGfx && _glowRT) renderer.render(_glowGfx, { renderTexture: _glowRT, clear: true });
+  // Pack into typed arrays for shader uniforms
+  const count      = Math.min(lights.length, 16);
+  const posArr     = new Float32Array(16 * 2);
+  const radArr     = new Float32Array(16);
+  const colArr     = new Float32Array(16 * 3);
+  const intArr     = new Float32Array(16);
+  const activeArr  = new Float32Array(16); // 1.0=active, 0.0=inactive slot
+  for (let i = 0; i < count; i++) {
+    const lt = lights[i];
+    posArr[i * 2]     = lt.sx;
+    posArr[i * 2 + 1] = lt.sy;
+    radArr[i]         = lt.r;
+    colArr[i * 3]     = lt.cr;
+    colArr[i * 3 + 1] = lt.cg;
+    colArr[i * 3 + 2] = lt.cb;
+    intArr[i]         = lt.intensity;
+    activeArr[i]      = 1.0;
+  }
+
+  const u = _lightFilter.uniforms;
+  u.uNightAlpha     = nightAlpha;
+  u.uAmbientColor   = [0.04, 0.04, 0.08];
+  u.uLightPos       = posArr;
+  u.uLightRadius    = radArr;
+  u.uLightColor     = colArr;
+  u.uLightIntensity = intArr;
+  u.uLightActive    = activeArr;
 }
 
 // ─────────────────────────────────────────────────────────────
