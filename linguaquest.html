@@ -191,6 +191,20 @@ html, body { background: #1a2a1a; overflow: hidden; font-family: 'Georgia', seri
   margin-left: auto; color: #3a6028; font-size: 10px; letter-spacing: 1px;
   background: rgba(0,0,0,.3); padding: 3px 10px; border-radius: 10px;
 }
+#time-pill {
+  color: #5a8040; font-size: 10px; letter-spacing: 1px;
+  background: rgba(0,0,0,.3); padding: 3px 10px; border-radius: 10px;
+  display: flex; align-items: center; gap: 5px;
+}
+#time-pill .time-icon { font-size: 9px; }
+/* Idle overlay */
+#idle-overlay {
+  position: fixed; inset: 0; z-index: 300;
+  background: rgba(0,0,0,.85);
+  display: none; align-items: center; justify-content: center; flex-direction: column; gap: 16px;
+}
+#idle-overlay p { color: #7ec850; font-size: 16px; letter-spacing: 4px; text-transform: uppercase; }
+#idle-overlay span { color: #3a6028; font-size: 11px; letter-spacing: 2px; }
 #controls-hint {
   position: fixed; bottom: 62px; right: 14px; z-index: 90;
   color: #2a4a18; font-size: 10px; letter-spacing: 1px; text-align: right;
@@ -363,7 +377,14 @@ html, body { background: #1a2a1a; overflow: hidden; font-family: 'Georgia', seri
 <div id="top-hud">
   <span id="world-name">World</span>
   <span id="lang-badge">ES</span>
+  <span id="time-pill"><span class="time-icon">☀</span><span id="time-display">Day 1 · 06:00</span></span>
   <span id="vocab-pill">loading vocab...</span>
+</div>
+
+<!-- IDLE OVERLAY -->
+<div id="idle-overlay">
+  <p>⏸ Time Paused</p>
+  <span>Move to resume</span>
 </div>
 
 <!-- GAME CANVAS -->
@@ -1010,7 +1031,7 @@ const DEFAULT_CAMPAIGN = {
     player_reputation: { overall: "neutral", by_faction: {}, notable_acts: [] },
     world_damage: {},
     in_game_date: "Day 1, Morning",
-    in_game_minutes_elapsed: 0,
+    in_game_minutes_elapsed: 360,  // start at 6:00 AM Day 1
     region_map: null,
     used_decorations: []
   }
@@ -3035,8 +3056,6 @@ function _initDayNight(worldContainer) {
 
 function _updateDayNight(inGameMinutes) {
   if (!_dayNightFilter) return;
-  _dayNightFilter.matrix = CM_DAY; // Day/night disabled — always daytime
-  /*
   const hour = (inGameMinutes % 1440) / 60;
   let matrix;
   if      (hour < 5)  matrix = CM_NIGHT;
@@ -3047,19 +3066,276 @@ function _updateDayNight(inGameMinutes) {
   else if (hour < 21) matrix = _lerp(CM_DUSK,  CM_NIGHT, (hour-19)/2);
   else                matrix = CM_NIGHT;
   _dayNightFilter.matrix = matrix;
-  */
 }
 
 function _dayNightAmbientAlpha(inGameMinutes) {
-  return 0.0; // Lighting system disabled — always daytime until redesigned
-  /*
   const hour = (inGameMinutes % 1440) / 60;
   if      (hour < 5)  return LIGHT_AMBIENT_NIGHT;
   else if (hour < 7)  return LIGHT_AMBIENT_NIGHT * (1 - (hour-5)/2);
   else if (hour < 17) return LIGHT_AMBIENT_DAY;
   else if (hour < 19) return LIGHT_AMBIENT_NIGHT * ((hour-17)/2);
   else                return LIGHT_AMBIENT_NIGHT;
-  */
+}
+
+// ═════════════════════════════════════════════════════════════
+//  PHASE 2 — WORLD CLOCK + TICK SYSTEM
+// ═════════════════════════════════════════════════════════════
+
+// ── 2.1 Constants ──────────────────────────────────────────
+const INGAME_MINS_PER_REAL_SEC = 2.0; // 120 in-game min per real min = 2/sec
+const WORLD_TICK_INTERVAL_MS   = 10000; // real ms between World Tick processing
+const IDLE_THRESHOLD_MS        = 120000; // 2 min real time → pause
+
+// ── 2.1/2.2 State ──────────────────────────────────────────
+let _clockLastRealMs  = null;   // performance.now() at last frame where time advanced
+let _clockPaused      = false;  // true when idling or tabbed out
+let _idleTimer        = null;   // setTimeout handle for idle detection
+let _worldTickHandle  = null;   // setInterval handle for World Tick loop
+let _tickInFlight     = false;  // guard against overlapping tick calls
+let _lastActivityMs   = 0;      // performance.now() of last player input
+
+// ── 2.1 HUD helpers ──────────────────────────────────────────
+function _ingameMinutesToDisplay(totalMinutes) {
+  // Day count starts at 1; 1440 min = 1 full in-game day
+  const day  = Math.floor(totalMinutes / 1440) + 1;
+  const mins = Math.round(totalMinutes % 1440);
+  const hh   = String(Math.floor(mins / 60)).padStart(2, '0');
+  const mm   = String(mins % 60).padStart(2, '0');
+  return `Day ${day} · ${hh}:${mm}`;
+}
+
+function _ingameMinutesToIcon(totalMinutes) {
+  const hour = (totalMinutes % 1440) / 60;
+  if (hour >= 5  && hour < 8)  return '🌅';
+  if (hour >= 8  && hour < 17) return '☀';
+  if (hour >= 17 && hour < 20) return '🌆';
+  if (hour >= 20 || hour < 5)  return '🌙';
+  return '☀';
+}
+
+function _updateTimeHUD() {
+  const mins = activeCampaign?.world_state?.in_game_minutes_elapsed || 0;
+  const el = document.getElementById('time-display');
+  const iconEl = document.querySelector('#time-pill .time-icon');
+  if (el) el.textContent = _ingameMinutesToDisplay(mins);
+  if (iconEl) iconEl.textContent = _ingameMinutesToIcon(mins);
+  // Also update day/night visuals
+  _updateDayNight(mins);
+}
+
+// ── 2.2 Idle detection ──────────────────────────────────────
+function _resetIdleTimer() {
+  _lastActivityMs = performance.now();
+  if (_clockPaused) _resumeClock();
+  clearTimeout(_idleTimer);
+  _idleTimer = setTimeout(_onIdle, IDLE_THRESHOLD_MS);
+}
+
+function _onIdle() {
+  if (_clockPaused) return;
+  _clockPaused = true;
+  _clockLastRealMs = null;
+  document.getElementById('idle-overlay').style.display = 'flex';
+  console.log('[WorldClock] Paused — idle');
+}
+
+function _resumeClock() {
+  _clockPaused = false;
+  _clockLastRealMs = performance.now();
+  document.getElementById('idle-overlay').style.display = 'none';
+}
+
+// ── 2.1 Clock tick — called every PixiJS frame ───────────────
+function _tickWorldClock(dt) {
+  // dt = seconds (PixiJS delta / 60)
+  if (_clockPaused || !activeCampaign) return;
+
+  const nowMs = performance.now();
+  if (_clockLastRealMs === null) { _clockLastRealMs = nowMs; return; }
+
+  const elapsedSec = Math.min((nowMs - _clockLastRealMs) / 1000, 1.0); // cap at 1s to avoid big jumps
+  _clockLastRealMs = nowMs;
+
+  const deltaIngame = elapsedSec * INGAME_MINS_PER_REAL_SEC;
+  activeCampaign.world_state.in_game_minutes_elapsed =
+    (activeCampaign.world_state.in_game_minutes_elapsed || 360) + deltaIngame;
+
+  _updateTimeHUD();
+}
+
+// ── 2.1 Startup ─────────────────────────────────────────────
+function startWorldClock() {
+  _clockLastRealMs = performance.now();
+  _clockPaused = false;
+
+  // Page Visibility API — pause when tab loses focus
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      _clockPaused = true;
+      _clockLastRealMs = null;
+    } else {
+      _resumeClock();
+      _resetIdleTimer();
+    }
+  });
+
+  // Track player activity to reset idle timer
+  ['keydown','mousemove','touchstart'].forEach(evt => {
+    window.addEventListener(evt, _resetIdleTimer, { passive: true });
+  });
+
+  _resetIdleTimer(); // start the initial idle countdown
+  _updateTimeHUD();  // render initial value immediately
+  console.log('[WorldClock] Started');
+}
+
+// ─────────────────────────────────────────────────────────────
+//  2.3 WORLD TICK LOOP
+//  Every 10 real seconds:
+//    1. Query lq_planned_events where status='pending' and execute_at <= current in-game minutes
+//    2. Resolve each event (update NPC state, write world events, queue follow-ups)
+//    3. Write world_tick_count + in_game_minutes_elapsed back to lq_campaigns
+// ─────────────────────────────────────────────────────────────
+function startWorldTick() {
+  if (_worldTickHandle) return; // already running
+  _worldTickHandle = setInterval(_runWorldTick, WORLD_TICK_INTERVAL_MS);
+  console.log('[WorldTick] Loop started (every 10s)');
+}
+
+async function _runWorldTick() {
+  if (_tickInFlight || !activeCampaignId || !activeCampaign) return;
+  if (_clockPaused) return; // don't advance while idling
+  _tickInFlight = true;
+
+  try {
+    const nowIngame = activeCampaign.world_state.in_game_minutes_elapsed || 0;
+
+    // 1. Fetch pending events due now
+    const pendingEvents = await lqDB('GET', 'lq_planned_events', null,
+      `?campaign_id=eq.${activeCampaignId}&status=eq.pending&execute_at_ingame_minute=lte.${Math.floor(nowIngame)}&order=execute_at_ingame_minute.asc&limit=20`
+    ) || [];
+
+    // 2. Resolve each event
+    for (const ev of pendingEvents) {
+      await _resolveWorldEvent(ev, nowIngame);
+    }
+
+    // 3. Persist world_state (in_game_minutes_elapsed + world_tick_count) back to DB
+    const newTickCount = (activeCampaign.world_tick_count || 0) + 1;
+    activeCampaign.world_tick_count = newTickCount;
+    await lqDB('PATCH', 'lq_campaigns', {
+      world_state: activeCampaign.world_state,
+      world_tick_count: newTickCount,
+      updated_at: new Date().toISOString()
+    }, `?id=eq.${activeCampaignId}`);
+
+    if (pendingEvents.length > 0) {
+      console.log(`[WorldTick] Resolved ${pendingEvents.length} event(s) at in-game minute ${Math.floor(nowIngame)}`);
+    }
+  } catch(e) {
+    console.warn('[WorldTick] Error:', e.message);
+  } finally {
+    _tickInFlight = false;
+  }
+}
+
+// ── 2.3 Event resolver ───────────────────────────────────────
+async function _resolveWorldEvent(ev, nowIngame) {
+  try {
+    const payload = ev.payload || {};
+
+    // Mark the event as resolved immediately to avoid double-processing
+    await lqDB('PATCH', 'lq_planned_events',
+      { status: 'resolved', resolved_at: new Date().toISOString() },
+      `?id=eq.${ev.id}`
+    );
+
+    // Write an objective world event log entry
+    const worldEventPayload = {
+      campaign_id: activeCampaignId,
+      chunk_key: payload.to_chunk || payload.from_chunk || '0,0',
+      event_type: ev.event_type,
+      description: ev.description || '',
+      affected_npc_ids: payload.npc_id ? [payload.npc_id] : [],
+      occurred_at_ingame_minute: Math.floor(nowIngame),
+      payload: payload
+    };
+    await lqDB('POST', 'lq_world_events', worldEventPayload);
+
+    // ── 2.4 Live chunk update: if event affects player's current chunk, notify ──
+    const affectedChunk = payload.to_chunk || payload.from_chunk || null;
+    if (affectedChunk) {
+      const [ecx, ecy] = affectedChunk.split(',').map(Number);
+      if (ecx === currentChunkX && ecy === currentChunkY) {
+        _onLiveChunkEvent(ev, payload, nowIngame);
+      }
+    }
+
+    // Type-specific handling
+    if (ev.event_type === 'npc_movement' && payload.npc_id) {
+      // Update NPC's current_chunk in DB
+      await lqDB('PATCH', 'lq_npcs',
+        { current_chunk: payload.to_chunk, updated_at: new Date().toISOString() },
+        `?id=eq.${payload.npc_id}`
+      );
+    }
+
+  } catch(e) {
+    console.warn('[WorldTick] resolveWorldEvent failed for', ev.id, ':', e.message);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  2.4 LIVE CHUNK UPDATES
+//  Called when a resolved event affects the player's current chunk.
+//  Shows a subtle status toast and — for NPC arrivals/departures —
+//  updates the visible NPC objects on screen.
+// ─────────────────────────────────────────────────────────────
+function _onLiveChunkEvent(ev, payload, nowIngame) {
+  const hour = Math.floor((nowIngame % 1440) / 60);
+  const timeStr = `${String(hour).padStart(2,'0')}:${String(Math.round(nowIngame % 60)).padStart(2,'0')}`;
+
+  if (ev.event_type === 'npc_movement') {
+    const npcId = payload.npc_id;
+    const movingTo = payload.to_chunk;
+    const movingFrom = payload.from_chunk;
+    const currentChunkKey = `${currentChunkX},${currentChunkY}`;
+
+    if (movingFrom === currentChunkKey && movingTo !== currentChunkKey) {
+      // NPC is leaving — remove from visible scene
+      _pixiRemoveNPCFromScene(npcId);
+      const npcName = _getNPCNameById(npcId);
+      if (npcName) showStatus(`${npcName} has left.`, 2500);
+    } else if (movingTo === currentChunkKey && movingFrom !== currentChunkKey) {
+      // NPC is arriving — we don't auto-spawn (no position defined),
+      // but show a toast so the player knows
+      const npcName = _getNPCNameById(npcId);
+      if (npcName) showStatus(`${npcName} has arrived.`, 2500);
+    }
+  }
+}
+
+// Remove an NPC sprite from the current PixiJS scene by npc id
+function _pixiRemoveNPCFromScene(npcId) {
+  if (!gameScene?.npcObjects) return;
+  const idx = gameScene.npcObjects.findIndex(n => n.def?.id === npcId);
+  if (idx === -1) return;
+  const npcObj = gameScene.npcObjects[idx];
+  if (npcObj.container && gameScene._worldContainer) {
+    gameScene._worldContainer.removeChild(npcObj.container);
+    npcObj.container.destroy({ children: true });
+  }
+  gameScene.npcObjects.splice(idx, 1);
+}
+
+// Helper: get NPC display name by UUID from loaded campaign NPCs
+function _getNPCNameById(npcId) {
+  for (const slug of Object.keys(campaignNPCs)) {
+    if (campaignNPCs[slug]?.id === npcId) return MAIN_CAST_SOULS[slug]?.name || null;
+  }
+  // Also check current scene NPCs
+  const sceneNPC = gameScene?.npcObjects?.find(n => n.def?.id === npcId);
+  return sceneNPC?.def?.name || null;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -3303,6 +3579,9 @@ function _pixiUpdate(delta) {
   const _wc = gameScene?._worldContainer;
   if (_wc) _updateWindShader(dt, _wc.x, _wc.y);
 
+  // ── WORLD CLOCK (Phase 2.1) ──
+  _tickWorldClock(dt);
+
   // ── DAY/NIGHT ──
   const ingameMin = activeCampaign?.world_state?.in_game_minutes_elapsed || 0;
   _updateDayNight(ingameMin);
@@ -3472,6 +3751,10 @@ function startGame(worldDef) {
 
   // ── Auto-save ──
   setInterval(() => { if (activeCampaignId) saveGame(); }, 30000);
+
+  // ── Phase 2: start world clock + tick loop ──
+  startWorldClock();
+  startWorldTick();
 
   // ── Init indoor canvas ──
   setupIndoorCanvas();
