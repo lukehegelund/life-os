@@ -1373,6 +1373,11 @@ async function loadSavedGame(campaignId) {
         if (slug) campaignNPCs[slug] = npc;
       }
     }
+    // Backfill in_game_minutes_elapsed to 6:00 AM if it's 0 (old save)
+    if (!activeCampaign.world_state?.in_game_minutes_elapsed) {
+      activeCampaign.world_state = { ...(activeCampaign.world_state || {}), in_game_minutes_elapsed: 360 };
+    }
+
     // Backfill region_map if this is an older campaign that doesn't have one
     if (!activeCampaign.world_state?.region_map) {
       console.log('Backfilling region_map for existing campaign...');
@@ -2494,13 +2499,13 @@ function _pixiLoadChunk(worldContainer, worldDef, chunkX, chunkY, isOrigin) {
     document.getElementById('dialogue-input').placeholder = `Respond in ${getLangName(worldLanguage)}...`;
     if (worldDef.world.description) showStatus(worldDef.world.description, 5000);
 
-    // ── PHASE 3.1: Chunk entry sweep ──
-    const npcsInThisChunk = chunkNpcs.map(n => n.def?.id).filter(Boolean).map(id => campaignNPCs[id]).filter(Boolean);
-    if (npcsInThisChunk.length > 0) _phase3ChunkEntrySweep(npcsInThisChunk).catch(() => {});
-
     queueSurroundingChunks(chunkX, chunkY);
     processChunkQueue();
   }
+
+  // ── PHASE 3.1: Chunk entry sweep (fires for all chunk loads) ──
+  const _p3npcs = (chunks.get(key)?.npcs || []).map(n => n.def?.id).filter(Boolean).map(id => campaignNPCs[id]).filter(Boolean);
+  if (_p3npcs.length > 0) _phase3ChunkEntrySweep(_p3npcs).catch(() => {});
 
   console.log(`Chunk (${chunkX},${chunkY}) loaded — ${gameObjects.length} objects`);
 }
@@ -3194,15 +3199,18 @@ function startWorldClock() {
   _clockPaused = false;
 
   // Page Visibility API — pause when tab loses focus
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-      _clockPaused = true;
-      _clockLastRealMs = null;
-    } else {
-      _resumeClock();
-      _resetIdleTimer();
-    }
-  });
+  // Delay listener attachment to avoid false-pause on initial page load
+  setTimeout(() => {
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        _clockPaused = true;
+        _clockLastRealMs = null;
+      } else {
+        _resumeClock();
+        _resetIdleTimer();
+      }
+    });
+  }, 500);
 
   // Track player activity to reset idle timer
   ['keydown','mousemove','touchstart'].forEach(evt => {
@@ -3250,8 +3258,7 @@ async function _runWorldTick() {
     activeCampaign.world_tick_count = newTickCount;
     await lqDB('PATCH', 'lq_campaigns', {
       world_state: activeCampaign.world_state,
-      world_tick_count: newTickCount,
-      updated_at: new Date().toISOString()
+      world_tick_count: newTickCount
     }, `?id=eq.${activeCampaignId}`);
 
     if (pendingEvents.length > 0) {
