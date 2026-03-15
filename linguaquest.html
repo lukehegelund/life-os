@@ -671,21 +671,27 @@ const SAMPLE_WORLD = {
 // Trees/buildings/cliff are drawn as decorations ON TOP of the base tile.
 // 'tint' is an optional hex tint to apply to the base tile.
 const TILE_DEFS = {
-  grass:         { key: 'grass',    walkable: true  },
-  path:          { key: 'path',     walkable: true  },
-  water:         { key: 'water',    walkable: false },
-  beach:         { key: 'beach',    walkable: true  },
-  sand:          { key: 'beach',    walkable: true  },
-  farmland:      { key: 'farmland', walkable: true  },
-  stone:         { key: 'path',     walkable: true,  tint: 0xaaaaaa },
-  cliff:         { key: 'grass',    walkable: false, tint: 0x888870 }, // dark grass base, cliff drawn on top
-  tree:          { key: 'grass',    walkable: false },
-  building:      { key: 'grass',    walkable: false, tint: 0xb8c8a0 }, // slightly different grass under building footprint
-  building_door: { key: 'path',     walkable: true  },
-  chest:         { key: 'grass',    walkable: true  },
-  mountain:      { key: 'grass',    walkable: false, tint: 0x888870 },
-  rock:          { key: 'grass',    walkable: false },
-  water_deep:    { key: 'water',    walkable: false, tint: 0x2266aa },
+  grass:         { key: 'grass',        walkable: true  },
+  grass2:        { key: 'grass2',       walkable: true  },
+  grass3:        { key: 'grass3',       walkable: true  },
+  grass4:        { key: 'grass4',       walkable: true  },
+  path:          { key: 'path',         walkable: true  },
+  cobble:        { key: 'cobble',       walkable: true  },
+  water:         { key: 'water',        walkable: false },
+  water_tiles:   { key: 'water',        walkable: false, tint: 0x88ccee }, // shallow water — autotile handled separately
+  beach:         { key: 'beach',        walkable: true  },
+  sand:          { key: 'beach',        walkable: true  },
+  farmland:      { key: 'farmland',     walkable: true  },
+  farmland_wet:  { key: 'farmland_wet', walkable: true  },
+  stone:         { key: 'cobble',       walkable: true,  tint: 0xbbbbbb }, // stone = lighter cobble
+  cliff:         { key: 'grass',        walkable: false, tint: 0x888870 },
+  tree:          { key: 'grass',        walkable: false },
+  building:      { key: 'grass',        walkable: false, tint: 0xb8c8a0 },
+  building_door: { key: 'path',         walkable: true  },
+  chest:         { key: 'grass',        walkable: true  },
+  mountain:      { key: 'grass',        walkable: false, tint: 0x888870 },
+  rock:          { key: 'grass',        walkable: false },
+  water_deep:    { key: 'water',        walkable: false, tint: 0x2266aa },
 };
 
 // ── BIOME PALETTES ──────────────────────────────────────────────────────────
@@ -2113,8 +2119,11 @@ function _pixiLoadChunk(worldContainer, worldDef, chunkX, chunkY, isOrigin) {
   const offsetX = chunkX * CHUNK_COLS * TILE_SIZE;
   const offsetY = chunkY * CHUNK_ROWS * TILE_SIZE;
 
-  const isPath  = (t) => t === 'path' || t === 'stone' || t === 'building_door' || t === 'farmland' || t === 'sand' || t === 'beach';
-  const isWater = (t) => t === 'water' || t === 'water_deep';
+  // isPath: uses path_tiles spritesheet autotile (cobble also uses it for blending)
+  const isPath  = (t) => t === 'path' || t === 'cobble' || t === 'stone' || t === 'building_door' || t === 'farmland' || t === 'farmland_wet' || t === 'sand' || t === 'beach';
+  const isWater = (t) => t === 'water' || t === 'water_deep' || t === 'water_tiles';
+  // isSolidTex: tiles that render as a single flat texture (no autotile, no spritesheet)
+  const isSolidTex = (t) => t === 'grass2' || t === 'grass3' || t === 'grass4' || t === 'cobble' || t === 'farmland_wet';
 
   if (!tilesAlreadyDrawn) { // ── TILE DRAWING BLOCK START ──
 
@@ -2126,8 +2135,21 @@ function _pixiLoadChunk(worldContainer, worldDef, chunkX, chunkY, isOrigin) {
       const x = offsetX + col * TILE_SIZE;
       const y = offsetY + row * TILE_SIZE;
 
-      if ((isPath(tileType) || isWater(tileType)) && pixiTex(isPath(tileType) ? 'path_tiles' : 'water_tiles')) {
-        // Lay grass base underneath
+      if (isSolidTex(tileType)) {
+        // Solid flat texture tiles (grass variants, cobble, farmland_wet)
+        // These render as a direct texture lookup — no autotile blending needed
+        const tex = pixiTex(def.key) || pixiTex('grass');
+        if (tex) {
+          const spr = new PIXI.Sprite(tex);
+          spr.x = x; spr.y = y;
+          spr.width = TILE_SIZE; spr.height = TILE_SIZE;
+          spr.zIndex = 0;
+          if (def.tint) spr.tint = def.tint;
+          worldContainer.addChild(spr);
+          gameObjects.push(spr);
+        }
+      } else if ((isPath(tileType) || isWater(tileType)) && pixiTex(isPath(tileType) ? 'path_tiles' : 'water_tiles')) {
+        // Lay grass base underneath for blended tiles
         const grassTex = pixiTex('grass');
         if (grassTex) {
           const g = new PIXI.Sprite(grassTex);
@@ -2288,8 +2310,11 @@ function _pixiLoadChunk(worldContainer, worldDef, chunkX, chunkY, isOrigin) {
 
   // ── GROUND SCATTER ──
   const chunkBiome = worldDef.world?.biome || 'wilderness';
-  if (pixiFrames['decor']) {
+  if (pixiFrames['decor'] || pixiFrames['decor_full']) {
+    // Free pack decor frames
     const GRASS_TUFTS = [0,1,2], FLOWERS = [7,8,9], STUMPS = [14], SMALL_ROCKS = [15,16], MUSHROOM = [51], LOG = [49];
+    // Full pack decor_full frames (same 16×16 sheet structure, richer variety)
+    const FULL_FLOWERS = [3,4,5,6], FULL_REEDS = [10,11], FULL_PEBBLES = [17,18,19], FULL_FERN = [20,21], FULL_MUSHROOM2 = [52,53];
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
         const tileType = (tiles[row]?.[col]) || 'grass';
@@ -2302,47 +2327,81 @@ function _pixiLoadChunk(worldContainer, worldDef, chunkX, chunkY, isOrigin) {
         const absRow2 = chunkY * CHUNK_ROWS + row + 10000;
         const depth = absRow2 * 10 + 2;
 
+        // Determine which sheet to pull from and what frame
+        let decorSheet = 'decor'; // default: free pack
         let frame = null;
-        if (tileType === 'grass') {
-          const isForest  = chunkBiome === 'forest';
-          const isBeach   = chunkBiome === 'beach';
-          const isRuins   = chunkBiome === 'ruins';
-          if (isForest) {
-            if      (roll < 8)  frame = STUMPS[0];
-            else if (roll < 16) frame = LOG[0];
-            else if (roll < 24) frame = MUSHROOM[0];
-            else if (roll < 30) frame = SMALL_ROCKS[h%SMALL_ROCKS.length];
-            else if (roll < 36) frame = GRASS_TUFTS[h%GRASS_TUFTS.length];
-          } else if (isBeach) {
-            if      (roll < 15) frame = SMALL_ROCKS[h%SMALL_ROCKS.length];
-            else if (roll < 22) frame = GRASS_TUFTS[h%GRASS_TUFTS.length];
-          } else if (isRuins) {
-            if      (roll < 18) frame = SMALL_ROCKS[h%SMALL_ROCKS.length];
-            else if (roll < 26) frame = STUMPS[0];
-            else if (roll < 32) frame = MUSHROOM[0];
-            else if (roll < 36) frame = FLOWERS[h%FLOWERS.length];
-          } else {
-            if      (roll < 12) frame = FLOWERS[h%FLOWERS.length];
-            else if (roll < 22) frame = GRASS_TUFTS[h%GRASS_TUFTS.length];
-            else if (roll < 27) frame = SMALL_ROCKS[h%SMALL_ROCKS.length];
-            else if (roll < 30) frame = STUMPS[0];
-            else if (roll < 32) frame = MUSHROOM[0];
-            else if (roll < 34) frame = LOG[0];
+
+        const isGrass = (tileType === 'grass' || tileType === 'grass2' || tileType === 'grass3' || tileType === 'grass4');
+        if (isGrass) {
+          switch (chunkBiome) {
+            case 'forest':
+              if      (roll < 8)  frame = STUMPS[0];
+              else if (roll < 16) frame = LOG[0];
+              else if (roll < 24) frame = MUSHROOM[0];
+              else if (roll < 30) frame = SMALL_ROCKS[h%SMALL_ROCKS.length];
+              else if (roll < 38) frame = GRASS_TUFTS[h%GRASS_TUFTS.length];
+              break;
+            case 'swamp':
+              decorSheet = pixiFrames['decor_full'] ? 'decor_full' : 'decor';
+              if      (roll < 12) frame = FULL_REEDS[h%FULL_REEDS.length];
+              else if (roll < 22) frame = MUSHROOM[0];
+              else if (roll < 32) frame = FULL_MUSHROOM2[h%FULL_MUSHROOM2.length];
+              else if (roll < 38) frame = STUMPS[0];
+              break;
+            case 'meadow':
+              decorSheet = pixiFrames['decor_full'] ? 'decor_full' : 'decor';
+              if      (roll < 15) frame = FULL_FLOWERS[h%FULL_FLOWERS.length];
+              else if (roll < 28) frame = FLOWERS[h%FLOWERS.length];
+              else if (roll < 35) frame = FULL_FERN[h%FULL_FERN.length];
+              else if (roll < 40) frame = GRASS_TUFTS[h%GRASS_TUFTS.length];
+              break;
+            case 'cave':
+              if      (roll < 10) frame = SMALL_ROCKS[h%SMALL_ROCKS.length];
+              else if (roll < 18) frame = MUSHROOM[0];
+              break;
+            case 'beach': case 'fishing_village':
+              decorSheet = pixiFrames['decor_full'] ? 'decor_full' : 'decor';
+              if      (roll < 10) frame = SMALL_ROCKS[h%SMALL_ROCKS.length];
+              else if (roll < 16) frame = FULL_PEBBLES[h%FULL_PEBBLES.length];
+              else if (roll < 20) frame = GRASS_TUFTS[h%GRASS_TUFTS.length];
+              break;
+            case 'ruins':
+              if      (roll < 18) frame = SMALL_ROCKS[h%SMALL_ROCKS.length];
+              else if (roll < 26) frame = STUMPS[0];
+              else if (roll < 32) frame = MUSHROOM[0];
+              else if (roll < 36) frame = FLOWERS[h%FLOWERS.length];
+              break;
+            case 'mountain_pass': case 'cliffside':
+              if (roll < 12) frame = SMALL_ROCKS[h%SMALL_ROCKS.length];
+              break;
+            default:
+              // General biomes — use decor_full for more variety when available
+              decorSheet = pixiFrames['decor_full'] ? 'decor_full' : 'decor';
+              if      (roll < 10) frame = FULL_FLOWERS[h%FULL_FLOWERS.length];
+              else if (roll < 18) frame = FLOWERS[h%FLOWERS.length];
+              else if (roll < 25) frame = GRASS_TUFTS[h%GRASS_TUFTS.length];
+              else if (roll < 30) frame = SMALL_ROCKS[h%SMALL_ROCKS.length];
+              else if (roll < 33) frame = STUMPS[0];
+              else if (roll < 35) frame = MUSHROOM[0];
+              else if (roll < 37) frame = LOG[0];
+              break;
           }
         } else if ((tileType === 'beach' || tileType === 'sand') && roll < 8) {
           frame = SMALL_ROCKS[h%SMALL_ROCKS.length];
+        } else if (tileType === 'farmland_wet' && roll < 6) {
+          decorSheet = pixiFrames['decor_full'] ? 'decor_full' : 'decor';
+          frame = FULL_REEDS[h%FULL_REEDS.length];
         }
 
         if (frame !== null) {
-          const tex = pixiFrame('decor', frame);
+          const tex = pixiFrame(decorSheet, frame) || pixiFrame('decor', frame);
           if (tex) {
             const spr = new PIXI.Sprite(tex);
             spr.anchor.set(0.5, 0.8);
             spr.x = scx + jx * 0.6; spr.y = scy + jy * 0.6;
             spr.scale.set(2.4);
             spr.zIndex = depth;
-            // Grass tufts and flowers sway in wind; rocks/stumps/logs don't
-            const swayFrames = [0,1,2,7,8,9]; // GRASS_TUFTS + FLOWERS
+            const swayFrames = [0,1,2,3,4,5,6,7,8,9,10,11,20,21]; // tufts, flowers, reeds, fern
             if (swayFrames.includes(frame)) {
               windContainer.addChild(spr);
             } else {
@@ -2358,17 +2417,31 @@ function _pixiLoadChunk(worldContainer, worldDef, chunkX, chunkY, isOrigin) {
   // ── BIOME DECORATION PROPS ──
   {
     const bioDecos = {
-      village:['well','fountain','bench','barrels'], city:['well','fountain','bench','barrels'],
-      farmland:['hay_bales','scarecrow','barrels'], forest:['camp_decor'], beach:['boat'],
-      ocean:['boat'], ruins:['barrels','camp_decor'], dungeon:['barrels','camp_decor'],
-      camp:['camp_decor','barrels'], road:['bench','barrels'], wilderness:[], cliffside:[],
+      village:         ['well','fountain','bench','barrels','apple_tree','cherry_tree'],
+      city:            ['well','fountain','bench','barrels'],
+      farmland:        ['hay_bales','scarecrow','barrels','apple_tree'],
+      forest:          ['camp_decor','apple_tree','cherry_tree'],
+      beach:           ['boat','barrels'],
+      ocean:           ['boat'],
+      ruins:           ['barrels','camp_decor'],
+      dungeon:         ['barrels','camp_decor'],
+      camp:            ['camp_decor','barrels'],
+      road:            ['bench','barrels'],
+      wilderness:      [],
+      cliffside:       [],
+      swamp:           ['camp_decor'],
+      meadow:          ['bench','hay_bales','apple_tree','cherry_tree'],
+      cave:            ['barrels','camp_decor'],
+      fishing_village: ['boat','barrels','bench'],
+      mountain_pass:   ['barrels','camp_decor'],
     };
     const decoList = bioDecos[chunkBiome] || [];
     if (decoList.length > 0) {
       const openTiles = [];
+      const _openGrassTypes = new Set(['grass','grass2','grass3','grass4']);
       for (let row = 2; row < rows - 2; row++)
         for (let col = 2; col < cols - 2; col++)
-          if ((tiles[row]?.[col] || 'grass') === 'grass') openTiles.push([col, row]);
+          if (_openGrassTypes.has(tiles[row]?.[col] || 'grass')) openTiles.push([col, row]);
       const seedH = ((chunkX * 7919 + chunkY * 6271) * 2654435761) >>> 0;
       const propCount = Math.min(2, decoList.length, Math.floor(openTiles.length / 20));
       for (let pi = 0; pi < propCount; pi++) {
@@ -2414,8 +2487,10 @@ function _pixiLoadChunk(worldContainer, worldDef, chunkX, chunkY, isOrigin) {
       mountain_pass:[],
     };
     const animalTypes = biomeAnimals[chunkBiome] || biomeAnimals.wilderness;
-    const validTiles = ['grass'];
-    if (chunkBiome === 'beach' || chunkBiome === 'ocean') validTiles.push('beach','sand','water');
+    // Animals can spawn on any grass variant, plus biome-specific extras
+    const validTiles = ['grass','grass2','grass3','grass4'];
+    if (chunkBiome === 'beach' || chunkBiome === 'ocean' || chunkBiome === 'fishing_village') validTiles.push('beach','sand','water_tiles');
+    if (chunkBiome === 'swamp') validTiles.push('water_tiles');
     const spawnTiles = [];
     for (let row = 0; row < rows; row++)
       for (let col = 0; col < cols; col++)
@@ -7105,6 +7180,38 @@ async function generateChunkAPI(cx, cy, dirLabel) {
     for (let r = 0; r < CHUNK_ROWS; r++) if (et[r]?.[0]) tiles[r][CHUNK_COLS-1] = et[r][0];
   }
 
+  // ── 2c. River overlay ─────────────────────────────────────────────────────
+  // Rivers stored as [regionRow, regionCol] on the 21×21 grid (chunkX = col-10, chunkY = row-10).
+  // Stamp water tiles into this chunk wherever a river passes through.
+  const _riverData = activeCampaign?.world_state?.rivers;
+  if (_riverData && Array.isArray(_riverData) && _riverData.length > 0) {
+    const _riverSet = new Set(_riverData.map(([r, c]) => `${r},${c}`));
+    const _rRow = cy + 10, _rCol = cx + 10;
+    if (_riverSet.has(`${_rRow},${_rCol}`)) {
+      const _hasN = _riverSet.has(`${_rRow-1},${_rCol}`);
+      const _hasS = _riverSet.has(`${_rRow+1},${_rCol}`);
+      const _hasE = _riverSet.has(`${_rRow},${_rCol+1}`);
+      const _hasW = _riverSet.has(`${_rRow},${_rCol-1}`);
+      const _mR = Math.floor(CHUNK_ROWS / 2);
+      const _mC = Math.floor(CHUNK_COLS / 2);
+      if (_hasN || _hasS) {
+        for (let r = 0; r < CHUNK_ROWS; r++) {
+          if (tiles[r]) { tiles[r][_mC] = 'water'; if (tiles[r][_mC+1] !== undefined) tiles[r][_mC+1] = 'water'; }
+        }
+        if (_hasE) for (let c = _mC; c < CHUNK_COLS; c++) if (tiles[_mR]) tiles[_mR][c] = 'water';
+        if (_hasW) for (let c = 0; c <= _mC; c++) if (tiles[_mR]) tiles[_mR][c] = 'water';
+      } else if (_hasE || _hasW) {
+        for (let c = 0; c < CHUNK_COLS; c++) {
+          if (tiles[_mR]) { tiles[_mR][c] = 'water'; if (tiles[_mR+1]) tiles[_mR+1][c] = 'water'; }
+        }
+      } else {
+        for (let dr = -1; dr <= 1; dr++)
+          for (let dc = -1; dc <= 1; dc++)
+            if (tiles[_mR+dr]?.[_mC+dc] !== undefined) tiles[_mR+dr][_mC+dc] = 'water';
+      }
+    }
+  }
+
   // ── 3. Generate NPCs via AI (lightweight call — names/dialogue only) ───────
   const npcs = await _generateNPCsForChunk(cx, cy, biomeKey, campaignId);
 
@@ -7128,18 +7235,23 @@ async function generateChunkAPI(cx, cy, dirLabel) {
 
   // ── 5. Build description from biome atmosphere ────────────────────────────
   const descriptions = {
-    village:   'A bustling village with cobbled paths and warm hearths.',
-    city:      'Dense city streets hum with activity and intrigue.',
-    farmland:  'Rolling fields stretch under an open sky.',
-    forest:    'Ancient trees loom over a shadowy forest floor.',
-    cliffside: 'Sheer cliffs and treacherous ledges pierce the sky.',
-    beach:     'Salt air and crashing waves define this coastal stretch.',
-    ocean:     'Open ocean stretches endlessly in every direction.',
-    ruins:     'Crumbling stones tell of a forgotten civilization.',
-    dungeon:   'A foreboding darkness radiates from the dungeon entrance.',
-    camp:      'The smell of campfire smoke hangs in the still air.',
-    road:      'A well-traveled road cuts through open countryside.',
-    wilderness:'Untamed wilderness, beautiful and unpredictable.',
+    village:         'A bustling village with cobbled paths and warm hearths.',
+    city:            'Dense city streets hum with activity and intrigue.',
+    farmland:        'Rolling fields stretch under an open sky.',
+    forest:          'Ancient trees loom over a shadowy forest floor.',
+    cliffside:       'Sheer cliffs and treacherous ledges pierce the sky.',
+    beach:           'Salt air and crashing waves define this coastal stretch.',
+    ocean:           'Open ocean stretches endlessly in every direction.',
+    ruins:           'Crumbling stones tell of a forgotten civilization.',
+    dungeon:         'A foreboding darkness radiates from the dungeon entrance.',
+    camp:            'The smell of campfire smoke hangs in the still air.',
+    road:            'A well-traveled road cuts through open countryside.',
+    wilderness:      'Untamed wilderness, beautiful and unpredictable.',
+    swamp:           'Dark fetid waters and gnarled roots fill this murky swamp.',
+    meadow:          'A sunlit meadow of wildflowers and lush grass stretches ahead.',
+    cave:            'The drip of water echoes in this dark underground cavern.',
+    fishing_village: 'A salt-crusted fishing village clings to the waterfront.',
+    mountain_pass:   'A narrow mountain pass — the only route through.',
   };
 
   // ── 6. Tag used_decorations ───────────────────────────────────────────────
