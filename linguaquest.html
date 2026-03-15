@@ -2333,6 +2333,18 @@ function _pixiLoadChunk(worldContainer, worldDef, chunkX, chunkY, isOrigin) {
         if (h % 5 === 0) {
           const [tc, tr] = pathTiles[i];
           addLight(tc, tr - 0.3, LCOLOR_TORCH, LIGHT_RADIUS_TORCH, true);
+          // Draw a torch post sprite at this location
+          const tx = offsetX + tc * TILE_SIZE + TILE_SIZE / 2;
+          const ty = offsetY + tr * TILE_SIZE;
+          const tg = new PIXI.Graphics();
+          // Post (dark brown stick)
+          tg.beginFill(0x5C3317); tg.drawRect(tx - 2, ty - 14, 4, 14); tg.endFill();
+          // Torch head (orange flame glow)
+          tg.beginFill(0xFF8800); tg.drawCircle(tx, ty - 16, 4); tg.endFill();
+          tg.beginFill(0xFFDD00, 0.8); tg.drawCircle(tx, ty - 18, 2); tg.endFill();
+          tg.zIndex = (offsetY + tr * TILE_SIZE) * 10 + 6;
+          worldContainer.addChild(tg);
+          gameObjects.push(tg);
         }
       }
     }
@@ -2348,6 +2360,21 @@ function _pixiLoadChunk(worldContainer, worldDef, chunkX, chunkY, isOrigin) {
         const pick = (chunkSeed * 1234567) % grassTiles.length;
         const [fc, fr] = grassTiles[pick];
         addLight(fc, fr, LCOLOR_CAMPFIRE, LIGHT_RADIUS_CAMPFIRE, true);
+        // Draw campfire marker
+        const cfx = offsetX + fc * TILE_SIZE + TILE_SIZE / 2;
+        const cfy = offsetY + fr * TILE_SIZE + TILE_SIZE / 2;
+        const cfg = new PIXI.Graphics();
+        // Logs (crossed brown lines)
+        cfg.lineStyle(3, 0x5C3317, 1);
+        cfg.moveTo(cfx - 7, cfy + 4); cfg.lineTo(cfx + 7, cfy - 2);
+        cfg.moveTo(cfx + 7, cfy + 4); cfg.lineTo(cfx - 7, cfy - 2);
+        // Flames
+        cfg.beginFill(0xFF6600, 0.9); cfg.drawEllipse(cfx, cfy - 4, 5, 8); cfg.endFill();
+        cfg.beginFill(0xFFAA00, 0.8); cfg.drawEllipse(cfx, cfy - 6, 3, 5); cfg.endFill();
+        cfg.beginFill(0xFFEE44, 0.7); cfg.drawEllipse(cfx, cfy - 8, 2, 3); cfg.endFill();
+        cfg.zIndex = (offsetY + fr * TILE_SIZE) * 10 + 6;
+        worldContainer.addChild(cfg);
+        gameObjects.push(cfg);
         // Embers nearby
         for (let e = 0; e < 2; e++) {
           const ep = (chunkSeed * (e + 7) * 987654) % grassTiles.length;
