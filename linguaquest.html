@@ -2533,14 +2533,15 @@ void main(void) {
   vec3  glow     = vec3(0.0);
   ${blocks}
 
-  // How dark this pixel is: blend scene toward ambient night colour
-  // lit=1 → scene unchanged; lit=0 → ambient night colour at full darkness
-  float nightStrength = uNightAlpha * (1.0 - lit);
-  vec3  nightCol = uAmbientColor;
-  vec3  col = mix(scene.rgb, nightCol, nightStrength);
+  // Darkness: unlit areas blend toward ambient night colour
+  // lit=1 → scene colour unchanged; lit=0 → full ambient tint
+  // Boost contrast: night unlit areas are much darker than lit areas
+  float nightStrength = uNightAlpha * 2.8 * (1.0 - lit);
+  nightStrength = clamp(nightStrength, 0.0, 0.88);
+  vec3  col = mix(scene.rgb, uAmbientColor, nightStrength);
 
-  // Add warm glow on top of lit areas
-  col += clamp(glow, 0.0, 1.0) * uNightAlpha * lit;
+  // Warm glow additive on lit areas
+  col += clamp(glow, 0.0, 0.5) * uNightAlpha;
 
   gl_FragColor = vec4(clamp(col, 0.0, 1.0), scene.a);
 }`;
@@ -2555,7 +2556,7 @@ function _initLighting(stage, w, h) {
   try {
     // Build uniform defaults — one named uniform per light slot (no arrays)
     // uResolution in CSS pixels — filterArea and vTextureCoord both work in CSS pixel space
-  const uniformDefs = { uResolution: [w, h], uNightAlpha: 0.0, uAmbientColor: [0.04, 0.04, 0.08] };
+  const uniformDefs = { uResolution: [w, h], uNightAlpha: 0.0, uAmbientColor: [0.12, 0.15, 0.28] };
     for (let i = 0; i < 16; i++) {
       uniformDefs[`uLightPos${i}`]       = [0, 0];
       uniformDefs[`uLightRadius${i}`]    = 1.0;
