@@ -2490,74 +2490,49 @@ void main(void) {
   vTextureCoord = aTextureCoord;
 }`;
 
-// Fragment shader — computes darkness overlay with per-pixel light contribution
-// Each light: position (px), radius (px), RGB colour, intensity
-// Output: dark ambient overlay with smooth light holes punched through it
-// NOTE: Uses float uLightActive[16] instead of int uLightCount for WebGL1
-//       compatibility (GLSL ES 1.0 requires constant loop bounds).
-const _LIGHT_FRAG = `
-precision mediump float;
+// Fragment shader — fully inlined for WebGL1 (GLSL ES 1.0).
+// No helper functions, no variable array indices — every index is a literal.
+// Macro trick: JS generates the 16-light unrolled GLSL at init time.
+const _LIGHT_FRAG = (() => {
+  // Generate one light's worth of inline GLSL with literal index N
+  const lightBlock = (n) => `{
+    float _d${n} = distance(fragPx, uLightPos${n});
+    float _r${n} = uLightRadius${n};
+    float _t${n} = clamp(_d${n} / max(_r${n}, 0.001), 0.0, 1.0);
+    float _s${n} = _t${n} * _t${n} * (3.0 - 2.0 * _t${n});
+    float _f${n} = pow(1.0 - _s${n}, 1.8) * uLightActive${n};
+    darkness = min(darkness, 1.0 - _f${n} * uLightIntensity${n});
+    float _gt${n} = clamp(_d${n} / max(_r${n} * 0.7, 0.001), 0.0, 1.0);
+    float _gf${n} = pow(1.0 - _gt${n} * _gt${n}, 2.5) * uLightActive${n};
+    glow += uLightColor${n} * _gf${n} * uLightIntensity${n} * 0.38;
+  }`;
+
+  // Declare all uniforms as individual names (no arrays) to avoid indexing
+  const uniforms = Array.from({length:16}, (_,i) => `
+uniform vec2  uLightPos${i};
+uniform float uLightRadius${i};
+uniform vec3  uLightColor${i};
+uniform float uLightIntensity${i};
+uniform float uLightActive${i};`).join('');
+
+  const blocks = Array.from({length:16}, (_,i) => lightBlock(i)).join('\n  ');
+
+  return `precision mediump float;
 varying vec2 vTextureCoord;
-
-uniform vec2  uResolution;       // screen size in px
-uniform float uNightAlpha;       // 0=day, 1=full night
-uniform vec3  uAmbientColor;     // night sky colour
-
-// 16 lights — inactive slots have uLightActive[i] = 0.0
-uniform vec2  uLightPos[16];
-uniform float uLightRadius[16];
-uniform vec3  uLightColor[16];
-uniform float uLightIntensity[16];
-uniform float uLightActive[16];  // 1.0 = active, 0.0 = inactive
-
-// Per-light contribution — returns (darkness reduction, glow vec3)
-vec4 lightContrib(vec2 fragPx, int i) {
-  float dist = distance(fragPx, uLightPos[i]);
-  float r    = uLightRadius[i];
-  float t    = clamp(dist / r, 0.0, 1.0);
-  float smooth_t = t * t * (3.0 - 2.0 * t);  // smoothstep
-  float falloff  = pow(1.0 - smooth_t, 1.8);  // sharp centre hotspot
-
-  float darkReduction = falloff * uLightIntensity[i] * uLightActive[i];
-
-  float glowT    = clamp(dist / (r * 0.7), 0.0, 1.0);
-  float glowFall = pow(1.0 - glowT * glowT, 2.5) * uLightActive[i];
-  vec3  glow     = uLightColor[i] * glowFall * uLightIntensity[i] * 0.38;
-
-  return vec4(glow, darkReduction);
-}
-
+uniform vec2  uResolution;
+uniform float uNightAlpha;
+uniform vec3  uAmbientColor;
+${uniforms}
 void main(void) {
-  vec2 fragPx = vTextureCoord * uResolution;
-
+  vec2  fragPx  = vTextureCoord * uResolution;
   float darkness = 1.0;
   vec3  glow     = vec3(0.0);
-
-  // Unrolled — GLSL ES 1.0 needs constant loop bounds
-  vec4 c;
-  c = lightContrib(fragPx, 0);  glow += c.rgb; darkness = min(darkness, 1.0 - c.a);
-  c = lightContrib(fragPx, 1);  glow += c.rgb; darkness = min(darkness, 1.0 - c.a);
-  c = lightContrib(fragPx, 2);  glow += c.rgb; darkness = min(darkness, 1.0 - c.a);
-  c = lightContrib(fragPx, 3);  glow += c.rgb; darkness = min(darkness, 1.0 - c.a);
-  c = lightContrib(fragPx, 4);  glow += c.rgb; darkness = min(darkness, 1.0 - c.a);
-  c = lightContrib(fragPx, 5);  glow += c.rgb; darkness = min(darkness, 1.0 - c.a);
-  c = lightContrib(fragPx, 6);  glow += c.rgb; darkness = min(darkness, 1.0 - c.a);
-  c = lightContrib(fragPx, 7);  glow += c.rgb; darkness = min(darkness, 1.0 - c.a);
-  c = lightContrib(fragPx, 8);  glow += c.rgb; darkness = min(darkness, 1.0 - c.a);
-  c = lightContrib(fragPx, 9);  glow += c.rgb; darkness = min(darkness, 1.0 - c.a);
-  c = lightContrib(fragPx, 10); glow += c.rgb; darkness = min(darkness, 1.0 - c.a);
-  c = lightContrib(fragPx, 11); glow += c.rgb; darkness = min(darkness, 1.0 - c.a);
-  c = lightContrib(fragPx, 12); glow += c.rgb; darkness = min(darkness, 1.0 - c.a);
-  c = lightContrib(fragPx, 13); glow += c.rgb; darkness = min(darkness, 1.0 - c.a);
-  c = lightContrib(fragPx, 14); glow += c.rgb; darkness = min(darkness, 1.0 - c.a);
-  c = lightContrib(fragPx, 15); glow += c.rgb; darkness = min(darkness, 1.0 - c.a);
-
+  ${blocks}
   float alpha = uNightAlpha * darkness;
   vec3  col   = uAmbientColor - clamp(glow, 0.0, 1.0) * uNightAlpha;
-  col = clamp(col, 0.0, 1.0);
-
-  gl_FragColor = vec4(col, alpha);
+  gl_FragColor  = vec4(clamp(col, 0.0, 1.0), alpha);
 }`;
+})();
 
 // ── State ─────────────────────────────────────────────────────
 let _lightFilter  = null;   // PIXI.Filter (our GLSL shader)
@@ -2566,16 +2541,16 @@ let _lightTime    = 0;
 
 function _initLighting(stage, w, h) {
   try {
-    _lightFilter = new PIXI.Filter(_LIGHT_VERT, _LIGHT_FRAG, {
-      uResolution:     [w, h],
-      uNightAlpha:     0.0,
-      uAmbientColor:   [0.04, 0.04, 0.08],
-      uLightPos:       new Float32Array(16 * 2),
-      uLightRadius:    new Float32Array(16),
-      uLightColor:     new Float32Array(16 * 3),
-      uLightIntensity: new Float32Array(16),
-      uLightActive:    new Float32Array(16),
-    });
+    // Build uniform defaults — one named uniform per light slot (no arrays)
+    const uniformDefs = { uResolution: [w, h], uNightAlpha: 0.0, uAmbientColor: [0.04, 0.04, 0.08] };
+    for (let i = 0; i < 16; i++) {
+      uniformDefs[`uLightPos${i}`]       = [0, 0];
+      uniformDefs[`uLightRadius${i}`]    = 1.0;
+      uniformDefs[`uLightColor${i}`]     = [0, 0, 0];
+      uniformDefs[`uLightIntensity${i}`] = 0.0;
+      uniformDefs[`uLightActive${i}`]    = 0.0;
+    }
+    _lightFilter = new PIXI.Filter(_LIGHT_VERT, _LIGHT_FRAG, uniformDefs);
   } catch(e) {
     console.warn('Light shader compile failed:', e.message);
     _lightFilter = null;
@@ -2720,33 +2695,23 @@ function _updateLighting(renderer, playerScreenX, playerScreenY, ambientAlpha, i
     });
   }
 
-  // Pack into typed arrays for shader uniforms
-  const count      = Math.min(lights.length, 16);
-  const posArr     = new Float32Array(16 * 2);
-  const radArr     = new Float32Array(16);
-  const colArr     = new Float32Array(16 * 3);
-  const intArr     = new Float32Array(16);
-  const activeArr  = new Float32Array(16); // 1.0=active, 0.0=inactive slot
-  for (let i = 0; i < count; i++) {
-    const lt = lights[i];
-    posArr[i * 2]     = lt.sx;
-    posArr[i * 2 + 1] = lt.sy;
-    radArr[i]         = lt.r;
-    colArr[i * 3]     = lt.cr;
-    colArr[i * 3 + 1] = lt.cg;
-    colArr[i * 3 + 2] = lt.cb;
-    intArr[i]         = lt.intensity;
-    activeArr[i]      = 1.0;
-  }
-
+  // Push light data to individual named uniforms (WebGL1 — no array indexing)
   const u = _lightFilter.uniforms;
-  u.uNightAlpha     = nightAlpha;
-  u.uAmbientColor   = [0.04, 0.04, 0.08];
-  u.uLightPos       = posArr;
-  u.uLightRadius    = radArr;
-  u.uLightColor     = colArr;
-  u.uLightIntensity = intArr;
-  u.uLightActive    = activeArr;
+  u.uNightAlpha   = nightAlpha;
+  u.uAmbientColor = [0.04, 0.04, 0.08];
+  const count = Math.min(lights.length, 16);
+  for (let i = 0; i < 16; i++) {
+    if (i < count) {
+      const lt = lights[i];
+      u[`uLightPos${i}`]       = [lt.sx, lt.sy];
+      u[`uLightRadius${i}`]    = lt.r;
+      u[`uLightColor${i}`]     = [lt.cr, lt.cg, lt.cb];
+      u[`uLightIntensity${i}`] = lt.intensity;
+      u[`uLightActive${i}`]    = 1.0;
+    } else {
+      u[`uLightActive${i}`] = 0.0;
+    }
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
