@@ -492,6 +492,7 @@ let currentNPC  = null;
 let currentWorld= null;
 let dialogueHistory = {};
 let lastNPCReply = '';   // for translation reveal
+let _lastPlayerText = '';  // for post-conversation record (Phase 3.4)
 
 // ── PIXI LOADED TEXTURES ─────────────────────────────────────
 // Map of assetKey -> PIXI.Texture (for spritesheets) or HTMLImageElement (for portraits)
@@ -1032,6 +1033,10 @@ const DEFAULT_CAMPAIGN = {
     world_damage: {},
     in_game_date: "Day 1, Morning",
     in_game_minutes_elapsed: 360,  // start at 6:00 AM Day 1
+    terrain_map: null,  // W1: elevation/temperature/moisture grid
+    rivers: [],         // W1: river tile coordinates
+    settlements: [],    // W2: village/city seeds {cx, cy, type, name, size}
+    roads: [],          // W3: road paths between settlements
     region_map: null,
     used_decorations: []
   }
@@ -1414,12 +1419,28 @@ async function createCampaign() {
     activeCampaign = campaign;
     activeCampaignId = campaign.id;
 
-    // 1.1b — Generate region map and patch it into world_state
-    const regionMap = generateRegionMap(activeCampaignId);
+    // 1.1b — Generate W1–W6 world layers and build region map
+    document.getElementById('loading-sub').textContent = 'Shaping the world...';
+    // W1: Build terrain map
+    const terrainMap = _buildTerrainMap(activeCampaignId);
+    // W1: Compute rivers
+    const rivers = _computeRivers(terrainMap);
+    // W2: Place settlements
+    let settlements = _placeSettlements(terrainMap);
+    // W4: Define village layouts
+    settlements = _defineVillageLayout(settlements);
+    // W3: Build road network
+    const roads = _buildRoads(terrainMap, settlements);
+    // W5: Satellite features
+    _addSatelliteFeatures(settlements, roads, terrainMap);
+    // W6: NPC stubs
+    settlements = _generateNPCStubs(settlements);
+    // Build region map from W1-W6 data
+    const regionMap = generateRegionMap(activeCampaignId, terrainMap, settlements, roads);
     await lqDB('PATCH', `lq_campaigns?id=eq.${activeCampaignId}`, {
-      world_state: { ...DEFAULT_CAMPAIGN.world_state, region_map: regionMap, used_decorations: [] }
+      world_state: { ...DEFAULT_CAMPAIGN.world_state, terrain_map: terrainMap, rivers: rivers, settlements: settlements, roads: roads, region_map: regionMap, used_decorations: [] }
     });
-    activeCampaign.world_state = { ...DEFAULT_CAMPAIGN.world_state, region_map: regionMap, used_decorations: [] };
+    activeCampaign.world_state = { ...DEFAULT_CAMPAIGN.world_state, terrain_map: terrainMap, rivers: rivers, settlements: settlements, roads: roads, region_map: regionMap, used_decorations: [] };
 
     // 1.2 — Generate soul documents for all 6 main cast NPCs (Template A via Claude)
     document.getElementById('loading-sub').textContent = 'Meeting the villagers...';
@@ -2472,6 +2493,10 @@ function _pixiLoadChunk(worldContainer, worldDef, chunkX, chunkY, isOrigin) {
     document.getElementById('lang-badge').textContent = worldLanguage.toUpperCase();
     document.getElementById('dialogue-input').placeholder = `Respond in ${getLangName(worldLanguage)}...`;
     if (worldDef.world.description) showStatus(worldDef.world.description, 5000);
+
+    // ── PHASE 3.1: Chunk entry sweep ──
+    const npcsInThisChunk = chunkNpcs.map(n => n.def?.id).filter(Boolean).map(id => campaignNPCs[id]).filter(Boolean);
+    if (npcsInThisChunk.length > 0) _phase3ChunkEntrySweep(npcsInThisChunk).catch(() => {});
 
     queueSurroundingChunks(chunkX, chunkY);
     processChunkQueue();
@@ -3660,6 +3685,11 @@ function _pixiOpenNPCDialogue(npcObj) {
 
   lqVoiceInit();
   lqSpeak(npcObj.def.greeting, npcObj.def._voiceId);
+
+  // ── PHASE 3.2: Encounter reasoning loop ──
+  if (campaignNPCs[npcObj.def.id]) {
+    _phase3EncounterReasoning(campaignNPCs[npcObj.def.id]).catch(() => {});
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -5552,6 +5582,7 @@ async function sendDialogue() {
 
   if (!dialogueHistory[currentNPC.id]) dialogueHistory[currentNPC.id] = [];
   dialogueHistory[currentNPC.id].push({ role: 'user', content: playerText });
+  _lastPlayerText = playerText; // Phase 3.4
 
   const world = currentWorld || ARENAS_BLANCAS_WORLD;
   const lang = world.world.language || 'es';
@@ -5615,9 +5646,14 @@ Rules:
 function closeDialogue() {
   lqStopSpeaking();
   if (lqMicActive) lqMicStop();
+  // ── PHASE 3.4: Post-conversation record ──
+  if (currentNPC && _lastPlayerText && lastNPCReply) {
+    _phase3PostConversationRecord(currentNPC.id, _lastPlayerText, lastNPCReply).catch(() => {});
+  }
   document.getElementById('dialogue-box').style.display = 'none';
   currentNPC = null;
   lastNPCReply = '';
+  _lastPlayerText = '';
   if (gameScene && !isIndoor) {
     gameScene.dialogueCooldown = true;
     setTimeout(() => { if (gameScene) gameScene.dialogueCooldown = false; }, 400);
@@ -5808,6 +5844,1844 @@ checkSavedGame();
 
 <script>
 // ─────────────────────────────────────────────────────────────
+
+//  W1–W6 WORLD GENERATION — Multi-layer terrain system
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ── W1: Terrain Simulation ───────────────────────────────────────────────────
+// Builds a 21×21 terrain map with elevation, temperature, moisture.
+// Each cell becomes the foundation for biome derivation.
+function _buildTerrainMap(campaignId, size = 21) {
+  const seed = _campaignSeed(campaignId);
+  const terrain = [];
+
+  for (let row = 0; row < size; row++) {
+    terrain[row] = [];
+    for (let col = 0; col < size; col++) {
+      const x = (col - size/2) * 0.15;
+      const y = (row - size/2) * 0.15;
+
+      // Elevation: use 4-octave FBM, center slightly elevated
+      const elev = _fbm(x, y, seed, 4, 2.0, 0.5);
+      const centerDist = Math.sqrt(x*x + y*y);
+      const elevation = Math.max(0.1, Math.min(0.95, elev * 0.7 + Math.exp(-centerDist * 0.8) * 0.3));
+
+      // Temperature: cooler at high elevation, varies N-S
+      const tempBase = 0.4 + (row / size) * 0.2;
+      const temperature = Math.max(0.2, Math.min(0.9, tempBase - elevation * 0.4 + _fbm(x*0.8, y*0.8, seed+111, 2, 2.0, 0.6) * 0.15));
+
+      // Moisture: higher near coasts (edges) and with FBM
+      const edgeDist = Math.min(row, col, size-1-row, size-1-col) / size;
+      const moisture = Math.max(0.1, Math.min(0.95, _fbm(x+500, y+500, seed+222, 3, 2.1, 0.5) * 0.6 + (1 - edgeDist*2) * 0.4));
+
+      terrain[row][col] = { elevation, temperature, moisture };
+    }
+  }
+
+  return terrain;
+}
+
+// Derive biome from terrain elevation/temperature/moisture
+function _terrainToBiome(elev, temp, moist) {
+  if (elev < 0.2 && moist > 0.7) return 'ocean';
+  if (elev < 0.3 && moist > 0.6) return 'beach';
+  if (elev > 0.75) return 'cliffside';
+  if (elev > 0.6 && moist < 0.3) return 'wilderness';
+  if (elev > 0.55 && moist < 0.4) return 'ruins';
+  if (moist > 0.7 && elev > 0.4 && elev < 0.7) return 'forest';
+  if (moist < 0.35 && elev < 0.5) return 'farmland';
+  if (elev > 0.65) return 'dungeon';
+  return 'wilderness';
+}
+
+// ── W1: River Tracing ────────────────────────────────────────────────────────
+// Trace drainage paths from high cells downhill to coast (elevation < 0.25).
+// Returns array of [row,col] pairs representing river tiles.
+function _computeRivers(terrain, size = 21) {
+  const rivers = [];
+  const visited = new Set();
+
+  // Start from peaks and trace downhill
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      if (terrain[r][c].elevation > 0.7 && !visited.has(`${r},${c}`)) {
+        const path = _traceDownhill(terrain, r, c, size, visited);
+        if (path.length > 2) rivers.push(...path);
+      }
+    }
+  }
+
+  return rivers;
+}
+
+// Gradient descent from a cell downhill to sea (elevation < 0.25) or a river.
+function _traceDownhill(terrain, startRow, startCol, size, visited) {
+  const path = [];
+  let r = startRow, c = startCol;
+  const maxSteps = 50;
+
+  for (let step = 0; step < maxSteps; step++) {
+    const key = `${r},${c}`;
+    if (visited.has(key)) break;
+    visited.add(key);
+    path.push([r, c]);
+
+    if (terrain[r]?.[c]?.elevation < 0.25) break; // reached sea
+
+    // Find neighbor with lowest elevation (gradient descent)
+    let lowest = terrain[r][c].elevation;
+    let nextR = r, nextC = c;
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        if (dr === 0 && dc === 0) continue;
+        const nr = r + dr, nc = c + dc;
+        if (nr < 0 || nr >= size || nc < 0 || nc >= size) continue;
+        if (terrain[nr][nc].elevation < lowest) {
+          lowest = terrain[nr][nc].elevation;
+          nextR = nr;
+          nextC = nc;
+        }
+      }
+    }
+
+    if (nextR === r && nextC === c) break; // stuck (local minimum)
+    r = nextR;
+    c = nextC;
+  }
+
+  return path;
+}
+
+// ── W2: Village Placement ────────────────────────────────────────────────────
+// Score cells for settlement potential, filter by distance, return village seeds.
+function _placeSettlements(terrain, size = 21) {
+  const settlements = [];
+  const scores = [];
+
+  // Scoring pass: flat, near-water, not isolated
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      const t = terrain[r][c];
+
+      // Low elevation variance = flat
+      let elevVar = 0;
+      for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+          const nr = r + dr, nc = c + dc;
+          if (nr >= 0 && nr < size && nc >= 0 && nc < size) {
+            elevVar += Math.abs(terrain[nr][nc].elevation - t.elevation);
+          }
+        }
+      }
+
+      // Higher score for low elevation variance, moderate elevation, high moisture
+      let score = 0;
+      score += (1 - elevVar / 10) * 2;  // flatness
+      score += t.moisture > 0.5 ? 1 : 0;  // water access
+      score += (0.5 - Math.abs(t.elevation - 0.4)) * 2;  // moderate elevation
+
+      // Avoid oceans and cliffs
+      if (t.elevation < 0.25 || t.elevation > 0.75) score = 0;
+
+      if (score > 0) scores.push({ r, c, score });
+    }
+  }
+
+  // Sort by score, descending
+  scores.sort((a, b) => b.score - a.score);
+
+  // Distance filter: villages 3 chunks apart, cities 6 apart
+  const minVillageDist = 3, minCityDist = 6;
+  for (const {r, c, score} of scores) {
+    // Check distance from existing settlements
+    let tooClose = false;
+    for (const settle of settlements) {
+      const dist = Math.max(Math.abs(settle.cx - c), Math.abs(settle.cy - r));
+      const minDist = settle.type === 'city' ? minCityDist : minVillageDist;
+      if (dist < minDist) {
+        tooClose = true;
+        break;
+      }
+    }
+
+    if (!tooClose) {
+      const type = settlements.length < 2 ? 'city' : (score > 2.5 ? 'city' : 'village');
+      settlements.push({
+        cx: c, cy: r,
+        type: type,
+        name: _generateVillageName(settlements.length, type),
+        size: type === 'city' ? 'large' : 'small'
+      });
+    }
+
+    // Stop after a reasonable number
+    if (settlements.length >= 8) break;
+  }
+
+  return settlements;
+}
+
+// Simple village name generation
+function _generateVillageName(index, type) {
+  const prefixes = ['San', 'Los', 'La', 'El', 'Las'];
+  const suffixes = ['Aire', 'Río', 'Cruz', 'Fuerte', 'Pueblo', 'Mar', 'Silva', 'Blanca', 'Peña'];
+
+  const p = prefixes[index % prefixes.length];
+  const s = suffixes[(index * 3) % suffixes.length];
+  return `${p} ${s}`;
+}
+
+// ── W3: Road Network ─────────────────────────────────────────────────────────
+// Use A* pathfinding to connect nearby settlements over terrain_map.
+// Store paths as chunk-coordinate sequences.
+function _buildRoads(terrain, settlements, size = 21) {
+  const roads = [];
+
+  // For each settlement, connect to nearest N neighbors
+  for (let i = 0; i < settlements.length; i++) {
+    const settle = settlements[i];
+    const neighbors = settlements
+      .map((other, j) => {
+        if (i === j) return null;
+        const dist = Math.max(Math.abs(settle.cx - other.cx), Math.abs(settle.cy - other.cy));
+        return { other, dist, j };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.dist - b.dist)
+      .slice(0, 3);  // Connect to 3 nearest
+
+    for (const {other} of neighbors) {
+      const path = _astarPath(terrain, settle.cx, settle.cy, other.cx, other.cy, size);
+      if (path.length > 1) {
+        roads.push(path);
+      }
+    }
+  }
+
+  return roads;
+}
+
+// Simple A* pathfinding on terrain (movement cost = 1 + elevation_delta + moisture penalty)
+function _astarPath(terrain, fromC, fromR, toC, toR, size) {
+  const open = [{c: fromC, r: fromR, g: 0, h: 0}];
+  const closed = new Set();
+  const cameFrom = {};
+
+  while (open.length > 0) {
+    open.sort((a, b) => (a.g + a.h) - (b.g + b.h));
+    const current = open.shift();
+    const key = `${current.r},${current.c}`;
+
+    if (key === `${toR},${toC}`) {
+      // Reconstruct path
+      const path = [{c: toC, r: toR}];
+      let k = key;
+      while (cameFrom[k]) {
+        const prev = cameFrom[k];
+        path.unshift(prev);
+        k = `${prev.r},${prev.c}`;
+      }
+      return path;
+    }
+
+    closed.add(key);
+
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        if (dr === 0 && dc === 0) continue;
+        const nc = current.c + dc, nr = current.r + dr;
+        if (nr < 0 || nr >= size || nc < 0 || nc >= size) continue;
+
+        const nkey = `${nr},${nc}`;
+        if (closed.has(nkey)) continue;
+
+        const t = terrain[nr][nc];
+        // Cost: avoid mountains (elev > 0.7) and deep water (elev < 0.2)
+        if (t.elevation > 0.7 || t.elevation < 0.2) continue;
+
+        const moveCost = 1 + Math.abs(t.elevation - terrain[current.r][current.c].elevation) + (t.moisture > 0.7 ? 0.5 : 0);
+        const ng = current.g + moveCost;
+        const h = Math.abs(toC - nc) + Math.abs(toR - nr);
+
+        const exists = open.find(o => o.r === nr && o.c === nc);
+        if (!exists || ng < exists.g) {
+          if (exists) open.splice(open.indexOf(exists), 1);
+          open.push({c: nc, r: nr, g: ng, h});
+          cameFrom[nkey] = {c: current.c, r: current.r};
+        }
+      }
+    }
+
+    if (open.length > 100) break; // prevent runaway search
+  }
+
+  return [];
+}
+
+// ── W4: Village Composition ──────────────────────────────────────────────────
+// For each settlement, define a 3×3 chunk bounding box with rings.
+// Currently stored as metadata; actual ring-based generation happens in _genVillage.
+function _defineVillageLayout(settlements) {
+  for (const settle of settlements) {
+    // Define 3×3 bounding box centered on settlement
+    settle.chunks = {
+      center: {cx: settle.cx, cy: settle.cy, ring: 0},
+      ring1: [],
+      ring2: []
+    };
+
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        if (dx === 0 && dy === 0) continue;
+        const r = Math.max(Math.abs(dx), Math.abs(dy));
+        const chunk = {cx: settle.cx + dx, cy: settle.cy + dy, ring: r};
+        if (r === 1) settle.chunks.ring1.push(chunk);
+        else if (r === 2) settle.chunks.ring2.push(chunk);
+      }
+    }
+  }
+
+  return settlements;
+}
+
+// ── W5: Satellite Features ───────────────────────────────────────────────────
+// Mark chunks near settlements as farmland, fishing huts, ruins, etc.
+// Currently stored as metadata in settlements; affects region_map biome assignment.
+function _addSatelliteFeatures(settlements, roads, terrain, size = 21) {
+  const features = {};
+
+  for (const settle of settlements) {
+    // Farmland 1–2 chunks away
+    for (let d = 1; d <= 2; d++) {
+      const candidates = [];
+      for (let dr = -d; dr <= d; dr++) {
+        for (let dc = -d; dc <= d; dc++) {
+          if (Math.max(Math.abs(dr), Math.abs(dc)) === d) {
+            const nc = settle.cx + dc, nr = settle.cy + dr;
+            if (nr >= 0 && nr < size && nc >= 0 && nc < size) {
+              candidates.push({cx: nc, cy: nr});
+            }
+          }
+        }
+      }
+      for (const cand of candidates.slice(0, 2)) {
+        const key = `${cand.cy},${cand.cx}`;
+        if (!features[key]) features[key] = 'farmland';
+      }
+    }
+
+    // Fishing huts near water-adjacent villages
+    if (settle.type === 'village') {
+      for (let dr = -2; dr <= 2; dr++) {
+        for (let dc = -2; dc <= 2; dc++) {
+          const nc = settle.cx + dc, nr = settle.cy + dr;
+          if (nr >= 0 && nr < size && nc >= 0 && nc < size) {
+            if (terrain[nr][nc].elevation < 0.35) {
+              const key = `${nr},${nc}`;
+              if (!features[key]) features[key] = 'fishing_hut';
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return features;
+}
+
+// ── W6: NPC Stub Generation ──────────────────────────────────────────────────
+// When a settlement is created, pre-generate 3–6 lightweight NPC stubs.
+// These are stored in world_state.settlements[].npcs for later soul generation.
+function _generateNPCStubs(settlements) {
+  for (const settle of settlements) {
+    settle.npcs = [];
+    const npcCount = settle.type === 'city' ? 6 : (2 + Math.floor(Math.random() * 2));
+
+    for (let i = 0; i < npcCount; i++) {
+      settle.npcs.push({
+        name: _generateNPCName(settle, i),
+        occupation: _generateOccupation(settle, i),
+        home_chunk: `${settle.cx},${settle.cy}`,
+        workplace_chunk: `${settle.cx + Math.floor(Math.random()*3 - 1)},${settle.cy + Math.floor(Math.random()*3 - 1)}`,
+        personality_seed: Math.random()
+      });
+    }
+  }
+
+  return settlements;
+}
+
+function _generateNPCName(settle, index) {
+  const names = ['María', 'José', 'Juan', 'Antonio', 'Rosa', 'Felipe', 'Isabel', 'Carlos'];
+  return names[index % names.length];
+}
+
+function _generateOccupation(settle, index) {
+  const occupations = settle.type === 'city'
+    ? ['merchant', 'smith', 'baker', 'guard', 'farmer', 'healer']
+    : ['farmer', 'fisherman', 'carpenter', 'weaver'];
+  return occupations[index % occupations.length];
+}
+
+// ── Fast chunk-local deterministic RNG ─────────────────────────────────────
+function _chunkRng(cx, cy, extra = 0) {
+  let s = (cx * 374761393 + cy * 668265263 + extra * 2246822519) >>> 0;
+  return () => { s ^= s << 13; s ^= s >> 17; s ^= s << 5; return (s >>> 0) / 0xFFFFFFFF; };
+}
+
+// ── Tile weight sampler ─────────────────────────────────────────────────────
+// Given a sorted array of [weight, tile] pairs, pick by cumulative weight
+function _weightedPick(rng, table) {
+  const total = table.reduce((s, [w]) => s + w, 0);
+  let r = rng() * total;
+  for (const [w, t] of table) { r -= w; if (r <= 0) return t; }
+  return table[table.length-1][1];
+}
+
+// ── Main procedural chunk tile generator ───────────────────────────────────
+function _generateProceduralTiles(cx, cy, biomeKey, campaignId) {
+  const ROWS = CHUNK_ROWS, COLS = CHUNK_COLS;
+  const cs = _campaignSeed(campaignId);
+  // Slight rotation offset per campaign — makes same biome feel different between campaigns
+  const offX = ((cs & 0xFFFF) / 0xFFFF) * 1000;
+  const offY = (((cs >> 16) & 0xFFFF) / 0xFFFF) * 1000;
+  const rng = _chunkRng(cx, cy);
+
+  // World-space noise coordinates for this chunk
+  // Small zoom = large features; large zoom = fine detail
+  const wx = (col) => (cx * COLS + col + offX) * 0.09;
+  const wy = (row) => (cy * ROWS + row + offY) * 0.09;
+  const wxFine = (col) => (cx * COLS + col + offX) * 0.28;
+  const wyFine = (row) => (cy * ROWS + row + offY) * 0.28;
+
+  // Sample noise layers once for the whole chunk
+  const elev  = [], moist = [], detail = [], fine = [];
+  for (let r = 0; r < ROWS; r++) {
+    elev[r] = []; moist[r] = []; detail[r] = []; fine[r] = [];
+    for (let c = 0; c < COLS; c++) {
+      elev[r][c]   = _fbm(wx(c),     wy(r),     cs,         4, 2.0, 0.5);
+      moist[r][c]  = _fbm(wx(c)+500, wy(r)+500, cs+99991,   3, 2.1, 0.5);
+      detail[r][c] = _fbm(wxFine(c), wyFine(r), cs+7331,    3, 2.0, 0.45);
+      fine[r][c]   = _valueNoise2D(wxFine(c)*2, wyFine(r)*2, cs+3571);
+    }
+  }
+
+  // Initialise tile grid with grass
+  const tiles = Array.from({length: ROWS}, () => Array(COLS).fill('grass'));
+
+  // ── Per-biome generation ────────────────────────────────────────────────
+  if (biomeKey === 'forest') {
+    _genForest(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy);
+  } else if (biomeKey === 'wilderness') {
+    _genWilderness(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy);
+  } else if (biomeKey === 'farmland') {
+    _genFarmland(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy);
+  } else if (biomeKey === 'village') {
+    _genVillage(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy);
+  } else if (biomeKey === 'city') {
+    _genCity(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy);
+  } else if (biomeKey === 'beach') {
+    _genBeach(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy);
+  } else if (biomeKey === 'ocean') {
+    _genOcean(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy);
+  } else if (biomeKey === 'cliffside') {
+    _genCliffside(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy);
+  } else if (biomeKey === 'dungeon') {
+    _genDungeon(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy);
+  } else if (biomeKey === 'ruins') {
+    _genRuins(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy);
+  } else if (biomeKey === 'camp') {
+    _genCamp(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy);
+  } else if (biomeKey === 'road') {
+    _genRoad(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy);
+  } else {
+    _genWilderness(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy);
+  }
+
+  return tiles;
+}
+
+// ── FOREST ──────────────────────────────────────────────────────────────────
+function _genForest(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy) {
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const e = elev[r][c], d = detail[r][c];
+      // Dense tree clusters where elevation+moisture both high
+      // Clearings at low elevation pockets — organic, not uniform
+      const treeDensity = e * 0.65 + moist[r][c] * 0.35;
+      if (treeDensity > 0.48) {
+        tiles[r][c] = 'tree';
+      } else if (treeDensity > 0.38 && d > 0.5) {
+        tiles[r][c] = 'tree'; // sparse fringe trees
+      } else if (e > 0.72) {
+        tiles[r][c] = 'rock';
+      } else if (e < 0.28 && moist[r][c] > 0.6) {
+        tiles[r][c] = 'water'; // forest pool
+      } else {
+        tiles[r][c] = 'grass';
+      }
+    }
+  }
+  // Carve a winding path through the forest
+  _carvePath(tiles, rng, ROWS, COLS, 'horizontal', 0.35, cx, cy);
+}
+
+// ── WILDERNESS ──────────────────────────────────────────────────────────────
+function _genWilderness(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy) {
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const e = elev[r][c], m = moist[r][c], d = detail[r][c];
+      if (e > 0.75) {
+        tiles[r][c] = d > 0.5 ? 'mountain' : 'rock';
+      } else if (e > 0.62) {
+        tiles[r][c] = 'rock';
+      } else if (e > 0.42 && m > 0.55 && d > 0.45) {
+        tiles[r][c] = 'tree'; // scattered copses
+      } else if (e < 0.25 && m > 0.65) {
+        tiles[r][c] = m > 0.78 ? 'water' : 'grass';
+      } else if (e < 0.2 && m > 0.55) {
+        tiles[r][c] = 'water'; // natural ponds
+      } else {
+        tiles[r][c] = 'grass';
+      }
+    }
+  }
+  // Occasional faint trail
+  if (rng() > 0.4) _carvePath(tiles, rng, ROWS, COLS, rng() > 0.5 ? 'horizontal' : 'vertical', 0.2, cx, cy);
+}
+
+// ── FARMLAND ────────────────────────────────────────────────────────────────
+function _genFarmland(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
+  // Noise-driven field patches — farmland blends with grass so it never looks
+  // like a flat desert. Fields are organic patches, not mechanical strips.
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const e = elev[r][c], d = detail[r][c], m = moist[r][c];
+      if (e > 0.82) {
+        tiles[r][c] = 'rock';
+      } else if (e > 0.68 && (r < 3 || r > ROWS-4 || c < 3 || c > COLS-4)) {
+        tiles[r][c] = 'tree'; // windbreak trees at field edges
+      } else if (e > 0.52 && d > 0.45) {
+        // Core farmland — only where noise is elevated AND detail agrees
+        // This creates patchy fields rather than wall-to-wall brown
+        tiles[r][c] = 'farmland';
+      } else if (e > 0.45 && d > 0.6) {
+        tiles[r][c] = 'farmland';
+      } else {
+        // Everything else is grassy — fields sit IN grass, not the other way around
+        tiles[r][c] = 'grass';
+      }
+    }
+  }
+  // Footpaths between fields — one E-W, one N-S, naturally placed
+  const pathR = Math.floor(ROWS * 0.4 + rng() * ROWS * 0.2);
+  const pathC = Math.floor(COLS * 0.4 + rng() * COLS * 0.2);
+  for (let c = 0; c < COLS; c++) tiles[pathR][c] = 'path';
+  for (let r = 0; r < ROWS; r++) tiles[r][pathC] = 'path';
+}
+
+// ── VILLAGE ─────────────────────────────────────────────────────────────────
+function _genVillage(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
+  // Base: mostly grass
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++)
+      tiles[r][c] = elev[r][c] > 0.82 ? 'rock' : 'grass';
+
+  // Central plaza — stone square in center
+  const pr = Math.floor(ROWS * 0.35), pc = Math.floor(COLS * 0.35);
+  const pw = Math.floor(COLS * 0.3),  ph = Math.floor(ROWS * 0.3);
+  for (let r = pr; r < pr + ph; r++)
+    for (let c = pc; c < pc + pw; c++)
+      tiles[r][c] = (r === pr || r === pr+ph-1 || c === pc || c === pc+pw-1) ? 'path' : 'stone';
+
+  // Roads radiating out from plaza
+  const midR = Math.floor(ROWS/2), midC = Math.floor(COLS/2);
+  _carvePathBetween(tiles, midR, 0, midR, COLS-1, 'path');       // E-W road
+  _carvePathBetween(tiles, 0, midC, ROWS-1, midC, 'path');       // N-S road
+  // Diagonal connector paths for a lived-in feel
+  _carvePathBetween(tiles, pr, pc, 0, 0, 'path');
+  _carvePathBetween(tiles, pr, pc+pw, 0, COLS-1, 'path');
+
+  // Building footprints — replaced by actual sprites in loadChunk decoration layer
+  const bPositions = _scatterBuildings(rng, ROWS, COLS, 4, 6);
+  for (const [br, bc] of bPositions) {
+    if (tiles[br]?.[bc]) tiles[br][bc] = 'building';
+    if (tiles[br]?.[bc+1]) tiles[br][bc+1] = 'building';
+    if (tiles[br+1]?.[bc]) tiles[br+1][bc] = 'building_door';
+  }
+}
+
+// ── CITY ─────────────────────────────────────────────────────────────────────
+function _genCity(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
+  // Mostly stone and path — dense urban
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++) {
+      const d = detail[r][c];
+      tiles[r][c] = d > 0.55 ? 'stone' : (d > 0.35 ? 'path' : 'grass');
+    }
+
+  // Grid of streets
+  const gridR = 4, gridC = 5;
+  for (let r = 0; r < ROWS; r += gridR) for (let c = 0; c < COLS; c++) tiles[r][c] = 'path';
+  for (let c = 0; c < COLS; c += gridC) for (let r = 0; r < ROWS; r++) tiles[r][c] = 'path';
+
+  // Dense building footprints in the blocks between streets
+  const bPositions = _scatterBuildings(rng, ROWS, COLS, 6, 9);
+  for (const [br, bc] of bPositions) {
+    if (tiles[br]?.[bc]) tiles[br][bc] = 'building';
+    if (tiles[br]?.[bc+1]) tiles[br][bc+1] = 'building';
+    if (tiles[br+1]?.[bc]) tiles[br+1][bc] = 'building_door';
+  }
+}
+
+// ── BEACH ────────────────────────────────────────────────────────────────────
+function _genBeach(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
+  // Water is south (positive y), land is north
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const waterLine = ROWS * 0.55 + Math.sin(c * 0.7 + moist[r][c] * 3) * 2;
+      const e = elev[r][c];
+      if (r > waterLine + 2 + e * 1.5) {
+        tiles[r][c] = moist[r][c] > 0.7 ? 'water' : (detail[r][c] > 0.5 ? 'water' : 'sand');
+      } else if (r > waterLine - 1) {
+        tiles[r][c] = detail[r][c] > 0.6 ? 'rock' : 'beach';
+      } else if (r > waterLine - 3) {
+        tiles[r][c] = 'beach';
+      } else if (r > waterLine - 5) {
+        tiles[r][c] = e > 0.6 ? 'rock' : 'sand';
+      } else {
+        tiles[r][c] = e > 0.72 ? 'rock' : 'grass';
+      }
+    }
+  }
+  // Scatter rocks in water
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++)
+      if (tiles[r][c] === 'water' && fine[r][c] > 0.82) tiles[r][c] = 'rock';
+}
+
+// ── OCEAN ────────────────────────────────────────────────────────────────────
+function _genOcean(tiles, elev, moist, detail, fine, rng, ROWS, COLS) {
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const e = elev[r][c];
+      if (e > 0.78) {
+        tiles[r][c] = detail[r][c] > 0.5 ? 'rock' : 'beach'; // island or sandbar
+      } else if (e > 0.68) {
+        tiles[r][c] = 'beach';
+      } else {
+        // Open ocean — depth varies by distance from land
+        tiles[r][c] = 'water';
+      }
+    }
+  }
+  // Rocky outcrops
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++)
+      if (tiles[r][c] === 'water' && fine[r][c] > 0.9) tiles[r][c] = 'rock';
+}
+
+// ── CLIFFSIDE ────────────────────────────────────────────────────────────────
+function _genCliffside(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy) {
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const e = elev[r][c], d = detail[r][c];
+      if (e > 0.58) {
+        tiles[r][c] = d > 0.6 ? 'mountain' : 'cliff';
+      } else if (e > 0.42) {
+        tiles[r][c] = d > 0.5 ? 'cliff' : 'rock';
+      } else if (e > 0.3) {
+        tiles[r][c] = 'rock';
+      } else {
+        tiles[r][c] = d > 0.7 ? 'grass' : 'rock'; // narrow ledges
+      }
+    }
+  }
+  // Single dangerous winding ledge path
+  _carvePath(tiles, rng, ROWS, COLS, 'vertical', 0.25, cx, cy);
+}
+
+// ── DUNGEON ──────────────────────────────────────────────────────────────────
+function _genDungeon(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy) {
+  // Outer walls of cliff/mountain, stone courtyard approach
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const isEdge = (r < 2 || r >= ROWS-2 || c < 2 || c >= COLS-2);
+      const e = elev[r][c];
+      if (isEdge || e > 0.62) {
+        tiles[r][c] = detail[r][c] > 0.5 ? 'cliff' : 'mountain';
+      } else if (e > 0.42) {
+        tiles[r][c] = 'rock';
+      } else {
+        tiles[r][c] = detail[r][c] > 0.6 ? 'stone' : 'grass';
+      }
+    }
+  }
+  // Approach path from south
+  const midC = Math.floor(COLS / 2);
+  for (let r = Math.floor(ROWS * 0.4); r < ROWS; r++) {
+    tiles[r][midC] = 'path';
+    if (tiles[r]?.[midC-1]) tiles[r][midC-1] = 'stone';
+    if (tiles[r]?.[midC+1]) tiles[r][midC+1] = 'stone';
+  }
+  // Entrance gate area
+  const gateR = Math.floor(ROWS * 0.35);
+  for (let c = midC-2; c <= midC+2; c++) if (tiles[gateR]?.[c]) tiles[gateR][c] = 'stone';
+  // Treasure chest somewhere inside
+  tiles[Math.floor(ROWS*0.2)][midC] = 'chest';
+}
+
+// ── RUINS ────────────────────────────────────────────────────────────────────
+function _genRuins(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy) {
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const e = elev[r][c], d = detail[r][c];
+      if (e > 0.65) {
+        tiles[r][c] = d > 0.5 ? 'cliff' : 'rock';
+      } else if (e > 0.5) {
+        tiles[r][c] = 'stone';
+      } else if (e > 0.4 && d > 0.6) {
+        tiles[r][c] = 'stone'; // cracked ruins floor
+      } else {
+        tiles[r][c] = 'grass'; // overgrown
+      }
+    }
+  }
+  // Ruined wall remnants — scattered rectangular outlines
+  const wallCount = 2 + Math.floor(rng() * 2);
+  for (let w = 0; w < wallCount; w++) {
+    const wr = 1 + Math.floor(rng() * (ROWS-5));
+    const wc = 1 + Math.floor(rng() * (COLS-5));
+    const wh = 2 + Math.floor(rng() * 3);
+    const ww = 3 + Math.floor(rng() * 4);
+    for (let dr = 0; dr < wh; dr++)
+      for (let dc = 0; dc < ww; dc++)
+        if (dr===0||dr===wh-1||dc===0||dc===ww-1)
+          if (tiles[wr+dr]?.[wc+dc] && rng() > 0.3)
+            tiles[wr+dr][wc+dc] = 'cliff'; // broken wall
+  }
+  // Overgrown path through ruins
+  _carvePath(tiles, rng, ROWS, COLS, 'horizontal', 0.15, cx, cy);
+  // A hidden chest
+  const cr = 2 + Math.floor(rng() * (ROWS-4));
+  const cc = 2 + Math.floor(rng() * (COLS-4));
+  tiles[cr][cc] = 'chest';
+}
+
+// ── CAMP ─────────────────────────────────────────────────────────────────────
+function _genCamp(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy) {
+  // Mostly open grass, some trees at edges
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const e = elev[r][c];
+      const edgeTree = (r < 2 || r > ROWS-3 || c < 2 || c > COLS-3) && e > 0.5;
+      if (edgeTree) tiles[r][c] = 'tree';
+      else if (e > 0.75) tiles[r][c] = 'rock';
+      else tiles[r][c] = 'grass';
+    }
+  }
+  // Worn clearing in center
+  const cr = Math.floor(ROWS/2), cc = Math.floor(COLS/2);
+  for (let dr = -2; dr <= 2; dr++)
+    for (let dc = -3; dc <= 3; dc++)
+      if (tiles[cr+dr]?.[cc+dc]) tiles[cr+dr][cc+dc] = 'path';
+  // Approach paths
+  for (let r = 0; r < ROWS; r++) if (tiles[r]?.[cc]) tiles[r][cc] = 'path';
+  // Supply chest
+  tiles[cr-1][cc+3] = 'chest';
+}
+
+// ── ROAD ─────────────────────────────────────────────────────────────────────
+function _genRoad(tiles, elev, moist, detail, fine, rng, ROWS, COLS, cx, cy) {
+  // Terrain flanking the road
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const e = elev[r][c];
+      if (e > 0.72) tiles[r][c] = 'rock';
+      else if (e > 0.55 && detail[r][c] > 0.55) tiles[r][c] = 'tree';
+      else tiles[r][c] = 'grass';
+    }
+  }
+  // Road entry R: seam-consistent hash on cy so all chunks in same row continue road at same height
+  const entryHash = (((cy * 2246822519) >>> 0) / 0xFFFFFFFF);
+  const roadBaseR = Math.floor(ROWS * 0.3 + entryHash * ROWS * 0.4);
+  for (let c = 0; c < COLS; c++) {
+    // Gentle deterministic curve using cx offset — continuous across chunk boundaries
+    const curve = Math.round(Math.sin((cx * COLS + c) * 0.18) * 1.5);
+    const r = Math.max(1, Math.min(ROWS-2, roadBaseR + curve));
+    for (let w = -1; w <= 1; w++) {
+      if (tiles[r+w]?.[c] !== undefined) tiles[r+w][c] = 'path';
+    }
+    // Road-side trees
+    if (detail[r][c] > 0.4 && c % 3 === 0) {
+      if (tiles[r-3]?.[c]) tiles[r-3][c] = 'tree';
+      if (tiles[r+3]?.[c]) tiles[r+3][c] = 'tree';
+    }
+  }
+}
+
+// ── Helper: carve a seam-consistent winding path across the chunk ──────────
+// cx/cy are chunk coords — used to derive deterministic entry/exit positions
+// so neighbouring chunks always continue the path at matching positions.
+function _carvePath(tiles, rng, ROWS, COLS, dir, width, cx, cy) {
+  const pathWidth = 1 + Math.floor(width * 3); // 1-2 tiles wide
+  // Entry position: hash of the chunk coord perpendicular to travel direction
+  // This ensures chunk (2,3) horizontal path starts at same R as chunk (1,3) ends
+  if (dir === 'horizontal') {
+    // Entry R comes from cy hash — same for all chunks in the same row
+    const entryHash = (((cy * 2246822519) >>> 0) / 0xFFFFFFFF);
+    let r = Math.floor(ROWS * 0.25 + entryHash * ROWS * 0.5);
+    for (let c = 0; c < COLS; c++) {
+      // Gentle drift using noise-like formula — deterministic, not rng()
+      const drift = Math.sin(c * 0.4 + cy * 1.7) * 0.8;
+      r = Math.max(1, Math.min(ROWS-2, r + Math.round(drift * (c === 0 ? 0 : 0.4))));
+      for (let w = 0; w < pathWidth; w++)
+        if (tiles[r+w]?.[c] !== undefined) tiles[r+w][c] = 'path';
+    }
+  } else {
+    // Entry C comes from cx hash — same for all chunks in the same column
+    const entryHash = (((cx * 2246822519) >>> 0) / 0xFFFFFFFF);
+    let c = Math.floor(COLS * 0.25 + entryHash * COLS * 0.5);
+    for (let r = 0; r < ROWS; r++) {
+      const drift = Math.sin(r * 0.4 + cx * 1.7) * 0.8;
+      c = Math.max(1, Math.min(COLS-2, c + Math.round(drift * (r === 0 ? 0 : 0.4))));
+      for (let w = 0; w < pathWidth; w++)
+        if (tiles[r]?.[c+w] !== undefined) tiles[r][c+w] = 'path';
+    }
+  }
+}
+
+// ── Helper: carve a straight path between two points ──────────────────────
+function _carvePathBetween(tiles, r0, c0, r1, c1, tileType) {
+  const steps = Math.max(Math.abs(r1-r0), Math.abs(c1-c0));
+  if (steps === 0) return;
+  for (let i = 0; i <= steps; i++) {
+    const r = Math.round(r0 + (r1-r0) * i / steps);
+    const c = Math.round(c0 + (c1-c0) * i / steps);
+    if (tiles[r]?.[c] !== undefined) tiles[r][c] = tileType;
+  }
+}
+
+// ── Helper: scatter building positions with minimum spacing ───────────────
+function _scatterBuildings(rng, ROWS, COLS, minCount, maxCount) {
+  const count = minCount + Math.floor(rng() * (maxCount - minCount + 1));
+  const positions = [];
+  const MIN_DIST = 4;
+  let attempts = 0;
+  while (positions.length < count && attempts < 200) {
+    attempts++;
+    const br = 1 + Math.floor(rng() * (ROWS - 3));
+    const bc = 1 + Math.floor(rng() * (COLS - 3));
+    const tooClose = positions.some(([pr, pc]) =>
+      Math.abs(pr-br) < MIN_DIST && Math.abs(pc-bc) < MIN_DIST
+    );
+    if (!tooClose) positions.push([br, bc]);
+  }
+  return positions;
+}
+
+// ── NPC generation — still AI-powered ──────────────────────────────────────
+async function _generateNPCsForChunk(cx, cy, biomeKey, campaignId) {
+  const lang = worldLanguage || 'es';
+  const biome = BIOME_PALETTES[biomeKey] || BIOME_PALETTES.wilderness;
+  const npcCount = biome.npc_count ?? 1;
+  if (npcCount === 0) return [];
+  if (!CLAUDE_KEY && !GEMINI_KEY) return [];
+
+  const spriteOptions = 'player/skeleton/slime/chicken/cow/pig/sheep';
+  const prompt = `You are generating ${npcCount} NPC(s) for a ${biome.label} chunk in a Spanish-language narrative detective RPG.
+Chunk position: (${cx},${cy}). Biome atmosphere: ${biome.atmosphere}
+Return ONLY raw JSON array (no markdown):
+[{"name":"...","col":${Math.floor(CHUNK_COLS/2)},"row":${Math.floor(CHUNK_ROWS/2)},"sprite":"player","dialogue":["one greeting line in ${lang}","one follow-up line in ${lang}"],"ai_context":"personality and what this NPC knows"}]
+Sprite options: ${spriteOptions}. Names must fit the biome. Dialogue in ${lang} only.`;
+
+  try {
+    if (GEMINI_KEY) {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_KEY}`,
+        { method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ contents:[{parts:[{text:prompt}]}], generationConfig:{temperature:0.85, maxOutputTokens:800} }) }
+      );
+      if (!res.ok) throw new Error('Gemini NPC error');
+      const d = await res.json();
+      const raw = (d.candidates?.[0]?.content?.parts?.[0]?.text||'').trim().replace(/^```json?\n?/,'').replace(/\n?```$/,'');
+      return JSON.parse(raw);
+    } else {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method:'POST',
+        headers:{'Content-Type':'application/json','x-api-key':CLAUDE_KEY,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+        body: JSON.stringify({ model:'claude-haiku-4-5-20251001', max_tokens:800, messages:[{role:'user',content:prompt}] })
+      });
+      if (!res.ok) throw new Error('Haiku NPC error');
+      const d = await res.json();
+      const raw = d.content[0].text.trim().replace(/^```json?\n?/,'').replace(/\n?```$/,'');
+      return JSON.parse(raw);
+    }
+  } catch(e) {
+    console.warn(`NPC gen failed for (${cx},${cy}):`, e.message);
+    return [];
+  }
+}
+
+async function generateChunkAPI(cx, cy, dirLabel) {
+  chunkGenCount++;
+
+  const lang = worldLanguage || 'es';
+
+  // ── 1. Biome identity ──────────────────────────────────────────────────────
+  const regionMap = activeCampaign?.world_state?.region_map || null;
+  const biomeKey = getChunkBiome(cx, cy, regionMap);
+  const biome = BIOME_PALETTES[biomeKey] || BIOME_PALETTES.wilderness;
+  const campaignId = activeCampaignId || 'default';
+
+  // ── 2. Procedural tile generation — instant, no API ───────────────────────
+  const tiles = _generateProceduralTiles(cx, cy, biomeKey, campaignId);
+
+  // ── 2b. Seam stitching — blend edges with already-loaded neighbours ────────
+  // Since noise is continuous, only the border 1px needs hard-matching.
+  // This prevents autotile from drawing mismatched borders at chunk edges.
+  const _N = chunks.get(`${cx},${cy - 1}`);
+  const _S = chunks.get(`${cx},${cy + 1}`);
+  const _W = chunks.get(`${cx - 1},${cy}`);
+  const _E = chunks.get(`${cx + 1},${cy}`);
+  if (_N?.loaded && _N.worldDef?.world?.tiles) {
+    const nt = _N.worldDef.world.tiles;
+    const lastRow = nt[nt.length - 1] || [];
+    for (let c = 0; c < CHUNK_COLS; c++) if (lastRow[c]) tiles[0][c] = lastRow[c];
+  }
+  if (_S?.loaded && _S.worldDef?.world?.tiles) {
+    const st = _S.worldDef.world.tiles;
+    const firstRow = st[0] || [];
+    for (let c = 0; c < CHUNK_COLS; c++) if (firstRow[c]) tiles[CHUNK_ROWS-1][c] = firstRow[c];
+  }
+  if (_W?.loaded && _W.worldDef?.world?.tiles) {
+    const wt = _W.worldDef.world.tiles;
+    for (let r = 0; r < CHUNK_ROWS; r++) if (wt[r]?.[CHUNK_COLS-1]) tiles[r][0] = wt[r][CHUNK_COLS-1];
+  }
+  if (_E?.loaded && _E.worldDef?.world?.tiles) {
+    const et = _E.worldDef.world.tiles;
+    for (let r = 0; r < CHUNK_ROWS; r++) if (et[r]?.[0]) tiles[r][CHUNK_COLS-1] = et[r][0];
+  }
+
+  // ── 3. Generate NPCs via AI (lightweight call — names/dialogue only) ───────
+  const npcs = await _generateNPCsForChunk(cx, cy, biomeKey, campaignId);
+
+  // ── 4. Normalise NPC format to match what loadChunk expects ───────────────
+  // AI returns {col, row} but loadChunk expects {position: [col, row]}
+  const normalisedNpcs = npcs.map((npc, i) => {
+    const rawGreeting = npc.greeting || (Array.isArray(npc.dialogue) && npc.dialogue[0]) || '...';
+    const col = npc.col ?? npc.position?.[0] ?? Math.floor(CHUNK_COLS / 2);
+    const row = npc.row ?? npc.position?.[1] ?? Math.floor(CHUNK_ROWS / 2);
+    return {
+      ...npc,
+      id: `${cx}_${cy}_npc${i}`,
+      position: [col, row],  // loadChunk destructures this at line 2222
+      col, row,
+      greeting: rawGreeting,
+      dialogue: npc.dialogue || [rawGreeting],
+      personality: npc.personality || npc.ai_context || '',
+      ai_context: npc.ai_context || npc.personality || '',
+    };
+  });
+
+  // ── 5. Build description from biome atmosphere ────────────────────────────
+  const descriptions = {
+    village:   'A bustling village with cobbled paths and warm hearths.',
+    city:      'Dense city streets hum with activity and intrigue.',
+    farmland:  'Rolling fields stretch under an open sky.',
+    forest:    'Ancient trees loom over a shadowy forest floor.',
+    cliffside: 'Sheer cliffs and treacherous ledges pierce the sky.',
+    beach:     'Salt air and crashing waves define this coastal stretch.',
+    ocean:     'Open ocean stretches endlessly in every direction.',
+    ruins:     'Crumbling stones tell of a forgotten civilization.',
+    dungeon:   'A foreboding darkness radiates from the dungeon entrance.',
+    camp:      'The smell of campfire smoke hangs in the still air.',
+    road:      'A well-traveled road cuts through open countryside.',
+    wilderness:'Untamed wilderness, beautiful and unpredictable.',
+  };
+
+  // ── 6. Tag used_decorations ───────────────────────────────────────────────
+  if (activeCampaign?.world_state) {
+    const prevUsed = activeCampaign.world_state.used_decorations || [];
+    const newUsed = [...new Set([...prevUsed, ...biome.buildings])];
+    activeCampaign.world_state.used_decorations = newUsed;
+    lqDB('PATCH', `lq_campaigns?id=eq.${activeCampaignId}`, {
+      world_state: { ...activeCampaign.world_state, used_decorations: newUsed }
+    }).catch(() => {});
+  }
+
+  // ── 7. Return worldDef in the same format loadChunk expects ───────────────
+  return {
+    world: {
+      theme: biomeKey,
+      biome: biomeKey,
+      language: lang,
+      description: descriptions[biomeKey] || biome.atmosphere,
+      size: [CHUNK_COLS, CHUNK_ROWS],
+      tiles,
+    },
+    npcs: normalisedNpcs,
+    player_start: [Math.floor(CHUNK_COLS / 2), Math.floor(CHUNK_ROWS / 2)],
+  };
+}
+
+// ═══════════════════════════════════════════════════════════
+//  NPC VOICE SYSTEM — Groq Whisper STT + ElevenLabs TTS
+//  Keys fetched from Supabase app_secrets (same as languages.html)
+// ═══════════════════════════════════════════════════════════
+
+// ── ElevenLabs voice roster ──
+// Voices available on all plans (pre-made voices)
+const LQ_VOICES = {
+  // Female voices
+  female_warm:       'EXAVITQu4vr4xnSDxMaL', // Sarah  — warm, clear, multilingual
+  female_professional: 'XrExE9yKIg1WjnnlVkGX', // Matilda — professional, clear
+  female_soft:       'pFZP5JQG7iQjIQuC4Bku', // Lily   — gentle, soft
+  female_young:      'jsCqWAovK2LkecY7zXl4', // Freya  — young, expressive
+  // Male voices
+  male_deep:         'onwK4e9ZLuTAKqWW03F9', // Daniel — deep, authoritative
+  male_young:        'TX3LPaxmHKxFdv7VOQHJ', // Liam   — young, energetic
+  male_old:          'nPczCjzI2devNBz1zQrb', // Brian  — older, wise
+  male_gruff:        'N2lVS1w4EtoT3dr4eOWO', // Callum — raspy, character voice
+};
+
+// Derive ElevenLabs voice from NPC personality + name
+function lqPickVoice(npc) {
+  const p = ((npc.personality || '') + ' ' + (npc.ai_context || '') + ' ' + (npc.role || '')).toLowerCase();
+  const name = (npc.name || '').toLowerCase();
+
+  // Word-boundary helper — avoids "man" matching "woman", "he" matching "she", etc.
+  const hasWord = (text, word) => new RegExp('\\b' + word + '\\b').test(text);
+
+  // Gender detection — explicit words only (word-boundary matched)
+  const femaleNames = ['maria','sofia','isabella','elena','ana','carmen','rosa','lucia','gabriela',
+                       'fatima','amara','yuki','sakura','abuela','grandma'];
+  const femaleWords = ['woman','she','señora','madre','abuela','hermana','girl','female',
+                       'widow','priestess','witch','healer','nurse','grandmother','sister','lady'];
+  const maleWords   = ['man','he','señor','padre','abuelo','hermano','boy','male','soldier',
+                       'guard','knight','farmer','merchant','blacksmith','sailor','grandfather',
+                       'brother','sir','mister','lord'];
+
+  const looksF = femaleWords.some(w => hasWord(p, w)) || femaleNames.some(n => name.startsWith(n));
+  const looksM = maleWords.some(w => hasWord(p, w));
+  const isFemale = looksF && !looksM;
+  const isMale   = looksM && !looksF;
+
+  if (isFemale) {
+    if (/\b(elder|wise|old|mature|grandmother|abuela|ancient)\b/.test(p)) return LQ_VOICES.female_professional;
+    if (/\b(young|child|girl|bright|cheerful|excited|playful)\b/.test(p)) return LQ_VOICES.female_young;
+    if (/\b(quiet|soft|gentle|shy|timid|sad|melancholy)\b/.test(p))       return LQ_VOICES.female_soft;
+    return LQ_VOICES.female_warm; // default female
+  }
+  if (isMale) {
+    if (/\b(elder|old|wise|grandfather|abuelo|ancient|aged)\b/.test(p))   return LQ_VOICES.male_old;
+    if (/\b(guard|soldier|knight|warrior|rough|gruff|stern|angry)\b/.test(p)) return LQ_VOICES.male_gruff;
+    if (/\b(young|boy|child|energetic|excited|merchant|trader|vendor)\b/.test(p)) return LQ_VOICES.male_young;
+    return LQ_VOICES.male_deep; // default male
+  }
+  // Ambiguous — hash-based variety so different NPCs still get different voices
+  const hash = (npc.id || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+  const pool = Object.values(LQ_VOICES);
+  return pool[hash % pool.length];
+}
+
+// ── Voice key state ──
+let lqVoiceMuted = false;
+
+// Keys are loaded at startup via loadConfig() into LQ_ELEVEN_KEY / LQ_GROQ_KEY.
+// No separate fetch needed — just reference those globals.
+async function lqLoadVoiceKeys() {
+  // Keys already loaded by loadConfig() on page init.
+  // If somehow not loaded yet (race), wait for loadConfig to finish.
+  if (!LQ_ELEVEN_KEY || !LQ_GROQ_KEY) await loadConfig();
+}
+
+// ── Mute toggle ──
+function lqToggleMute() {
+  lqVoiceMuted = !lqVoiceMuted;
+  const btn = document.getElementById('dialogue-mute');
+  if (btn) btn.textContent = lqVoiceMuted ? '🔇' : '🔊';
+  if (lqVoiceMuted) lqStopSpeaking();
+}
+
+// ── TTS state ──
+let lqTTSSource = null;
+let lqTTSCtx = null;
+let lqIsSpeaking = false;
+
+function lqStopSpeaking() {
+  if (lqTTSSource) { try { lqTTSSource.stop(); } catch(e) {} lqTTSSource = null; }
+  if (lqTTSCtx)   { try { lqTTSCtx.close();  } catch(e) {} lqTTSCtx = null; }
+  lqIsSpeaking = false;
+  const dot = document.getElementById('dialogue-speaking-dot');
+  if (dot) dot.style.display = 'none';
+}
+
+// Speak text using ElevenLabs with a specific voice ID
+async function lqSpeak(text, voiceId) {
+  if (lqVoiceMuted) return;
+  const key = LQ_ELEVEN_KEY;
+  if (!key) return;
+
+  lqStopSpeaking();
+
+  const dot = document.getElementById('dialogue-speaking-dot');
+  if (dot) dot.style.display = 'inline-block';
+
+  try {
+    const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream`, {
+      method: 'POST',
+      headers: { 'xi-api-key': key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text,
+        model_id: 'eleven_turbo_v2_5',
+        voice_settings: { stability: 0.55, similarity_boost: 0.80, speed: 1.0 },
+      }),
+    });
+    if (!res.ok) { console.warn('ElevenLabs TTS error', res.status); lqStopSpeaking(); return; }
+
+    const buf = await res.arrayBuffer();
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const decoded  = await audioCtx.decodeAudioData(buf);
+    const source   = audioCtx.createBufferSource();
+    source.buffer  = decoded;
+    source.connect(audioCtx.destination);
+
+    lqTTSCtx    = audioCtx;
+    lqTTSSource = source;
+    lqIsSpeaking = true;
+
+    source.start();
+    source.onended = () => lqStopSpeaking();
+  } catch(e) {
+    console.warn('lqSpeak error', e);
+    lqStopSpeaking();
+  }
+}
+
+// ── STT state ──
+let lqMicRecorder = null;
+let lqMicChunks   = [];
+let lqMicStream   = null;
+let lqMicActive   = false;
+
+async function lqMicToggle() {
+  if (lqMicActive) {
+    lqMicStop();
+  } else {
+    await lqMicStart();
+  }
+}
+
+async function lqMicStart() {
+  if (lqMicActive) return;
+  lqStopSpeaking(); // interrupt NPC if speaking
+
+  const micBtn = document.getElementById('dialogue-mic');
+
+  try {
+    lqMicStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch(e) {
+    showStatus('Microphone access denied', 3000);
+    return;
+  }
+
+  lqMicChunks = [];
+  const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/ogg';
+  lqMicRecorder = new MediaRecorder(lqMicStream, { mimeType });
+  lqMicRecorder.ondataavailable = e => { if (e.data.size > 0) lqMicChunks.push(e.data); };
+  lqMicRecorder.start(100);
+  lqMicActive = true;
+
+  if (micBtn) { micBtn.classList.add('recording'); micBtn.textContent = '⏹️'; }
+  showStatus('🔴 Recording… tap again to send', 15000);
+}
+
+function lqMicStop() {
+  if (!lqMicActive || !lqMicRecorder) return;
+  lqMicActive = false;
+  lqMicRecorder.stop();
+  if (lqMicStream) lqMicStream.getTracks().forEach(t => t.stop());
+
+  const micBtn = document.getElementById('dialogue-mic');
+  if (micBtn) { micBtn.classList.remove('recording'); micBtn.classList.add('loading'); micBtn.textContent = '⏳'; }
+
+  lqMicRecorder.onstop = async () => {
+    const blob = new Blob(lqMicChunks, { type: 'audio/webm' });
+    showStatus('Transcribing…', 5000);
+    try {
+      const text = await lqTranscribe(blob);
+      if (text && text.trim().length > 1) {
+        const input = document.getElementById('dialogue-input');
+        if (input) {
+          input.value = text.trim();
+          input.focus();
+        }
+        // Auto-send after a short delay so user can see what was transcribed
+        setTimeout(() => sendDialogue(), 400);
+      } else {
+        showStatus('Didn\'t catch that — try again', 3000);
+      }
+    } catch(e) {
+      showStatus('Transcription failed — check Groq key', 3000);
+      console.warn('lqTranscribe error', e);
+    }
+    if (micBtn) { micBtn.classList.remove('loading'); micBtn.textContent = '🎙️'; }
+  };
+}
+
+async function lqTranscribe(blob) {
+  if (!LQ_GROQ_KEY) await loadConfig();
+  const groqKey = LQ_GROQ_KEY;
+  if (!groqKey) throw new Error('No Groq key — check app_secrets table');
+
+  // Detect language from world setting
+  const world = currentWorld || ARENAS_BLANCAS_WORLD;
+  const lang  = (world?.world?.language || 'es').split('-')[0];
+
+  const form = new FormData();
+  form.append('file', blob, 'audio.webm');
+  form.append('model', 'whisper-large-v3-turbo');
+  form.append('language', lang);
+  form.append('response_format', 'json');
+
+  const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${groqKey}` },
+    body: form,
+  });
+  if (!res.ok) throw new Error(`Groq STT ${res.status}`);
+  const j = await res.json();
+  return j.text;
+}
+
+// Called by openNPCDialogue and openIndoorNPCDialogue — kick off key load eagerly
+function lqVoiceInit() {
+  // Keys already loaded by loadConfig() at startup — nothing to fetch
+  // Show mic button and mute button
+  const micBtn  = document.getElementById('dialogue-mic');
+  const muteBtn = document.getElementById('dialogue-mute');
+  if (micBtn)  micBtn.style.display  = 'inline-flex';
+  if (muteBtn) muteBtn.style.display = 'inline-block';
+  if (muteBtn) muteBtn.textContent   = lqVoiceMuted ? '🔇' : '🔊';
+}
+
+// Translation reveal (click handler on translation element)
+document.getElementById('dialogue-translation').addEventListener('click', async () => {
+  const el = document.getElementById('dialogue-translation');
+  if (!lastNPCReply || !CLAUDE_KEY) return;
+  if (el.textContent !== '(tap to translate)') return;
+
+  el.textContent = 'Translating...';
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': CLAUDE_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 120,
+        system: 'Translate the following text to natural English. Return ONLY the translation, no explanation.',
+        messages: [{ role: 'user', content: lastNPCReply }],
+      }),
+    });
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    el.textContent = '→ ' + data.content[0].text.trim();
+  } catch {
+    el.textContent = '(translation failed)';
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+//  SUPABASE VOCAB SYNC
+// ─────────────────────────────────────────────────────────────
+async function fetchSRSVocab() {
+  try {
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/vocab_words?select=word,translation,stage&next_review=lte.${today}&order=stage.asc&limit=20`,
+      { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
+    );
+    if (!res.ok) throw new Error();
+    srsVocab = await res.json();
+    document.getElementById('vocab-pill').textContent = srsVocab.length > 0
+      ? `✦ ${srsVocab.length} words due`
+      : 'vocab: all caught up';
+  } catch {
+    document.getElementById('vocab-pill').textContent = 'vocab: offline';
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  UTILS
+// ─────────────────────────────────────────────────────────────
+let _statusTimer;
+function showStatus(msg, dur = 3000) {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.style.opacity = '1';
+  clearTimeout(_statusTimer);
+  _statusTimer = setTimeout(() => { el.style.opacity = '0'; }, dur);
+}
+
+// ─────────────────────────────────────────────────────────────
+//  KEYBOARD SHORTCUTS
+// ─────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  const active = document.activeElement;
+  const inInput = active?.tagName === 'INPUT' || active?.tagName === 'TEXTAREA';
+
+  if (e.key === 'Enter') {
+    const dBox   = document.getElementById('dialogue-box');
+    const dInput = document.getElementById('dialogue-input');
+    if (dBox.style.display !== 'none' && active === dInput) {
+      sendDialogue(); return;
+    }
+  }
+
+  if (e.key === 'Escape') {
+    closeDialogue();
+  }
+
+  // E key — DOM-level building entry (works regardless of Phaser canvas focus or input focus)
+  // Note: intentionally NOT gated by !inInput — building entry works even if prompt has focus
+  if ((e.key === 'e' || e.key === 'E') && !isIndoor && gameScene && !gameScene.dialogueCooldown) {
+    // Don't fire if user is actively typing in an input (dialogue input or world prompt)
+    const typingInDialogue = active === document.getElementById('dialogue-input');
+    if (!typingInDialogue) {
+      const dialogueOpen = document.getElementById('dialogue-box').style.display !== 'none'
+                        && document.getElementById('dialogue-box').style.display !== '';
+      if (!dialogueOpen) {
+        const buildingKey = gameScene._findNearbyBuildingDoor?.();
+        if (buildingKey) {
+          e.preventDefault();
+          // Also blur any focused input so future keys go to game
+          if (inInput) document.activeElement?.blur();
+          const layout = indoorLayouts.get(buildingKey);
+          if (layout?.ready) {
+            enterHouse(buildingKey, layout);
+          } else if (layout?.loading) {
+            const msg = HOUSE_NOT_READY_MSGS[Math.floor(Math.random() * HOUSE_NOT_READY_MSGS.length)];
+            showStatus(msg, 2500);
+          } else {
+            // Lazy gen — kick off now
+            const [gcx, gcy] = buildingKey.split('_')[0].split(',').map(Number);
+            triggerLazyHouseGen(buildingKey, gcx, gcy);
+          }
+        }
+      }
+    }
+  }
+});
+
+// (PixiJS doesn't intercept keyboard events, so no need to disable during HTML input focus)
+
+// ─────────────────────────────────────────────────────────────
+//  STARTUP
+// ─────────────────────────────────────────────────────────────
+loadConfig();
+checkSavedGame();
+</script>
+
+<!-- DEBUG PANEL -->
+<button id="dbg-toggle" onclick="lqDbgToggle()">DEBUG</button>
+<div id="dbg-panel">
+  <div id="dbg-header">
+    <span>LQ Debug Console</span>
+    <button id="dbg-refresh" onclick="lqDbgLoad()">↺ Refresh</button>
+    <button id="dbg-refresh" onclick="lqDbgToggle()" style="border:none;background:none;color:#3a6020;cursor:pointer;font-size:14px;padding:0 2px;font-family:inherit">✕</button>
+  </div>
+  <div id="dbg-tabs">
+    <button class="dbg-tab active" onclick="lqDbgTab('campaign',this)">Campaign</button>
+    <button class="dbg-tab" onclick="lqDbgTab('souls',this)">Souls</button>
+    <button class="dbg-tab" onclick="lqDbgTab('events',this)">World Events</button>
+    <button class="dbg-tab" onclick="lqDbgTab('planned',this)">Planned</button>
+    <button class="dbg-tab" onclick="lqDbgTab('logs',this)">NPC Logs</button>
+    <button class="dbg-tab" onclick="lqDbgTab('player',this)">Player</button>
+    <button class="dbg-tab" onclick="lqDbgTab('chunks',this)">Chunks</button>
+  </div>
+  <div id="dbg-body"><div class="dbg-loading">Open a campaign to begin.</div></div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────
+
+//  PHASE 3: NPC REASONING LOOP
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Template B — Reasoning Loop Prompt
+ * Used for both chunk-entry sweep (lightweight) and encounter (full).
+ */
+function _buildTemplateB(npcRow, recentEvents, worldState, isEncounter = false, playerTrust = 0.5, playerRecentActions = []) {
+  const soul = npcRow.soul || {};
+  const currentFocus = npcRow.current_focus || {};
+
+  // Condense soul document for token economy
+  const condensedSoul = `
+Name: ${npcRow.name}
+Age: ${npcRow.age || 'unknown'}
+Occupation: ${npcRow.occupation || 'unknown'}
+Home chunk: ${npcRow.home_chunk || 'unknown'}
+Current chunk: ${npcRow.current_chunk || 'unknown'}
+
+Personality: ${soul.personality || 'reserved'}
+History: ${soul.history ? soul.history.substring(0, 150) : '(minimal)'}
+Values: ${Array.isArray(soul.values) ? soul.values.join(', ') : 'loyalty, survival'}
+Fears: ${Array.isArray(soul.fears) ? soul.fears.slice(0, 2).join(', ') : 'unknown'}
+Desires: ${Array.isArray(soul.desires) ? soul.desires.slice(0, 2).join(', ') : 'unknown'}
+Speech pattern: ${soul.speech_pattern || 'direct'}
+Current preoccupation: ${soul.current_preoccupation || 'daily tasks'}
+Secrets: ${Array.isArray(soul.secrets) ? soul.secrets[0] || '(private)' : '(private)'}
+Emotional state (current): ${soul.emotional_state?.current || 'neutral'}
+Faction ties: ${Array.isArray(soul.faction_ties) ? soul.faction_ties.map(f => f.faction).join(', ') : 'none known'}
+`;
+
+  // Recent event log (last 5 entries)
+  const eventSummary = recentEvents.slice(-5).map(evt =>
+    `${evt.ingame_time || 'unknown time'}: ${evt.summary}`
+  ).join('\n');
+
+  // World state key facts
+  const worldFacts = `
+In-game time: ${worldState.in_game_date || 'unknown'}
+Campaign status: ${worldState.campaign_status || 'ongoing'}
+Player reputation: ${worldState.player_reputation?.overall || 'unknown'}
+`;
+
+  const playerContext = isEncounter ? `
+Player trust level: ${playerTrust.toFixed(2)} / 1.0
+Player recent actions: ${playerRecentActions.length > 0 ? playerRecentActions.join(', ') : 'none observed'}
+` : '';
+
+  return `You are an NPC reasoning engine. Given the soul document below, recent events, and current world state, output a JSON object describing:
+1. What this NPC is doing right now
+2. Their current emotional state (internal)
+3. How they relate to the player
+4. Any inter-NPC events they've learned about (cascade entries)
+5. Any new decisions they're making (planned events)
+
+${condensedSoul}
+
+RECENT EVENT LOG (last 5):
+${eventSummary || '(no recent events)'}
+
+WORLD STATE:
+${worldFacts}
+${playerContext}
+
+OUTPUT (valid JSON only, no markdown):
+{
+  "current_activity": "string — 1-2 words: what they're doing right now (e.g., 'tending the bar', 'worried at home')",
+  "emotional_state": {
+    "current": "string — current mood (anxious, hopeful, guarded, etc.)",
+    "toward_player": "string — their stance toward player (wary, friendly, neutral, etc.)",
+    "stability": "string — stable / fragile / volatile"
+  },
+  "current_situation": "string — 1-2 sentences: snapshot for dialogue context (e.g., 'Ramos seems on edge after a late-night visitor. He's reluctant to make eye contact.')",
+  "cascade_entries": [
+    {
+      "target_npc_slug": "npc name or id",
+      "event_type": "conversation_with_npc | discovery | emotional_shift | movement",
+      "summary": "1-2 sentences of what happened that target NPC should know about"
+    }
+  ],
+  "new_planned_event": {
+    "event_type": "string",
+    "description": "string — what will happen",
+    "execute_at_ingame_minute": number
+  } | null
+}`;
+}
+
+/**
+ * Fire Template B for a single NPC (used by chunk sweep and encounter)
+ * Returns the parsed reasoning output.
+ */
+async function _fireTemplateB(npcRow, isEncounter = false) {
+  if (!CLAUDE_KEY || !activeCampaignId) return null;
+
+  try {
+    // Fetch recent events for this NPC
+    const eventRes = await lqDB('GET', 'lq_npc_event_logs', null,
+      `?campaign_id=eq.${activeCampaignId}&npc_id=eq.${npcRow.id}&order=created_at.desc&limit=5`);
+    const recentEvents = Array.isArray(eventRes) ? eventRes : [];
+
+    // Get campaign world state
+    const campaignRes = await lqDB('GET', 'lq_campaigns', null, `?id=eq.${activeCampaignId}&limit=1`);
+    const worldState = campaignRes?.[0]?.world_state || {};
+
+    // For encounter: include player trust and recent actions
+    let playerTrust = 0.5;
+    let playerRecentActions = [];
+    if (isEncounter && campaignNPCs[npcRow.id]) {
+      playerTrust = campaignNPCs[npcRow.id].player_trust || 0.5;
+      // TODO: extract from conversation history if available
+    }
+
+    const systemPrompt = _buildTemplateB(npcRow, recentEvents, worldState, isEncounter, playerTrust, playerRecentActions);
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': CLAUDE_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: isEncounter ? 500 : 400,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: 'Reason about this NPC and output JSON.' }],
+      }),
+    });
+
+    if (!res.ok) {
+      console.error('Template B error:', await res.text());
+      return null;
+    }
+
+    const data = await res.json();
+    const text = data.content[0].text.trim();
+    const parsed = JSON.parse(text);
+    return parsed;
+  } catch (err) {
+    console.error('Template B error:', err);
+    return null;
+  }
+}
+
+/**
+ * 3.1 — Chunk entry sweep: fire Template B for all NPCs in chunk (fire-and-forget)
+ */
+async function _phase3ChunkEntrySweep(npcsInChunk) {
+  if (!activeCampaignId || npcsInChunk.length === 0) return;
+
+  // Fire all in parallel, catch errors silently
+  const promises = npcsInChunk.map(async (npcRow) => {
+    try {
+      const reasoning = await _fireTemplateB(npcRow, false);
+      if (!reasoning) return;
+
+      // Write updates to lq_npcs
+      await lqDB('PATCH', `lq_npcs?id=eq.${npcRow.id}`, {
+        current_activity: reasoning.current_activity || '',
+        emotional_state: reasoning.emotional_state || {},
+        updated_at: new Date().toISOString(),
+      });
+
+      // Process cascade entries
+      if (Array.isArray(reasoning.cascade_entries)) {
+        for (const cascade of reasoning.cascade_entries.slice(0, 3)) {
+          _phase3WriteCascadeEntry(cascade, npcRow.id);
+        }
+      }
+
+      // Queue new planned event if present
+      if (reasoning.new_planned_event) {
+        await lqDB('POST', 'lq_planned_events', {
+          campaign_id: activeCampaignId,
+          decided_by_npc: npcRow.id,
+          event_type: reasoning.new_planned_event.event_type || 'discovery',
+          description: reasoning.new_planned_event.description || 'unspecified',
+          payload: {},
+          execute_at_ingame_minute: reasoning.new_planned_event.execute_at_ingame_minute || 0,
+          priority: 5,
+          status: 'pending',
+        });
+      }
+    } catch (err) {
+      console.warn(`Chunk sweep error for ${npcRow.name}:`, err);
+    }
+  });
+
+  // Fire all in parallel, don't wait
+  Promise.all(promises).catch(() => {});
+}
+
+/**
+ * 3.3 — Write a cascade entry to the target NPC's event log
+ */
+async function _phase3WriteCascadeEntry(cascadeEntry, sourceNpcId) {
+  if (!activeCampaignId) return;
+
+  try {
+    // Find target NPC by slug/name
+    const targetNpcSlug = cascadeEntry.target_npc_slug;
+    let targetNpcId = null;
+
+    // Search campaignNPCs
+    for (const [slug, npcData] of Object.entries(campaignNPCs)) {
+      if (slug === targetNpcSlug || npcData.name === targetNpcSlug) {
+        targetNpcId = npcData.id;
+        break;
+      }
+    }
+
+    if (!targetNpcId) return; // Target not found; skip
+
+    // Write event log entry for target
+    await lqDB('POST', 'lq_npc_event_logs', {
+      campaign_id: activeCampaignId,
+      npc_id: targetNpcId,
+      event_type: cascadeEntry.event_type || 'cascade_received',
+      summary: cascadeEntry.summary || '',
+      actors_involved: [sourceNpcId],
+      chunk_location: '',
+      is_objective_fact: true,
+      cascade_source_npc: sourceNpcId,
+    });
+  } catch (err) {
+    console.warn('Cascade write error:', err);
+  }
+}
+
+/**
+ * 3.2 — Encounter reasoning loop: full Template B with thinking state
+ * Called from _pixiOpenNPCDialogue() after setting up initial greeting
+ */
+async function _phase3EncounterReasoning(npcRow) {
+  if (!CLAUDE_KEY || !activeCampaignId) return null;
+
+  // Show "thinking..." state
+  const textEl = document.getElementById('dialogue-text');
+  const inputEl = document.getElementById('dialogue-input');
+  const sendBtn = document.getElementById('dialogue-send');
+
+  const originalText = textEl.innerHTML;
+  textEl.innerHTML = '<span class="typing-dots"><span></span><span></span><span></span></span>';
+  inputEl.style.display = 'none';
+  sendBtn.style.display = 'none';
+
+  try {
+    const reasoning = await _fireTemplateB(npcRow, true);
+
+    if (reasoning) {
+      // Update NPC state
+      await lqDB('PATCH', `lq_npcs?id=eq.${npcRow.id}`, {
+        current_activity: reasoning.current_activity || '',
+        emotional_state: reasoning.emotional_state || {},
+        updated_at: new Date().toISOString(),
+      });
+
+      // Process cascades
+      if (Array.isArray(reasoning.cascade_entries)) {
+        for (const cascade of reasoning.cascade_entries.slice(0, 3)) {
+          _phase3WriteCascadeEntry(cascade, npcRow.id);
+        }
+      }
+    }
+
+    // Show the current_situation in dialogue (enriched context for NPC)
+    const situationText = reasoning?.current_situation || originalText;
+    textEl.innerHTML = highlightVocab(situationText);
+
+    // Re-enable input and send
+    inputEl.style.display = 'block';
+    sendBtn.style.display = 'block';
+    inputEl.focus();
+
+    return reasoning;
+  } catch (err) {
+    console.error('Encounter reasoning error:', err);
+    // Fallback: restore original and continue
+    textEl.innerHTML = originalText;
+    inputEl.style.display = 'block';
+    sendBtn.style.display = 'block';
+    inputEl.focus();
+    return null;
+  }
+}
+
+/**
+ * 3.4 — Post-conversation record: after dialogue closes
+ */
+async function _phase3PostConversationRecord(npcId, playerMessage, npcReply) {
+  if (!activeCampaignId) return;
+
+  try {
+    const npcRow = await lqDB('GET', 'lq_npcs', null, `?id=eq.${npcId}&limit=1`);
+    if (!Array.isArray(npcRow) || npcRow.length === 0) return;
+
+    const npc = npcRow[0];
+
+    // Write event log entry
+    const eventSummary = `Player said: "${playerMessage.substring(0, 50)}...". NPC replied: "${npcReply.substring(0, 50)}..."`;
+    await lqDB('POST', 'lq_npc_event_logs', {
+      campaign_id: activeCampaignId,
+      npc_id: npcId,
+      event_type: 'conversation_with_player',
+      summary: eventSummary,
+      actors_involved: ['player'],
+      chunk_location: `${currentChunkX},${currentChunkY}`,
+      is_objective_fact: true,
+    });
+
+    // TODO: Extract trust delta from NPC response (placeholder for now)
+    const trustDelta = 0.05; // Small increase by default; implement delta extraction in Phase 4
+    const newTrust = Math.max(0, Math.min(1, (npc.player_trust || 0.5) + trustDelta));
+
+    // Update NPC
+    await lqDB('PATCH', `lq_npcs?id=eq.${npcId}`, {
+      player_trust: newTrust,
+      last_seen_by_player: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.warn('Post-conversation record error:', err);
+  }
+}
+
+// Translation reveal (click handler on translation element)
+document.getElementById('dialogue-translation').addEventListener('click', async () => {
+  const el = document.getElementById('dialogue-translation');
+  if (!lastNPCReply || !CLAUDE_KEY) return;
+  if (el.textContent !== '(tap to translate)') return;
+
+  el.textContent = 'Translating...';
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': CLAUDE_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 120,
+        system: 'Translate the following text to natural English. Return ONLY the translation, no explanation.',
+        messages: [{ role: 'user', content: lastNPCReply }],
+      }),
+    });
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    el.textContent = '→ ' + data.content[0].text.trim();
+  } catch {
+    el.textContent = '(translation failed)';
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+//  SUPABASE VOCAB SYNC
+// ─────────────────────────────────────────────────────────────
+async function fetchSRSVocab() {
+  try {
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/vocab_words?select=word,translation,stage&next_review=lte.${today}&order=stage.asc&limit=20`,
+      { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
+    );
+    if (!res.ok) throw new Error();
+    srsVocab = await res.json();
+    document.getElementById('vocab-pill').textContent = srsVocab.length > 0
+      ? `✦ ${srsVocab.length} words due`
+      : 'vocab: all caught up';
+  } catch {
+    document.getElementById('vocab-pill').textContent = 'vocab: offline';
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  UTILS
+// ─────────────────────────────────────────────────────────────
+let _statusTimer;
+function showStatus(msg, dur = 3000) {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.style.opacity = '1';
+  clearTimeout(_statusTimer);
+  _statusTimer = setTimeout(() => { el.style.opacity = '0'; }, dur);
+}
+
+// ─────────────────────────────────────────────────────────────
+//  KEYBOARD SHORTCUTS
+// ─────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  const active = document.activeElement;
+  const inInput = active?.tagName === 'INPUT' || active?.tagName === 'TEXTAREA';
+
+  if (e.key === 'Enter') {
+    const dBox   = document.getElementById('dialogue-box');
+    const dInput = document.getElementById('dialogue-input');
+    if (dBox.style.display !== 'none' && active === dInput) {
+      sendDialogue(); return;
+    }
+  }
+
+  if (e.key === 'Escape') {
+    closeDialogue();
+  }
+
+  // E key — DOM-level building entry (works regardless of Phaser canvas focus or input focus)
+  // Note: intentionally NOT gated by !inInput — building entry works even if prompt has focus
+  if ((e.key === 'e' || e.key === 'E') && !isIndoor && gameScene && !gameScene.dialogueCooldown) {
+    // Don't fire if user is actively typing in an input (dialogue input or world prompt)
+    const typingInDialogue = active === document.getElementById('dialogue-input');
+    if (!typingInDialogue) {
+      const dialogueOpen = document.getElementById('dialogue-box').style.display !== 'none'
+                        && document.getElementById('dialogue-box').style.display !== '';
+      if (!dialogueOpen) {
+        const buildingKey = gameScene._findNearbyBuildingDoor?.();
+        if (buildingKey) {
+          e.preventDefault();
+          // Also blur any focused input so future keys go to game
+          if (inInput) document.activeElement?.blur();
+          const layout = indoorLayouts.get(buildingKey);
+          if (layout?.ready) {
+            enterHouse(buildingKey, layout);
+          } else if (layout?.loading) {
+            const msg = HOUSE_NOT_READY_MSGS[Math.floor(Math.random() * HOUSE_NOT_READY_MSGS.length)];
+            showStatus(msg, 2500);
+          } else {
+            // Lazy gen — kick off now
+            const [gcx, gcy] = buildingKey.split('_')[0].split(',').map(Number);
+            triggerLazyHouseGen(buildingKey, gcx, gcy);
+          }
+        }
+      }
+    }
+  }
+});
+
+// (PixiJS doesn't intercept keyboard events, so no need to disable during HTML input focus)
+
+// ─────────────────────────────────────────────────────────────
+//  STARTUP
+// ─────────────────────────────────────────────────────────────
+loadConfig();
+checkSavedGame();
+</script>
+
+<!-- DEBUG PANEL -->
+<button id="dbg-toggle" onclick="lqDbgToggle()">DEBUG</button>
+<div id="dbg-panel">
+  <div id="dbg-header">
+    <span>LQ Debug Console</span>
+    <button id="dbg-refresh" onclick="lqDbgLoad()">↺ Refresh</button>
+    <button id="dbg-refresh" onclick="lqDbgToggle()" style="border:none;background:none;color:#3a6020;cursor:pointer;font-size:14px;padding:0 2px;font-family:inherit">✕</button>
+  </div>
+  <div id="dbg-tabs">
+    <button class="dbg-tab active" onclick="lqDbgTab('campaign',this)">Campaign</button>
+    <button class="dbg-tab" onclick="lqDbgTab('souls',this)">Souls</button>
+    <button class="dbg-tab" onclick="lqDbgTab('events',this)">World Events</button>
+    <button class="dbg-tab" onclick="lqDbgTab('planned',this)">Planned</button>
+    <button class="dbg-tab" onclick="lqDbgTab('logs',this)">NPC Logs</button>
+    <button class="dbg-tab" onclick="lqDbgTab('player',this)">Player</button>
+    <button class="dbg-tab" onclick="lqDbgTab('chunks',this)">Chunks</button>
+  </div>
+  <div id="dbg-body"><div class="dbg-loading">Open a campaign to begin.</div></div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────
+
 //  DEBUG PANEL  (Phase 1.5)
 // ─────────────────────────────────────────────────────────────
 let _dbgTab = 'campaign';
