@@ -1564,10 +1564,29 @@ async function loadSavedGame(campaignId) {
         .catch(e  => console.warn('[W1–W6] Migration persist failed:', e));
 
     } else {
-      // terrain_map present — still backfill in_game_minutes_elapsed if 0
-      if (!activeCampaign.world_state.in_game_minutes_elapsed) {
-        activeCampaign.world_state = { ...activeCampaign.world_state, in_game_minutes_elapsed: 360 };
-        lqDB('PATCH', 'lq_campaigns', { world_state: activeCampaign.world_state }, `?id=eq.${campaignId}`).catch(() => {});
+      // terrain_map present — backfill any missing derived data
+      let needsPatch = false;
+      let ws = activeCampaign.world_state;
+
+      // Backfill in_game_minutes_elapsed
+      if (!ws.in_game_minutes_elapsed) {
+        ws = { ...ws, in_game_minutes_elapsed: 360 };
+        needsPatch = true;
+      }
+
+      // Backfill rivers if missing or empty (re-derive from terrain)
+      if (!ws.rivers || ws.rivers.length === 0) {
+        console.log('[W1–W6] Rivers empty — recomputing from terrain...');
+        const terrainMap = _buildTerrainMap(campaignId);
+        const rivers = _computeRivers(terrainMap);
+        ws = { ...ws, rivers };
+        needsPatch = true;
+        console.log(`[W1–W6] Recomputed ${rivers.length} river tiles`);
+      }
+
+      if (needsPatch) {
+        activeCampaign.world_state = ws;
+        lqDB('PATCH', 'lq_campaigns', { world_state: ws }, `?id=eq.${campaignId}`).catch(() => {});
       }
     }
 
@@ -6145,16 +6164,33 @@ function _buildTerrainMap(campaignId, size = 21) {
   const seed = _campaignSeed(campaignId);
   const terrain = [];
 
+  // First pass: compute raw elevation values
+  const rawElev = [];
+  let rawMin = Infinity, rawMax = -Infinity;
+  for (let row = 0; row < size; row++) {
+    rawElev[row] = [];
+    for (let col = 0; col < size; col++) {
+      const x = (col - size/2) * 0.15;
+      const y = (row - size/2) * 0.15;
+      const elev = _fbm(x, y, seed, 4, 2.0, 0.5);
+      const centerDist = Math.sqrt(x*x + y*y);
+      const raw = elev * 0.7 + Math.exp(-centerDist * 0.8) * 0.3;
+      rawElev[row][col] = raw;
+      if (raw < rawMin) rawMin = raw;
+      if (raw > rawMax) rawMax = raw;
+    }
+  }
+  // Normalize elevation to always span 0.05–0.95 so biome thresholds work for any seed
+  const rawRange = rawMax - rawMin || 1;
+
   for (let row = 0; row < size; row++) {
     terrain[row] = [];
     for (let col = 0; col < size; col++) {
       const x = (col - size/2) * 0.15;
       const y = (row - size/2) * 0.15;
 
-      // Elevation: use 4-octave FBM, center slightly elevated
-      const elev = _fbm(x, y, seed, 4, 2.0, 0.5);
-      const centerDist = Math.sqrt(x*x + y*y);
-      const elevation = Math.max(0.1, Math.min(0.95, elev * 0.7 + Math.exp(-centerDist * 0.8) * 0.3));
+      // Normalize so elevation always spans [0.05, 0.95]
+      const elevation = 0.05 + ((rawElev[row][col] - rawMin) / rawRange) * 0.90;
 
       // Temperature: cooler at high elevation, varies N-S
       const tempBase = 0.4 + (row / size) * 0.2;
