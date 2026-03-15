@@ -2542,9 +2542,8 @@ let _lightTime    = 0;
 function _initLighting(stage, w, h) {
   try {
     // Build uniform defaults — one named uniform per light slot (no arrays)
-    // uResolution uses renderer physical pixels (accounts for devicePixelRatio / retina)
-  const res = pixiApp ? pixiApp.renderer.resolution : 1;
-  const uniformDefs = { uResolution: [w * res, h * res], uNightAlpha: 0.0, uAmbientColor: [0.04, 0.04, 0.08] };
+    // uResolution in CSS pixels — filterArea and vTextureCoord both work in CSS pixel space
+  const uniformDefs = { uResolution: [w, h], uNightAlpha: 0.0, uAmbientColor: [0.04, 0.04, 0.08] };
     for (let i = 0; i < 16; i++) {
       uniformDefs[`uLightPos${i}`]       = [0, 0];
       uniformDefs[`uLightRadius${i}`]    = 1.0;
@@ -2559,22 +2558,29 @@ function _initLighting(stage, w, h) {
     return;
   }
 
-  // Full-screen white sprite — shader colours it as the darkness overlay
-  _lightOverlay = new PIXI.Sprite(PIXI.Texture.WHITE);
-  _lightOverlay.width  = w;
-  _lightOverlay.height = h;
-  _lightOverlay.blendMode = PIXI.BLEND_MODES.NORMAL;
-  _lightOverlay.filters  = [_lightFilter];
-  _lightOverlay.zIndex   = 50000;
+  // Full-screen Graphics rect — filter is applied to its bounding area.
+  // Must use Graphics (not Sprite(Texture.WHITE)) so PixiJS allocates a real
+  // texture region for the filter to operate on.
+  _lightOverlay = new PIXI.Graphics();
+  _lightOverlay.beginFill(0xFFFFFF, 1);
+  _lightOverlay.drawRect(0, 0, w, h);
+  _lightOverlay.endFill();
+  _lightOverlay.filterArea = new PIXI.Rectangle(0, 0, w, h);
+  _lightOverlay.blendMode  = PIXI.BLEND_MODES.NORMAL;
+  _lightOverlay.filters    = [_lightFilter];
+  _lightOverlay.zIndex     = 50000;
   stage.addChild(_lightOverlay);
 }
 
 function _resizeLighting(w, h) {
-  if (_lightOverlay) { _lightOverlay.width = w; _lightOverlay.height = h; }
-  if (_lightFilter) {
-    const res = pixiApp ? pixiApp.renderer.resolution : 1;
-    _lightFilter.uniforms.uResolution = [w * res, h * res];
+  if (_lightOverlay) {
+    _lightOverlay.clear();
+    _lightOverlay.beginFill(0xFFFFFF, 1);
+    _lightOverlay.drawRect(0, 0, w, h);
+    _lightOverlay.endFill();
+    _lightOverlay.filterArea = new PIXI.Rectangle(0, 0, w, h);
   }
+  if (_lightFilter) _lightFilter.uniforms.uResolution = [w, h];
 }
 
 // ── Flicker ───────────────────────────────────────────────────
@@ -2701,8 +2707,7 @@ function _updateLighting(renderer, playerScreenX, playerScreenY, ambientAlpha, i
   }
 
   // Push light data to individual named uniforms (WebGL1 — no array indexing)
-  // Scale positions and radii by devicePixelRatio — PixiJS filters run in physical pixels
-  const res = pixiApp ? pixiApp.renderer.resolution : 1;
+  // Positions are in CSS pixels, matching uResolution and filterArea
   const u = _lightFilter.uniforms;
   u.uNightAlpha   = nightAlpha;
   u.uAmbientColor = [0.04, 0.04, 0.08];
@@ -2710,8 +2715,8 @@ function _updateLighting(renderer, playerScreenX, playerScreenY, ambientAlpha, i
   for (let i = 0; i < 16; i++) {
     if (i < count) {
       const lt = lights[i];
-      u[`uLightPos${i}`]       = [lt.sx * res, lt.sy * res];
-      u[`uLightRadius${i}`]    = lt.r * res;
+      u[`uLightPos${i}`]       = [lt.sx, lt.sy];
+      u[`uLightRadius${i}`]    = lt.r;
       u[`uLightColor${i}`]     = [lt.cr, lt.cg, lt.cb];
       u[`uLightIntensity${i}`] = lt.intensity;
       u[`uLightActive${i}`]    = 1.0;
