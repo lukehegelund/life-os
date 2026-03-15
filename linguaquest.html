@@ -2558,28 +2558,16 @@ function _initLighting(stage, w, h) {
     return;
   }
 
-  // Full-screen Graphics rect — filter is applied to its bounding area.
-  // Must use Graphics (not Sprite(Texture.WHITE)) so PixiJS allocates a real
-  // texture region for the filter to operate on.
-  _lightOverlay = new PIXI.Graphics();
-  _lightOverlay.beginFill(0xFFFFFF, 1);
-  _lightOverlay.drawRect(0, 0, w, h);
-  _lightOverlay.endFill();
+  // Apply the filter directly to the stage so it reads the fully-rendered
+  // scene as its input texture — correct way to do a full-screen post-process.
+  _lightOverlay = stage;
   _lightOverlay.filterArea = new PIXI.Rectangle(0, 0, w, h);
-  _lightOverlay.blendMode  = PIXI.BLEND_MODES.NORMAL;
-  _lightOverlay.filters    = [_lightFilter];
-  _lightOverlay.zIndex     = 50000;
-  stage.addChild(_lightOverlay);
+  const existing = _lightOverlay.filters || [];
+  _lightOverlay.filters = [...existing, _lightFilter];
 }
 
 function _resizeLighting(w, h) {
-  if (_lightOverlay) {
-    _lightOverlay.clear();
-    _lightOverlay.beginFill(0xFFFFFF, 1);
-    _lightOverlay.drawRect(0, 0, w, h);
-    _lightOverlay.endFill();
-    _lightOverlay.filterArea = new PIXI.Rectangle(0, 0, w, h);
-  }
+  if (_lightOverlay) _lightOverlay.filterArea = new PIXI.Rectangle(0, 0, w, h);
   if (_lightFilter) _lightFilter.uniforms.uResolution = [w, h];
 }
 
@@ -2654,13 +2642,22 @@ function _updateLighting(renderer, playerScreenX, playerScreenY, ambientAlpha, i
   if (!_lightFilter || !_lightOverlay) return;
 
   if (ambientAlpha <= 0.02) {
-    _lightOverlay.visible = false;
+    // Day: remove light filter from stage
+    if (_lightOverlay && _lightFilter) {
+      _lightOverlay.filters = (_lightOverlay.filters || []).filter(f => f !== _lightFilter);
+    }
     return;
   }
-  _lightOverlay.visible = true;
+  // Night: ensure filter is attached to stage
+  if (_lightOverlay && _lightFilter) {
+    if (!(_lightOverlay.filters || []).includes(_lightFilter)) {
+      _lightOverlay.filters = [...(_lightOverlay.filters || []), _lightFilter];
+    }
+  }
 
   const nightAlpha = 1 - ambientAlpha;
-  const w = _lightOverlay.width, h = _lightOverlay.height;
+  const w = _lightFilter.uniforms.uResolution[0];
+  const h = _lightFilter.uniforms.uResolution[1];
   const wc  = gameScene?._worldContainer;
   const wcx = wc ? wc.x : 0;
   const wcy = wc ? wc.y : 0;
