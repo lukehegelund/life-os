@@ -2542,7 +2542,9 @@ let _lightTime    = 0;
 function _initLighting(stage, w, h) {
   try {
     // Build uniform defaults — one named uniform per light slot (no arrays)
-    const uniformDefs = { uResolution: [w, h], uNightAlpha: 0.0, uAmbientColor: [0.04, 0.04, 0.08] };
+    // uResolution uses renderer physical pixels (accounts for devicePixelRatio / retina)
+  const res = pixiApp ? pixiApp.renderer.resolution : 1;
+  const uniformDefs = { uResolution: [w * res, h * res], uNightAlpha: 0.0, uAmbientColor: [0.04, 0.04, 0.08] };
     for (let i = 0; i < 16; i++) {
       uniformDefs[`uLightPos${i}`]       = [0, 0];
       uniformDefs[`uLightRadius${i}`]    = 1.0;
@@ -2569,7 +2571,10 @@ function _initLighting(stage, w, h) {
 
 function _resizeLighting(w, h) {
   if (_lightOverlay) { _lightOverlay.width = w; _lightOverlay.height = h; }
-  if (_lightFilter)  { _lightFilter.uniforms.uResolution = [w, h]; }
+  if (_lightFilter) {
+    const res = pixiApp ? pixiApp.renderer.resolution : 1;
+    _lightFilter.uniforms.uResolution = [w * res, h * res];
+  }
 }
 
 // ── Flicker ───────────────────────────────────────────────────
@@ -2696,6 +2701,8 @@ function _updateLighting(renderer, playerScreenX, playerScreenY, ambientAlpha, i
   }
 
   // Push light data to individual named uniforms (WebGL1 — no array indexing)
+  // Scale positions and radii by devicePixelRatio — PixiJS filters run in physical pixels
+  const res = pixiApp ? pixiApp.renderer.resolution : 1;
   const u = _lightFilter.uniforms;
   u.uNightAlpha   = nightAlpha;
   u.uAmbientColor = [0.04, 0.04, 0.08];
@@ -2703,8 +2710,8 @@ function _updateLighting(renderer, playerScreenX, playerScreenY, ambientAlpha, i
   for (let i = 0; i < 16; i++) {
     if (i < count) {
       const lt = lights[i];
-      u[`uLightPos${i}`]       = [lt.sx, lt.sy];
-      u[`uLightRadius${i}`]    = lt.r;
+      u[`uLightPos${i}`]       = [lt.sx * res, lt.sy * res];
+      u[`uLightRadius${i}`]    = lt.r * res;
       u[`uLightColor${i}`]     = [lt.cr, lt.cg, lt.cb];
       u[`uLightIntensity${i}`] = lt.intensity;
       u[`uLightActive${i}`]    = 1.0;
