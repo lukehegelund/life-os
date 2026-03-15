@@ -902,15 +902,15 @@ function generateRegionMap(campaignId, terrainMap, settlements, roads) {
           continue;
         }
 
-        // Road cells
-        if (roadCells.has(cellKey)) {
-          map[row][col] = 'road';
+        // Origin (0,0) is always village — takes priority over road overlay
+        if (row === CENTER && col === CENTER) {
+          map[row][col] = 'village';
           continue;
         }
 
-        // Origin (0,0) is always village if not already set by settlement seed
-        if (row === CENTER && col === CENTER) {
-          map[row][col] = 'village';
+        // Road cells
+        if (roadCells.has(cellKey)) {
+          map[row][col] = 'road';
           continue;
         }
 
@@ -6148,7 +6148,7 @@ function _placeSettlements(terrain, size = 21) {
     }
 
     if (!tooClose) {
-      const type = settlements.length < 2 ? 'city' : (score > 2.5 ? 'city' : 'village');
+      const type = settlements.length < 2 ? 'city' : (score > 4.5 ? 'city' : 'village');
       settlements.push({
         cx: c, cy: r,
         type: type,
