@@ -387,22 +387,43 @@ const LEVEL_DESCRIPTIONS = {
 
 // ── Init ──────────────────────────────────────────────────────────────────
 
-// ── Supabase config (anon key — read-only, safe to expose) ────────────────
-const SUPABASE_URL  = 'https://kxsuzgpnvtepsyhkezin.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4c3V6Z3BudnRlcHN5aGtlemluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3Nzc1MDAsImV4cCI6MjA4NzM1MzUwMH0.oKtpiH63heyK-wJ87ZRvkhUzRqy6NT6Z2XWF1xjbtxA';
+// ── Supabase config ────────────────────────────────────────────────────────
+const SUPABASE_URL   = 'https://kxsuzgpnvtepsyhkezin.supabase.co';
+const DB_PROXY_URL   = `${SUPABASE_URL}/functions/v1/db-proxy`;
+const DW_SESSION_KEY = 'dw_config_cache';
 
 async function loadApiKey() {
-  // 1. Use localStorage if already saved
+  // 1. Use localStorage if user manually saved a key
   const saved = localStorage.getItem('dw_api_key');
   if (saved) { document.getElementById('api-key').value = saved; return; }
-  // 2. Fetch from Supabase app_secrets
+
+  // 2. Check session cache
+  const cached = sessionStorage.getItem(DW_SESSION_KEY);
+  if (cached) {
+    try {
+      const keys = JSON.parse(cached);
+      if (keys.anthropic_api_key) {
+        document.getElementById('api-key').value = keys.anthropic_api_key;
+        return;
+      }
+    } catch(e) { sessionStorage.removeItem(DW_SESSION_KEY); }
+  }
+
+  // 3. Fetch via db-proxy Edge Function (same pattern as LinguaQuest)
   try {
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/app_secrets?key=eq.diglot_weave_api_key&select=value`,
-      { headers: { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}` } }
-    );
-    const data = await res.json();
-    if (data?.[0]?.value) document.getElementById('api-key').value = data[0].value;
+    const res = await fetch(DB_PROXY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ table: 'app_secrets', op: 'select', select: 'key,value' })
+    });
+    const json = await res.json();
+    const rows = Array.isArray(json) ? json : (json?.data || []);
+    const map  = {};
+    for (const r of rows) map[r.key] = r.value;
+    if (map.anthropic_api_key) {
+      document.getElementById('api-key').value = map.anthropic_api_key;
+      sessionStorage.setItem(DW_SESSION_KEY, JSON.stringify(map));
+    }
   } catch(e) { /* silent fail — user can enter manually */ }
 }
 
