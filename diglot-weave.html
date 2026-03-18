@@ -117,6 +117,30 @@
   .glossary-item .sl { color:var(--gray-600); font-size:12px; }
   .glossary-item.untranslatable .tl { color:#6b21a8; font-style:italic; }
 
+  /* Audio player */
+  .audio-bar {
+    display:flex; align-items:center; gap:10px;
+    padding:10px 0; border-top:1px solid var(--gray-100); margin-top:8px;
+  }
+  .audio-btn {
+    width:36px; height:36px; border-radius:50%; border:none;
+    background:var(--blue); color:#fff; font-size:14px;
+    cursor:pointer; display:flex; align-items:center; justify-content:center;
+    flex-shrink:0; transition:opacity .15s;
+  }
+  .audio-btn:hover { opacity:.85; }
+  .audio-btn:disabled { opacity:.4; cursor:not-allowed; }
+  .audio-progress-wrap {
+    flex:1; height:6px; background:var(--gray-200); border-radius:99px;
+    cursor:pointer; position:relative; overflow:hidden;
+  }
+  .audio-progress-fill {
+    height:100%; background:var(--blue); border-radius:99px;
+    width:0%; transition:width .2s linear; pointer-events:none;
+  }
+  .audio-time { font-size:12px; color:var(--gray-400); white-space:nowrap; min-width:32px; }
+  .audio-status { font-size:12px; color:var(--gray-400); white-space:nowrap; }
+
   /* Error */
   .error-box { background:var(--coral-light); border:1px solid var(--coral); border-radius:var(--radius); padding:12px 14px; font-size:14px; color:#7f1d1d; display:none; margin-bottom:12px; }
 
@@ -153,6 +177,10 @@
           <option value="Portuguese">Portuguese</option>
           <option value="Dutch">Dutch</option>
           <option value="Russian">Russian</option>
+          <option value="Danish">Danish</option>
+          <option value="Swedish">Swedish</option>
+          <option value="Norwegian">Norwegian</option>
+          <option value="Swahili">Swahili</option>
         </select>
       </div>
       <div class="control-group">
@@ -165,6 +193,10 @@
           <option value="Portuguese">Portuguese</option>
           <option value="Dutch">Dutch</option>
           <option value="Russian">Russian</option>
+          <option value="Danish">Danish</option>
+          <option value="Swedish">Swedish</option>
+          <option value="Norwegian">Norwegian</option>
+          <option value="Swahili">Swahili</option>
           <option value="Japanese">Japanese</option>
           <option value="Chinese (Simplified)">Chinese</option>
           <option value="Arabic">Arabic</option>
@@ -227,6 +259,17 @@
     </div>
     <div class="output-text" id="output-text"></div>
     <div class="stats-bar" id="stats-bar"></div>
+
+    <!-- Audio player -->
+    <div class="audio-bar" id="audio-bar">
+      <button class="audio-btn" id="audio-play-btn" onclick="toggleAudio()" title="Read aloud">▶</button>
+      <div class="audio-progress-wrap" onclick="seekAudio(event)">
+        <div class="audio-progress-fill" id="audio-progress-fill"></div>
+      </div>
+      <span class="audio-time" id="audio-time">0:00</span>
+      <span class="audio-status" id="audio-status"></span>
+    </div>
+
     <div class="btn-row">
       <button class="btn btn-green" onclick="downloadPDF()">⬇ Download PDF</button>
       <button class="btn btn-secondary" onclick="copyText()">📋 Copy</button>
@@ -313,6 +356,9 @@ async function loadApiKey() {
     if (map.anthropic_api_key) {
       document.getElementById('api-key').value = map.anthropic_api_key;
       sessionStorage.setItem(DW_CFG_KEY, JSON.stringify(map));
+    }
+    if (map.elevenlabs_api_key) {
+      sessionStorage.setItem('dw_eleven_key', map.elevenlabs_api_key);
     }
   } catch(e) {}
 }
@@ -641,8 +687,18 @@ function renderFromCache(cacheData, level, fromCache) {
     document.getElementById('glossary-card').style.display = 'block';
   }
 
-  // Store for PDF
+  // Store for PDF + audio
   lastPDFData = { tokens, level, src: srcLang, tgt: tgtLang };
+
+  // Reset audio player for new output
+  resetAudio();
+
+  // If we have cached audio for this exact key, show a ready indicator
+  const aKey = buildAudioCacheKey();
+  if (aKey && audioCache[aKey]) {
+    setAudioStatus('⚡ cached');
+    setTimeout(() => setAudioStatus(''), 2000);
+  }
 
   document.getElementById('output-card').scrollIntoView({ behavior:'smooth', block:'start' });
 }
@@ -755,6 +811,246 @@ function downloadPDF() {
 function copyText() {
   const plain = document.getElementById('output-text').innerText;
   navigator.clipboard.writeText(plain).then(() => flashBtn(event.target, '✓ Copied'));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AUDIO — ElevenLabs multilingual_v2
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Audio state
+let audioCtx        = null;
+let audioSource     = null;
+let audioBuffer     = null;
+let audioStartTime  = 0;
+let audioPauseAt    = 0;
+let audioPlaying    = false;
+let audioRAF        = null;
+let audioCache      = {};   // key → ArrayBuffer
+let currentAudioKey = null;
+
+// ElevenLabs voice — "Rachel" (calm, clear, works well across languages)
+const EL_VOICE_ID   = '21m00Tcm4TlvDq8ikWAM';
+const EL_MODEL      = 'eleven_multilingual_v2';
+
+function buildAudioCacheKey() {
+  if (!lastPDFData.tokens.length) return null;
+  const { level, src, tgt } = lastPDFData;
+  const textSnippet = lastPDFData.tokens.slice(0,30).map(t=>t.token).join('').slice(0,60);
+  return `audio_${src}_${tgt}_${level}_${textSnippet.length}_${textSnippet.replace(/\s+/g,'_')}`;
+}
+
+function getPlainTextForAudio() {
+  // Get the rendered plain text from the output div (includes swapped words as rendered)
+  return document.getElementById('output-text').innerText || '';
+}
+
+async function toggleAudio() {
+  if (audioPlaying) {
+    pauseAudio();
+    return;
+  }
+
+  // If we have a buffer already loaded (paused state), resume
+  if (audioBuffer && audioPauseAt > 0) {
+    resumeAudio();
+    return;
+  }
+
+  // Check cache
+  const cacheKey = buildAudioCacheKey();
+  if (cacheKey && audioCache[cacheKey]) {
+    await playFromArrayBuffer(audioCache[cacheKey], cacheKey);
+    return;
+  }
+
+  // Need to generate — fetch ElevenLabs key and call API
+  await generateAudio(cacheKey);
+}
+
+async function generateAudio(cacheKey) {
+  const elevenKey = sessionStorage.getItem('dw_eleven_key') ||
+    (() => {
+      try {
+        const cfg = JSON.parse(sessionStorage.getItem(DW_CFG_KEY) || '{}');
+        if (cfg.elevenlabs_api_key) {
+          sessionStorage.setItem('dw_eleven_key', cfg.elevenlabs_api_key);
+          return cfg.elevenlabs_api_key;
+        }
+      } catch(e) {}
+      return null;
+    })();
+
+  if (!elevenKey) {
+    setAudioStatus('No ElevenLabs key found');
+    return;
+  }
+
+  const text = getPlainTextForAudio().trim();
+  if (!text) { setAudioStatus('No text to read'); return; }
+
+  // Truncate to 4500 chars to stay safely under ElevenLabs 5000 char limit
+  const truncated = text.length > 4500 ? text.slice(0, 4500) + '…' : text;
+
+  setAudioStatus('Generating audio…');
+  setPlayBtn('⏳', true);
+
+  try {
+    const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${EL_VOICE_ID}`, {
+      method: 'POST',
+      headers: {
+        'xi-api-key': elevenKey,
+        'Content-Type': 'application/json',
+        'Accept': 'audio/mpeg'
+      },
+      body: JSON.stringify({
+        text: truncated,
+        model_id: EL_MODEL,
+        voice_settings: { stability: 0.50, similarity_boost: 0.75, style: 0.0, use_speaker_boost: true }
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.detail?.message || `ElevenLabs error ${res.status}`);
+    }
+
+    const arrayBuffer = await res.arrayBuffer();
+
+    // Cache it
+    if (cacheKey) {
+      audioCache[cacheKey] = arrayBuffer;
+      currentAudioKey = cacheKey;
+    }
+
+    setAudioStatus('');
+    await playFromArrayBuffer(arrayBuffer, cacheKey);
+
+  } catch(err) {
+    setAudioStatus('Audio error — ' + (err.message || 'try again'));
+    setPlayBtn('▶', false);
+  }
+}
+
+async function playFromArrayBuffer(buffer, cacheKey) {
+  // Always decode fresh — AudioBuffers are not reusable after a context is closed
+  if (!audioCtx || audioCtx.state === 'closed') {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+
+  try {
+    // Clone buffer since decodeAudioData is destructive in some browsers
+    const clone   = buffer.slice(0);
+    audioBuffer   = await audioCtx.decodeAudioData(clone);
+    audioPauseAt  = 0;
+    currentAudioKey = cacheKey;
+    startPlayback(0);
+  } catch(err) {
+    setAudioStatus('Playback error');
+    setPlayBtn('▶', false);
+  }
+}
+
+function startPlayback(offset) {
+  if (audioSource) { try { audioSource.stop(); } catch(e) {} }
+
+  audioSource           = audioCtx.createBufferSource();
+  audioSource.buffer    = audioBuffer;
+  audioSource.connect(audioCtx.destination);
+
+  audioSource.onended = () => {
+    if (audioPlaying) {
+      audioPlaying = false;
+      audioPauseAt = 0;
+      setPlayBtn('▶', false);
+      setAudioStatus('');
+      cancelAnimationFrame(audioRAF);
+      document.getElementById('audio-progress-fill').style.width = '0%';
+      document.getElementById('audio-time').textContent = '0:00';
+    }
+  };
+
+  audioStartTime = audioCtx.currentTime - offset;
+  audioSource.start(0, offset);
+  audioPlaying = true;
+  setPlayBtn('⏸', false);
+  setAudioStatus('');
+  updateProgressLoop();
+}
+
+function pauseAudio() {
+  if (!audioPlaying) return;
+  audioPauseAt = audioCtx.currentTime - audioStartTime;
+  try { audioSource.stop(); } catch(e) {}
+  audioPlaying = false;
+  cancelAnimationFrame(audioRAF);
+  setPlayBtn('▶', false);
+}
+
+function resumeAudio() {
+  if (!audioBuffer) return;
+  if (!audioCtx || audioCtx.state === 'closed') {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  startPlayback(audioPauseAt);
+}
+
+function seekAudio(e) {
+  if (!audioBuffer) return;
+  const wrap    = e.currentTarget;
+  const rect    = wrap.getBoundingClientRect();
+  const pct     = (e.clientX - rect.left) / rect.width;
+  const seekTo  = pct * audioBuffer.duration;
+  audioPauseAt  = seekTo;
+  if (audioPlaying) {
+    startPlayback(seekTo);
+  } else {
+    // Update progress bar visually without playing
+    const fill = document.getElementById('audio-progress-fill');
+    fill.style.width = (pct * 100) + '%';
+    document.getElementById('audio-time').textContent = formatTime(seekTo);
+  }
+}
+
+function updateProgressLoop() {
+  if (!audioPlaying || !audioBuffer) return;
+  const elapsed  = audioCtx.currentTime - audioStartTime;
+  const duration = audioBuffer.duration;
+  const pct      = Math.min(elapsed / duration, 1) * 100;
+
+  document.getElementById('audio-progress-fill').style.width = pct + '%';
+  document.getElementById('audio-time').textContent = formatTime(elapsed);
+
+  audioRAF = requestAnimationFrame(updateProgressLoop);
+}
+
+function formatTime(secs) {
+  const m = Math.floor(secs / 60);
+  const s = Math.floor(secs % 60);
+  return `${m}:${s.toString().padStart(2,'0')}`;
+}
+
+function setPlayBtn(icon, disabled) {
+  const btn    = document.getElementById('audio-play-btn');
+  btn.textContent = icon;
+  btn.disabled    = disabled;
+}
+
+function setAudioStatus(msg) {
+  document.getElementById('audio-status').textContent = msg;
+}
+
+// Reset audio state when new output is rendered
+function resetAudio() {
+  if (audioSource) { try { audioSource.stop(); } catch(e) {} }
+  cancelAnimationFrame(audioRAF);
+  audioPlaying   = false;
+  audioBuffer    = null;
+  audioPauseAt   = 0;
+  currentAudioKey = null;
+  setPlayBtn('▶', false);
+  setAudioStatus('');
+  document.getElementById('audio-progress-fill').style.width = '0%';
+  document.getElementById('audio-time').textContent = '0:00';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
