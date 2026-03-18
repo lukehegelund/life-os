@@ -110,8 +110,24 @@
   .stats-bar { display:flex; gap:16px; flex-wrap:wrap; font-size:13px; color:var(--gray-600); padding:10px 0; border-top:1px solid var(--gray-100); margin-top:8px; }
   .stats-bar span { font-weight:700; color:var(--gray-800); }
 
+  /* Glossary tabs */
+  .glossary-tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+  .glossary-tab {
+    padding:4px 12px; border-radius:99px; border:1.5px solid var(--gray-200);
+    font-size:12px; font-weight:700; cursor:pointer; background:var(--white);
+    color:var(--gray-600); transition:all .15s;
+  }
+  .glossary-tab:hover { border-color:var(--purple); color:var(--purple); }
+  .glossary-tab.active { background:var(--purple); color:#fff; border-color:var(--purple); }
+  .glossary-tab .tab-count {
+    display:inline-flex; align-items:center; justify-content:center;
+    background:rgba(255,255,255,0.25); border-radius:99px;
+    font-size:10px; padding:0 5px; margin-left:4px; min-width:16px;
+  }
+  .glossary-tab:not(.active) .tab-count { background:var(--gray-100); color:var(--gray-600); }
+
   /* Glossary */
-  .glossary-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:6px; margin-top:8px; }
+  .glossary-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:6px; margin-top:0; }
   .glossary-item { background:var(--gray-50); border:1px solid var(--gray-200); border-radius:6px; padding:6px 10px; font-size:13px; }
   .glossary-item .tl { font-weight:700; color:var(--purple); }
   .glossary-item .sl { color:var(--gray-600); font-size:12px; }
@@ -283,6 +299,7 @@
   <!-- Glossary -->
   <div class="card" id="glossary-card" style="display:none">
     <div class="card-title">📖 Glossary</div>
+    <div class="glossary-tabs" id="glossary-tabs"></div>
     <div class="glossary-grid" id="glossary-grid"></div>
   </div>
 
@@ -415,6 +432,24 @@ function setLoading(on) {
   const btn = document.getElementById('process-btn');
   btn.disabled = on;
   btn.textContent = on ? '⏳ Classifying…' : '✨ Generate';
+}
+
+function switchGlossaryTab(tab) {
+  window._dwGlossaryActive = tab;
+  document.querySelectorAll('.glossary-tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.tab === tab)
+  );
+  renderGlossaryTab(tab);
+}
+
+function renderGlossaryTab(tab) {
+  const items = window._dwGlossaryGroups?.[tab] || [];
+  document.getElementById('glossary-grid').innerHTML = items.map(g => `
+    <div class="glossary-item${g.isX ? ' untranslatable' : ''}">
+      <div class="tl">${escapeHTML(g.tl)}</div>
+      <div class="sl">${escapeHTML(g.sl)}</div>
+    </div>
+  `).join('');
 }
 
 function toggleHighlight() {
@@ -742,19 +777,40 @@ function renderFromCache(cacheData, level, fromCache) {
 
   document.getElementById('output-card').style.display = 'block';
 
-  // Glossary
-  const glossaryItems = [...glossaryMap.values()].sort((a,b) => {
-    return (LEVEL_THRESHOLD[a.level]??99) - (LEVEL_THRESHOLD[b.level]??99);
-  });
+  // Glossary — build tabbed by level
+  const allGlossaryItems = [...glossaryMap.values()].sort((a,b) =>
+    (LEVEL_THRESHOLD[a.level]??99) - (LEVEL_THRESHOLD[b.level]??99)
+  );
 
-  if (glossaryItems.length) {
-    const grid = document.getElementById('glossary-grid');
-    grid.innerHTML = glossaryItems.map(g => `
-      <div class="glossary-item${g.isX ? ' untranslatable' : ''}">
-        <div class="tl">${escapeHTML(g.tl)}</div>
-        <div class="sl">${escapeHTML(g.sl)}${g.level !== 'X' ? ` <span style="color:var(--gray-400)">(${g.level})</span>` : ' <span style="color:var(--gray-400)">(~)</span>'}</div>
-      </div>
+  if (allGlossaryItems.length) {
+    // Group by level
+    const groups = {};
+    for (const g of allGlossaryItems) {
+      const lbl = g.isX ? '~' : g.level;
+      if (!groups[lbl]) groups[lbl] = [];
+      groups[lbl].push(g);
+    }
+
+    // Tab order
+    const tabOrder = ['A0','A1','A2','B1','B2','~'];
+    const presentTabs = tabOrder.filter(t => groups[t]);
+
+    // Store for tab switching
+    window._dwGlossaryGroups = groups;
+    window._dwGlossaryActive = presentTabs[0];
+
+    // Render tabs
+    const tabsEl = document.getElementById('glossary-tabs');
+    tabsEl.innerHTML = presentTabs.map(t => `
+      <button class="glossary-tab${t === presentTabs[0] ? ' active' : ''}"
+              data-tab="${t}" onclick="switchGlossaryTab('${t}')">
+        ${t === '~' ? 'Untranslatable' : t}
+        <span class="tab-count">${groups[t].length}</span>
+      </button>
     `).join('');
+
+    // Render first tab
+    renderGlossaryTab(presentTabs[0]);
     document.getElementById('glossary-card').style.display = 'block';
   }
 
