@@ -4,26 +4,23 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Diglot Weave — Life OS</title>
-<link rel="stylesheet" href="../LifeOS/css/main.css?v=2" onerror="this.remove()">
+<link rel="stylesheet" href="css/main.css?v=2" onerror="this.remove()">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
-  /* Fallback CSS vars if main.css not loaded */
   :root {
     --blue:#2563EB; --blue-light:#DBEAFE; --green:#1A5E3A; --green-light:#D1FAE5;
     --coral:#E8563A; --coral-light:#FEE2E2; --purple:#7C3AED; --purple-light:#EDE9FE;
     --orange:#D97706; --orange-light:#FEF3C7; --gold:#F59E0B; --red:#DC2626;
     --gray-50:#F9FAFB; --gray-100:#F3F4F6; --gray-200:#E5E7EB; --gray-400:#9CA3AF;
     --gray-600:#4B5563; --gray-800:#1F2937; --white:#FFFFFF;
-    --radius:10px; --shadow:0 1px 3px rgba(0,0,0,0.1); --nav-height:60px;
+    --radius:10px; --shadow:0 1px 3px rgba(0,0,0,0.1);
   }
   * { box-sizing:border-box; margin:0; padding:0; }
   body {
     font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
     background:var(--gray-50); color:var(--gray-800); font-size:15px;
-    line-height:1.6; padding-bottom:32px;
+    line-height:1.6; padding-bottom:40px;
   }
-
-  /* ── Header ── */
   .page-header {
     background:var(--white); border-bottom:1px solid var(--gray-200);
     padding:16px 20px 12px; position:sticky; top:0; z-index:100;
@@ -31,19 +28,13 @@
   .page-header h1 { font-size:20px; font-weight:700; }
   .page-header .subtitle { font-size:13px; color:var(--gray-400); margin-top:2px; }
   .header-row { display:flex; align-items:center; justify-content:space-between; gap:12px; }
-
-  .content { padding:16px 20px; max-width:780px; margin:0 auto; }
-
-  /* ── Cards ── */
+  .content { padding:16px 20px; max-width:800px; margin:0 auto; }
   .card { background:var(--white); border-radius:var(--radius); box-shadow:var(--shadow); padding:16px; margin-bottom:12px; }
   .card-title { font-size:12px; font-weight:600; color:var(--gray-400); text-transform:uppercase; letter-spacing:.05em; margin-bottom:10px; }
 
-  /* ── Controls ── */
-  .controls-grid {
-    display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;
-  }
-  @media(min-width:600px){ .controls-grid { grid-template-columns:1fr 1fr 1fr 1fr; } }
-
+  /* Controls */
+  .controls-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px; }
+  @media(min-width:600px){ .controls-grid { grid-template-columns:1fr 1fr 1fr; } }
   .control-group { display:flex; flex-direction:column; gap:4px; }
   .control-group label { font-size:12px; font-weight:600; color:var(--gray-600); }
   .control-group select, .control-group input {
@@ -51,22 +42,30 @@
     font-size:14px; background:var(--white); color:var(--gray-800);
     appearance:none; -webkit-appearance:none;
   }
-  .control-group select:focus, .control-group input:focus {
-    outline:none; border-color:var(--blue);
-  }
+  .control-group select:focus, .control-group input:focus { outline:none; border-color:var(--blue); }
 
-  /* ── Level badge ── */
-  .level-badge {
-    display:inline-flex; align-items:center; gap:6px;
-    padding:4px 10px; border-radius:99px; font-size:12px; font-weight:700;
+  /* Level tabs */
+  .level-tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:4px; }
+  .level-tab {
+    padding:6px 14px; border-radius:99px; border:1.5px solid var(--gray-200);
+    font-size:13px; font-weight:600; cursor:pointer; background:var(--white);
+    color:var(--gray-600); transition:all .15s;
   }
-  .level-A0 { background:#f0fdf4; color:#166534; }
-  .level-A1 { background:#eff6ff; color:#1d4ed8; }
-  .level-A2 { background:#fefce8; color:#854d0e; }
-  .level-B1 { background:#fdf4ff; color:#7e22ce; }
-  .level-B2 { background:#fff1f2; color:#be123c; }
+  .level-tab:hover { border-color:var(--blue); color:var(--blue); }
+  .level-tab.active { background:var(--blue); color:#fff; border-color:var(--blue); }
+  .level-tab.instant { position:relative; }
+  .level-tab.instant::after {
+    content:'⚡'; position:absolute; top:-6px; right:-4px; font-size:10px;
+  }
+  .level-desc { font-size:12px; color:var(--gray-600); padding:8px 12px; background:var(--gray-50); border-radius:8px; margin-top:8px; border-left:3px solid var(--blue); }
 
-  /* ── Textarea ── */
+  /* API key */
+  .apikey-row { display:flex; gap:8px; align-items:center; }
+  .apikey-row input { flex:1; padding:8px 10px; border:1.5px solid var(--gray-200); border-radius:8px; font-size:13px; font-family:monospace; }
+  .apikey-row input:focus { outline:none; border-color:var(--blue); }
+  .link-btn { font-size:12px; color:var(--blue); cursor:pointer; white-space:nowrap; background:none; border:none; padding:0; }
+
+  /* Textarea */
   textarea {
     width:100%; min-height:160px; padding:12px; border:1.5px solid var(--gray-200);
     border-radius:var(--radius); font-size:15px; font-family:inherit;
@@ -75,16 +74,7 @@
   textarea:focus { outline:none; border-color:var(--blue); }
   .char-count { font-size:12px; color:var(--gray-400); text-align:right; margin-top:4px; }
 
-  /* ── API key row ── */
-  .apikey-row { display:flex; gap:8px; align-items:center; }
-  .apikey-row input {
-    flex:1; padding:8px 10px; border:1.5px solid var(--gray-200); border-radius:8px;
-    font-size:14px; font-family:monospace;
-  }
-  .apikey-row input:focus { outline:none; border-color:var(--blue); }
-  .apikey-toggle { font-size:12px; color:var(--blue); cursor:pointer; white-space:nowrap; }
-
-  /* ── Buttons ── */
+  /* Buttons */
   .btn {
     display:inline-flex; align-items:center; gap:6px; padding:10px 18px;
     border-radius:8px; border:none; font-size:14px; font-weight:600;
@@ -97,63 +87,38 @@
   .btn-green { background:var(--green); color:#fff; }
   .btn-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
 
-  /* ── Loading ── */
-  .loading-bar {
-    height:3px; background:var(--blue-light); border-radius:99px;
-    overflow:hidden; margin-bottom:12px; display:none;
-  }
-  .loading-bar-inner {
-    height:100%; width:30%; background:var(--blue);
-    border-radius:99px; animation:slide 1.2s ease-in-out infinite;
-  }
-  @keyframes slide {
-    0%   { transform:translateX(-100%); }
-    100% { transform:translateX(400%); }
+  /* Loading */
+  .loading-bar { height:3px; background:var(--blue-light); border-radius:99px; overflow:hidden; margin-bottom:12px; display:none; }
+  .loading-bar-inner { height:100%; width:30%; background:var(--blue); border-radius:99px; animation:slide 1.2s ease-in-out infinite; }
+  @keyframes slide { 0%{transform:translateX(-100%)} 100%{transform:translateX(400%)} }
+
+  /* Cache badge */
+  .cache-badge {
+    display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:700;
+    padding:2px 8px; border-radius:99px; background:var(--green-light); color:var(--green);
   }
 
-  /* ── Output ── */
-  .output-text {
-    font-size:16px; line-height:1.9; white-space:pre-wrap;
-    word-break:break-word;
-  }
-  .output-text .sw {
-    background:#fef9c3; color:#713f12; border-radius:3px;
-    padding:1px 3px; font-weight:600;
-  }
+  /* Output */
+  .output-text { font-size:16px; line-height:2; white-space:pre-wrap; word-break:break-word; }
+  .sw { background:#fef9c3; color:#713f12; border-radius:3px; padding:1px 3px; font-weight:600; }
+  .sw-untranslatable { background:#f3e8ff; color:#6b21a8; border-radius:3px; padding:1px 3px; font-weight:600; font-style:italic; }
 
-  /* ── Glossary ── */
-  .glossary-grid {
-    display:grid; grid-template-columns:repeat(auto-fill, minmax(160px,1fr));
-    gap:6px; margin-top:8px;
-  }
-  .glossary-item {
-    background:var(--gray-50); border:1px solid var(--gray-200);
-    border-radius:6px; padding:6px 10px; font-size:13px;
-  }
-  .glossary-item .tl { font-weight:700; color:var(--purple); }
-  .glossary-item .sl { color:var(--gray-600); font-size:12px; }
-
-  /* ── Stats bar ── */
-  .stats-bar {
-    display:flex; gap:16px; flex-wrap:wrap;
-    font-size:13px; color:var(--gray-600); padding:10px 0;
-    border-top:1px solid var(--gray-100); margin-top:8px;
-  }
+  /* Stats */
+  .stats-bar { display:flex; gap:16px; flex-wrap:wrap; font-size:13px; color:var(--gray-600); padding:10px 0; border-top:1px solid var(--gray-100); margin-top:8px; }
   .stats-bar span { font-weight:700; color:var(--gray-800); }
 
-  /* ── Error ── */
-  .error-box {
-    background:var(--coral-light); border:1px solid var(--coral);
-    border-radius:var(--radius); padding:12px 14px;
-    font-size:14px; color:#7f1d1d; display:none;
-  }
+  /* Glossary */
+  .glossary-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:6px; margin-top:8px; }
+  .glossary-item { background:var(--gray-50); border:1px solid var(--gray-200); border-radius:6px; padding:6px 10px; font-size:13px; }
+  .glossary-item .tl { font-weight:700; color:var(--purple); }
+  .glossary-item .sl { color:var(--gray-600); font-size:12px; }
+  .glossary-item.untranslatable .tl { color:#6b21a8; font-style:italic; }
 
-  /* ── Level description pill ── */
-  .level-desc {
-    font-size:12px; color:var(--gray-600); padding:8px 12px;
-    background:var(--gray-50); border-radius:8px; margin-top:8px;
-    border-left:3px solid var(--blue);
-  }
+  /* Error */
+  .error-box { background:var(--coral-light); border:1px solid var(--coral); border-radius:var(--radius); padding:12px 14px; font-size:14px; color:#7f1d1d; display:none; margin-bottom:12px; }
+
+  /* Output header row */
+  .output-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
 </style>
 </head>
 <body>
@@ -164,17 +129,15 @@
       <h1>🌐 Diglot Weave</h1>
       <div class="subtitle">Language immersion text generator</div>
     </div>
-    <a href="https://lukehegelund.github.io/life-os/apps.html"
-       style="font-size:13px;color:var(--blue);text-decoration:none;">← Apps</a>
+    <a href="apps.html" style="font-size:13px;color:var(--blue);text-decoration:none;">← Apps</a>
   </div>
 </header>
 
 <main class="content">
 
-  <!-- Settings card -->
+  <!-- Settings -->
   <div class="card">
-    <div class="card-title">Settings</div>
-
+    <div class="card-title">Languages</div>
     <div class="controls-grid">
       <div class="control-group">
         <label>Source Language</label>
@@ -206,215 +169,142 @@
         </select>
       </div>
       <div class="control-group">
-        <label>Learner Level</label>
-        <select id="level">
-          <option value="A0">A0 — Complete Beginner</option>
-          <option value="A1">A1 — Beginner</option>
-          <option value="A2">A2 — Elementary</option>
-          <option value="B1" selected>B1 — Intermediate</option>
-          <option value="B2">B2 — Upper Intermediate</option>
-        </select>
-      </div>
-      <div class="control-group">
         <label>Style</label>
         <select id="style">
-          <option value="normal">Normal</option>
+          <option value="natural">Natural</option>
           <option value="formal">Formal</option>
           <option value="casual">Casual</option>
         </select>
       </div>
     </div>
 
-    <div id="level-desc" class="level-desc"></div>
+    <div class="card-title" style="margin-top:12px;">Difficulty Level</div>
+    <div class="level-tabs">
+      <button class="level-tab" data-level="A0" onclick="selectLevel('A0')">A0</button>
+      <button class="level-tab" data-level="A1" onclick="selectLevel('A1')">A1</button>
+      <button class="level-tab" data-level="A2" onclick="selectLevel('A2')">A2</button>
+      <button class="level-tab active" data-level="B1" onclick="selectLevel('B1')">B1</button>
+      <button class="level-tab" data-level="B2" onclick="selectLevel('B2')">B2</button>
+      <button class="level-tab" data-level="full" onclick="selectLevel('full')">Full Translation</button>
+    </div>
+    <div class="level-desc" id="level-desc"></div>
   </div>
 
-  <!-- API Key card -->
+  <!-- API Key -->
   <div class="card">
     <div class="card-title">Claude API Key</div>
     <div class="apikey-row">
       <input type="password" id="api-key" placeholder="sk-ant-..." autocomplete="off">
-      <span class="apikey-toggle" id="key-toggle" onclick="toggleKey()">Show</span>
-      <span class="apikey-toggle" id="key-save" onclick="saveKey()" style="color:var(--green)">Save</span>
+      <button class="link-btn" onclick="toggleKey()">Show</button>
+      <button class="link-btn" style="color:var(--green)" onclick="saveKey()">Save</button>
     </div>
-    <div style="font-size:12px;color:var(--gray-400);margin-top:6px;">
-      Your key is stored locally in your browser and never sent anywhere except directly to Anthropic.
-    </div>
+    <div style="font-size:12px;color:var(--gray-400);margin-top:6px;">Sent only to Anthropic. Never stored on any servidor.</div>
   </div>
 
-  <!-- Input card -->
+  <!-- Input -->
   <div class="card">
     <div class="card-title">Your Text</div>
-    <textarea id="input-text"
-      placeholder="Paste or type any text here — an article, a story, a conversation, anything..."
-      oninput="updateCharCount()"></textarea>
+    <textarea id="input-text" placeholder="Paste or type any text here…" oninput="updateCharCount()"></textarea>
     <div class="char-count"><span id="char-count">0</span> characters</div>
-
     <div class="btn-row">
-      <button class="btn btn-primary" id="process-btn" onclick="processText()">
-        ✨ Generate Diglot Weave
-      </button>
+      <button class="btn btn-primary" id="process-btn" onclick="processText()">✨ Generate</button>
       <button class="btn btn-secondary" onclick="clearAll()">Clear</button>
     </div>
   </div>
 
-  <!-- Error box -->
+  <!-- Error -->
   <div class="error-box" id="error-box"></div>
 
-  <!-- Loading bar -->
-  <div class="loading-bar" id="loading-bar">
-    <div class="loading-bar-inner"></div>
-  </div>
+  <!-- Loading -->
+  <div class="loading-bar" id="loading-bar"><div class="loading-bar-inner"></div></div>
 
-  <!-- Output card -->
-  <div class="card" id="output-card" style="display:none;">
-    <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
-      <span>Output</span>
-      <span id="output-level-badge"></span>
+  <!-- Output -->
+  <div class="card" id="output-card" style="display:none">
+    <div class="output-header">
+      <div class="card-title" style="margin:0">Output</div>
+      <div id="cache-indicator"></div>
     </div>
-
     <div class="output-text" id="output-text"></div>
-
     <div class="stats-bar" id="stats-bar"></div>
-
     <div class="btn-row">
       <button class="btn btn-green" onclick="downloadPDF()">⬇ Download PDF</button>
-      <button class="btn btn-secondary" onclick="copyText()">📋 Copy Text</button>
+      <button class="btn btn-secondary" onclick="copyText()">📋 Copy</button>
     </div>
   </div>
 
-  <!-- Glossary card -->
-  <div class="card" id="glossary-card" style="display:none;">
-    <div class="card-title">📖 Glossary — Words kept in English</div>
+  <!-- Glossary -->
+  <div class="card" id="glossary-card" style="display:none">
+    <div class="card-title">📖 Glossary</div>
     <div class="glossary-grid" id="glossary-grid"></div>
   </div>
 
 </main>
 
 <script>
-// ── Prompts per level ──────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// CONSTANTS
+// ─────────────────────────────────────────────────────────────────────────────
 
-const LEVEL_PROMPTS = {
-  A0: (src, tgt) => `
-You are a diglot weave language learning text processor.
-
-Write in ${src}, but replace the most common and foundational ${tgt} words — things like basic nouns (family members, colors, numbers, days of the week, common everyday objects, simple greetings) — with their ${tgt} equivalent. Only swap words a complete beginner would encounter in their very first week of study. These should be the most recognizable, high-frequency words in ${tgt}.
-
-RULES:
-- The text stays mostly in ${src}. Only swap the most foundational, beginner-level ${tgt} words.
-- Wrap every single swapped word or phrase in <sw> tags like this: <sw>${tgt === 'Spanish' ? 'hola' : 'word'}</sw>
-- Do NOT include the ${src} equivalent in parentheses or brackets after the swapped word.
-- Do NOT add any commentary, preamble, or explanation before or after the text.
-- At the very end, after the processed text, add a section on a new line starting with exactly "GLOSSARY:" followed by each swapped word as: targetword=sourceword, one per line. Example: GLOSSARY:\nhola=hello\ncasa=house
-- Double-check every sentence before responding. Make sure every swap is tagged.
-  `.trim(),
-
-  A1: (src, tgt) => `
-You are a diglot weave language learning text processor.
-
-Write in ${src}, but replace any word that a solid A1 ${tgt} learner would confidently know — common everyday nouns, basic adjectives (colors, size, simple emotions), simple high-frequency verbs in present tense — with the ${tgt} equivalent. Only swap a verb if its infinitive form is clearly A1-level.
-
-RULES:
-- The text stays mostly in ${src}. Swap A1-level vocabulary only.
-- Wrap every single swapped word or phrase in <sw> tags like this: <sw>word</sw>
-- Ensure grammatical agreement in ${tgt} (correct gender, number, conjugation).
-- Do NOT include the ${src} equivalent in parentheses after swapped words.
-- Do NOT add any commentary, preamble, or explanation.
-- At the very end, after the processed text, add a section on a new line starting with exactly "GLOSSARY:" followed by each unique swapped word as: targetword=sourceword, one per line.
-- Double-check every sentence before responding.
-  `.trim(),
-
-  A2: (src, tgt) => `
-You are a diglot weave language learning text processor.
-
-Write in ${src}, but replace any word that a solid A2 ${tgt} learner would confidently know — most common nouns, descriptive adjectives, adverbs, and regular verbs in simple present and simple past — with the ${tgt} equivalent. Only swap a conjugated verb if its infinitive is clearly within A2 range. Prefer swapping words that appear multiple times in the text.
-
-RULES:
-- The text stays mostly in ${src}. Swap A1 and A2-level vocabulary.
-- Wrap every single swapped word or phrase in <sw> tags like this: <sw>word</sw>
-- Ensure grammatical agreement in ${tgt} (correct gender, number, conjugation).
-- Do NOT include the ${src} equivalent in parentheses after swapped words.
-- Do NOT add any commentary, preamble, or explanation.
-- At the very end, after the processed text, add a section on a new line starting with exactly "GLOSSARY:" followed by each unique swapped word as: targetword=sourceword, one per line.
-- Double-check every sentence before responding.
-  `.trim(),
-
-  B1: (src, tgt) => `
-You are a diglot weave language learning text processor.
-
-Write the text mostly in ${tgt}, but whenever you would use a word that a B1 ${tgt} learner likely does not know yet — rare vocabulary, uncommon verb forms whose infinitive a B1 learner would not know, low-frequency adjectives, technical or specialist terms — use the ${src} word instead.
-
-Only keep a word in ${src} if you are genuinely confident a B1 learner would NOT know its base/infinitive form. If the learner would know the base form, use the correctly conjugated or inflected ${tgt} form. Prefer swapping words that appear multiple times.
-
-RULES:
-- The text is mostly in ${tgt}. ${src} words are the exceptions — used only where ${tgt} would be too hard.
-- Wrap every ${src} word or phrase (the exceptions) in <sw> tags like this: <sw>word</sw>
-- Ensure grammatical agreement in ${tgt} (correct gender, number, conjugation).
-- Do NOT include the ${tgt} equivalent in parentheses after ${src} words.
-- Do NOT add any commentary, preamble, or explanation.
-- At the very end, after the processed text, add a section on a new line starting with exactly "GLOSSARY:" followed by each unique ${src} exception word as: sourceword=${tgt}equivalent, one per line.
-- Double-check every sentence before responding.
-  `.trim(),
-
-  B2: (src, tgt) => `
-You are a diglot weave language learning text processor.
-
-Write entirely in ${tgt}, EXCEPT keep a word in ${src} only if it meets one of these criteria:
-1. It is rare, technical, or the learner almost certainly does not know it yet
-2. It has no clean ${tgt} equivalent
-3. It is a proper noun, brand name, or place name
-4. It is part of a fixed ${src} idiom or expression that cannot be naturally translated
-
-Everything else must be in ${tgt} — including pronouns, articles, conjunctions, and all conjugated verb forms whose infinitive a B2 learner would know. Be aggressive about using ${tgt}. When in doubt, use ${tgt}.
-
-RULES:
-- The text is almost entirely in ${tgt}. ${src} words are rare exceptions only.
-- Wrap every ${src} exception word or phrase in <sw> tags like this: <sw>word</sw>
-- Ensure grammatical agreement in ${tgt} (correct gender, number, conjugation, subjunctive where natural).
-- Do NOT include the ${tgt} equivalent in parentheses after ${src} words.
-- Do NOT add any commentary, preamble, or explanation.
-- At the very end, after the processed text, add a section on a new line starting with exactly "GLOSSARY:" followed by each unique ${src} exception word as: sourceword=${tgt}equivalent, one per line.
-- Double-check every sentence before responding.
-  `.trim()
-};
-
-const LEVEL_DESCRIPTIONS = {
-  A0: "Complete beginner — text stays in your language, only the most basic target-language words appear.",
-  A1: "Beginner — text mostly in your language, common everyday vocabulary swapped in.",
-  A2: "Elementary — text mostly in your language, A1+A2 vocabulary freely swapped.",
-  B1: "Intermediate — text mostly in target language, unknown words stay in your language as a safety net.",
-  B2: "Upper Intermediate — text almost entirely in target language, only genuinely unknown or untranslatable words stay in English."
-};
-
-// ── Init ──────────────────────────────────────────────────────────────────
-
-// ── Supabase config ────────────────────────────────────────────────────────
 const SUPABASE_URL   = 'https://kxsuzgpnvtepsyhkezin.supabase.co';
 const DB_PROXY_URL   = `${SUPABASE_URL}/functions/v1/db-proxy`;
-const DW_SESSION_KEY = 'dw_config_cache';
+const DW_CFG_KEY     = 'dw_config_cache';
+const LEVEL_ORDER    = ['A0','A1','A2','B1','B2','full'];
+
+const LEVEL_DESCS = {
+  A0:   'Complete beginner — source language with only the most foundational target-language words (numbers, family, colours, greetings).',
+  A1:   'Beginner — source language with common everyday nouns and basic adjectives swapped in.',
+  A2:   'Elementary — source language with A0+A1 vocabulary plus regular verbs and descriptive adjectives.',
+  B1:   'Intermediate — most vocabulary swapped; only words a B1 learner wouldn\'t know stay in source language.',
+  B2:   'Upper Intermediate — nearly everything swapped; only rare, technical, or untranslatable words stay in source language.',
+  full: 'Full Translation — entire text in target language, including closest equivalents for untranslatable words.',
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────────────────────────────────────
+
+let currentLevel    = 'B1';
+let classCache      = {};   // key: cacheKey → { tokens: [...], srcLang, tgtLang }
+let lastCacheKey    = null;
+let lastInputText   = '';
+let lastPDFData     = { tokens:[], level:'', src:'', tgt:'' };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────────────────────────────────────
+
+window.addEventListener('DOMContentLoaded', () => {
+  loadApiKey();
+  updateLevelDesc();
+  updateCharCount();
+
+  // Restore sessionStorage caches
+  try {
+    const sc = sessionStorage.getItem('dw_class_cache');
+    if (sc) classCache = JSON.parse(sc);
+  } catch(e) {}
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// API KEY
+// ─────────────────────────────────────────────────────────────────────────────
 
 async function loadApiKey() {
-  // 1. Use localStorage if user manually saved a key
   const saved = localStorage.getItem('dw_api_key');
   if (saved) { document.getElementById('api-key').value = saved; return; }
 
-  // 2. Check session cache
-  const cached = sessionStorage.getItem(DW_SESSION_KEY);
+  const cached = sessionStorage.getItem(DW_CFG_KEY);
   if (cached) {
     try {
       const keys = JSON.parse(cached);
-      if (keys.anthropic_api_key) {
-        document.getElementById('api-key').value = keys.anthropic_api_key;
-        return;
-      }
-    } catch(e) { sessionStorage.removeItem(DW_SESSION_KEY); }
+      if (keys.anthropic_api_key) { document.getElementById('api-key').value = keys.anthropic_api_key; return; }
+    } catch(e) { sessionStorage.removeItem(DW_CFG_KEY); }
   }
 
-  // 3. Fetch via db-proxy Edge Function (same pattern as LinguaQuest)
   try {
-    const res = await fetch(DB_PROXY_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ table: 'app_secrets', op: 'select', select: 'key,value' })
+    const res  = await fetch(DB_PROXY_URL, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ table:'app_secrets', op:'select', select:'key,value' })
     });
     const json = await res.json();
     const rows = Array.isArray(json) ? json : (json?.data || []);
@@ -422,50 +312,47 @@ async function loadApiKey() {
     for (const r of rows) map[r.key] = r.value;
     if (map.anthropic_api_key) {
       document.getElementById('api-key').value = map.anthropic_api_key;
-      sessionStorage.setItem(DW_SESSION_KEY, JSON.stringify(map));
+      sessionStorage.setItem(DW_CFG_KEY, JSON.stringify(map));
     }
-  } catch(e) { /* silent fail — user can enter manually */ }
-}
-
-window.addEventListener('DOMContentLoaded', () => {
-  loadApiKey();
-
-  // Level description
-  document.getElementById('level').addEventListener('change', updateLevelDesc);
-  updateLevelDesc();
-  updateCharCount();
-});
-
-function updateLevelDesc() {
-  const level = document.getElementById('level').value;
-  document.getElementById('level-desc').textContent = LEVEL_DESCRIPTIONS[level];
-}
-
-function updateCharCount() {
-  const len = document.getElementById('input-text').value.length;
-  document.getElementById('char-count').textContent = len.toLocaleString();
+  } catch(e) {}
 }
 
 function toggleKey() {
-  const input = document.getElementById('api-key');
-  const toggle = document.getElementById('key-toggle');
-  if (input.type === 'password') {
-    input.type = 'text';
-    toggle.textContent = 'Hide';
-  } else {
-    input.type = 'password';
-    toggle.textContent = 'Show';
-  }
+  const inp = document.getElementById('api-key');
+  inp.type  = inp.type === 'password' ? 'text' : 'password';
+  event.target.textContent = inp.type === 'password' ? 'Show' : 'Hide';
 }
 
 function saveKey() {
-  const key = document.getElementById('api-key').value.trim();
-  if (key) {
-    localStorage.setItem('dw_api_key', key);
-    const btn = document.getElementById('key-save');
-    btn.textContent = 'Saved ✓';
-    setTimeout(() => btn.textContent = 'Save', 2000);
+  const k = document.getElementById('api-key').value.trim();
+  if (k) { localStorage.setItem('dw_api_key', k); flashBtn(event.target, 'Saved ✓'); }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UI HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+
+function selectLevel(level) {
+  currentLevel = level;
+  document.querySelectorAll('.level-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.level === level);
+  });
+  updateLevelDesc();
+
+  // If we already have a cache for the current text+langs, re-render instantly
+  const cacheKey = buildCacheKey();
+  if (cacheKey && classCache[cacheKey]) {
+    renderFromCache(classCache[cacheKey], level, true);
   }
+}
+
+function updateLevelDesc() {
+  document.getElementById('level-desc').textContent = LEVEL_DESCS[currentLevel];
+}
+
+function updateCharCount() {
+  document.getElementById('char-count').textContent =
+    document.getElementById('input-text').value.length.toLocaleString();
 }
 
 function clearAll() {
@@ -474,43 +361,131 @@ function clearAll() {
   document.getElementById('output-card').style.display = 'none';
   document.getElementById('glossary-card').style.display = 'none';
   document.getElementById('error-box').style.display = 'none';
+  lastCacheKey = null;
 }
 
-// ── Core processing ───────────────────────────────────────────────────────
+function showError(msg) {
+  const b = document.getElementById('error-box');
+  b.textContent = '⚠ ' + msg;
+  b.style.display = 'block';
+}
 
-let lastRawOutput = '';
-let lastGlossaryItems = [];
-let lastLevel = 'B1';
-let lastSourceLang = 'English';
-let lastTargetLang = 'Spanish';
+function setLoading(on) {
+  document.getElementById('loading-bar').style.display = on ? 'block' : 'none';
+  const btn = document.getElementById('process-btn');
+  btn.disabled = on;
+  btn.textContent = on ? '⏳ Classifying…' : '✨ Generate';
+}
+
+function flashBtn(btn, text) {
+  const orig = btn.textContent;
+  btn.textContent = text;
+  setTimeout(() => btn.textContent = orig, 2000);
+}
+
+function buildCacheKey() {
+  const text = document.getElementById('input-text').value.trim();
+  const src  = document.getElementById('source-lang').value;
+  const tgt  = document.getElementById('target-lang').value;
+  if (!text) return null;
+  // Simple hash: length + first 80 chars + langs
+  const snippet = text.slice(0, 80).replace(/\s+/g,' ');
+  return `${src}_${tgt}_${text.length}_${snippet}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CLASSIFICATION PROMPT
+// ─────────────────────────────────────────────────────────────────────────────
+
+function buildClassificationPrompt(src, tgt, style) {
+  return `You are a language classification engine for a diglot weave language learning app.
+
+Your job is to tokenize the input text and classify every token.
+
+TOKENIZATION RULES:
+- Split the text into tokens. Each token is either:
+  a) A WORD or MULTI-WORD PHRASE (1-4 words) that carries meaning
+  b) A PUNCTUATION/WHITESPACE token (spaces, commas, periods, newlines, etc.)
+- Keep punctuation and whitespace as separate tokens so the text can be reconstructed exactly.
+- Multi-word phrases (e.g. "in spite of", "good morning", "Holy Spirit") should be grouped as single tokens when they function as a unit.
+
+FOR EACH WORD/PHRASE TOKEN, output one line in this exact format:
+TOKEN|LEVEL|TRANSLATION
+
+Where:
+- TOKEN is the exact surface form as it appears in the text (preserve capitalisation, conjugation, inflection, gender)
+- LEVEL is one of: A0, A1, A2, B1, B2, X
+  - A0 = absolute beginner knows this in ${tgt} (numbers, family words, colours, greetings, days)
+  - A1 = beginner knows this (common everyday nouns, basic adjectives)
+  - A2 = elementary knows this (most nouns, regular verbs in simple tenses, common adverbs)
+  - B1 = intermediate knows this (broader vocab, irregular verbs, abstract nouns)
+  - B2 = upper-intermediate knows this (collocations, idiomatic phrases, nuanced vocabulary)
+  - X  = untranslatable or has no clean ${tgt} equivalent (proper nouns that stay as-is are also X)
+- TRANSLATION is the best ${tgt} equivalent of this exact surface form:
+  - Match the exact inflection, conjugation, gender, and number of the source token
+  - For X-level tokens: still provide the closest possible ${tgt} translation (approximate is fine)
+  - For proper nouns (people, place names, brands): use X level and repeat the original as translation
+  - Style register: ${style}
+
+FOR PUNCTUATION/WHITESPACE TOKENS, output:
+TOKEN|P|
+
+(Just the token, pipe, P, pipe, empty — no translation needed.)
+
+CRITICAL RULES:
+- Output ONLY the token lines. No introduction, no summary, no explanation.
+- Every single character of the original text must be accounted for across all tokens.
+- The tokens must reconstruct the original text exactly when concatenated.
+- Never skip a word. Never merge a punctuation mark into a word token.
+
+Example input: "The dog ran quickly."
+Example output:
+The|A0|El
+ |P|
+dog|A0|perro
+ |P|
+ran|A1|corrió
+ |P|
+quickly|A2|rápidamente
+.|P|
+
+Now classify this ${src} text for ${tgt} learners:`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MAIN PROCESS
+// ─────────────────────────────────────────────────────────────────────────────
 
 async function processText() {
-  const apiKey   = document.getElementById('api-key').value.trim();
-  const inputText = document.getElementById('input-text').value.trim();
-  const level    = document.getElementById('level').value;
-  const src      = document.getElementById('source-lang').value;
-  const tgt      = document.getElementById('target-lang').value;
+  const apiKey = document.getElementById('api-key').value.trim();
+  const text   = document.getElementById('input-text').value.trim();
+  const src    = document.getElementById('source-lang').value;
+  const tgt    = document.getElementById('target-lang').value;
+  const style  = document.getElementById('style').value;
 
-  // Validation
-  const errorBox = document.getElementById('error-box');
-  errorBox.style.display = 'none';
+  document.getElementById('error-box').style.display = 'none';
 
-  if (!apiKey) return showError('Please enter your Claude API key above.');
-  if (!apiKey.startsWith('sk-ant-')) return showError('That doesn\'t look like a valid Claude API key (should start with sk-ant-).');
-  if (!inputText) return showError('Please enter some text to process.');
-  if (src === tgt) return showError('Source and target language must be different.');
-  if (inputText.length > 8000) return showError('Text is too long — please keep it under 8,000 characters for best results.');
+  if (!apiKey)                   return showError('Please enter your Claude API key.');
+  if (!apiKey.startsWith('sk-')) return showError('That doesn\'t look like a valid Claude API key.');
+  if (!text)                     return showError('Please enter some text to process.');
+  if (src === tgt)               return showError('Source and target language must be different.');
+  if (text.length > 8000)        return showError('Text is too long — please keep under 8,000 characters.');
 
-  // UI: loading state
+  // Check cache first
+  const cacheKey = buildCacheKey();
+  if (classCache[cacheKey]) {
+    renderFromCache(classCache[cacheKey], currentLevel, true);
+    return;
+  }
+
   setLoading(true);
   document.getElementById('output-card').style.display = 'none';
   document.getElementById('glossary-card').style.display = 'none';
 
-  const systemPrompt = LEVEL_PROMPTS[level](src, tgt);
-  const userMessage  = `Here is the text to process:\n\n${inputText}`;
+  const systemPrompt = buildClassificationPrompt(src, tgt, style);
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -519,273 +494,282 @@ async function processText() {
         'anthropic-dangerous-direct-browser-access': 'true'
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 4096,
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 8192,
         system: systemPrompt,
-        messages: [{ role: 'user', content: userMessage }]
+        messages: [{ role:'user', content: text }]
       })
     });
 
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      throw new Error(err?.error?.message || `API error ${response.status}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.error?.message || `API error ${res.status}`);
     }
 
-    const data = await response.json();
+    const data    = await res.json();
     const rawText = data.content?.[0]?.text || '';
-
     if (!rawText) throw new Error('Empty response from Claude. Please try again.');
 
-    // Parse output + glossary
-    const { processedText, glossary } = parseOutput(rawText);
+    const tokens = parseClassification(rawText);
+    if (!tokens.length) throw new Error('Could not parse classification. Please try again.');
 
-    lastRawOutput      = processedText;
-    lastGlossaryItems  = glossary;
-    lastLevel          = level;
-    lastSourceLang     = src;
-    lastTargetLang     = tgt;
+    // Verify reconstruction
+    const reconstructed = tokens.map(t => t.token).join('');
+    // Allow minor whitespace differences at end
+    if (reconstructed.replace(/\s+$/,'') !== text.replace(/\s+$/,'')) {
+      console.warn('Reconstruction mismatch — proceeding anyway.');
+    }
 
-    renderOutput(processedText, glossary, level, src, tgt, inputText);
+    // Store in cache
+    const cacheData = { tokens, srcLang:src, tgtLang:tgt };
+    classCache[cacheKey] = cacheData;
+    lastCacheKey = cacheKey;
+    try { sessionStorage.setItem('dw_class_cache', JSON.stringify(classCache)); } catch(e) {}
 
-  } catch (err) {
+    // Mark level tabs as instant
+    document.querySelectorAll('.level-tab').forEach(t => t.classList.add('instant'));
+
+    renderFromCache(cacheData, currentLevel, false);
+
+  } catch(err) {
     showError(err.message || 'Something went wrong. Please try again.');
   } finally {
     setLoading(false);
   }
 }
 
-// ── Parse Claude's output ─────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// PARSE CLASSIFICATION OUTPUT
+// ─────────────────────────────────────────────────────────────────────────────
 
-function parseOutput(raw) {
-  // Split on GLOSSARY: marker
-  const glossaryMarker = raw.indexOf('GLOSSARY:');
-  let processedText = raw;
-  let glossaryRaw   = '';
+function parseClassification(raw) {
+  const lines  = raw.split('\n');
+  const tokens = [];
 
-  if (glossaryMarker !== -1) {
-    processedText = raw.substring(0, glossaryMarker).trim();
-    glossaryRaw   = raw.substring(glossaryMarker + 9).trim();
+  for (const line of lines) {
+    if (!line) continue;
+    const parts = line.split('|');
+    if (parts.length < 2) continue;
+
+    const token       = parts[0];          // exact surface form
+    const level       = parts[1].trim();   // A0/A1/A2/B1/B2/X/P
+    const translation = parts[2] ?? '';
+
+    if (!token) continue;
+
+    tokens.push({ token, level, translation: translation.trim() });
   }
 
-  // Parse glossary lines: word=translation
-  const glossary = [];
-  const seen = new Set();
-  glossaryRaw.split('\n').forEach(line => {
-    const eqIdx = line.indexOf('=');
-    if (eqIdx !== -1) {
-      const tl = line.substring(0, eqIdx).trim();
-      const sl = line.substring(eqIdx + 1).trim();
-      if (tl && sl && !seen.has(tl.toLowerCase())) {
-        seen.add(tl.toLowerCase());
-        glossary.push({ tl, sl });
-      }
-    }
-  });
-
-  return { processedText, glossary };
+  return tokens;
 }
 
-// ── Render output ──────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// RENDERER — pure JS, zero API calls
+// ─────────────────────────────────────────────────────────────────────────────
 
-function renderOutput(processedText, glossary, level, src, tgt, originalText) {
-  // Replace <sw>...</sw> with highlighted spans
-  const rendered = processedText.replace(/<sw>([\s\S]*?)<\/sw>/g, (_, word) => {
-    return `<span class="sw">${escapeHTML(word)}</span>`;
-  });
+const LEVEL_THRESHOLD = { A0:0, A1:1, A2:2, B1:3, B2:4, full:99 };
 
-  document.getElementById('output-text').innerHTML = rendered;
+function renderFromCache(cacheData, level, fromCache) {
+  const { tokens, srcLang, tgtLang } = cacheData;
+  const threshold = LEVEL_THRESHOLD[level] ?? 3;
+  const isFull    = level === 'full';
+
+  let html         = '';
+  let swappedCount = 0;
+  let wordCount    = 0;
+  const glossaryMap = new Map(); // translation → { src, level, isUntranslatable }
+
+  for (const tok of tokens) {
+    const escaped = escapeHTML(tok.token);
+
+    if (tok.level === 'P') {
+      // Punctuation / whitespace — always pass through as-is
+      html += escaped;
+      continue;
+    }
+
+    wordCount++;
+    const tokLevel   = LEVEL_THRESHOLD[tok.level] ?? 99;
+    const isX        = tok.level === 'X';
+    const shouldSwap = isFull
+      ? (tok.translation && tok.translation !== tok.token)
+      : (!isX && tokLevel <= threshold && tok.translation && tok.translation !== tok.token);
+
+    if (shouldSwap) {
+      const cls = isX ? 'sw-untranslatable' : 'sw';
+      html += `<span class="${cls}" title="${escapeHTML(tok.token)}">${escapeHTML(tok.translation)}</span>`;
+      swappedCount++;
+
+      // Glossary entry
+      const key = tok.translation.toLowerCase();
+      if (!glossaryMap.has(key)) {
+        glossaryMap.set(key, { tl: tok.translation, sl: tok.token, level: tok.level, isX });
+      }
+    } else {
+      html += escaped;
+    }
+  }
+
+  // Render output
+  document.getElementById('output-text').innerHTML = html;
 
   // Stats
-  const totalWords    = originalText.split(/\s+/).filter(Boolean).length;
-  const swMatches     = [...processedText.matchAll(/<sw>([\s\S]*?)<\/sw>/g)];
-  const swappedCount  = swMatches.length;
-  const pct           = totalWords ? Math.round((swappedCount / totalWords) * 100) : 0;
-
-  const statsBar = document.getElementById('stats-bar');
-  statsBar.innerHTML = `
-    <div>Words in original: <span>${totalWords.toLocaleString()}</span></div>
-    <div>Words swapped: <span>${swappedCount}</span></div>
+  const pct = wordCount ? Math.round((swappedCount / wordCount) * 100) : 0;
+  document.getElementById('stats-bar').innerHTML = `
+    <div>Words: <span>${wordCount.toLocaleString()}</span></div>
+    <div>Swapped: <span>${swappedCount}</span></div>
     <div>Swap rate: <span>${pct}%</span></div>
     <div>Level: <span>${level}</span></div>
+    <div>${srcLang} → ${tgtLang}</div>
   `;
 
-  // Level badge
-  document.getElementById('output-level-badge').innerHTML =
-    `<span class="level-badge level-${level}">${level}</span>`;
+  // Cache badge
+  document.getElementById('cache-indicator').innerHTML = fromCache
+    ? '<span class="cache-badge">⚡ Instant — from cache</span>'
+    : '';
 
-  // Show output card
   document.getElementById('output-card').style.display = 'block';
 
   // Glossary
-  if (glossary.length > 0) {
+  const glossaryItems = [...glossaryMap.values()].sort((a,b) => {
+    return (LEVEL_THRESHOLD[a.level]??99) - (LEVEL_THRESHOLD[b.level]??99);
+  });
+
+  if (glossaryItems.length) {
     const grid = document.getElementById('glossary-grid');
-    grid.innerHTML = glossary.map(g => `
-      <div class="glossary-item">
+    grid.innerHTML = glossaryItems.map(g => `
+      <div class="glossary-item${g.isX ? ' untranslatable' : ''}">
         <div class="tl">${escapeHTML(g.tl)}</div>
-        <div class="sl">${escapeHTML(g.sl)}</div>
+        <div class="sl">${escapeHTML(g.sl)}${g.level !== 'X' ? ` <span style="color:var(--gray-400)">(${g.level})</span>` : ' <span style="color:var(--gray-400)">(~)</span>'}</div>
       </div>
     `).join('');
     document.getElementById('glossary-card').style.display = 'block';
   }
 
-  // Scroll to output
-  document.getElementById('output-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // Store for PDF
+  lastPDFData = { tokens, level, src: srcLang, tgt: tgtLang };
+
+  document.getElementById('output-card').scrollIntoView({ behavior:'smooth', block:'start' });
 }
 
-// ── PDF download ──────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// PDF
+// ─────────────────────────────────────────────────────────────────────────────
 
 function downloadPDF() {
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const doc = new jsPDF({ unit:'mm', format:'a4' });
+  const { tokens, level, src, tgt } = lastPDFData;
 
-  const margin   = 20;
-  const pageW    = 210;
-  const pageH    = 297;
-  const usableW  = pageW - margin * 2;
-  let   y        = margin;
-  const lineH    = 7;
+  const margin = 20, pageW = 210, pageH = 297, usableW = pageW - margin * 2;
+  let y = margin;
+  const lh = 7;
 
-  // Helper: add text with word wrap, returns new y
-  function addText(text, fontSize, fontStyle, color, maxY) {
-    doc.setFontSize(fontSize);
-    doc.setFont('helvetica', fontStyle);
-    doc.setTextColor(...color);
+  function checkPage() { if (y + lh > pageH - margin) { doc.addPage(); y = margin; } }
+
+  function addLine(text, size, style, color) {
+    doc.setFontSize(size); doc.setFont('helvetica', style); doc.setTextColor(...color);
     const lines = doc.splitTextToSize(text, usableW);
-    lines.forEach(line => {
-      if (y + lineH > pageH - margin) { doc.addPage(); y = margin; }
-      doc.text(line, margin, y);
-      y += lineH;
-    });
+    for (const l of lines) { checkPage(); doc.text(l, margin, y); y += lh; }
     y += 2;
   }
 
   // Title
-  addText('Diglot Weave Output', 18, 'bold', [37, 99, 235], pageH);
-  addText(`Level: ${lastLevel}  |  ${lastSourceLang} → ${lastTargetLang}  |  ${new Date().toLocaleDateString()}`, 10, 'normal', [107, 114, 128], pageH);
-  y += 4;
-  doc.setDrawColor(229, 231, 235);
-  doc.line(margin, y, pageW - margin, y);
-  y += 6;
+  addLine('Diglot Weave Output', 18, 'bold', [37,99,235]);
+  addLine(`Level: ${level}  |  ${src} → ${tgt}  |  ${new Date().toLocaleDateString()}`, 10, 'normal', [107,114,128]);
+  y += 2;
+  doc.setDrawColor(229,231,235); doc.line(margin, y, pageW-margin, y); y += 6;
 
-  // Output text — strip <sw> tags, render plain
-  // We'll render swapped words in a different color using segments
-  const rawText = lastRawOutput;
-  const segments = [];
-  let cursor = 0;
-  const swRegex = /<sw>([\s\S]*?)<\/sw>/g;
-  let match;
-  while ((match = swRegex.exec(rawText)) !== null) {
-    if (match.index > cursor) {
-      segments.push({ text: rawText.slice(cursor, match.index), swapped: false });
-    }
-    segments.push({ text: match[1], swapped: true });
-    cursor = match.index + match[0].length;
-  }
-  if (cursor < rawText.length) {
-    segments.push({ text: rawText.slice(cursor), swapped: false });
+  // Body — render swapped words in brackets
+  const threshold = LEVEL_THRESHOLD[level] ?? 3;
+  const isFull    = level === 'full';
+  let bodyText    = '';
+
+  for (const tok of tokens) {
+    if (tok.level === 'P') { bodyText += tok.token; continue; }
+    const tokLevel   = LEVEL_THRESHOLD[tok.level] ?? 99;
+    const isX        = tok.level === 'X';
+    const shouldSwap = isFull
+      ? (tok.translation && tok.translation !== tok.token)
+      : (!isX && tokLevel <= threshold && tok.translation && tok.translation !== tok.token);
+    bodyText += shouldSwap ? `[${tok.translation}]` : tok.token;
   }
 
-  // Render segments line by line
-  doc.setFontSize(12);
-  const fullText = segments.map(s => s.text).join('');
-  const wrappedLines = doc.splitTextToSize(fullText, usableW);
-
-  // Simple approach: render full text normally, then re-render swapped words in color
-  // For PDF we render the whole text in normal color first, then overlay isn't possible
-  // Instead, render plain text with swapped words UPPERCASE + marked
-  const plainForPDF = segments.map(s =>
-    s.swapped ? `[${s.text}]` : s.text
-  ).join('');
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(12);
-  doc.setTextColor(31, 41, 55);
-  const bodyLines = doc.splitTextToSize(plainForPDF, usableW);
-  bodyLines.forEach(line => {
-    if (y + lineH > pageH - margin) { doc.addPage(); y = margin; }
-    doc.text(line, margin, y);
-    y += lineH;
-  });
+  doc.setFontSize(12); doc.setFont('helvetica','normal'); doc.setTextColor(31,41,55);
+  const bodyLines = doc.splitTextToSize(bodyText, usableW);
+  for (const l of bodyLines) { checkPage(); doc.text(l, margin, y); y += lh; }
 
   // Glossary
-  if (lastGlossaryItems.length > 0) {
-    y += 6;
-    if (y + 10 > pageH - margin) { doc.addPage(); y = margin; }
-    doc.setDrawColor(229, 231, 235);
-    doc.line(margin, y, pageW - margin, y);
-    y += 6;
-    addText('Glossary', 14, 'bold', [37, 99, 235], pageH);
+  const seen = new Set();
+  const glossaryItems = [];
+  for (const tok of tokens) {
+    if (tok.level === 'P') continue;
+    const tokLevel = LEVEL_THRESHOLD[tok.level] ?? 99;
+    const isX      = tok.level === 'X';
+    const show     = isFull
+      ? (tok.translation && tok.translation !== tok.token)
+      : (!isX && tokLevel <= threshold && tok.translation && tok.translation !== tok.token);
+    if (show && !seen.has(tok.translation.toLowerCase())) {
+      seen.add(tok.translation.toLowerCase());
+      glossaryItems.push({ tl: tok.translation, sl: tok.token, level: tok.level });
+    }
+  }
+
+  if (glossaryItems.length) {
+    y += 4; checkPage();
+    doc.setDrawColor(229,231,235); doc.line(margin, y, pageW-margin, y); y += 6;
+    addLine('Glossary', 14, 'bold', [37,99,235]);
 
     const colW = usableW / 2;
-    const half = Math.ceil(lastGlossaryItems.length / 2);
-    const leftCol  = lastGlossaryItems.slice(0, half);
-    const rightCol = lastGlossaryItems.slice(half);
-    const maxRows  = Math.max(leftCol.length, rightCol.length);
+    const half = Math.ceil(glossaryItems.length / 2);
+    const left = glossaryItems.slice(0, half), right = glossaryItems.slice(half);
 
     doc.setFontSize(11);
-    for (let i = 0; i < maxRows; i++) {
-      if (y + 6 > pageH - margin) { doc.addPage(); y = margin; }
-      if (leftCol[i]) {
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(124, 58, 237);
-        doc.text(leftCol[i].tl, margin, y);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(75, 85, 99);
-        doc.text(`= ${leftCol[i].sl}`, margin + 28, y);
+    for (let i = 0; i < Math.max(left.length, right.length); i++) {
+      checkPage();
+      if (left[i]) {
+        doc.setFont('helvetica','bold'); doc.setTextColor(124,58,237);
+        doc.text(left[i].tl, margin, y);
+        doc.setFont('helvetica','normal'); doc.setTextColor(75,85,99);
+        doc.text(`= ${left[i].sl}`, margin+30, y);
       }
-      if (rightCol[i]) {
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(124, 58, 237);
-        doc.text(rightCol[i].tl, margin + colW, y);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(75, 85, 99);
-        doc.text(`= ${rightCol[i].sl}`, margin + colW + 28, y);
+      if (right[i]) {
+        doc.setFont('helvetica','bold'); doc.setTextColor(124,58,237);
+        doc.text(right[i].tl, margin+colW, y);
+        doc.setFont('helvetica','normal'); doc.setTextColor(75,85,99);
+        doc.text(`= ${right[i].sl}`, margin+colW+30, y);
       }
       y += 6;
     }
   }
 
   // Footer
-  const pageCount = doc.internal.getNumberOfPages();
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i);
-    doc.setFontSize(9);
-    doc.setTextColor(156, 163, 175);
-    doc.text(`Diglot Weave — Life OS  |  Page ${i} of ${pageCount}`, margin, pageH - 8);
+  const pages = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= pages; i++) {
+    doc.setPage(i); doc.setFontSize(9); doc.setTextColor(156,163,175);
+    doc.text(`Diglot Weave — Life OS  |  Page ${i} of ${pages}`, margin, pageH-8);
   }
 
-  const date = new Date().toISOString().slice(0,10);
-  doc.save(`diglot-weave-${lastLevel}-${date}.pdf`);
+  doc.save(`diglot-weave-${level}-${new Date().toISOString().slice(0,10)}.pdf`);
 }
 
-// ── Copy text ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// COPY
+// ─────────────────────────────────────────────────────────────────────────────
 
 function copyText() {
-  const plain = lastRawOutput.replace(/<sw>([\s\S]*?)<\/sw>/g, '$1');
-  navigator.clipboard.writeText(plain).then(() => {
-    const btn = event.target;
-    btn.textContent = '✓ Copied';
-    setTimeout(() => btn.textContent = '📋 Copy Text', 2000);
-  });
+  const plain = document.getElementById('output-text').innerText;
+  navigator.clipboard.writeText(plain).then(() => flashBtn(event.target, '✓ Copied'));
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────
-
-function showError(msg) {
-  const box = document.getElementById('error-box');
-  box.textContent = '⚠ ' + msg;
-  box.style.display = 'block';
-  box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-}
-
-function setLoading(on) {
-  document.getElementById('loading-bar').style.display = on ? 'block' : 'none';
-  document.getElementById('process-btn').disabled = on;
-  document.getElementById('process-btn').textContent = on ? '⏳ Processing...' : '✨ Generate Diglot Weave';
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// UTILS
+// ─────────────────────────────────────────────────────────────────────────────
 
 function escapeHTML(str) {
-  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 </script>
 </body>
