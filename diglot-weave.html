@@ -102,6 +102,9 @@
   .output-text { font-size:16px; line-height:2; white-space:pre-wrap; word-break:break-word; }
   .sw { background:#fef9c3; color:#713f12; border-radius:3px; padding:1px 3px; font-weight:600; }
   .sw-untranslatable { background:#f3e8ff; color:#6b21a8; border-radius:3px; padding:1px 3px; font-weight:600; font-style:italic; }
+  /* Highlight off */
+  .no-highlight .sw { background:none; color:inherit; font-weight:inherit; padding:0; border-radius:0; }
+  .no-highlight .sw-untranslatable { background:none; color:inherit; font-weight:inherit; font-style:inherit; padding:0; border-radius:0; }
 
   /* Stats */
   .stats-bar { display:flex; gap:16px; flex-wrap:wrap; font-size:13px; color:var(--gray-600); padding:10px 0; border-top:1px solid var(--gray-100); margin-top:8px; }
@@ -214,7 +217,13 @@
   <div class="card" id="output-card" style="display:none">
     <div class="output-header">
       <div class="card-title" style="margin:0">Output</div>
-      <div id="cache-indicator"></div>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--gray-600);cursor:pointer;user-select:none;">
+          <input type="checkbox" id="highlight-toggle" checked onchange="toggleHighlight()" style="width:15px;height:15px;cursor:pointer;">
+          Highlight swapped words
+        </label>
+        <div id="cache-indicator"></div>
+      </div>
     </div>
     <div class="output-text" id="output-text"></div>
     <div class="stats-bar" id="stats-bar"></div>
@@ -356,6 +365,11 @@ function setLoading(on) {
   const btn = document.getElementById('process-btn');
   btn.disabled = on;
   btn.textContent = on ? '⏳ Classifying…' : '✨ Generate';
+}
+
+function toggleHighlight() {
+  const on = document.getElementById('highlight-toggle').checked;
+  document.getElementById('output-text').classList.toggle('no-highlight', !on);
 }
 
 function flashBtn(btn, text) {
