@@ -631,21 +631,25 @@ Your job is to tokenize the input text and classify every token.
 
 ═══ TOKENIZATION — DEFAULT: ONE WORD PER TOKEN ═══
 
-Tokenize word by word. Every article, conjunction, pronoun, preposition, adjective, noun, and verb gets its own token. This is the default and applies to the vast majority of words.
+Tokenize word by word. Every article, conjunction, pronoun, preposition, adjective, noun, and verb gets its own token. This is the default and covers the vast majority of words.
 
-ONLY create a multi-word chunk (2–4 words grouped as one token) when ALL of the following are true:
-1. The target language grammatically requires adding or dropping a word that has no equivalent in the source (e.g. Spanish drops subject pronouns that English requires — "sería ideal" → "it would be ideal"; the "it" has no source word)
-2. OR the phrase is a fixed, inseparable expression with no word-for-word equivalent (e.g. "Holy Spirit", "buenos días", "in spite of", "se dio cuenta")
-3. OR the verb phrase is an inseparable unit whose parts are meaningless alone (e.g. "había llegado" → "had arrived")
+ONLY create a multi-word chunk when translating word-by-word would produce INCORRECT, UNNATURAL, or NON-IDIOMATIC ${tgt} output. This includes:
+- Multi-source-word expressions that map to a single ${tgt} word (e.g. "por tanto" → "therefore", "sin embargo" → "however", "a fin de que" → "so that")
+- Prepositional phrases where the ${tgt} preposition differs from the literal translation (e.g. "de la misma manera" → "in the same way", NOT "of the same way")
+- Expressions that require adding a word in ${tgt} that has no source equivalent (e.g. "sería ideal" → "it would be ideal")
+- Fixed, inseparable idioms or expressions (e.g. "Holy Spirit", "buenos días", "se dio cuenta")
+- Inseparable verb phrases (e.g. "había llegado" → "had arrived")
 
-Do NOT chunk just because words are related. Do NOT chunk regular noun phrases, adjective+noun pairs, or verb+adverb pairs — translate each word individually.
+Do NOT chunk just because words are related or adjacent. Do NOT chunk noun phrases, adjective+noun pairs, or verb+adverb pairs unless the above conditions are met — translate each word individually and let them assemble naturally.
+
+THE KEY TEST: Ask "if I translate each word separately and place them in ${tgt} word order, will the result be natural ${tgt}?" If YES → single tokens. If NO → one chunk.
 
 ═══ OUTPUT FORMAT ═══
 
 For each SINGLE-WORD token:
 TOKEN|LEVEL|TRANSLATION
 
-For each MULTI-WORD CHUNK (only when required by the rules above):
+For each MULTI-WORD CHUNK:
 CHUNK_SOURCE|LEVEL|CHUNK_TRANSLATION
 
 For PUNCTUATION/WHITESPACE tokens:
@@ -662,14 +666,14 @@ Where:
   - X  = untranslatable, proper noun, or no clean ${tgt} equivalent
 - TRANSLATION / CHUNK_TRANSLATION = grammatically correct ${tgt} equivalent
   - Single words: match the exact inflection, conjugation, gender, number of the source token
-  - Chunks: produce a natural, grammatically correct ${tgt} phrase (may add/drop words as needed)
+  - Chunks: produce a natural, grammatically correct ${tgt} phrase
   - X tokens: closest approximate ${tgt} translation; proper nouns repeat the original
   - Style register: ${style}
 
 ═══ RECONSTRUCTION RULE ═══
 All tokens concatenated must exactly reconstruct the original text.
 - Single-word tokens: concatenate directly
-- Multi-word chunks: the CHUNK_SOURCE must exactly match the corresponding span in the original text including its spaces
+- Multi-word chunks: CHUNK_SOURCE must exactly match the corresponding span in the original text including spaces
 - Punctuation and whitespace are always separate P tokens
 
 ═══ CRITICAL ═══
@@ -679,7 +683,7 @@ All tokens concatenated must exactly reconstruct the original text.
 
 ═══ EXAMPLES ═══
 
-Single-word example (${src} = Spanish, ${tgt} = English):
+Single-word default (${src} = Spanish, ${tgt} = English):
 Input: "El perro corrió rápidamente."
 Output:
 El|A0|The
@@ -691,7 +695,30 @@ corrió|A1|ran
 rápidamente|A2|quickly
 .|P|
 
-Multi-word chunk example (${src} = Spanish, ${tgt} = English):
+Non-compositional prepositional phrase — chunk required (${src} = Spanish, ${tgt} = English):
+Input: "Pensad de la misma manera."
+Output:
+Pensad|A2|Think
+ |P|
+de la misma manera|A2|in the same way
+.|P|
+(NOT "of the same way" — the preposition changes, so chunk)
+
+Multi-word expression reducing to one word — chunk required (${src} = Spanish, ${tgt} = English):
+Input: "Por tanto, completad mi gozo."
+Output:
+Por tanto|A2|Therefore
+,|P|
+ |P|
+completad|B1|complete
+ |P|
+mi|A0|my
+ |P|
+gozo|A1|joy
+.|P|
+(NOT "By therefore" — "por tanto" is one English word, so chunk)
+
+Subject-drop requiring added pronoun — chunk required (${src} = Spanish, ${tgt} = English):
 Input: "Sería ideal terminar hoy."
 Output:
 Sería ideal|B1|It would be ideal
@@ -701,18 +728,13 @@ terminar|A2|to finish
 hoy|A0|today
 .|P|
 
-Fixed expression example (${src} = English, ${tgt} = Spanish):
-Input: "Good morning, how are you?"
+Regular adjective+noun — NO chunk needed (${src} = Spanish, ${tgt} = English):
+Input: "afecto profundo"
 Output:
-Good morning|A0|Buenos días
-,|P|
+afecto|B1|affection
  |P|
-how|A1|cómo
- |P|
-are|A0|estás
- |P|
-you|A0|tú
-?|P|
+profundo|A2|deep
+(Each word translates cleanly and assembles to "deep affection" in ${tgt} word order — no chunk)
 
 Now classify this ${src} text for ${tgt} learners:`;
 }
