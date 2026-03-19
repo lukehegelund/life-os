@@ -188,7 +188,8 @@
       <div class="control-group">
         <label>Target Language</label>
         <select id="target-lang" onchange="checkLangMatch()">
-          <option value="Spanish">Spanish</option>
+          <option value="Spanish (Latin American)">Spanish — Latin American</option>
+          <option value="Spanish (Spain)">Spanish — Spain</option>
           <option value="French">French</option>
           <option value="German">German</option>
           <option value="Italian">Italian</option>
@@ -615,8 +616,10 @@ function checkLangMatch() {
   const tgt  = document.getElementById('target-lang').value;
   const warning = document.getElementById('lang-match-warning');
   const detected = detectLanguage(text);
-  if (detected && detected === tgt) {
-    document.getElementById('lang-match-detected').textContent = detected;
+  // Treat both Spanish variants as matching detected 'Spanish'
+  const tgtBase = tgt.replace(/ \(.*\)/, '');
+  if (detected && detected === tgtBase) {
+    document.getElementById('lang-match-detected').textContent = tgt;
     warning.style.display = 'block';
   } else {
     warning.style.display = 'none';
