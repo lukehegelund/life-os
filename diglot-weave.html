@@ -186,23 +186,6 @@
     <div class="card-title">Languages</div>
     <div class="controls-grid">
       <div class="control-group">
-        <label>Source Language</label>
-        <select id="source-lang">
-          <option value="English">English</option>
-          <option value="Spanish">Spanish</option>
-          <option value="French">French</option>
-          <option value="German">German</option>
-          <option value="Italian">Italian</option>
-          <option value="Portuguese">Portuguese</option>
-          <option value="Dutch">Dutch</option>
-          <option value="Russian">Russian</option>
-          <option value="Danish">Danish</option>
-          <option value="Swedish">Swedish</option>
-          <option value="Norwegian">Norwegian</option>
-          <option value="Swahili">Swahili</option>
-        </select>
-      </div>
-      <div class="control-group">
         <label>Target Language</label>
         <select id="target-lang">
           <option value="Spanish">Spanish</option>
@@ -612,12 +595,11 @@ function flashBtn(btn, text) {
 
 function buildCacheKey() {
   const text = document.getElementById('input-text').value.trim();
-  const src  = document.getElementById('source-lang').value;
   const tgt  = document.getElementById('target-lang').value;
   if (!text) return null;
   // Simple hash: length + first 80 chars + langs
   const snippet = text.slice(0, 80).replace(/\s+/g,' ');
-  return `${src}_${tgt}_${text.length}_${snippet}`;
+  return `auto_${tgt}_${text.length}_${snippet}`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -628,6 +610,8 @@ function buildClassificationPrompt(src, tgt, style) {
   return `You are a language classification engine for a diglot weave language learning app.
 
 Your job is to tokenize the input text and classify every token.
+
+IMPORTANT: Auto-detect the language of the input text. Do NOT assume it is any particular language.
 
 ═══ TOKENIZATION — DEFAULT: ONE WORD PER TOKEN ═══
 
@@ -683,7 +667,7 @@ All tokens concatenated must exactly reconstruct the original text.
 
 ═══ EXAMPLES ═══
 
-Single-word default (${src} = Spanish, ${tgt} = English):
+Single-word default (source auto-detected as Spanish, ${tgt} = English):
 Input: "El perro corrió rápidamente."
 Output:
 El|A0|The
@@ -695,7 +679,7 @@ corrió|A1|ran
 rápidamente|A2|quickly
 .|P|
 
-Non-compositional prepositional phrase — chunk required (${src} = Spanish, ${tgt} = English):
+Non-compositional prepositional phrase — chunk required (source = Spanish, ${tgt} = English):
 Input: "Pensad de la misma manera."
 Output:
 Pensad|A2|Think
@@ -704,7 +688,7 @@ de la misma manera|A2|in the same way
 .|P|
 (NOT "of the same way" — the preposition changes, so chunk)
 
-Multi-word expression reducing to one word — chunk required (${src} = Spanish, ${tgt} = English):
+Multi-word expression reducing to one word — chunk required (source = Spanish, ${tgt} = English):
 Input: "Por tanto, completad mi gozo."
 Output:
 Por tanto|A2|Therefore
@@ -718,7 +702,7 @@ gozo|A1|joy
 .|P|
 (NOT "By therefore" — "por tanto" is one English word, so chunk)
 
-Subject-drop requiring added pronoun — chunk required (${src} = Spanish, ${tgt} = English):
+Subject-drop requiring added pronoun — chunk required (source = Spanish, ${tgt} = English):
 Input: "Sería ideal terminar hoy."
 Output:
 Sería ideal|B1|It would be ideal
@@ -728,7 +712,7 @@ terminar|A2|to finish
 hoy|A0|today
 .|P|
 
-Regular adjective+noun — NO chunk needed (${src} = Spanish, ${tgt} = English):
+Regular adjective+noun — NO chunk needed (source = Spanish, ${tgt} = English):
 Input: "afecto profundo"
 Output:
 afecto|B1|affection
@@ -736,7 +720,7 @@ afecto|B1|affection
 profundo|A2|deep
 (Each word translates cleanly and assembles to "deep affection" in ${tgt} word order — no chunk)
 
-Now classify this ${src} text for ${tgt} learners:`;
+Auto-detect the source language and classify this text for ${tgt} learners:`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -746,7 +730,7 @@ Now classify this ${src} text for ${tgt} learners:`;
 async function processText() {
   const apiKey = document.getElementById('api-key').value.trim();
   const text   = document.getElementById('input-text').value.trim();
-  const src    = document.getElementById('source-lang').value;
+  const src    = 'auto';
   const tgt    = document.getElementById('target-lang').value;
   const style  = document.getElementById('style').value;
 
@@ -755,7 +739,6 @@ async function processText() {
   if (!apiKey)                   return showError('API key not loaded yet — please wait a moment and try again.');
   if (!apiKey.startsWith('sk-')) return showError('API key appears invalid — please refresh the page and try again.');
   if (!text)                     return showError('Please enter some text to process.');
-  if (src === tgt)               return showError('Source and target language must be different.');
   if (text.length > 8000)        return showError('Text is too long — please keep under 8,000 characters.');
 
   // Apply cleanup pre-processing before classification if checkbox is checked
@@ -926,7 +909,7 @@ function renderFromCache(cacheData, level, fromCache) {
     <div>Swapped: <span>${swappedCount}</span></div>
     <div>Swap rate: <span>${pct}%</span></div>
     <div>Level: <span>${level}</span></div>
-    <div>${srcLang} → ${tgtLang}</div>
+    <div>→ ${tgtLang}</div>
   `;
 
   // Cache badge
