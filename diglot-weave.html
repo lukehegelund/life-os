@@ -394,7 +394,7 @@ async function loadApiKey() {
   if (cached) {
     try {
       const keys = JSON.parse(cached);
-      if (keys.anthropic_api_key) { document.getElementById('api-key').value = keys.anthropic_api_key; return; }
+      if (keys.gemini_api_key) { document.getElementById('api-key').value = keys.gemini_api_key; return; }
     } catch(e) { sessionStorage.removeItem(DW_CFG_KEY); }
   }
 
@@ -405,8 +405,8 @@ async function loadApiKey() {
     const rows = Array.isArray(json) ? json : (json?.data || []);
     const map  = {};
     for (const r of rows) map[r.key] = r.value;
-    if (map.anthropic_api_key) {
-      document.getElementById('api-key').value = map.anthropic_api_key;
+    if (map.gemini_api_key) {
+      document.getElementById('api-key').value = map.gemini_api_key;
       sessionStorage.setItem(DW_CFG_KEY, JSON.stringify(map));
     }
     if (map.elevenlabs_api_key) {
@@ -758,8 +758,7 @@ async function processText() {
 
   document.getElementById('error-box').style.display = 'none';
 
-  if (!apiKey)                   return showError('API key not loaded yet — please wait a moment and try again.');
-  if (!apiKey.startsWith('sk-')) return showError('API key appears invalid — please refresh the page and try again.');
+  if (!apiKey) return showError('API key not loaded yet — please wait a moment and try again.');
   if (!text)                     return showError('Please enter some text to process.');
   if (text.length > 8000)        return showError('Text is too long — please keep under 8,000 characters.');
 
@@ -796,21 +795,18 @@ async function processText() {
   const systemPrompt = buildClassificationPrompt(src, tgt, style);
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 8192,
-        system: systemPrompt,
-        messages: [{ role:'user', content: finalText }]
-      })
-    });
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: systemPrompt }] },
+          contents: [{ role: 'user', parts: [{ text: finalText }] }],
+          generationConfig: { maxOutputTokens: 8192, temperature: 0.1 }
+        })
+      }
+    );
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -818,8 +814,8 @@ async function processText() {
     }
 
     const data    = await res.json();
-    const rawText = data.content?.[0]?.text || '';
-    if (!rawText) throw new Error('Empty response from Claude. Please try again.');
+    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    if (!rawText) throw new Error('Empty response from Gemini. Please try again.');
 
     const tokens = parseClassification(rawText);
     if (!tokens.length) throw new Error('Could not parse classification. Please try again.');
