@@ -187,7 +187,7 @@
     <div class="controls-grid">
       <div class="control-group">
         <label>Target Language</label>
-        <select id="target-lang">
+        <select id="target-lang" onchange="checkLangMatch()">
           <option value="Spanish">Spanish</option>
           <option value="French">French</option>
           <option value="German">German</option>
@@ -203,14 +203,6 @@
           <option value="Chinese (Simplified)">Chinese</option>
           <option value="Arabic">Arabic</option>
           <option value="English">English</option>
-        </select>
-      </div>
-      <div class="control-group">
-        <label>Style</label>
-        <select id="style">
-          <option value="natural">Natural</option>
-          <option value="formal">Formal</option>
-          <option value="casual">Casual</option>
         </select>
       </div>
     </div>
@@ -258,8 +250,11 @@
   <!-- Input -->
   <div class="card">
     <div class="card-title">Your Text</div>
-    <textarea id="input-text" placeholder="Paste or type any text here…" oninput="updateCharCount()"></textarea>
+    <textarea id="input-text" placeholder="Paste or type any text here…" oninput="updateCharCount(); checkLangMatch()"></textarea>
     <div class="char-count"><span id="char-count">0</span> characters</div>
+    <div id="lang-match-warning" style="display:none;margin-top:6px;padding:8px 10px;background:#fef9c3;border:1px solid #fde047;border-radius:8px;font-size:13px;color:#713f12;">
+      ⚠ Your text appears to already be in <strong id="lang-match-detected"></strong> — the same as your target language. Did you mean to choose a different target?
+    </div>
     <div class="btn-row" style="align-items:center;">
       <button class="btn btn-primary" id="process-btn" onclick="processText()">✨ Generate</button>
       <button class="btn btn-secondary" onclick="clearAll()">Clear</button>
@@ -587,6 +582,47 @@ async function lookupBible() {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// LANGUAGE MATCH WARNING — pure heuristics, no AI
+// ─────────────────────────────────────────────────────────────────────────────
+
+function detectLanguage(text) {
+  if (!text || text.length < 20) return null;
+  const t = text.slice(0, 300).toLowerCase();
+  if (/[\u0400-\u04FF]/.test(t)) return 'Russian';
+  if (/[\u4E00-\u9FFF]/.test(t)) return 'Chinese (Simplified)';
+  if (/[\u3040-\u30FF]/.test(t)) return 'Japanese';
+  if (/[\u0600-\u06FF]/.test(t)) return 'Arabic';
+  const scores = {
+    Spanish:    (t.match(/\b(el|la|los|las|de|que|en|es|se|por|una|con|un|del|para|como|más|pero|sus|le|ya|cuando|muy|sin|sobre|también|me|hay|donde|están|desde|todo|nos|todos|uno|les|ni|contra|otros|ese|eso|ante|ellos|esto|antes|algunos|qué|yo|otro|otras|este|ella)\b/g)||[]).length,
+    French:     (t.match(/\b(le|la|les|de|du|des|en|et|est|que|qui|il|elle|ils|pas|dans|une|sur|au|par|pour|avec|plus|mais|ou|se|son|sa|ses|nous|vous|leur|leurs|cette|ces|tout|comme|si|bien|même|aussi|après|avant|sans|sous|très|entre|encore|dont|car|ni|peu)\b/g)||[]).length,
+    German:     (t.match(/\b(der|die|das|den|dem|des|ein|eine|einen|einem|einer|und|ist|nicht|sie|er|ich|wir|zu|in|mit|von|für|auf|an|im|am|auch|sich|es|als|bei|nach|aber|wenn|noch|so|wie|dann|oder|mehr|bis|aus|über|unter|vor|durch|werden|haben|war|sind)\b/g)||[]).length,
+    Portuguese: (t.match(/\b(o|a|os|as|de|do|da|dos|das|em|no|na|nos|nas|por|para|com|que|se|é|não|uma|um|ao|à|seu|sua|seus|suas|mas|como|mais|ou|já|ele|ela|eles|elas|isso|isto|aqui|quando|também|bem|ainda|muito|depois|antes|sobre|entre|até|sem|pelo|pela)\b/g)||[]).length,
+    Italian:    (t.match(/\b(il|la|lo|i|gli|le|di|del|della|dei|degli|delle|in|nel|nella|nei|negli|nelle|e|è|che|non|si|con|su|per|una|un|dal|dalla|dai|dagli|dalle|al|alla|ai|agli|alle|come|più|ma|se|anche|così|già|poi|qui|quando|molto|tutto|tutti)\b/g)||[]).length,
+    Dutch:      (t.match(/\b(de|het|een|van|in|is|op|dat|die|en|aan|met|zijn|er|maar|om|je|niet|ook|te|ze|voor|als|dan|door|na|uit|bij|wel|hem|hun|we|zo|al|nog|tot|nu|meer|kan|had|was|werd|worden|hebben|heeft)\b/g)||[]).length,
+    Danish:     (t.match(/\b(og|i|det|at|en|den|til|er|som|på|de|med|han|af|for|ikke|der|var|mig|sig|men|et|har|om|vi|min|havde|ham|hun|nu|under|over|da|fra|du|ud|sin|dem|os|efter|man|kan|vil|skal)\b/g)||[]).length,
+    Swedish:    (t.match(/\b(och|i|att|det|som|en|på|är|av|för|med|till|den|inte|har|han|om|vi|sin|var|men|ett|sig|nu|hon|de|efter|kan|man|ska|vid|sedan|under|från|du|ut|mer|också|när|upp|hade)\b/g)||[]).length,
+    Norwegian:  (t.match(/\b(og|i|det|at|en|til|er|som|på|de|med|han|av|for|ikke|der|var|jeg|men|et|har|om|vi|sin|hun|dem|seg|etter|kan|vil|fra|du|ut|over|under|da|når|bli|vi)\b/g)||[]).length,
+    English:    (t.match(/\b(the|and|of|to|in|is|it|that|was|for|on|are|with|as|at|be|this|from|or|an|by|which|have|not|but|had|they|his|her|we|you|do|what|all|would|there|their|will|he|she|been|one|has|were|when|so|no|if|about|who|into|then|more|can|them|also|up|out|now|my|these|over|such|some|me|just|like|him|only|its|may)\b/g)||[]).length,
+    Swahili:    (t.match(/\b(na|ya|wa|kwa|ni|katika|la|za|pia|kama|au|lakini|hata|bali|sana|sasa|bado|tayari|kwamba|ambayo|ambao|ambaye|yeye|wao|mimi|wewe|sisi|ninyi|chini|juu|pamoja|baada|kabla|wakati|kila|yote|ote)\b/g)||[]).length,
+  };
+  const best = Object.entries(scores).sort((a,b) => b[1]-a[1])[0];
+  return best && best[1] >= 3 ? best[0] : null;
+}
+
+function checkLangMatch() {
+  const text = document.getElementById('input-text').value;
+  const tgt  = document.getElementById('target-lang').value;
+  const warning = document.getElementById('lang-match-warning');
+  const detected = detectLanguage(text);
+  if (detected && detected === tgt) {
+    document.getElementById('lang-match-detected').textContent = detected;
+    warning.style.display = 'block';
+  } else {
+    warning.style.display = 'none';
+  }
+}
+
 function flashBtn(btn, text) {
   const orig = btn.textContent;
   btn.textContent = text;
@@ -697,7 +733,7 @@ async function processText() {
   const text   = document.getElementById('input-text').value.trim();
   const src    = 'auto';
   const tgt    = document.getElementById('target-lang').value;
-  const style  = document.getElementById('style').value;
+  const style  = 'natural';
 
   document.getElementById('error-box').style.display = 'none';
 
