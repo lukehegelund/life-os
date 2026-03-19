@@ -603,64 +603,61 @@ function buildCacheKey() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TWO-STEP PROMPTS
+// OPTION C — SINGLE PROMPT: THINK THEN ALIGN
 // ─────────────────────────────────────────────────────────────────────────────
 
-function buildTranslationPrompt(tgt, style) {
-  return `Translate the following text into natural, fluent ${tgt}.
+function buildAlignmentPrompt(tgt, style) {
+  return `You are a diglot weave alignment engine. Your job is to produce a word-and-phrase alignment of a source text to its natural ${tgt} translation, with CEFR level classifications.
 
-Rules:
-- Produce a complete, idiomatic ${tgt} translation — write as a native speaker would.
-- Preserve the structure and paragraph breaks of the original.
-- Do not add commentary, notes, or explanations.
-- Style register: ${style}.
-- Output ONLY the translation. Nothing else.`;
-}
+STEP 1 — Before writing any output, silently think through the full natural ${tgt} translation of the entire text. Consider each sentence as a whole. Note where:
+- Word order differs between languages (e.g. noun+adjective → adjective+noun)
+- Prepositions change (e.g. "de la misma manera" → "in the same way", not "of the same way")
+- Multiple source words compress to one target word (e.g. "por tanto" → "therefore")
+- A source subject pronoun is dropped but the target language requires one (e.g. "sería" → "it would be")
+- Verb phrases are inseparable units (e.g. "había llegado" → "had arrived")
+- Fixed idioms or expressions exist (e.g. "Holy Spirit" → "Espíritu Santo")
+Do not output this thinking. Use it only to inform the alignment.
 
-function buildAlignmentPrompt(tgt) {
-  return `You are an alignment engine for a diglot weave language learning app.
-
-You will be given:
-1. SOURCE TEXT — the original text
-2. TRANSLATION — a natural ${tgt} translation of that source text
-
-Your job is to align every span of the source text to its corresponding span in the translation, and classify each aligned pair by CEFR level.
-
-OUTPUT FORMAT — one line per aligned pair:
+STEP 2 — Output the alignment in this exact format, one line per span:
 SOURCE_SPAN|LEVEL|TRANSLATION_SPAN
 
-Where:
-- SOURCE_SPAN = the exact source text characters (word, phrase, or punctuation/whitespace)
-- LEVEL = A0, A1, A2, B1, B2, X, or P
-  - P  = punctuation or whitespace (no translation needed)
+Rules:
+- SOURCE_SPAN = exact characters from the source text in order
+- LEVEL = P, A0, A1, A2, B1, B2, or X
+  - P  = punctuation or whitespace (leave TRANSLATION_SPAN empty)
   - A0 = absolute beginner knows this in ${tgt} (numbers, family, colours, greetings, days)
-  - A1 = beginner knows this (common everyday nouns, basic adjectives)
+  - A1 = beginner (common nouns, basic adjectives)
   - A2 = elementary (most nouns, regular verbs, common adverbs)
   - B1 = intermediate (broader vocab, irregular verbs, abstract nouns)
   - B2 = upper-intermediate (collocations, idioms, nuanced vocabulary)
   - X  = proper noun, untranslatable, or no clean ${tgt} equivalent
-- TRANSLATION_SPAN = the corresponding span from the TRANSLATION
-  - For P tokens: leave empty
-  - For X tokens: use the closest ${tgt} equivalent even if approximate
-  - Use the exact text from the provided translation — do not re-translate
+- TRANSLATION_SPAN = what a native ${tgt} speaker would actually say for this span,
+  informed by your Step 1 translation of the whole sentence.
+  Style register: ${style}.
+  For P spans: leave empty.
+  For X spans: use closest ${tgt} equivalent.
 
-ALIGNMENT RULES:
-- Every character of the source text must appear in exactly one SOURCE_SPAN.
-- Spans must be in source-text order.
-- Align at the most natural granularity:
-  • Single words whenever possible.
-  • Multi-word source spans only when they correspond to a single translation span (e.g. "por tanto" → "therefore", "afecto profundo" → "deep affection", "de la misma manera" → "in the same way").
-  • Punctuation and whitespace are their own P spans.
-- The TRANSLATION_SPANs concatenated (ignoring P spans) must reconstruct the full translation.
+GRANULARITY RULES — apply before writing each line:
+- Default: one source word = one token
+- Use a MULTI-WORD source span ONLY when the natural ${tgt} equivalent cannot be arrived at by translating each word individually, specifically when:
+  • Word order must invert ("afecto profundo" → "deep affection" not "affection deep")
+  • The ${tgt} preposition differs ("de la misma manera" → "in the same way")
+  • Multiple words compress to one ("por tanto" → "therefore", "a fin de que" → "so that")
+  • A pronoun must be added ("sería ideal" → "it would be ideal")
+  • Inseparable verb unit ("había llegado" → "had arrived", "se dio cuenta" → "realized")
+  • Fixed idiom ("Holy Spirit", "buenos días")
+- Do NOT chunk noun+adjective pairs unless word order inverts in ${tgt}
+- Do NOT chunk verb+adverb pairs unless the assembly would be unnatural
+- Every source character must appear in exactly one span
 
 CRITICAL:
 - Output ONLY the alignment lines. No introduction, no explanation, no summary.
 - Never skip a source character.
+- Punctuation and whitespace are always their own P tokens.
 
-Example:
-SOURCE: "El perro corrió rápidamente."
-TRANSLATION: "The dog ran quickly."
+Examples:
 
+Regular tokens (source = Spanish → ${tgt} = English):
 El|A0|The
  |P|
 perro|A0|dog
@@ -670,20 +667,25 @@ corrió|A1|ran
 rápidamente|A2|quickly
 .|P|
 
-Example with chunk:
-SOURCE: "Tenía afecto profundo por todos."
-TRANSLATION: "He had deep affection for everyone."
-
-Tenía|A1|He had
- |P|
+Word order inversion — chunk (source = Spanish → ${tgt} = English):
 afecto profundo|B1|deep affection
- |P|
-por|A0|for
- |P|
-todos|A1|everyone
-.|P|
+(NOT: afecto|B1|affection + profundo|A2|deep — would render "affection deep")
 
-Now align this source text and its ${tgt} translation:`;
+Compression — chunk (source = Spanish → ${tgt} = English):
+por tanto|A2|therefore
+(NOT: por|A0|by + tanto|A1|so — would render "by so" or "by therefore")
+
+Preposition mismatch — chunk (source = Spanish → ${tgt} = English):
+de la misma manera|A2|in the same way
+(NOT "of the same way" — preposition changes)
+
+Subject-drop expansion — chunk (source = Spanish → ${tgt} = English):
+sería ideal|B1|it would be ideal
+
+Inseparable verb — chunk (source = Spanish → ${tgt} = English):
+había llegado|B1|had arrived
+
+Now auto-detect the source language and produce the alignment for ${tgt}:`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -729,41 +731,32 @@ async function processText() {
     return;
   }
 
-  setLoading(true, 'Translating…');
+  setLoading(true, 'Processing…');
   document.getElementById('output-card').style.display = 'none';
   document.getElementById('glossary-card').style.display = 'none';
 
-  async function gemini(systemPrompt, userText) {
+  try {
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          system_instruction: { parts: [{ text: systemPrompt }] },
-          contents: [{ role: 'user', parts: [{ text: userText }] }],
+          system_instruction: { parts: [{ text: buildAlignmentPrompt(tgt, style) }] },
+          contents: [{ role: 'user', parts: [{ text: finalText }] }],
           generationConfig: { maxOutputTokens: 8192, temperature: 0.1 }
         })
       }
     );
+
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err?.error?.message || `API error ${res.status}`);
     }
-    const data = await res.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-  }
 
-  try {
-    // ── Step 1: Natural translation ──────────────────────────────────────────
-    const translation = await gemini(buildTranslationPrompt(tgt, style), finalText);
-    if (!translation) throw new Error('Empty translation from Gemini. Please try again.');
-
-    // ── Step 2: Alignment + classification ───────────────────────────────────
-    setLoading(true, 'Aligning…');
-    const alignInput = `SOURCE TEXT:\n${finalText}\n\nTRANSLATION:\n${translation}`;
-    const rawText = await gemini(buildAlignmentPrompt(tgt), alignInput);
-    if (!rawText) throw new Error('Empty alignment from Gemini. Please try again.');
+    const data    = await res.json();
+    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    if (!rawText) throw new Error('Empty response from Gemini. Please try again.');
 
     const tokens = parseClassification(rawText);
     if (!tokens.length) throw new Error('Could not parse alignment. Please try again.');
