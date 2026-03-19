@@ -339,8 +339,22 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 const SUPABASE_URL   = 'https://kxsuzgpnvtepsyhkezin.supabase.co';
+const SUPABASE_ANON  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4c3V6Z3BudnRlcHN5aGtlemluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3Nzc1MDAsImV4cCI6MjA4NzM1MzUwMH0.oKtpiH63heyK-wJ87ZRvkhUzRqy6NT6Z2XWF1xjbtxA';
 const DB_PROXY_URL   = `${SUPABASE_URL}/functions/v1/db-proxy`;
 const DW_CFG_KEY     = 'dw_config_cache';
+
+// Authenticated fetch to db-proxy
+function proxyFetch(body) {
+  return fetch(DB_PROXY_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${SUPABASE_ANON}`,
+      'apikey': SUPABASE_ANON
+    },
+    body: JSON.stringify(body)
+  });
+}
 const LEVEL_ORDER    = ['A0','A1','A2','B1','B2','full'];
 
 const LEVEL_DESCS = {
@@ -403,10 +417,7 @@ async function loadApiKey() {
 
   // Fetch from Supabase via db-proxy
   try {
-    const res  = await fetch(DB_PROXY_URL, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ table:'app_secrets', op:'select', select:'key,value' })
-    });
+    const res  = await proxyFetch({ table:'app_secrets', op:'select', select:'key,value' });
     const json = await res.json();
     const rows = Array.isArray(json) ? json : (json?.data || []);
     const map  = {};
@@ -561,18 +572,14 @@ async function lookupBible() {
       verseTo   = parts[1] ? parseInt(parts[1]) : verseFrom;
     }
 
-    const res = await fetch(DB_PROXY_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        table: 'bible_verses',
-        op: 'select',
-        select: 'verse,text',
-        filters: verseFrom
-          ? { eq: { book, chapter }, gte: { verse: verseFrom }, lte: { verse: verseTo } }
-          : { eq: { book, chapter } },
-        order: [{ column: 'verse', ascending: true }]
-      })
+    const res = await proxyFetch({
+      table: 'bible_verses',
+      op: 'select',
+      select: 'verse,text',
+      filters: verseFrom
+        ? { eq: { book, chapter }, gte: { verse: verseFrom }, lte: { verse: verseTo } }
+        : { eq: { book, chapter } },
+      order: [{ column: 'verse', ascending: true }]
     });
 
     const json = await res.json();
