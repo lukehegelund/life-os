@@ -492,52 +492,90 @@ function buildClassificationPrompt(src, tgt, style) {
 
 Your job is to tokenize the input text and classify every token.
 
-TOKENIZATION RULES:
-- Split the text into tokens. Each token is either:
-  a) A WORD or MULTI-WORD PHRASE (1-4 words) that carries meaning
-  b) A PUNCTUATION/WHITESPACE token (spaces, commas, periods, newlines, etc.)
-- Keep punctuation and whitespace as separate tokens so the text can be reconstructed exactly.
-- Multi-word phrases (e.g. "in spite of", "good morning", "Holy Spirit") should be grouped as single tokens when they function as a unit.
+═══ TOKENIZATION — DEFAULT: ONE WORD PER TOKEN ═══
 
-FOR EACH WORD/PHRASE TOKEN, output one line in this exact format:
+Tokenize word by word. Every article, conjunction, pronoun, preposition, adjective, noun, and verb gets its own token. This is the default and applies to the vast majority of words.
+
+ONLY create a multi-word chunk (2–4 words grouped as one token) when ALL of the following are true:
+1. The target language grammatically requires adding or dropping a word that has no equivalent in the source (e.g. Spanish drops subject pronouns that English requires — "sería ideal" → "it would be ideal"; the "it" has no source word)
+2. OR the phrase is a fixed, inseparable expression with no word-for-word equivalent (e.g. "Holy Spirit", "buenos días", "in spite of", "se dio cuenta")
+3. OR the verb phrase is an inseparable unit whose parts are meaningless alone (e.g. "había llegado" → "had arrived")
+
+Do NOT chunk just because words are related. Do NOT chunk regular noun phrases, adjective+noun pairs, or verb+adverb pairs — translate each word individually.
+
+═══ OUTPUT FORMAT ═══
+
+For each SINGLE-WORD token:
 TOKEN|LEVEL|TRANSLATION
 
+For each MULTI-WORD CHUNK (only when required by the rules above):
+CHUNK_SOURCE|LEVEL|CHUNK_TRANSLATION
+
+For PUNCTUATION/WHITESPACE tokens:
+TOKEN|P|
+
 Where:
-- TOKEN is the exact surface form as it appears in the text (preserve capitalisation, conjugation, inflection, gender)
-- LEVEL is one of: A0, A1, A2, B1, B2, X
-  - A0 = absolute beginner knows this in ${tgt} (numbers, family words, colours, greetings, days)
+- TOKEN / CHUNK_SOURCE = exact surface form from the text (preserve capitalisation, conjugation, inflection)
+- LEVEL = A0, A1, A2, B1, B2, or X
+  - A0 = absolute beginner knows this in ${tgt} (numbers, family, colours, greetings, days)
   - A1 = beginner knows this (common everyday nouns, basic adjectives)
   - A2 = elementary knows this (most nouns, regular verbs in simple tenses, common adverbs)
   - B1 = intermediate knows this (broader vocab, irregular verbs, abstract nouns)
   - B2 = upper-intermediate knows this (collocations, idiomatic phrases, nuanced vocabulary)
-  - X  = untranslatable or has no clean ${tgt} equivalent (proper nouns that stay as-is are also X)
-- TRANSLATION is the best ${tgt} equivalent of this exact surface form:
-  - Match the exact inflection, conjugation, gender, and number of the source token
-  - For X-level tokens: still provide the closest possible ${tgt} translation (approximate is fine)
-  - For proper nouns (people, place names, brands): use X level and repeat the original as translation
+  - X  = untranslatable, proper noun, or no clean ${tgt} equivalent
+- TRANSLATION / CHUNK_TRANSLATION = grammatically correct ${tgt} equivalent
+  - Single words: match the exact inflection, conjugation, gender, number of the source token
+  - Chunks: produce a natural, grammatically correct ${tgt} phrase (may add/drop words as needed)
+  - X tokens: closest approximate ${tgt} translation; proper nouns repeat the original
   - Style register: ${style}
 
-FOR PUNCTUATION/WHITESPACE TOKENS, output:
-TOKEN|P|
+═══ RECONSTRUCTION RULE ═══
+All tokens concatenated must exactly reconstruct the original text.
+- Single-word tokens: concatenate directly
+- Multi-word chunks: the CHUNK_SOURCE must exactly match the corresponding span in the original text including its spaces
+- Punctuation and whitespace are always separate P tokens
 
-(Just the token, pipe, P, pipe, empty — no translation needed.)
+═══ CRITICAL ═══
+- Output ONLY token lines. No introduction, no explanation, no summary.
+- Never skip a word or character.
+- Never merge punctuation into a word token.
 
-CRITICAL RULES:
-- Output ONLY the token lines. No introduction, no summary, no explanation.
-- Every single character of the original text must be accounted for across all tokens.
-- The tokens must reconstruct the original text exactly when concatenated.
-- Never skip a word. Never merge a punctuation mark into a word token.
+═══ EXAMPLES ═══
 
-Example input: "The dog ran quickly."
-Example output:
-The|A0|El
+Single-word example (${src} = Spanish, ${tgt} = English):
+Input: "El perro corrió rápidamente."
+Output:
+El|A0|The
  |P|
-dog|A0|perro
+perro|A0|dog
  |P|
-ran|A1|corrió
+corrió|A1|ran
  |P|
-quickly|A2|rápidamente
+rápidamente|A2|quickly
 .|P|
+
+Multi-word chunk example (${src} = Spanish, ${tgt} = English):
+Input: "Sería ideal terminar hoy."
+Output:
+Sería ideal|B1|It would be ideal
+ |P|
+terminar|A2|to finish
+ |P|
+hoy|A0|today
+.|P|
+
+Fixed expression example (${src} = English, ${tgt} = Spanish):
+Input: "Good morning, how are you?"
+Output:
+Good morning|A0|Buenos días
+,|P|
+ |P|
+how|A1|cómo
+ |P|
+are|A0|estás
+ |P|
+you|A0|tú
+?|P|
 
 Now classify this ${src} text for ${tgt} learners:`;
 }
