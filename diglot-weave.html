@@ -367,7 +367,16 @@ let lastPDFData     = { tokens:[], level:'', src:'', tgt:'' };
 // ─────────────────────────────────────────────────────────────────────────────
 
 window.addEventListener('DOMContentLoaded', () => {
-  loadApiKey();
+  // Disable Generate until API key is loaded
+  const btn = document.getElementById('process-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Loading…';
+
+  loadApiKey().then(() => {
+    btn.disabled = false;
+    btn.textContent = '✨ Generate';
+  });
+
   updateLevelDesc();
   updateCharCount();
 
