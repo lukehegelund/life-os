@@ -458,11 +458,11 @@ function showError(msg) {
   b.style.display = 'block';
 }
 
-function setLoading(on) {
+function setLoading(on, label) {
   document.getElementById('loading-bar').style.display = on ? 'block' : 'none';
   const btn = document.getElementById('process-btn');
   btn.disabled = on;
-  btn.textContent = on ? '⏳ Classifying…' : '✨ Generate';
+  btn.textContent = on ? `⏳ ${label || 'Processing…'}` : '✨ Generate';
 }
 
 function switchGlossaryTab(tab) {
@@ -603,146 +603,87 @@ function buildCacheKey() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CLASSIFICATION PROMPT
+// TWO-STEP PROMPTS
 // ─────────────────────────────────────────────────────────────────────────────
 
-function buildClassificationPrompt(src, tgt, style) {
-  return `You are a language classification engine for a diglot weave language learning app.
+function buildTranslationPrompt(tgt, style) {
+  return `Translate the following text into natural, fluent ${tgt}.
 
-Your job is to tokenize the input text and classify every token.
+Rules:
+- Produce a complete, idiomatic ${tgt} translation — write as a native speaker would.
+- Preserve the structure and paragraph breaks of the original.
+- Do not add commentary, notes, or explanations.
+- Style register: ${style}.
+- Output ONLY the translation. Nothing else.`;
+}
 
-IMPORTANT: Auto-detect the source language. Do NOT assume any particular language.
+function buildAlignmentPrompt(tgt) {
+  return `You are an alignment engine for a diglot weave language learning app.
 
-═══ TOKENIZATION — DEFAULT: ONE WORD PER TOKEN ═══
+You will be given:
+1. SOURCE TEXT — the original text
+2. TRANSLATION — a natural ${tgt} translation of that source text
 
-The default is one word per token. Tokenize every article, conjunction, pronoun, preposition, adjective, noun, and verb as its own separate token. This applies to the vast majority of words.
+Your job is to align every span of the source text to its corresponding span in the translation, and classify each aligned pair by CEFR level.
 
-THE KEY TEST before creating any chunk: "If I translate each word individually and place them in natural ${tgt} word order, will the result be correct and natural ${tgt}?"
-— If YES → keep as single tokens.
-— If NO → group as one chunk.
-
-Create a multi-word chunk ONLY when one of these phenomena applies:
-
-PHENOMENON 1 — WORD ORDER INVERSION
-Source word order produces unnatural ${tgt} when translated word-by-word.
-Examples across languages:
-• Spanish/French/Italian noun+adjective → ${tgt} adjective+noun: "afecto profundo" → "deep affection", "maison blanche" → "white house", "vino rosso" → "red wine"
-• Arabic/Hebrew right-branching modifiers that invert in ${tgt}
-• Japanese/Korean verb-final that restructures in ${tgt}
-RULE: Chunk the noun+adjective (or equivalent) as one unit when inversion is needed.
-
-PHENOMENON 2 — PREPOSITION MISMATCH
-The ${tgt} preposition differs from a literal word-for-word translation.
-Examples: "de la misma manera" → "in the same way" (not "of the same way"), "se fier à" → "to rely on" (not "to trust to"), "denken an" → "to think about" (not "to think at"), "jeg er glad for" → "I am happy about" (not "I am glad for")
-RULE: Chunk the full prepositional phrase as one unit.
-
-PHENOMENON 3 — COMPRESSION (many source words → one ${tgt} word)
-Multiple source words translate to a single ${tgt} word.
-Examples: "por tanto" → "therefore", "sin embargo" → "however", "c'est pourquoi" → "therefore", "nichtsdestoweniger" → "nevertheless", "malgré tout" → "nevertheless", "a fin de que" → "so that", "hvad angår" → "regarding"
-RULE: Chunk the full source expression as one unit.
-
-PHENOMENON 4 — EXPANSION (subject/object drop requiring pronoun insertion)
-Source language drops a pronoun that ${tgt} grammatically requires.
-Examples: Spanish/Italian/Portuguese drop subject pronouns: "sería ideal" → "it would be ideal", "piove" → "it is raining", "é importante" → "it is important"
-Also: impersonal constructions — French "il fait chaud" → "it is hot"
-RULE: Chunk verb phrase + context as needed to include the added pronoun in the translation.
-
-PHENOMENON 5 — INSEPARABLE VERB PHRASES
-Compound tenses, phrasal verbs, or reflexive constructions that are meaningless when split.
-Examples: "había llegado" → "had arrived", "s'en aller" → "to go away", "aufgewacht sein" → "to have woken up", "se dio cuenta" → "realized", "ne...pas" → negation handled as a unit when needed
-RULE: Chunk the full verb unit.
-
-PHENOMENON 6 — FIXED EXPRESSIONS AND IDIOMS
-Multi-word expressions with no compositional word-for-word equivalent.
-Examples: "Holy Spirit", "buenos días", "s'il vous plaît", "auf Wiedersehen", "c'est-à-dire", "that is to say", "lo siento"
-RULE: Chunk the full expression.
-
-DO NOT chunk:
-— Regular noun phrases where each word translates cleanly (chunk only if word order inverts)
-— Verb + adverb pairs that assemble naturally
-— Any group of words just because they are related in meaning
-
-═══ OUTPUT FORMAT ═══
-
-For each SINGLE-WORD token:
-TOKEN|LEVEL|TRANSLATION
-
-For each MULTI-WORD CHUNK:
-CHUNK_SOURCE|LEVEL|CHUNK_TRANSLATION
-
-For PUNCTUATION/WHITESPACE tokens:
-TOKEN|P|
+OUTPUT FORMAT — one line per aligned pair:
+SOURCE_SPAN|LEVEL|TRANSLATION_SPAN
 
 Where:
-- TOKEN / CHUNK_SOURCE = exact surface form from the text (preserve capitalisation, conjugation, inflection, spacing)
-- LEVEL = A0, A1, A2, B1, B2, or X
+- SOURCE_SPAN = the exact source text characters (word, phrase, or punctuation/whitespace)
+- LEVEL = A0, A1, A2, B1, B2, X, or P
+  - P  = punctuation or whitespace (no translation needed)
   - A0 = absolute beginner knows this in ${tgt} (numbers, family, colours, greetings, days)
   - A1 = beginner knows this (common everyday nouns, basic adjectives)
-  - A2 = elementary knows this (most nouns, regular verbs in simple tenses, common adverbs)
-  - B1 = intermediate knows this (broader vocab, irregular verbs, abstract nouns)
-  - B2 = upper-intermediate knows this (collocations, idiomatic phrases, nuanced vocabulary)
-  - X  = untranslatable, proper noun, or no clean ${tgt} equivalent
-- TRANSLATION / CHUNK_TRANSLATION = grammatically correct ${tgt} equivalent
-  - Single words: match the exact inflection, conjugation, gender, number of the source token
-  - Chunks: produce natural, grammatically correct ${tgt} (may add/drop words as needed)
-  - X tokens: closest approximate ${tgt} translation; proper nouns repeat the original
-  - Style register: ${style}
+  - A2 = elementary (most nouns, regular verbs, common adverbs)
+  - B1 = intermediate (broader vocab, irregular verbs, abstract nouns)
+  - B2 = upper-intermediate (collocations, idioms, nuanced vocabulary)
+  - X  = proper noun, untranslatable, or no clean ${tgt} equivalent
+- TRANSLATION_SPAN = the corresponding span from the TRANSLATION
+  - For P tokens: leave empty
+  - For X tokens: use the closest ${tgt} equivalent even if approximate
+  - Use the exact text from the provided translation — do not re-translate
 
-═══ RECONSTRUCTION RULE ═══
-All tokens concatenated must exactly reconstruct the original text.
-- CHUNK_SOURCE must exactly match the corresponding span in the source text including internal spaces
-- Punctuation and whitespace are always their own P tokens
-- Never skip a character
+ALIGNMENT RULES:
+- Every character of the source text must appear in exactly one SOURCE_SPAN.
+- Spans must be in source-text order.
+- Align at the most natural granularity:
+  • Single words whenever possible.
+  • Multi-word source spans only when they correspond to a single translation span (e.g. "por tanto" → "therefore", "afecto profundo" → "deep affection", "de la misma manera" → "in the same way").
+  • Punctuation and whitespace are their own P spans.
+- The TRANSLATION_SPANs concatenated (ignoring P spans) must reconstruct the full translation.
 
-═══ CRITICAL ═══
-- Output ONLY token lines. No introduction, no explanation, no summary.
-- Never skip a word or character.
-- Never merge punctuation into a word token.
+CRITICAL:
+- Output ONLY the alignment lines. No introduction, no explanation, no summary.
+- Never skip a source character.
 
-═══ EXAMPLES ═══
+Example:
+SOURCE: "El perro corrió rápidamente."
+TRANSLATION: "The dog ran quickly."
 
-Phenomenon 1 — word order inversion (source = Spanish → ${tgt} = English):
-"afecto profundo" → chunk because adjective must move before noun
-afecto profundo|B1|deep affection
-NOT: afecto|B1|affection + profundo|A2|deep (would render "affection deep")
-
-Phenomenon 1 — word order fine, NO chunk needed (source = Spanish → ${tgt} = English):
-"corrió rápidamente" → no inversion needed
+El|A0|The
+ |P|
+perro|A0|dog
+ |P|
 corrió|A1|ran
  |P|
 rápidamente|A2|quickly
-(assembles to "ran quickly" — correct, no chunk)
+.|P|
 
-Phenomenon 2 — preposition mismatch (source = Spanish → ${tgt} = English):
-"de la misma manera" → chunk because "de" → "in" (not "of")
-de la misma manera|A2|in the same way
+Example with chunk:
+SOURCE: "Tenía afecto profundo por todos."
+TRANSLATION: "He had deep affection for everyone."
 
-Phenomenon 3 — compression (source = Spanish → ${tgt} = English):
-"por tanto" → chunk because two words become one
-por tanto|A2|therefore
-NOT: por|A0|by + tanto|A1|so (would render "by therefore")
+Tenía|A1|He had
+ |P|
+afecto profundo|B1|deep affection
+ |P|
+por|A0|for
+ |P|
+todos|A1|everyone
+.|P|
 
-Phenomenon 3 — compression (source = French → ${tgt} = English):
-"c'est pourquoi" → chunk because phrase = one English word
-c'est pourquoi|A2|therefore
-
-Phenomenon 4 — subject-drop expansion (source = Spanish → ${tgt} = English):
-"sería ideal" → chunk because English requires "it"
-sería ideal|B1|it would be ideal
-
-Phenomenon 4 — impersonal expansion (source = French → ${tgt} = English):
-"il fait chaud" → chunk (impersonal construction)
-il fait chaud|A1|it is hot
-
-Phenomenon 5 — inseparable verb phrase (source = Spanish → ${tgt} = English):
-"había llegado" → chunk (compound tense)
-había llegado|B1|had arrived
-
-Phenomenon 6 — fixed expression (source = English → ${tgt} = Spanish):
-"Holy Spirit" → chunk (fixed theological term)
-Holy Spirit|A1|Espíritu Santo
-
-Auto-detect the source language and classify this text for ${tgt} learners:`;
+Now align this source text and its ${tgt} translation:`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -788,13 +729,11 @@ async function processText() {
     return;
   }
 
-  setLoading(true);
+  setLoading(true, 'Translating…');
   document.getElementById('output-card').style.display = 'none';
   document.getElementById('glossary-card').style.display = 'none';
 
-  const systemPrompt = buildClassificationPrompt(src, tgt, style);
-
-  try {
+  async function gemini(systemPrompt, userText) {
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
       {
@@ -802,23 +741,32 @@ async function processText() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           system_instruction: { parts: [{ text: systemPrompt }] },
-          contents: [{ role: 'user', parts: [{ text: finalText }] }],
+          contents: [{ role: 'user', parts: [{ text: userText }] }],
           generationConfig: { maxOutputTokens: 8192, temperature: 0.1 }
         })
       }
     );
-
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err?.error?.message || `API error ${res.status}`);
     }
+    const data = await res.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  }
 
-    const data    = await res.json();
-    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    if (!rawText) throw new Error('Empty response from Gemini. Please try again.');
+  try {
+    // ── Step 1: Natural translation ──────────────────────────────────────────
+    const translation = await gemini(buildTranslationPrompt(tgt, style), finalText);
+    if (!translation) throw new Error('Empty translation from Gemini. Please try again.');
+
+    // ── Step 2: Alignment + classification ───────────────────────────────────
+    setLoading(true, 'Aligning…');
+    const alignInput = `SOURCE TEXT:\n${finalText}\n\nTRANSLATION:\n${translation}`;
+    const rawText = await gemini(buildAlignmentPrompt(tgt), alignInput);
+    if (!rawText) throw new Error('Empty alignment from Gemini. Please try again.');
 
     const tokens = parseClassification(rawText);
-    if (!tokens.length) throw new Error('Could not parse classification. Please try again.');
+    if (!tokens.length) throw new Error('Could not parse alignment. Please try again.');
 
     // Verify reconstruction
     const reconstructed = tokens.map(t => t.token).join('');
