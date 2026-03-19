@@ -611,22 +611,56 @@ function buildClassificationPrompt(src, tgt, style) {
 
 Your job is to tokenize the input text and classify every token.
 
-IMPORTANT: Auto-detect the language of the input text. Do NOT assume it is any particular language.
+IMPORTANT: Auto-detect the source language. Do NOT assume any particular language.
 
 ═══ TOKENIZATION — DEFAULT: ONE WORD PER TOKEN ═══
 
-Tokenize word by word. Every article, conjunction, pronoun, preposition, adjective, noun, and verb gets its own token. This is the default and covers the vast majority of words.
+The default is one word per token. Tokenize every article, conjunction, pronoun, preposition, adjective, noun, and verb as its own separate token. This applies to the vast majority of words.
 
-ONLY create a multi-word chunk when translating word-by-word would produce INCORRECT, UNNATURAL, or NON-IDIOMATIC ${tgt} output. This includes:
-- Multi-source-word expressions that map to a single ${tgt} word (e.g. "por tanto" → "therefore", "sin embargo" → "however", "a fin de que" → "so that")
-- Prepositional phrases where the ${tgt} preposition differs from the literal translation (e.g. "de la misma manera" → "in the same way", NOT "of the same way")
-- Expressions that require adding a word in ${tgt} that has no source equivalent (e.g. "sería ideal" → "it would be ideal")
-- Fixed, inseparable idioms or expressions (e.g. "Holy Spirit", "buenos días", "se dio cuenta")
-- Inseparable verb phrases (e.g. "había llegado" → "had arrived")
+THE KEY TEST before creating any chunk: "If I translate each word individually and place them in natural ${tgt} word order, will the result be correct and natural ${tgt}?"
+— If YES → keep as single tokens.
+— If NO → group as one chunk.
 
-Do NOT chunk just because words are related or adjacent. Do NOT chunk noun phrases, adjective+noun pairs, or verb+adverb pairs unless the above conditions are met — translate each word individually and let them assemble naturally.
+Create a multi-word chunk ONLY when one of these phenomena applies:
 
-THE KEY TEST: Ask "if I translate each word separately and place them in ${tgt} word order, will the result be natural ${tgt}?" If YES → single tokens. If NO → one chunk.
+PHENOMENON 1 — WORD ORDER INVERSION
+Source word order produces unnatural ${tgt} when translated word-by-word.
+Examples across languages:
+• Spanish/French/Italian noun+adjective → ${tgt} adjective+noun: "afecto profundo" → "deep affection", "maison blanche" → "white house", "vino rosso" → "red wine"
+• Arabic/Hebrew right-branching modifiers that invert in ${tgt}
+• Japanese/Korean verb-final that restructures in ${tgt}
+RULE: Chunk the noun+adjective (or equivalent) as one unit when inversion is needed.
+
+PHENOMENON 2 — PREPOSITION MISMATCH
+The ${tgt} preposition differs from a literal word-for-word translation.
+Examples: "de la misma manera" → "in the same way" (not "of the same way"), "se fier à" → "to rely on" (not "to trust to"), "denken an" → "to think about" (not "to think at"), "jeg er glad for" → "I am happy about" (not "I am glad for")
+RULE: Chunk the full prepositional phrase as one unit.
+
+PHENOMENON 3 — COMPRESSION (many source words → one ${tgt} word)
+Multiple source words translate to a single ${tgt} word.
+Examples: "por tanto" → "therefore", "sin embargo" → "however", "c'est pourquoi" → "therefore", "nichtsdestoweniger" → "nevertheless", "malgré tout" → "nevertheless", "a fin de que" → "so that", "hvad angår" → "regarding"
+RULE: Chunk the full source expression as one unit.
+
+PHENOMENON 4 — EXPANSION (subject/object drop requiring pronoun insertion)
+Source language drops a pronoun that ${tgt} grammatically requires.
+Examples: Spanish/Italian/Portuguese drop subject pronouns: "sería ideal" → "it would be ideal", "piove" → "it is raining", "é importante" → "it is important"
+Also: impersonal constructions — French "il fait chaud" → "it is hot"
+RULE: Chunk verb phrase + context as needed to include the added pronoun in the translation.
+
+PHENOMENON 5 — INSEPARABLE VERB PHRASES
+Compound tenses, phrasal verbs, or reflexive constructions that are meaningless when split.
+Examples: "había llegado" → "had arrived", "s'en aller" → "to go away", "aufgewacht sein" → "to have woken up", "se dio cuenta" → "realized", "ne...pas" → negation handled as a unit when needed
+RULE: Chunk the full verb unit.
+
+PHENOMENON 6 — FIXED EXPRESSIONS AND IDIOMS
+Multi-word expressions with no compositional word-for-word equivalent.
+Examples: "Holy Spirit", "buenos días", "s'il vous plaît", "auf Wiedersehen", "c'est-à-dire", "that is to say", "lo siento"
+RULE: Chunk the full expression.
+
+DO NOT chunk:
+— Regular noun phrases where each word translates cleanly (chunk only if word order inverts)
+— Verb + adverb pairs that assemble naturally
+— Any group of words just because they are related in meaning
 
 ═══ OUTPUT FORMAT ═══
 
@@ -640,7 +674,7 @@ For PUNCTUATION/WHITESPACE tokens:
 TOKEN|P|
 
 Where:
-- TOKEN / CHUNK_SOURCE = exact surface form from the text (preserve capitalisation, conjugation, inflection)
+- TOKEN / CHUNK_SOURCE = exact surface form from the text (preserve capitalisation, conjugation, inflection, spacing)
 - LEVEL = A0, A1, A2, B1, B2, or X
   - A0 = absolute beginner knows this in ${tgt} (numbers, family, colours, greetings, days)
   - A1 = beginner knows this (common everyday nouns, basic adjectives)
@@ -650,15 +684,15 @@ Where:
   - X  = untranslatable, proper noun, or no clean ${tgt} equivalent
 - TRANSLATION / CHUNK_TRANSLATION = grammatically correct ${tgt} equivalent
   - Single words: match the exact inflection, conjugation, gender, number of the source token
-  - Chunks: produce a natural, grammatically correct ${tgt} phrase
+  - Chunks: produce natural, grammatically correct ${tgt} (may add/drop words as needed)
   - X tokens: closest approximate ${tgt} translation; proper nouns repeat the original
   - Style register: ${style}
 
 ═══ RECONSTRUCTION RULE ═══
 All tokens concatenated must exactly reconstruct the original text.
-- Single-word tokens: concatenate directly
-- Multi-word chunks: CHUNK_SOURCE must exactly match the corresponding span in the original text including spaces
-- Punctuation and whitespace are always separate P tokens
+- CHUNK_SOURCE must exactly match the corresponding span in the source text including internal spaces
+- Punctuation and whitespace are always their own P tokens
+- Never skip a character
 
 ═══ CRITICAL ═══
 - Output ONLY token lines. No introduction, no explanation, no summary.
@@ -667,58 +701,46 @@ All tokens concatenated must exactly reconstruct the original text.
 
 ═══ EXAMPLES ═══
 
-Single-word default (source auto-detected as Spanish, ${tgt} = English):
-Input: "El perro corrió rápidamente."
-Output:
-El|A0|The
- |P|
-perro|A0|dog
- |P|
+Phenomenon 1 — word order inversion (source = Spanish → ${tgt} = English):
+"afecto profundo" → chunk because adjective must move before noun
+afecto profundo|B1|deep affection
+NOT: afecto|B1|affection + profundo|A2|deep (would render "affection deep")
+
+Phenomenon 1 — word order fine, NO chunk needed (source = Spanish → ${tgt} = English):
+"corrió rápidamente" → no inversion needed
 corrió|A1|ran
  |P|
 rápidamente|A2|quickly
-.|P|
+(assembles to "ran quickly" — correct, no chunk)
 
-Non-compositional prepositional phrase — chunk required (source = Spanish, ${tgt} = English):
-Input: "Pensad de la misma manera."
-Output:
-Pensad|A2|Think
- |P|
+Phenomenon 2 — preposition mismatch (source = Spanish → ${tgt} = English):
+"de la misma manera" → chunk because "de" → "in" (not "of")
 de la misma manera|A2|in the same way
-.|P|
-(NOT "of the same way" — the preposition changes, so chunk)
 
-Multi-word expression reducing to one word — chunk required (source = Spanish, ${tgt} = English):
-Input: "Por tanto, completad mi gozo."
-Output:
-Por tanto|A2|Therefore
-,|P|
- |P|
-completad|B1|complete
- |P|
-mi|A0|my
- |P|
-gozo|A1|joy
-.|P|
-(NOT "By therefore" — "por tanto" is one English word, so chunk)
+Phenomenon 3 — compression (source = Spanish → ${tgt} = English):
+"por tanto" → chunk because two words become one
+por tanto|A2|therefore
+NOT: por|A0|by + tanto|A1|so (would render "by therefore")
 
-Subject-drop requiring added pronoun — chunk required (source = Spanish, ${tgt} = English):
-Input: "Sería ideal terminar hoy."
-Output:
-Sería ideal|B1|It would be ideal
- |P|
-terminar|A2|to finish
- |P|
-hoy|A0|today
-.|P|
+Phenomenon 3 — compression (source = French → ${tgt} = English):
+"c'est pourquoi" → chunk because phrase = one English word
+c'est pourquoi|A2|therefore
 
-Regular adjective+noun — NO chunk needed (source = Spanish, ${tgt} = English):
-Input: "afecto profundo"
-Output:
-afecto|B1|affection
- |P|
-profundo|A2|deep
-(Each word translates cleanly and assembles to "deep affection" in ${tgt} word order — no chunk)
+Phenomenon 4 — subject-drop expansion (source = Spanish → ${tgt} = English):
+"sería ideal" → chunk because English requires "it"
+sería ideal|B1|it would be ideal
+
+Phenomenon 4 — impersonal expansion (source = French → ${tgt} = English):
+"il fait chaud" → chunk (impersonal construction)
+il fait chaud|A1|it is hot
+
+Phenomenon 5 — inseparable verb phrase (source = Spanish → ${tgt} = English):
+"había llegado" → chunk (compound tense)
+había llegado|B1|had arrived
+
+Phenomenon 6 — fixed expression (source = English → ${tgt} = Spanish):
+"Holy Spirit" → chunk (fixed theological term)
+Holy Spirit|A1|Espíritu Santo
 
 Auto-detect the source language and classify this text for ${tgt} learners:`;
 }
