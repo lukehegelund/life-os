@@ -484,13 +484,6 @@ function toggleHighlight() {
   document.getElementById('output-text').classList.toggle('no-highlight', !on);
 }
 
-function cleanupPlain(text) {
-  return text
-    .replace(/\[\d{1,3}\]/g, '')
-    .replace(/\(\d{1,3}\)/g, '')
-    .replace(/  +/g, ' ');
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // BIBLE LOOKUP
 // ─────────────────────────────────────────────────────────────────────────────
@@ -744,37 +737,45 @@ async function processText() {
   if (!text)                     return showError('Please enter some text to process.');
   if (text.length > 8000)        return showError('Text is too long — please keep under 8,000 characters.');
 
-  // Apply cleanup pre-processing before classification if checkbox is checked
-  const doCleanup = document.getElementById('cleanup-toggle').checked;
-  if (doCleanup) {
-    const cleaned = cleanupPlain(text)
-      // Remove chapter:verse refs like "3:16" — keep surrounding spaces
-      .replace(/(\s|^)\d{1,3}:\d{1,3}(\s|$)/g, (m, pre, post) => (pre || '') + (post || ''))
-      // Remove standalone verse numbers (1–176) at start of line or after newline
-      // Only strip the number itself, preserve the space that follows
-      .replace(/(^|\n)\s*(\d{1,3})\s+/g, (m, pre, num) =>
-        parseInt(num) <= 176 ? (pre || '') : m)
-      // Collapse 3+ blank lines to 1
-      .replace(/(\n\s*){3,}/g, '\n\n')
-      // Clean trailing/leading whitespace per line
-      .replace(/[ \t]+\n/g, '\n')
-      .replace(/\n[ \t]+/g, '\n')
-      // Collapse multiple spaces (but not newlines)
-      .replace(/[^\S\n]{2,}/g, ' ')
-      .trim();
-    // Update the textarea so the user sees what was sent
-    document.getElementById('input-text').value = cleaned;
-    updateCharCount();
-  }
+  // Re-read text (cleanup will update it if needed)
+  let finalText = text;
 
-  // Re-read text in case cleanup modified the textarea
-  const finalText = document.getElementById('input-text').value.trim();
-
-  // Check cache first
+  // Check cache first (before potentially expensive cleanup)
   const cacheKey = buildCacheKey();
   if (classCache[cacheKey]) {
     renderFromCache(classCache[cacheKey], currentLevel, true);
     return;
+  }
+
+  // AI cleanup pre-pass if checkbox is checked
+  const doCleanup = document.getElementById('cleanup-toggle').checked;
+  if (doCleanup) {
+    setLoading(true, 'Cleaning up…');
+    document.getElementById('output-card').style.display = 'none';
+    document.getElementById('glossary-card').style.display = 'none';
+    try {
+      const cleanRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: `Clean up the following text for reading. Remove verse numbers, chapter numbers, reference codes (like "3:16"), bracketed notes, editorial headers, and any non-prose formatting. Fix spacing. Keep only the natural flowing prose or poetry. Do not translate, summarize, or change any words. Output only the cleaned text, nothing else.` }] },
+            contents: [{ role: 'user', parts: [{ text: finalText }] }],
+            generationConfig: { maxOutputTokens: 4096, temperature: 0 }
+          })
+        }
+      );
+      if (cleanRes.ok) {
+        const cleanData = await cleanRes.json();
+        const cleaned = cleanData.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+        if (cleaned) {
+          finalText = cleaned;
+          document.getElementById('input-text').value = cleaned;
+          updateCharCount();
+        }
+      }
+    } catch(e) { /* silent — proceed with original text if cleanup fails */ }
   }
 
   setLoading(true, 'Processing…');
