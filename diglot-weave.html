@@ -871,6 +871,7 @@ function renderFromCache(cacheData, level, fromCache) {
   let html         = '';
   let swappedCount = 0;
   let wordCount    = 0;
+  let lastWasWord  = false; // track whether last token was a word (not P)
   const glossaryMap = new Map(); // translation → { src, level, isUntranslatable }
 
   for (const tok of tokens) {
@@ -879,8 +880,13 @@ function renderFromCache(cacheData, level, fromCache) {
     if (tok.level === 'P') {
       // Punctuation / whitespace — always pass through as-is
       html += escaped;
+      lastWasWord = false;
       continue;
     }
+
+    // Safety net: if two consecutive word tokens have no P token between them,
+    // insert a space to prevent words merging (e.g. "elchoirmaster")
+    if (lastWasWord) html += ' ';
 
     wordCount++;
     const tokLevel   = LEVEL_THRESHOLD[tok.level] ?? 99;
@@ -902,6 +908,7 @@ function renderFromCache(cacheData, level, fromCache) {
     } else {
       html += escaped;
     }
+    lastWasWord = true;
   }
 
   // Render output
