@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mark Berean — Life OS</title>
+<link rel="stylesheet" href="css/main.css?v=2" onerror="this.remove()">
+<style>
+  /* ── Reader-specific styles ── */
+  :root {
+    --accent: #16a34a;
+    --spanish-bg: #f0fdf4;
+    --spanish-color: #15803d;
+    --spanish-border: #bbf7d0;
+    --vnum-color: #9ca3af;
+  }
+
+  .reader-controls {
+    background: var(--white);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .ctrl-label {
+    font-size: 13px;
+    color: var(--gray-400);
+    white-space: nowrap;
+  }
+
+  /* ── Chapter selector ── */
+  #chapterSelect {
+    padding: 6px 10px;
+    border: 1.5px solid var(--gray-200);
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    background: var(--white);
+    color: var(--gray-800);
+    cursor: pointer;
+  }
+  #chapterSelect:focus { outline: none; border-color: var(--accent); }
+
+  /* ── Range slider ── */
+  #range-wrap {
+    position: relative;
+    flex: 1;
+    min-width: 140px;
+    max-width: 380px;
+    height: 28px;
+  }
+  #range-track {
+    position: absolute;
+    top: 50%; left: 0; right: 0;
+    height: 4px;
+    background: var(--gray-200);
+    border-radius: 2px;
+    transform: translateY(-50%);
+  }
+  #range-fill {
+    position: absolute;
+    top: 50%;
+    height: 4px;
+    background: var(--accent);
+    border-radius: 2px;
+    transform: translateY(-50%);
+    pointer-events: none;
+  }
+  #range-wrap input[type=range] {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 100%;
+    height: 4px;
+    background: transparent;
+    pointer-events: none;
+    -webkit-appearance: none;
+    appearance: none;
+    outline: none;
+  }
+  #range-wrap input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    pointer-events: all;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,.25);
+    cursor: pointer;
+  }
+  #range-wrap input[type=range]::-moz-range-thumb {
+    pointer-events: all;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,.25);
+    cursor: pointer;
+  }
+
+  /* ── Number inputs ── */
+  .num-input {
+    font-size: 13px;
+    width: 58px;
+    padding: 4px 6px;
+    border: 1px solid var(--spanish-border);
+    border-radius: 6px;
+    color: var(--accent);
+    font-weight: 600;
+    text-align: center;
+    outline: none;
+    background: var(--spanish-bg);
+    -moz-appearance: textfield;
+  }
+  .num-input::-webkit-inner-spin-button,
+  .num-input::-webkit-outer-spin-button { opacity: 1; }
+  .num-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(22,163,74,.15);
+  }
+
+  /* ── Badge + coverage ── */
+  #badge {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    background: var(--spanish-bg);
+    border: 1px solid var(--spanish-border);
+    border-radius: 20px;
+    padding: 3px 12px;
+    white-space: nowrap;
+    text-align: center;
+  }
+  #coverage {
+    font-size: 12px;
+    color: var(--gray-400);
+    white-space: nowrap;
+  }
+
+  /* ── Color toggle ── */
+  #color-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--gray-400);
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+  }
+  #colorToggle {
+    accent-color: var(--accent);
+    cursor: pointer;
+    width: 14px; height: 14px;
+  }
+
+  /* ── Verse text area ── */
+  #text {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 16px 0 80px;
+    font-family: Georgia, 'Times New Roman', serif;
+    line-height: 1.85;
+  }
+
+  #text h2 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--gray-400);
+    margin: 32px 0 12px;
+  }
+
+  p.verse {
+    margin-bottom: .2em;
+    font-size: 1.05rem;
+  }
+
+  .vnum {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: .72rem;
+    font-weight: 600;
+    color: var(--vnum-color);
+    vertical-align: super;
+    margin-right: 2px;
+    user-select: none;
+  }
+
+  /* ── Word states ── */
+  span[data-w] {
+    transition: background .12s, color .12s;
+    border-radius: 2px;
+  }
+  span[data-w].spanish {
+    color: var(--spanish-color);
+    background: var(--spanish-bg);
+    padding: 0 1px;
+  }
+  body.plain-mode span[data-w].spanish {
+    color: inherit;
+    background: none;
+    padding: 0;
+  }
+
+  /* ── Loading state ── */
+  #loading {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--gray-400);
+    font-size: 15px;
+  }
+  .spinner {
+    display: inline-block;
+    width: 28px; height: 28px;
+    border: 3px solid var(--gray-200);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .6s linear infinite;
+    margin-bottom: 12px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<header class="page-header">
+  <div class="header-row">
+    <div>
+      <h1>Mark — Berean Diglot</h1>
+      <div class="subtitle">Lectura bilingüe con frecuencia</div>
+    </div>
+  </div>
+</header>
+
+<main class="content">
+  <div class="reader-controls">
+    <label class="ctrl-label">Ch:</label>
+    <select id="chapterSelect"></select>
+
+    <label class="ctrl-label">Range:</label>
+    <input type="number" id="numMin" class="num-input" min="0" max="2000" value="0" title="Bottom rank">
+    <div id="range-wrap">
+      <div id="range-track"></div>
+      <div id="range-fill"></div>
+      <input type="range" id="sliderMin" min="0" max="2000" value="0" step="1">
+      <input type="range" id="sliderMax" min="0" max="2000" value="50" step="1">
+    </div>
+    <input type="number" id="numMax" class="num-input" min="0" max="2000" value="50" title="Top rank">
+    <div id="badge">Top 50 words → Spanish</div>
+    <div id="coverage"></div>
+    <label id="color-wrap" title="Show Spanish words in green">
+      <input type="checkbox" id="colorToggle" checked>
+      Highlight
+    </label>
+  </div>
+
+  <div id="loading">
+    <div class="spinner"></div>
+    <div>Loading Mark…</div>
+  </div>
+
+  <div id="text" style="display:none;"></div>
+</main>
+
+<nav class="bottom-nav">
+  <a href="dashboard.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+    Inicio
+  </a>
+  <a href="school.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>
+    Escuela
+  </a>
+  <a href="apps.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+    Apps
+  </a>
+  <a href="languages.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+    Idiomas
+  </a>
+  <a href="calendar.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><circle cx="8" cy="16" r="1" fill="currentColor"/><circle cx="12" cy="16" r="1" fill="currentColor"/></svg>
+    Calendario
+  </a>
+  <a href="notes.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+    Notas
+  </a>
+  <a href="tasks.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+    Tareas
+  </a>
+  <a href="reminders.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+    Recordatorios
+  </a>
+  <a href="projects.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+    Proyectos
+  </a>
+</nav>
+
+<script type="module" src="js/auth-guard.js"></script>
+<script type="module">
+import { supabase } from './js/supabase.js';
+
+// ── DOM refs ──
+const chapterSelect = document.getElementById('chapterSelect');
+const sliderMin  = document.getElementById('sliderMin');
+const sliderMax  = document.getElementById('sliderMax');
+const numMin     = document.getElementById('numMin');
+const numMax     = document.getElementById('numMax');
+const rangeFill  = document.getElementById('range-fill');
+const badge      = document.getElementById('badge');
+const coverage   = document.getElementById('coverage');
+const colorToggle = document.getElementById('colorToggle');
+const textDiv    = document.getElementById('text');
+const loadingDiv = document.getElementById('loading');
+
+// ── State ──
+let FREQ = {};        // { english_lc: [rank, spanish_text] }
+let VERSES = [];      // all verses from DB
+let MAX_RANK = 2000;
+let currentChapter = 1;
+
+// ── Load data from Supabase ──
+async function loadData() {
+  const [freqRes, versesRes] = await Promise.all([
+    supabase.from('diglot_berean_frequency').select('*'),
+    supabase.from('diglot_berean_verses').select('*').order('chapter').order('verse'),
+  ]);
+
+  if (freqRes.error || versesRes.error) {
+    loadingDiv.innerHTML = '<div style="color:var(--coral);">Error loading data. Check console.</div>';
+    console.error('Freq error:', freqRes.error, 'Verses error:', versesRes.error);
+    return;
+  }
+
+  // Build frequency map: english_lc -> [rank, spanish]
+  const freqRows = freqRes.data || [];
+  let maxR = 0;
+  freqRows.forEach(r => {
+    const key = (r.english || '').toLowerCase();
+    if (key) {
+      FREQ[key] = [r.rank || 0, r.spanish || ''];
+      if (r.rank > maxR) maxR = r.rank;
+    }
+  });
+  MAX_RANK = maxR || 2000;
+
+  // Update slider max
+  sliderMin.max = MAX_RANK;
+  sliderMax.max = MAX_RANK;
+  numMin.max = MAX_RANK;
+  numMax.max = MAX_RANK;
+
+  VERSES = versesRes.data || [];
+
+  // Populate chapter selector
+  const chapters = [...new Set(VERSES.map(v => v.chapter))].sort((a, b) => a - b);
+  chapterSelect.innerHTML = '';
+  chapters.forEach(ch => {
+    const opt = document.createElement('option');
+    opt.value = ch;
+    opt.textContent = ch;
+    chapterSelect.appendChild(opt);
+  });
+
+  if (chapters.length > 0) {
+    currentChapter = chapters[0];
+    chapterSelect.value = currentChapter;
+  }
+
+  loadingDiv.style.display = 'none';
+  textDiv.style.display = '';
+  renderChapter();
+}
+
+// ── Render chapter ──
+function renderChapter() {
+  const chVerses = VERSES.filter(v => v.chapter === currentChapter);
+  textDiv.innerHTML = `<h2>Chapter ${currentChapter}</h2>`;
+
+  chVerses.forEach(v => {
+    const p = document.createElement('p');
+    p.className = 'verse';
+
+    // Verse number
+    const vnSpan = document.createElement('span');
+    vnSpan.className = 'vnum';
+    vnSpan.textContent = v.verse;
+    p.appendChild(vnSpan);
+    p.appendChild(document.createTextNode(' '));
+
+    // Parse words from verse data
+    // Verse data has: english_text, and a words JSON array
+    // Format: each word object has { english, spanish }
+    const words = v.words || [];
+    if (Array.isArray(words)) {
+      words.forEach((w, i) => {
+        const eng = w.english || '';
+        const es = w.spanish || '';
+        const span = document.createElement('span');
+        span.dataset.w = eng.toLowerCase();
+        span.dataset.es = es;
+        span.dataset.orig = eng;
+        span.textContent = eng;
+        p.appendChild(span);
+        // Add space between words
+        if (i < words.length - 1) p.appendChild(document.createTextNode(' '));
+      });
+    } else {
+      // Fallback: if words is just text
+      p.appendChild(document.createTextNode(v.english_text || ''));
+    }
+
+    textDiv.appendChild(p);
+  });
+
+  update();
+}
+
+// ── Get word rank ──
+function getWordRank(span) {
+  const key = span.dataset.w;
+  if (!key) return undefined;
+  const entry = FREQ[key];
+  return entry ? entry[0] : undefined;
+}
+
+// ── Update word states based on slider ──
+function update() {
+  const lo = parseInt(sliderMin.value) || 0;
+  const hi = parseInt(sliderMax.value) || 0;
+  const spans = textDiv.querySelectorAll('span[data-w]');
+  const spanArr = Array.from(spans);
+  let totalTokens = spans.length;
+
+  // Update spans
+  spans.forEach(s => {
+    const rank = getWordRank(s);
+    if (rank === undefined) return;
+
+    if (rank >= lo && rank <= hi) {
+      const freqEntry = FREQ[s.dataset.w];
+      s.textContent = freqEntry ? freqEntry[1] : (s.dataset.es || s.dataset.orig);
+      s.classList.add('spanish');
+    } else {
+      s.textContent = s.dataset.orig;
+      s.classList.remove('spanish');
+    }
+  });
+
+  // Capitalise first Spanish word in each verse
+  spanArr.forEach((s, i) => {
+    if (!s.classList.contains('spanish')) return;
+    const prev = spanArr[i - 1];
+    if (!prev || prev.closest('p') !== s.closest('p')) {
+      const t = s.textContent;
+      s.textContent = t.charAt(0).toUpperCase() + t.slice(1);
+    }
+  });
+
+  // Update track fill
+  const pctLo = (lo / MAX_RANK) * 100;
+  const pctHi = (hi / MAX_RANK) * 100;
+  rangeFill.style.left  = pctLo + '%';
+  rangeFill.style.width = (pctHi - pctLo) + '%';
+
+  // Update badge
+  if (hi === 0) {
+    badge.textContent = 'All English';
+  } else if (lo <= 1) {
+    badge.textContent = `Top ${hi} words → Spanish`;
+  } else {
+    badge.textContent = `Ranks ${lo}–${hi} → Spanish`;
+  }
+
+  // Update coverage
+  let spanishCount = 0;
+  spans.forEach(s => { if (s.classList.contains('spanish')) spanishCount++; });
+  const pct = totalTokens > 0 ? Math.round((spanishCount / totalTokens) * 100) : 0;
+  coverage.textContent = `${pct}% of words in Spanish`;
+}
+
+// ── Sync helpers ──
+function setMin(val) {
+  val = Math.max(0, Math.min(parseInt(sliderMax.value), val || 0));
+  sliderMin.value = val;
+  numMin.value    = val;
+  update();
+}
+function setMax(val) {
+  val = Math.max(parseInt(sliderMin.value), Math.min(MAX_RANK, val || 0));
+  sliderMax.value = val;
+  numMax.value    = val;
+  update();
+}
+
+// Slider events
+sliderMin.addEventListener('input', () => setMin(parseInt(sliderMin.value)));
+sliderMax.addEventListener('input', () => setMax(parseInt(sliderMax.value)));
+
+// Number input events
+numMin.addEventListener('change',  () => setMin(parseInt(numMin.value)));
+numMax.addEventListener('change',  () => setMax(parseInt(numMax.value)));
+numMin.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); setMin(parseInt(numMin.value)); } });
+numMax.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); setMax(parseInt(numMax.value)); } });
+
+// Color toggle
+colorToggle.addEventListener('change', () => {
+  document.body.classList.toggle('plain-mode', !colorToggle.checked);
+});
+
+// Chapter change
+chapterSelect.addEventListener('change', () => {
+  currentChapter = parseInt(chapterSelect.value);
+  renderChapter();
+});
+
+// ── Init ──
+loadData();
+</script>
+<script type="module" src="js/error-reporter.js?v=1"></script>
+<script type="module" src="js/topbar.js?v=6"></script>
+</body>
+</html>
