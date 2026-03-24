@@ -403,25 +403,21 @@ function renderChapter() {
     p.appendChild(vnSpan);
     p.appendChild(document.createTextNode(' '));
 
-    // Parse words from verse data
-    // Verse data has: english_text, and a words JSON array
-    // Format: each word object has { english, spanish }
+    // Parse word_pairs: each entry is [english, spanish]
     const words = v.word_pairs || [];
-    if (Array.isArray(words)) {
-      words.forEach((w, i) => {
-        const eng = w.english || '';
-        const es = w.spanish || '';
+    if (Array.isArray(words) && words.length > 0) {
+      words.forEach((pair, i) => {
+        const eng = Array.isArray(pair) ? (pair[0] || '') : (pair.english || '');
+        const es  = Array.isArray(pair) ? (pair[1] || '') : (pair.spanish || '');
         const span = document.createElement('span');
-        span.dataset.w = eng.toLowerCase();
+        span.dataset.w = eng.toLowerCase().replace(/[^a-z']/g, '');
         span.dataset.es = es;
         span.dataset.orig = eng;
         span.textContent = eng;
         p.appendChild(span);
-        // Add space between words
         if (i < words.length - 1) p.appendChild(document.createTextNode(' '));
       });
     } else {
-      // Fallback: if words is just text
       p.appendChild(document.createTextNode(v.english_text || ''));
     }
 
