@@ -308,9 +308,12 @@
   </a>
 </nav>
 
-<script type="module" src="js/auth-guard.js"></script>
 <script type="module">
-import { supabase } from './js/supabase.js';
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+const supabase = createClient(
+  'https://kxsuzgpnvtepsyhkezin.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4c3V6Z3BudnRlcHN5aGtlemluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3Nzc1MDAsImV4cCI6MjA4NzM1MzUwMH0.oKtpiH63heyK-wJ87ZRvkhUzRqy6NT6Z2XWF1xjbtxA'
+);
 
 // ── DOM refs ──
 const chapterSelect = document.getElementById('chapterSelect');
@@ -348,7 +351,7 @@ async function loadData() {
   const freqRows = freqRes.data || [];
   let maxR = 0;
   freqRows.forEach(r => {
-    const key = (r.english || '').toLowerCase();
+    const key = (r.word || '').toLowerCase();
     if (key) {
       FREQ[key] = [r.rank || 0, r.spanish || ''];
       if (r.rank > maxR) maxR = r.rank;
@@ -403,7 +406,7 @@ function renderChapter() {
     // Parse words from verse data
     // Verse data has: english_text, and a words JSON array
     // Format: each word object has { english, spanish }
-    const words = v.words || [];
+    const words = v.word_pairs || [];
     if (Array.isArray(words)) {
       words.forEach((w, i) => {
         const eng = w.english || '';
