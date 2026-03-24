@@ -245,14 +245,14 @@
     <select id="chapterSelect"></select>
 
     <label class="ctrl-label">Range:</label>
-    <input type="number" id="numMin" class="num-input" min="0" max="2000" value="0" title="Bottom rank">
+    <input type="number" id="numMin" class="num-input" min="0" max="2087" value="0" title="Bottom rank">
     <div id="range-wrap">
       <div id="range-track"></div>
       <div id="range-fill"></div>
-      <input type="range" id="sliderMin" min="0" max="2000" value="0" step="1">
-      <input type="range" id="sliderMax" min="0" max="2000" value="50" step="1">
+      <input type="range" id="sliderMin" min="0" max="2087" value="0" step="1">
+      <input type="range" id="sliderMax" min="0" max="2087" value="50" step="1">
     </div>
-    <input type="number" id="numMax" class="num-input" min="0" max="2000" value="50" title="Top rank">
+    <input type="number" id="numMax" class="num-input" min="0" max="2087" value="50" title="Top rank">
     <div id="badge">Top 50 words → Spanish</div>
     <div id="coverage"></div>
     <label id="color-wrap" title="Show Spanish words in green">
@@ -331,7 +331,7 @@ const loadingDiv = document.getElementById('loading');
 // ── State ──
 let FREQ = {};        // { english_lc: [rank, spanish_text] }
 let VERSES = [];      // all verses from DB
-let MAX_RANK = 2000;
+let MAX_RANK = 2087;
 let currentChapter = 1;
 
 // ── Load data from Supabase ──
@@ -357,7 +357,7 @@ async function loadData() {
       if (r.rank > maxR) maxR = r.rank;
     }
   });
-  MAX_RANK = maxR || 2000;
+  MAX_RANK = maxR || 2087;
 
   // Update slider max
   sliderMin.max = MAX_RANK;
