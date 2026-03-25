@@ -3,6 +3,8 @@
 // The anon key below has NO table access (RLS blocks everything)
 
 const PROXY_URL = 'https://kxsuzgpnvtepsyhkezin.supabase.co/functions/v1/db-proxy';
+const ANON_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4c3V6Z3BudnRlcHN5aGtlemluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3Nzc1MDAsImV4cCI6MjA4NzM1MzUwMH0.oKtpiH63heyK-wJ87ZRvkhUzRqy6NT6Z2XWF1xjbtxA';
+const PROXY_HEADERS = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${ANON_KEY}` };
 
 // ── Error reporter shim ───────────────────────────────────────────────────────
 // Reports Supabase proxy errors to the console_errors table.
@@ -47,7 +49,7 @@ function _reportDbError(message, context) {
   // Fire-and-forget via raw fetch (bypasses ProxyQueryBuilder entirely)
   fetch(PROXY_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: PROXY_HEADERS,
     body: JSON.stringify({
       table: 'console_errors',
       op: 'insert',
@@ -157,7 +159,7 @@ class ProxyQueryBuilder {
     try {
       const res = await fetch(PROXY_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: PROXY_HEADERS,
         body: JSON.stringify(payload),
       });
 
@@ -202,9 +204,8 @@ export const supabase = {
   storage: {
     from: (bucket) => ({
       upload: async (path, file, opts) => {
-        const ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4c3V6Z3BudnRlcHN5aGtlemluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3Nzc1MDAsImV4cCI6MjA4NzM1MzUwMH0.oKtpiH63heyK-wJ87ZRvkhUzRqy6NT6Z2XWF1xjbtxA';
         const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
-        const sb = createClient('https://kxsuzgpnvtepsyhkezin.supabase.co', ANON);
+        const sb = createClient('https://kxsuzgpnvtepsyhkezin.supabase.co', ANON_KEY);
         return sb.storage.from(bucket).upload(path, file, opts);
       },
       getPublicUrl: (path) => ({
