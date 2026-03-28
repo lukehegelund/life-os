@@ -1,0 +1,2224 @@
+{
+  "book": "Mark",
+  "chapter": 7,
+  "source": "Berean Standard Bible",
+  "review_date": "2026-03-27",
+  "review_notes": [
+    "Verse 4: Merged [\"from\", \"del\"] + [\"the\", \"\"] → [\"from the\", \"del\"] per de+el contraction rule.",
+    "Verse 5: Merged [\"defiled\", \"inmundas\"] + [\"hands\", \"manos\"] → [\"defiled hands\", \"manos inmundas\"] per Rule 10 (adjective follows noun in Spanish).",
+    "Verse 6: Merged [\"honor\", \"honra\"] + [\"Me\", \"Me\"] → [\"honor Me\", \"Me honra\"] — object pronoun must precede conjugated verb in Spanish.",
+    "Verse 6: Changed [\"are far from\", \"está lejos de\"] → [\"are far from\", \"están lejos de\"] — plural subject 'hearts' requires plural verb.",
+    "Verse 7: Merged [\"worship\", \"me adoran\"] + [\"Me\", \"\"] → [\"worship Me\", \"me adoran\"] — object pronoun incorporated into verb chunk.",
+    "Verse 13: Merged [\"such\", \"semejantes\"] + [\"matters\", \"cosas\"] → [\"such matters\", \"cosas semejantes\"] per Rule 10 (adjective follows noun).",
+    "Verse 14: Merged [\"listen to\", \"escúchenme\"] + [\"Me\", \"\"] → [\"listen to Me\", \"escúchenme\"] — object pronoun incorporated into verb.",
+    "Verse 19: Merged [\"it\", \"no\"] + [\"does not enter\", \"entra en\"] → [\"it does not enter\", \"no entra en\"] for correct negation placement.",
+    "Verse 19: Restructured [\"it goes into\", \"va al\"] + [\"the\", \"el\"] + [\"stomach\", \"estómago\"] → [\"it goes into the\", \"va al\"] + [\"stomach\", \"estómago\"] — 'al' is contraction of a+el, already contains 'the'.",
+    "Verse 21: Changed [\"the\", \"el\"] → [\"the\", \"del\"] — de+el contraction in 'from within the hearts' (desde adentro del corazón).",
+    "Verse 21: Merged [\"evil\", \"malos\"] + [\"thoughts\", \"pensamientos\"] → [\"evil thoughts\", \"malos pensamientos\"] per Rule 10.",
+    "Verse 24: Changed [\"He\", \"Él\"] → [\"He\", \"que Él\"] — Spanish requires relative 'que' connector before the subordinate clause subject.",
+    "Verse 26: Fixed [\"Now\", \"Era\"] [\"she\", \"ella\"] [\"was\", \"\"] → [\"Now\", \"\"] [\"she\", \"ella\"] [\"was\", \"era\"] for correct verb alignment.",
+    "Verse 26: Merged [\"Syrophoenician\", \"origen sirofenicio\"] + [\"origin\", \"\"] → [\"Syrophoenician origin\", \"origen sirofenicio\"].",
+    "Verse 27: Merged [\"children's\", \"pan de los hijos\"] + [\"bread\", \"\"] → [\"the children's bread\", \"el pan de los hijos\"] including preceding article.",
+    "Verse 28: Merged [\"children's\", \"migajas de los hijos\"] + [\"crumbs\", \"\"] → [\"the children's crumbs\", \"las migajas de los hijos\"].",
+    "Verse 32: Restructured [\"Some people\", \"Le trajeron\"] [\"brought\", \"\"] → [\"Some people\", \"Unas personas\"] [\"brought\", \"trajeron\"] for proper subject-verb alignment.",
+    "Verse 33: Merged [\"the\", \"los\"] + [\"man's\", \"oídos del hombre\"] + [\"ears\", \"\"] → [\"the\", \"\"] + [\"man's ears\", \"los oídos del hombre\"].",
+    "Verse 33: Merged [\"the\", \"la\"] + [\"man's\", \"lengua del hombre\"] + [\"tongue\", \"\"] → [\"the\", \"\"] + [\"man's tongue\", \"la lengua del hombre\"].",
+    "Verse 34: Merged [\"looking up\", \"mirando al\"] + [\"to\", \"\"] → [\"looking up to\", \"mirando al\"] — 'al' incorporates 'to the'.",
+    "Verse 35: Merged [\"the\", \"\"] + [\"man's\", \"oídos del hombre\"] + [\"ears\", \"\"] → [\"the\", \"\"] + [\"man's ears\", \"los oídos del hombre\"].",
+    "Verse 37: Merged [\"He has done\", \"Todo lo ha hecho\"] + [\"all things\", \"\"] + [\"well\", \"bien\"] → [\"He has done all things well\", \"Todo lo ha hecho bien\"] — idiomatic structure requiring single chunk."
+  ],
+  "verses": {
+    "1": [
+      [
+        "Then",
+        "Entonces"
+      ],
+      [
+        "the",
+        "los"
+      ],
+      [
+        "Pharisees",
+        "fariseos"
+      ],
+      [
+        "and",
+        "y"
+      ],
+      [
+        "some",
+        "algunos"
+      ],
+      [
+        "of",
+        "de"
+      ],
+      [
+        "the",
+        "los"
+      ],
+      [
+        "scribes",
+        "escribas"
+      ],
+      [
+        "who",
+        "que"
+      ],
+      [
+        "had come",
+        "habían venido"
+      ],
+      [
+        "from",
+        "de"
+      ],
+      [
+        "Jerusalem",
+        "Jerusalén"
+      ],
+      [
+        "gathered around",
+        "se reunieron alrededor de"
+      ],
+      [
+        "Jesus",
+        "Jesús"
+      ]
+    ],
+    "2": [
+      [
+        "and",
+        "y"
+      ],
+      [
+        "they",
+        "ellos"
+      ],
+      [
+        "saw",
+        "vieron"
+      ],
+      [
+        "some",
+        "algunos"
+      ],
+      [
+        "of",
+        "de"
+      ],
+      [
+        "His",
+        "Sus"
+      ],
+      [
+        "disciples",
+        "discípulos"
+      ],
+      [
+        "eating",
+        "comer"
+      ],
+      [
+        "with",
+        "con"
+      ],
+      [
+        "hands",
+        "manos"
+      ],
+      [
+        "that",
+        "que"
+      ],
+      [
+        "were",
+        "estaban"
+      ],
+      [
+        "defiled",
+        "inmundas"
+      ],
+      [
+        "that is",
+        "es decir"
+      ],
+      [
+        "unwashed",
+        "sin lavar"
+      ]
+    ],
+    "3": [
+      [
+        "Now",
+        "Pues"
+      ],
+      [
+        "in holding to",
+        "al aferrarse a"
+      ],
+      [
+        "the",
+        "la"
+      ],
+      [
+        "tradition",
+        "tradición"
+      ],
+      [
+        "of the",
+        "de los"
+      ],
+      [
+        "elders",
+        "ancianos"
+      ],
+      [
+        "the",
+        "los"
+      ],
+      [
+        "Pharisees",
+        "fariseos"
+      ],
+      [
+        "and",
+        "y"
+      ],
+      [
+        "all",
+        "todos"
+      ],
+      [
+        "the",
+        "los"
+      ],
+      [
+        "Jews",
+        "judíos"
+      ],
+      [
+        "do not",
+        "no"
+      ],
+      [
+        "eat",
+        "comen"
+      ],
+      [
+        "until",
+        "hasta"
+      ],
+      [
+        "they wash",
+        "lavarse"
+      ],
+      [
+        "their",
+        "sus"
+      ],
+      [
+        "hands",
+        "manos"
+      ],
+      [
+        "ceremonially",
+        "ceremonialmente"
+      ]
+    ],
+    "4": [
+      [
+        "And",
+        "Y"
+      ],
+      [
+        "on returning",
+        "al regresar"
+      ],
+      [
+        "from the",
+        "del"
+      ],
+      [
+        "market",
+        "mercado"
+      ],
+      [
+        "they",
+        "ellos"
+      ],
+      [
+        "do not",
+        "no"
+      ],
+      [
+        "eat",
+        "comen"
+      ],
+      [
+        "unless",
+        "a menos que"
+      ],
+      [
+        "they wash",
+        "se laven"
+      ],
+      [
+        "And",
+        "Y"
+      ],
+      [
+        "there are",
+        "hay"
+      ],
+      [
+        "many",
+        "muchas"
+      ],
+      [
+        "other",
+        "otras"
+      ],
+      [
+        "traditions",
+        "tradiciones"
+      ],
+      [
+        "for them to observe",
+        "que observar"
+      ],
+      [
+        "including",
+        "incluyendo"
+      ],
+      [
+        "the",
+        "el"
+      ],
+      [
+        "washing",
+        "lavado"
+      ],
+      [
+        "of",
+        "de"
+      ],
+      [
+        "cups",
+        "copas"
+      ],
+      [
+        "pitchers",
+        "cántaros"
+      ],
+      [
+        "kettles",
+        "vasijas"
+      ],
+      [
+        "and",
+        "y"
+      ],
+      [
+        "couches for dining",
+        "divanes de comer"
+      ]
+    ],
+    "5": [
+      [
+        "So",
+        "Entonces"
+      ],
+      [
+        "the",
+        "los"
+      ],
+      [
+        "Pharisees",
+        "fariseos"
+      ],
+      [
+        "and",
+        "y"
+      ],
+      [
+        "scribes",
+        "escribas"
+      ],
+      [
+        "questioned",
+        "preguntaron a"
+      ],
+      [
+        "Jesus",
+        "Jesús"
+      ],
+      [
+        "Why",
+        "¿Por qué"
+      ],
+      [
+        "do",
+        ""
+      ],
+      [
+        "Your",
+        "Sus"
+      ],
+      [
+        "disciples",
+        "discípulos"
+      ],
+      [
+        "not",
+        "no"
+      ],
+      [
+        "walk",
+        "andan"
+      ],
+      [
+        "according to",
+        "conforme a"
+      ],
+      [
+        "the",
+        "la"
+      ],
+      [
+        "tradition",
+        "tradición"
+      ],
+      [
+        "of the",
+        "de los"
+      ],
+      [
+        "elders",
+        "ancianos"
+      ],
+      [
+        "Instead",
+        "Sino que"
+      ],
+      [
+        "they",
+        "ellos"
+      ],
+      [
+        "eat",
+        "comen"
+      ],
+      [
+        "with",
+        "con"
+      ],
+      [
+        "defiled hands",
+        "manos inmundas"
+      ]
+    ],
+    "6": [
+      [
+        "Jesus",
+        "Jesús"
+      ],
+      [
+        "answered",
+        "les respondió"
+      ],
+      [
+        "them",
+        ""
+      ],
+      [
+        "Isaiah",
+        "Isaías"
+      ],
+      [
+        "prophesied",
+        "profetizó"
+      ],
+      [
+        "correctly",
+        "acertadamente"
+      ],
+      [
+        "about",
+        "acerca de"
+      ],
+      [
+        "you",
+        "ustedes"
+      ],
+      [
+        "hypocrites",
+        "hipócritas"
+      ],
+      [
+        "as",
+        "como"
+      ],
+      [
+        "it is written",
+        "está escrito"
+      ],
+      [
+        "These people",
+        "Este pueblo"
+      ],
+      [
+        "honor Me",
+        "Me honra"
+      ],
+      [
+        "with",
+        "con"
+      ],
+      [
+        "their",
+        "sus"
+      ],
+      [
+        "lips",
+        "labios"
+      ],
+      [
+        "but",
+        "pero"
+      ],
+      [
+        "their",
+        "su"
+      ],
+      [
+        "hearts",
+        "corazón"
+      ],
+      [
+        "are far from",
+        "están lejos de"
+      ],
+      [
+        "Me",
+        "Mí"
+      ]
+    ],
+    "7": [
+      [
+        "They",
+        "Ellos"
+      ],
+      [
+        "worship Me",
+        "me adoran"
+      ],
+      [
+        "in vain",
+        "en vano"
+      ],
+      [
+        "they teach",
+        "enseñando"
+      ],
+      [
+        "as",
+        "como"
+      ],
+      [
+        "doctrine",
+        "doctrina"
+      ],
+      [
+        "the",
+        "los"
+      ],
+      [
+        "precepts",
+        "preceptos"
+      ],
+      [
+        "of",
+        "de"
+      ],
+      [
+        "men",
+        "hombres"
+      ]
+    ],
+    "8": [
+      [
+        "You",
+        "Ustedes"
+      ],
+      [
+        "have disregarded",
+        "han dejado de lado"
+      ],
+      [
+        "the",
+        "el"
+      ],
+      [
+        "commandment",
+        "mandamiento"
+      ],
+      [
+        "of",
+        "de"
+      ],
+      [
+        "God",
+        "Dios"
+      ],
+      [
+        "to keep",
+        "para guardar"
+      ],
+      [
+        "the",
+        "la"
+      ],
+      [
+        "tradition",
+        "tradición"
+      ],
+      [
+        "of",
+        "de"
+      ],
+      [
+        "men",
+        "hombres"
+      ]
+    ],
+    "9": [
+      [
+        "He",
+        "Él"
+      ],
+      [
+        "went on to say",
+        "continuó diciendo"
+      ],
+      [
+        "You",
+        "Ustedes"
+      ],
+      [
+        "neatly",
+        "hábilmente"
+      ],
+      [
+        "set aside",
+        "rechazan"
+      ],
+      [
+        "the",
+        "el"
+      ],
+      [
+        "commandment",
+        "mandamiento"
+      ],
+      [
+        "of",
+        "de"
+      ],
+      [
+        "God",
+        "Dios"
+      ],
+      [
+        "to maintain",
+        "para mantener"
+      ],
+      [
+        "your",
+        "su"
+      ],
+      [
+        "own",
+        "propia"
+      ],
+      [
+        "tradition",
+        "tradición"
+      ]
+    ],
+    "10": [
+      [
+        "For",
+        "Porque"
+      ],
+      [
+        "Moses",
+        "Moisés"
+      ],
+      [
+        "said",
+        "dijo"
+      ],
+      [
+        "Honor",
+        "Honra"
+      ],
+      [
+        "your",
+        "a tu"
+      ],
+      [
+        "father",
+        "padre"
+      ],
+      [
+        "and",
+        "y"
+      ],
+      [
+        "your",
+        "a tu"
+      ],
+      [
+        "mother",
+        "madre"
+      ],
+      [
+        "and",
+        "y"
+      ],
+      [
+        "Anyone",
+        "El que"
+      ],
+      [
+        "who",
+        ""
+      ],
+      [
+        "curses",
+        "maldiga"
+      ],
+      [
+        "his",
+        "a su"
+      ],
+      [
+        "father",
+        "padre"
+      ],
+      [
+        "or",
+        "o"
+      ],
+      [
+        "mother",
+        "madre"
+      ],
+      [
+        "must be put to death",
+        "ha de morir"
+      ]
+    ],
+    "11": [
+      [
+        "But",
+        "Pero"
+      ],
+      [
+        "you",
+        "ustedes"
+      ],
+      [
+        "say",
+        "dicen"
+      ],
+      [
+        "that",
+        "que"
+      ],
+      [
+        "if",
+        "si"
+      ],
+      [
+        "a",
+        "un"
+      ],
+      [
+        "man",
+        "hombre"
+      ],
+      [
+        "says",
+        "le dice"
+      ],
+      [
+        "to his",
+        "a su"
+      ],
+      [
+        "father",
+        "padre"
+      ],
+      [
+        "or",
+        "o"
+      ],
+      [
+        "mother",
+        "madre"
+      ],
+      [
+        "Whatever",
+        "Lo que"
+      ],
+      [
+        "you would have received",
+        "podrías haber recibido"
+      ],
+      [
+        "from",
+        "de"
+      ],
+      [
+        "me",
+        "mí"
+      ],
+      [
+        "is",
+        "es"
+      ],
+      [
+        "Corban",
+        "Corbán"
+      ],
+      [
+        "that is",
+        "es decir"
+      ],
+      [
+        "a gift",
+        "una ofrenda"
+      ],
+      [
+        "devoted to",
+        "dedicada a"
+      ],
+      [
+        "God",
+        "Dios"
+      ]
+    ],
+    "12": [
+      [
+        "he",
+        "él"
+      ],
+      [
+        "is no longer permitted",
+        "ya no puede"
+      ],
+      [
+        "to do",
+        "hacer"
+      ],
+      [
+        "anything",
+        "nada"
+      ],
+      [
+        "for",
+        "por"
+      ],
+      [
+        "his",
+        "su"
+      ],
+      [
+        "father",
+        "padre"
+      ],
+      [
+        "or",
+        "o"
+      ],
+      [
+        "mother",
+        "madre"
+      ]
+    ],
+    "13": [
+      [
+        "Thus",
+        "Así"
+      ],
+      [
+        "you",
+        "ustedes"
+      ],
+      [
+        "nullify",
+        "anulan"
+      ],
+      [
+        "the",
+        "la"
+      ],
+      [
+        "word",
+        "palabra"
+      ],
+      [
+        "of",
+        "de"
+      ],
+      [
+        "God",
+        "Dios"
+      ],
+      [
+        "by",
+        "con"
+      ],
+      [
+        "the",
+        "la"
+      ],
+      [
+        "tradition",
+        "tradición"
+      ],
+      [
+        "you",
+        "que"
+      ],
+      [
+        "have handed down",
+        "han transmitido"
+      ],
+      [
+        "And",
+        "Y"
+      ],
+      [
+        "you do so",
+        "así hacen"
+      ],
+      [
+        "in",
+        "en"
+      ],
+      [
+        "many",
+        "muchas"
+      ],
+      [
+        "such matters",
+        "cosas semejantes"
+      ]
+    ],
+    "14": [
+      [
+        "Once again",
+        "De nuevo"
+      ],
+      [
+        "Jesus",
+        "Jesús"
+      ],
+      [
+        "called",
+        "llamó"
+      ],
+      [
+        "the",
+        "a la"
+      ],
+      [
+        "crowd",
+        "multitud"
+      ],
+      [
+        "to Him",
+        "hacia Él"
+      ],
+      [
+        "and",
+        "y"
+      ],
+      [
+        "said",
+        "dijo"
+      ],
+      [
+        "All of you",
+        "Todos"
+      ],
+      [
+        "listen to Me",
+        "escúchenme"
+      ],
+      [
+        "and",
+        "y"
+      ],
+      [
+        "understand",
+        "entiendan"
+      ]
+    ],
+    "15": [
+      [
+        "Nothing",
+        "Nada"
+      ],
+      [
+        "that",
+        "que"
+      ],
+      [
+        "enters",
+        "entra"
+      ],
+      [
+        "a",
+        "a un"
+      ],
+      [
+        "man",
+        "hombre"
+      ],
+      [
+        "from the outside",
+        "desde afuera"
+      ],
+      [
+        "can defile",
+        "puede contaminarlo"
+      ],
+      [
+        "him",
+        ""
+      ],
+      [
+        "but",
+        "sino"
+      ],
+      [
+        "the",
+        "las"
+      ],
+      [
+        "things",
+        "cosas"
+      ],
+      [
+        "that",
+        "que"
+      ],
+      [
+        "come out",
+        "salen"
+      ],
+      [
+        "of",
+        "de"
+      ],
+      [
+        "a",
+        "un"
+      ],
+      [
+        "man",
+        "hombre"
+      ],
+      [
+        "these are what",
+        "esas son las que"
+      ],
+      [
+        "defile",
+        "contaminan"
+      ],
+      [
+        "him",
+        "al hombre"
+      ]
+    ],
+    "17": [
+      [
+        "After",
+        "Después"
+      ],
+      [
+        "Jesus",
+        "Jesús"
+      ],
+      [
+        "had left",
+        "dejó"
+      ],
+      [
+        "the",
+        "a la"
+      ],
+      [
+        "crowd",
+        "multitud"
+      ],
+      [
+        "and gone into",
+        "y entró en"
+      ],
+      [
+        "the",
+        "la"
+      ],
+      [
+        "house",
+        "casa"
+      ],
+      [
+        "His",
+        "Sus"
+      ],
+      [
+        "disciples",
+        "discípulos"
+      ],
+      [
+        "inquired",
+        "le preguntaron"
+      ],
+      [
+        "about",
+        "sobre"
+      ],
+      [
+        "the",
+        "la"
+      ],
+      [
+        "parable",
+        "parábola"
+      ]
+    ],
+    "18": [
+      [
+        "Are you still so dull",
+        "¿Acaso están tan faltos de entendimiento"
+      ],
+      [
+        "He asked",
+        "preguntó Él"
+      ],
+      [
+        "Do you not understand",
+        "¿No entienden"
+      ],
+      [
+        "Nothing",
+        "Nada"
+      ],
+      [
+        "that",
+        "que"
+      ],
+      [
+        "enters",
+        "entra"
+      ],
+      [
+        "a",
+        "a un"
+      ],
+      [
+        "man",
+        "hombre"
+      ],
+      [
+        "from the outside",
+        "desde afuera"
+      ],
+      [
+        "can defile",
+        "puede contaminarlo"
+      ],
+      [
+        "him",
+        ""
+      ]
+    ],
+    "19": [
+      [
+        "because",
+        "porque"
+      ],
+      [
+        "it does not enter",
+        "no entra en"
+      ],
+      [
+        "his",
+        "su"
+      ],
+      [
+        "heart",
+        "corazón"
+      ],
+      [
+        "but",
+        "sino que"
+      ],
+      [
+        "it goes into the",
+        "va al"
+      ],
+      [
+        "stomach",
+        "estómago"
+      ],
+      [
+        "and then",
+        "y luego"
+      ],
+      [
+        "is eliminated",
+        "es eliminado"
+      ],
+      [
+        "Thus",
+        "Así"
+      ],
+      [
+        "all",
+        "todos"
+      ],
+      [
+        "foods",
+        "los alimentos"
+      ],
+      [
+        "are clean",
+        "son limpios"
+      ]
+    ],
+    "20": [
+      [
+        "He",
+        "Él"
+      ],
+      [
+        "continued",
+        "continuó"
+      ],
+      [
+        "What",
+        "Lo que"
+      ],
+      [
+        "comes out",
+        "sale"
+      ],
+      [
+        "of",
+        "de"
+      ],
+      [
+        "a",
+        "un"
+      ],
+      [
+        "man",
+        "hombre"
+      ],
+      [
+        "that",
+        "eso"
+      ],
+      [
+        "is what",
+        "es lo que"
+      ],
+      [
+        "defiles",
+        "contamina"
+      ],
+      [
+        "him",
+        "al hombre"
+      ]
+    ],
+    "21": [
+      [
+        "For",
+        "Porque"
+      ],
+      [
+        "from within",
+        "desde adentro"
+      ],
+      [
+        "the",
+        "del"
+      ],
+      [
+        "hearts",
+        "corazón"
+      ],
+      [
+        "of",
+        "de"
+      ],
+      [
+        "men",
+        "los hombres"
+      ],
+      [
+        "come",
+        "salen"
+      ],
+      [
+        "evil thoughts",
+        "malos pensamientos"
+      ],
+      [
+        "sexual immorality",
+        "inmoralidad sexual"
+      ],
+      [
+        "theft",
+        "robo"
+      ],
+      [
+        "murder",
+        "homicidio"
+      ],
+      [
+        "adultery",
+        "adulterio"
+      ]
+    ],
+    "22": [
+      [
+        "greed",
+        "avaricia"
+      ],
+      [
+        "wickedness",
+        "maldad"
+      ],
+      [
+        "deceit",
+        "engaño"
+      ],
+      [
+        "debauchery",
+        "libertinaje"
+      ],
+      [
+        "envy",
+        "envidia"
+      ],
+      [
+        "slander",
+        "calumnia"
+      ],
+      [
+        "arrogance",
+        "arrogancia"
+      ],
+      [
+        "and",
+        "y"
+      ],
+      [
+        "foolishness",
+        "insensatez"
+      ]
+    ],
+    "23": [
+      [
+        "All",
+        "Todas"
+      ],
+      [
+        "these",
+        "estas"
+      ],
+      [
+        "evils",
+        "maldades"
+      ],
+      [
+        "come from within",
+        "vienen de adentro"
+      ],
+      [
+        "and",
+        "y"
+      ],
+      [
+        "these",
+        "estas"
+      ],
+      [
+        "are what",
+        "son las que"
+      ],
+      [
+        "defile",
+        "contaminan"
+      ],
+      [
+        "a",
+        "a un"
+      ],
+      [
+        "man",
+        "hombre"
+      ]
+    ],
+    "24": [
+      [
+        "Jesus",
+        "Jesús"
+      ],
+      [
+        "left",
+        "se fue"
+      ],
+      [
+        "that",
+        "de aquel"
+      ],
+      [
+        "place",
+        "lugar"
+      ],
+      [
+        "and",
+        "y"
+      ],
+      [
+        "went to",
+        "fue a"
+      ],
+      [
+        "the",
+        "la"
+      ],
+      [
+        "region",
+        "región"
+      ],
+      [
+        "of",
+        "de"
+      ],
+      [
+        "Tyre",
+        "Tiro"
+      ],
+      [
+        "Not wanting",
+        "No queriendo"
+      ],
+      [
+        "anyone",
+        "que nadie"
+      ],
+      [
+        "to know",
+        "supiera"
+      ],
+      [
+        "He",
+        "que Él"
+      ],
+      [
+        "was there",
+        "estaba allí"
+      ],
+      [
+        "He entered",
+        "entró en"
+      ],
+      [
+        "a",
+        "una"
+      ],
+      [
+        "house",
+        "casa"
+      ],
+      [
+        "but",
+        "pero"
+      ],
+      [
+        "was unable to",
+        "no pudo"
+      ],
+      [
+        "escape their notice",
+        "pasar desapercibido"
+      ]
+    ],
+    "25": [
+      [
+        "Instead",
+        "Sino que"
+      ],
+      [
+        "a",
+        "una"
+      ],
+      [
+        "woman",
+        "mujer"
+      ],
+      [
+        "whose",
+        "cuya"
+      ],
+      [
+        "little daughter",
+        "hijita"
+      ],
+      [
+        "had",
+        "tenía"
+      ],
+      [
+        "an",
+        "un"
+      ],
+      [
+        "unclean spirit",
+        "espíritu impuro"
+      ],
+      [
+        "soon heard",
+        "pronto oyó"
+      ],
+      [
+        "about",
+        "hablar de"
+      ],
+      [
+        "Jesus",
+        "Jesús"
+      ],
+      [
+        "and",
+        "y"
+      ],
+      [
+        "she came",
+        "vino"
+      ],
+      [
+        "and",
+        "y"
+      ],
+      [
+        "fell at",
+        "se postró a"
+      ],
+      [
+        "His",
+        "Sus"
+      ],
+      [
+        "feet",
+        "pies"
+      ]
+    ],
+    "26": [
+      [
+        "Now",
+        ""
+      ],
+      [
+        "she",
+        "ella"
+      ],
+      [
+        "was",
+        "era"
+      ],
+      [
+        "a",
+        "una"
+      ],
+      [
+        "Greek woman",
+        "mujer griega"
+      ],
+      [
+        "of",
+        "de"
+      ],
+      [
+        "Syrophoenician origin",
+        "origen sirofenicio"
+      ],
+      [
+        "and",
+        "y"
+      ],
+      [
+        "she kept asking",
+        "le seguía pidiendo a"
+      ],
+      [
+        "Jesus",
+        "Jesús"
+      ],
+      [
+        "to drive",
+        "que expulsara"
+      ],
+      [
+        "the",
+        "el"
+      ],
+      [
+        "demon",
+        "demonio"
+      ],
+      [
+        "out of",
+        "de"
+      ],
+      [
+        "her",
+        "su"
+      ],
+      [
+        "daughter",
+        "hija"
+      ]
+    ],
+    "27": [
+      [
+        "First",
+        "Primero"
+      ],
+      [
+        "let",
+        "deja que"
+      ],
+      [
+        "the",
+        "los"
+      ],
+      [
+        "children",
+        "hijos"
+      ],
+      [
+        "have their fill",
+        "se sacien"
+      ],
+      [
+        "He said",
+        "dijo Él"
+      ],
+      [
+        "For",
+        "Porque"
+      ],
+      [
+        "it is not right",
+        "no está bien"
+      ],
+      [
+        "to take",
+        "tomar"
+      ],
+      [
+        "the children's bread",
+        "el pan de los hijos"
+      ],
+      [
+        "and toss it",
+        "y echarlo"
+      ],
+      [
+        "to the",
+        "a los"
+      ],
+      [
+        "dogs",
+        "perros"
+      ]
+    ],
+    "28": [
+      [
+        "Yes",
+        "Sí"
+      ],
+      [
+        "Lord",
+        "Señor"
+      ],
+      [
+        "she replied",
+        "respondió ella"
+      ],
+      [
+        "even",
+        "incluso"
+      ],
+      [
+        "the",
+        "los"
+      ],
+      [
+        "dogs",
+        "perros"
+      ],
+      [
+        "under",
+        "debajo de"
+      ],
+      [
+        "the",
+        "la"
+      ],
+      [
+        "table",
+        "mesa"
+      ],
+      [
+        "eat",
+        "comen"
+      ],
+      [
+        "the children's crumbs",
+        "las migajas de los hijos"
+      ]
+    ],
+    "29": [
+      [
+        "Then",
+        "Entonces"
+      ],
+      [
+        "Jesus",
+        "Jesús"
+      ],
+      [
+        "told",
+        "le dijo"
+      ],
+      [
+        "her",
+        ""
+      ],
+      [
+        "Because of",
+        "Por"
+      ],
+      [
+        "this",
+        "esta"
+      ],
+      [
+        "answer",
+        "respuesta"
+      ],
+      [
+        "you may go",
+        "puedes irte"
+      ],
+      [
+        "The",
+        "El"
+      ],
+      [
+        "demon",
+        "demonio"
+      ],
+      [
+        "has left",
+        "ha salido de"
+      ],
+      [
+        "your",
+        "tu"
+      ],
+      [
+        "daughter",
+        "hija"
+      ]
+    ],
+    "30": [
+      [
+        "And",
+        "Y"
+      ],
+      [
+        "she",
+        "ella"
+      ],
+      [
+        "went",
+        "fue"
+      ],
+      [
+        "home",
+        "a su casa"
+      ],
+      [
+        "and",
+        "y"
+      ],
+      [
+        "found",
+        "encontró"
+      ],
+      [
+        "her",
+        "a su"
+      ],
+      [
+        "child",
+        "hija"
+      ],
+      [
+        "lying on",
+        "acostada en"
+      ],
+      [
+        "the",
+        "la"
+      ],
+      [
+        "bed",
+        "cama"
+      ],
+      [
+        "and",
+        "y"
+      ],
+      [
+        "the",
+        "el"
+      ],
+      [
+        "demon",
+        "demonio"
+      ],
+      [
+        "was gone",
+        "había salido"
+      ]
+    ],
+    "31": [
+      [
+        "Then",
+        "Luego"
+      ],
+      [
+        "Jesus",
+        "Jesús"
+      ],
+      [
+        "left",
+        "salió de"
+      ],
+      [
+        "the",
+        "la"
+      ],
+      [
+        "region",
+        "región"
+      ],
+      [
+        "of",
+        "de"
+      ],
+      [
+        "Tyre",
+        "Tiro"
+      ],
+      [
+        "and went through",
+        "y pasó por"
+      ],
+      [
+        "Sidon",
+        "Sidón"
+      ],
+      [
+        "to the",
+        "al"
+      ],
+      [
+        "Sea",
+        "mar"
+      ],
+      [
+        "of",
+        "de"
+      ],
+      [
+        "Galilee",
+        "Galilea"
+      ],
+      [
+        "and into",
+        "y a"
+      ],
+      [
+        "the",
+        "la"
+      ],
+      [
+        "region",
+        "región"
+      ],
+      [
+        "of the",
+        "de la"
+      ],
+      [
+        "Decapolis",
+        "Decápolis"
+      ]
+    ],
+    "32": [
+      [
+        "Some people",
+        "Unas personas"
+      ],
+      [
+        "brought",
+        "trajeron"
+      ],
+      [
+        "to Him",
+        "a Él"
+      ],
+      [
+        "a",
+        "un"
+      ],
+      [
+        "man",
+        "hombre"
+      ],
+      [
+        "who was",
+        "que era"
+      ],
+      [
+        "deaf",
+        "sordo"
+      ],
+      [
+        "and",
+        "y"
+      ],
+      [
+        "hardly able to speak",
+        "apenas podía hablar"
+      ],
+      [
+        "and",
+        "y"
+      ],
+      [
+        "they begged",
+        "le rogaron"
+      ],
+      [
+        "Jesus",
+        "a Jesús"
+      ],
+      [
+        "to place",
+        "que pusiera"
+      ],
+      [
+        "His",
+        "Su"
+      ],
+      [
+        "hand",
+        "mano"
+      ],
+      [
+        "on him",
+        "sobre él"
+      ]
+    ],
+    "33": [
+      [
+        "So",
+        "Entonces"
+      ],
+      [
+        "Jesus",
+        "Jesús"
+      ],
+      [
+        "took him aside",
+        "lo llevó aparte"
+      ],
+      [
+        "privately",
+        "en privado"
+      ],
+      [
+        "away from",
+        "lejos de"
+      ],
+      [
+        "the",
+        "la"
+      ],
+      [
+        "crowd",
+        "multitud"
+      ],
+      [
+        "and put",
+        "y metió"
+      ],
+      [
+        "His",
+        "Sus"
+      ],
+      [
+        "fingers",
+        "dedos"
+      ],
+      [
+        "into",
+        "en"
+      ],
+      [
+        "the",
+        ""
+      ],
+      [
+        "man's ears",
+        "los oídos del hombre"
+      ],
+      [
+        "Then",
+        "Luego"
+      ],
+      [
+        "He spit",
+        "escupió"
+      ],
+      [
+        "and touched",
+        "y tocó"
+      ],
+      [
+        "the",
+        ""
+      ],
+      [
+        "man's tongue",
+        "la lengua del hombre"
+      ]
+    ],
+    "34": [
+      [
+        "And",
+        "Y"
+      ],
+      [
+        "looking up to",
+        "mirando al"
+      ],
+      [
+        "heaven",
+        "cielo"
+      ],
+      [
+        "He sighed deeply",
+        "suspiró profundamente"
+      ],
+      [
+        "and said",
+        "y le dijo"
+      ],
+      [
+        "to him",
+        ""
+      ],
+      [
+        "Ephphatha",
+        "Efatá"
+      ],
+      [
+        "which means",
+        "que significa"
+      ],
+      [
+        "Be opened",
+        "Ábrete"
+      ]
+    ],
+    "35": [
+      [
+        "Immediately",
+        "Inmediatamente"
+      ],
+      [
+        "the",
+        ""
+      ],
+      [
+        "man's ears",
+        "los oídos del hombre"
+      ],
+      [
+        "were opened",
+        "se abrieron"
+      ],
+      [
+        "and",
+        "y"
+      ],
+      [
+        "his",
+        "su"
+      ],
+      [
+        "tongue",
+        "lengua"
+      ],
+      [
+        "was released",
+        "fue soltada"
+      ],
+      [
+        "and",
+        "y"
+      ],
+      [
+        "he began",
+        "comenzó"
+      ],
+      [
+        "to speak",
+        "a hablar"
+      ],
+      [
+        "plainly",
+        "claramente"
+      ]
+    ],
+    "36": [
+      [
+        "Jesus",
+        "Jesús"
+      ],
+      [
+        "ordered",
+        "les ordenó"
+      ],
+      [
+        "them",
+        ""
+      ],
+      [
+        "not to tell",
+        "que no lo dijeran a"
+      ],
+      [
+        "anyone",
+        "nadie"
+      ],
+      [
+        "But",
+        "Pero"
+      ],
+      [
+        "the more",
+        "cuanto más"
+      ],
+      [
+        "He ordered",
+        "Él les ordenaba"
+      ],
+      [
+        "them",
+        ""
+      ],
+      [
+        "the more widely",
+        "tanto más"
+      ],
+      [
+        "they proclaimed",
+        "lo proclamaban"
+      ],
+      [
+        "it",
+        ""
+      ]
+    ],
+    "37": [
+      [
+        "The people",
+        "La gente"
+      ],
+      [
+        "were utterly astonished",
+        "estaba sumamente asombrada"
+      ],
+      [
+        "and said",
+        "y decía"
+      ],
+      [
+        "He has done all things well",
+        "Todo lo ha hecho bien"
+      ],
+      [
+        "He makes even",
+        "Hasta a"
+      ],
+      [
+        "the",
+        "los"
+      ],
+      [
+        "deaf",
+        "sordos"
+      ],
+      [
+        "hear",
+        "hace oír"
+      ],
+      [
+        "and",
+        "y a"
+      ],
+      [
+        "the",
+        "los"
+      ],
+      [
+        "mute",
+        "mudos"
+      ],
+      [
+        "speak",
+        "hace hablar"
+      ]
+    ]
+  }
+}
