@@ -215,6 +215,8 @@
       <button class="level-tab" data-level="A2" onclick="selectLevel('A2')">A2</button>
       <button class="level-tab active" data-level="B1" onclick="selectLevel('B1')">B1</button>
       <button class="level-tab" data-level="B2" onclick="selectLevel('B2')">B2</button>
+      <button class="level-tab" data-level="C1" onclick="selectLevel('C1')">C1</button>
+      <button class="level-tab" data-level="C2" onclick="selectLevel('C2')">C2</button>
       <button class="level-tab" data-level="full" onclick="selectLevel('full')">Full Translation</button>
     </div>
     <div class="level-desc" id="level-desc"></div>
@@ -334,7 +336,7 @@ function proxyFetch(body) {
     body: JSON.stringify(body)
   });
 }
-const LEVEL_ORDER    = ['A0','A1','A2','B1','B2','full'];
+const LEVEL_ORDER    = ['A0','A1','A2','B1','B2','C1','C2','full'];
 
 const LEVEL_DESCS = {
   A0:   'Complete beginner — source language with only the most foundational target-language words (numbers, family, colours, greetings).',
@@ -342,6 +344,8 @@ const LEVEL_DESCS = {
   A2:   'Elementary — source language with A0+A1 vocabulary plus regular verbs and descriptive adjectives.',
   B1:   'Intermediate — most vocabulary swapped; only words a B1 learner wouldn\'t know stay in source language.',
   B2:   'Upper Intermediate — nearly everything swapped; only rare, technical, or untranslatable words stay in source language.',
+  C1:   'Advanced — all but the rarest specialist vocabulary swapped; covers ~95% of words.',
+  C2:   'Mastery — virtually every word swapped including rare, literary, and technical vocabulary; covers ~99% of words.',
   full: 'Full Translation — entire text in target language, including closest equivalents for untranslatable words.',
 };
 
@@ -350,10 +354,10 @@ const LEVEL_DESCS = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 let currentLevel    = 'B1';
-let classCache      = {};   // key: cacheKey → { tokens: [...], srcLang, tgtLang }
+let classCache      = {};   // key: cacheKey → { spans: [...], sourceText, srcLang, tgtLang }
 let lastCacheKey    = null;
 let lastInputText   = '';
-let lastPDFData     = { tokens:[], level:'', src:'', tgt:'' };
+let lastPDFData     = { spans:[], sourceText:'', level:'', src:'', tgt:'' };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // INIT
@@ -562,7 +566,7 @@ async function lookupBible() {
       return;
     }
 
-    const text = rows.map(r => `${r.verse} ${r.text}`).join('\n');
+    const text = rows.map(r => `${r.verse} ${r.text}`).join('\n\n');
     document.getElementById('input-text').value = text;
     updateCharCount();
 
@@ -655,14 +659,17 @@ SOURCE_SPAN|LEVEL|TRANSLATION_SPAN
 
 Rules:
 - SOURCE_SPAN = exact characters from the source text in order
-- LEVEL = P, A0, A1, A2, B1, B2, or X
+- LEVEL = P, A0, A1, A2, B1, B2, C1, C2, or X
   - P  = punctuation or whitespace (leave TRANSLATION_SPAN empty)
   - A0 = absolute beginner knows this in ${tgt} (numbers, family, colours, greetings, days)
   - A1 = beginner (common nouns, basic adjectives)
   - A2 = elementary (most nouns, regular verbs, common adverbs)
   - B1 = intermediate (broader vocab, irregular verbs, abstract nouns)
   - B2 = upper-intermediate (collocations, idioms, nuanced vocabulary)
+  - C1 = advanced (low-frequency vocabulary, specialised terms, literary words)
+  - C2 = mastery/proficiency (rare, archaic, highly technical, or domain-specific words)
   - X  = proper noun, untranslatable, or no clean ${tgt} equivalent
+  IMPORTANT: Use C1/C2 for words that are genuinely rare or advanced — do NOT default to X just because a word is difficult. Reserve X strictly for proper nouns and truly untranslatable terms.
 - TRANSLATION_SPAN = what a native ${tgt} speaker would actually say for this span,
   informed by your Step 1 translation of the whole sentence.
   Style register: ${style}.
@@ -686,6 +693,7 @@ CRITICAL:
 - Output ONLY the alignment lines. No introduction, no explanation, no summary.
 - Never skip a source character.
 - Punctuation and whitespace are always their own P tokens.
+- Newline characters (\n) must be their own P token, one per line break: "\n|P|".
 
 Examples:
 
@@ -805,18 +813,12 @@ async function processText() {
     const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     if (!rawText) throw new Error('Empty response from Gemini. Please try again.');
 
-    const tokens = parseClassification(rawText);
-    if (!tokens.length) throw new Error('Could not parse alignment. Please try again.');
+    const spans = parseClassification(rawText, finalText);
+    if (!spans.length) throw new Error('Could not parse alignment. Please try again.');
 
-    // Verify reconstruction
-    const reconstructed = tokens.map(t => t.token).join('');
-    // Allow minor whitespace differences at end
-    if (reconstructed.replace(/\s+$/,'') !== text.replace(/\s+$/,'')) {
-      console.warn('Reconstruction mismatch — proceeding anyway.');
-    }
-
-    // Store in cache
-    const cacheData = { tokens, srcLang:src, tgtLang:tgt };
+    // Store in cache — sourceText is stored alongside spans so the renderer
+    // always has the original characters available.
+    const cacheData = { spans, sourceText: finalText, srcLang:src, tgtLang:tgt };
     classCache[cacheKey] = cacheData;
     lastCacheKey = cacheKey;
     try { sessionStorage.setItem('dw_class_cache', JSON.stringify(classCache)); } catch(e) {}
@@ -835,81 +837,120 @@ async function processText() {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PARSE CLASSIFICATION OUTPUT
+//
+// Design principle: the original source text is the single source of truth
+// for all spacing and punctuation. The AI output only tells us which spans
+// of that text map to which translation + CEFR level.
+//
+// We produce an array of spans: { start, end, level, translation }
+// where start/end are character indices into the original text.
+// Every character of the original text is covered by exactly one span.
 // ─────────────────────────────────────────────────────────────────────────────
 
-function parseClassification(raw) {
-  const lines  = raw.split('\n');
-  const tokens = [];
-
-  for (const line of lines) {
-    if (!line) continue;
+function parseClassification(raw, sourceText) {
+  // Step 1 — parse the raw pipe-delimited lines from the AI
+  const aiTokens = [];
+  for (const line of raw.split('\n')) {
+    if (!line.trim()) continue;
     const parts = line.split('|');
     if (parts.length < 2) continue;
-
-    const token       = parts[0];          // exact surface form
-    const level       = parts[1].trim();   // A0/A1/A2/B1/B2/X/P
-    const translation = parts[2] ?? '';
-
-    if (!token) continue;
-
-    tokens.push({ token, level, translation: translation.trim() });
+    const surface     = parts[0];                  // exact characters (may include surrounding whitespace for multi-word chunks)
+    const level       = parts[1].trim().toUpperCase();
+    const translation = (parts[2] ?? '').trim();
+    if (!surface) continue;
+    if (!['P','A0','A1','A2','B1','B2','X'].includes(level)) continue;
+    aiTokens.push({ surface, level, translation });
   }
 
-  return tokens;
+  // Step 2 — walk through the source text, matching AI tokens in order.
+  // We only use the AI token's surface to find WHERE in the source text we are.
+  // If the AI skipped whitespace/punctuation, we fill it in as P spans ourselves.
+  const spans = [];
+  let pos = 0; // current position in sourceText
+
+  for (let i = 0; i < aiTokens.length; i++) {
+    const tok = aiTokens[i];
+    // Find where this token's surface starts in the remaining source text.
+    // Trim leading/trailing whitespace from the AI's surface for the search
+    // (the AI sometimes wraps the span in surrounding spaces we don't want
+    // to rely on).
+    const trimmedSurface = tok.surface.trim();
+    if (!trimmedSurface) continue; // pure-whitespace token — handled as gap below
+
+    const idx = sourceText.indexOf(trimmedSurface, pos);
+    if (idx === -1) continue; // AI hallucinated something — skip it
+
+    // Any characters between pos and idx are whitespace/punct the AI didn't
+    // emit as separate tokens — emit them as P spans now.
+    if (idx > pos) {
+      spans.push({ start: pos, end: idx, level: 'P', translation: '' });
+    }
+
+    spans.push({ start: idx, end: idx + trimmedSurface.length, level: tok.level, translation: tok.translation });
+    pos = idx + trimmedSurface.length;
+  }
+
+  // Anything left at the end
+  if (pos < sourceText.length) {
+    spans.push({ start: pos, end: sourceText.length, level: 'P', translation: '' });
+  }
+
+  return spans;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// RENDERER — pure JS, zero API calls
+// RENDERER
+//
+// Design principle: iterate the original source text using the span map.
+// Spaces, punctuation, and numbers are always emitted verbatim from the
+// source text — never from the AI output. Only word-level spans (non-P)
+// are candidates for translation swapping.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const LEVEL_THRESHOLD = { A0:0, A1:1, A2:2, B1:3, B2:4, full:99 };
+const LEVEL_THRESHOLD = { A0:0, A1:1, A2:2, B1:3, B2:4, C1:5, C2:6, full:99 };
+
+// Chars that should never have a space before them in natural prose
+const NO_SPACE_BEFORE = new Set([',', '.', '!', '?', ':', ';', ')', ']', '»', '"', '\u2019', '\u201d']);
+// Chars that should always have a space after them (if the next char is a word char)
+const SPACE_AFTER     = new Set([':', ';', '—']);
 
 function renderFromCache(cacheData, level, fromCache) {
-  const { tokens, srcLang, tgtLang } = cacheData;
-  const threshold = LEVEL_THRESHOLD[level] ?? 3;
-  const isFull    = level === 'full';
+  const { spans, sourceText, srcLang, tgtLang } = cacheData;
+  const threshold   = LEVEL_THRESHOLD[level] ?? 3;
+  const isFull      = level === 'full';
+  let html          = '';
+  let swappedCount  = 0;
+  let wordCount     = 0;
+  const glossaryMap = new Map();
 
-  let html         = '';
-  let swappedCount = 0;
-  let wordCount    = 0;
-  let lastWasWord  = false; // track whether last token was a word (not P)
-  const glossaryMap = new Map(); // translation → { src, level, isUntranslatable }
+  for (const span of spans) {
+    const raw         = sourceText.slice(span.start, span.end); // verbatim from source
+    const isWordSpan  = span.level !== 'P';
 
-  for (const tok of tokens) {
-    const escaped = escapeHTML(tok.token);
-
-    if (tok.level === 'P') {
-      // Punctuation / whitespace — always pass through as-is
-      html += escaped;
-      lastWasWord = false;
+    if (!isWordSpan) {
+      // Emit the original characters exactly, just converting \n → <br>
+      html += escapeHTML(raw).replace(/\n/g, '<br>');
       continue;
     }
 
-    // Safety net: if two consecutive word tokens have no P token between them,
-    // insert a space to prevent words merging (e.g. "elchoirmaster")
-    if (lastWasWord) html += ' ';
-
     wordCount++;
-    const tokLevel   = LEVEL_THRESHOLD[tok.level] ?? 99;
-    const isX        = tok.level === 'X';
+    const tokLevel   = LEVEL_THRESHOLD[span.level] ?? 99;
+    const isX        = span.level === 'X';
     const shouldSwap = isFull
-      ? (tok.translation && tok.translation !== tok.token)
-      : (!isX && tokLevel <= threshold && tok.translation && tok.translation !== tok.token);
+      ? (span.translation && span.translation !== raw)
+      : (!isX && tokLevel <= threshold && span.translation && span.translation !== raw);
 
     if (shouldSwap) {
       const cls = isX ? 'sw-untranslatable' : 'sw';
-      html += `<span class="${cls}" title="${escapeHTML(tok.token)}">${escapeHTML(tok.translation)}</span>`;
+      html += `<span class="${cls}" title="${escapeHTML(raw)}">${escapeHTML(span.translation)}</span>`;
       swappedCount++;
-
-      // Glossary entry
-      const key = tok.translation.toLowerCase();
+      const key = span.translation.toLowerCase();
       if (!glossaryMap.has(key)) {
-        glossaryMap.set(key, { tl: tok.translation, sl: tok.token, level: tok.level, isX });
+        glossaryMap.set(key, { tl: span.translation, sl: raw, level: span.level, isX });
       }
     } else {
-      html += escaped;
+      html += escapeHTML(raw);
     }
-    lastWasWord = true;
   }
 
   // Render output
@@ -947,7 +988,7 @@ function renderFromCache(cacheData, level, fromCache) {
     }
 
     // Tab order
-    const tabOrder = ['A0','A1','A2','B1','B2','~'];
+    const tabOrder = ['A0','A1','A2','B1','B2','C1','C2','~'];
     const presentTabs = tabOrder.filter(t => groups[t]);
 
     // Store for tab switching
@@ -970,7 +1011,7 @@ function renderFromCache(cacheData, level, fromCache) {
   }
 
   // Store for PDF + audio
-  lastPDFData = { tokens, level, src: srcLang, tgt: tgtLang };
+  lastPDFData = { spans, sourceText, level, src: srcLang, tgt: tgtLang };
 
   // Reset audio player for new output
   resetAudio();
@@ -992,96 +1033,236 @@ function renderFromCache(cacheData, level, fromCache) {
 function downloadPDF() {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit:'mm', format:'a4' });
-  const { tokens, level, src, tgt } = lastPDFData;
+  const { spans, sourceText, level, src, tgt } = lastPDFData;
 
-  const margin = 20, pageW = 210, pageH = 297, usableW = pageW - margin * 2;
-  let y = margin;
-  const lh = 7;
+  // ── Layout constants ──────────────────────────────────────────────────────
+  const margin   = 22;
+  const pageW    = 210;
+  const pageH    = 297;
+  const usableW  = pageW - margin * 2;
+  const bodySize = 12;
+  const bodyLH   = 7.2;
+  const fnSize   = 8.5;
+  const fnLH     = 5.2;
+  const footerH  = 10;
 
-  function checkPage() { if (y + lh > pageH - margin) { doc.addPage(); y = margin; } }
-
-  function addLine(text, size, style, color) {
-    doc.setFontSize(size); doc.setFont('helvetica', style); doc.setTextColor(...color);
-    const lines = doc.splitTextToSize(text, usableW);
-    for (const l of lines) { checkPage(); doc.text(l, margin, y); y += lh; }
-    y += 2;
+  // ── Alphabet footnote labels (a, b, c … z, aa, ab …) ────────────────────
+  function fnLabel(n) {
+    const alpha = 'abcdefghijklmnopqrstuvwxyz';
+    if (n < 26) return alpha[n];
+    return alpha[Math.floor(n / 26) - 1] + alpha[n % 26];
   }
 
-  // Title
-  addLine('Diglot Weave Output', 18, 'bold', [37,99,235]);
-  addLine(`Level: ${level}  |  ${src} → ${tgt}  |  ${new Date().toLocaleDateString()}`, 10, 'normal', [107,114,128]);
-  y += 2;
-  doc.setDrawColor(229,231,235); doc.line(margin, y, pageW-margin, y); y += 6;
+  // ── Build segments using the same span model as the renderer ─────────────
+  // Segments are plain text pieces — no HTML — each flagged as swapped or not.
+  const threshold  = LEVEL_THRESHOLD[level] ?? 3;
+  const isFull     = level === 'full';
+  const fnRegistry = new Map(); // translation.toLowerCase() → { label, tgt, src }
+  let   fnCounter  = 0;
 
-  // Body — render swapped words in brackets
-  const threshold = LEVEL_THRESHOLD[level] ?? 3;
-  const isFull    = level === 'full';
-  let bodyText    = '';
+  const segments = [];
+  for (const span of spans) {
+    const raw = sourceText.slice(span.start, span.end);
 
-  for (const tok of tokens) {
-    if (tok.level === 'P') { bodyText += tok.token; continue; }
-    const tokLevel   = LEVEL_THRESHOLD[tok.level] ?? 99;
-    const isX        = tok.level === 'X';
+    if (span.level === 'P') {
+      // Pass through verbatim — newlines become line-break markers for the
+      // word-wrapper below
+      segments.push({ text: raw, isSwapped: false });
+      continue;
+    }
+
+    const tokLevel   = LEVEL_THRESHOLD[span.level] ?? 99;
+    const isX        = span.level === 'X';
     const shouldSwap = isFull
-      ? (tok.translation && tok.translation !== tok.token)
-      : (!isX && tokLevel <= threshold && tok.translation && tok.translation !== tok.token);
-    bodyText += shouldSwap ? `[${tok.translation}]` : tok.token;
-  }
+      ? (span.translation && span.translation !== raw)
+      : (!isX && tokLevel <= threshold && span.translation && span.translation !== raw);
 
-  doc.setFontSize(12); doc.setFont('helvetica','normal'); doc.setTextColor(31,41,55);
-  const bodyLines = doc.splitTextToSize(bodyText, usableW);
-  for (const l of bodyLines) { checkPage(); doc.text(l, margin, y); y += lh; }
-
-  // Glossary
-  const seen = new Set();
-  const glossaryItems = [];
-  for (const tok of tokens) {
-    if (tok.level === 'P') continue;
-    const tokLevel = LEVEL_THRESHOLD[tok.level] ?? 99;
-    const isX      = tok.level === 'X';
-    const show     = isFull
-      ? (tok.translation && tok.translation !== tok.token)
-      : (!isX && tokLevel <= threshold && tok.translation && tok.translation !== tok.token);
-    if (show && !seen.has(tok.translation.toLowerCase())) {
-      seen.add(tok.translation.toLowerCase());
-      glossaryItems.push({ tl: tok.translation, sl: tok.token, level: tok.level });
+    if (shouldSwap) {
+      const key = span.translation.toLowerCase();
+      if (!fnRegistry.has(key)) {
+        fnRegistry.set(key, { label: fnLabel(fnCounter++), tgt: span.translation, src: raw });
+      }
+      const { label } = fnRegistry.get(key);
+      segments.push({ text: span.translation, isSwapped: true, label });
+    } else {
+      segments.push({ text: raw, isSwapped: false });
     }
   }
 
-  if (glossaryItems.length) {
-    y += 4; checkPage();
-    doc.setDrawColor(229,231,235); doc.line(margin, y, pageW-margin, y); y += 6;
-    addLine('Glossary', 14, 'bold', [37,99,235]);
+  // ── Word-wrap the segments into lines ────────────────────────────────────
+  // We need to wrap manually so we know which footnote labels appear per line
+  // and therefore per page.
+  // Strategy: build an array of lines, each line = array of segment-pieces.
+  // Use jsPDF getTextWidth to measure.
 
-    const colW = usableW / 2;
-    const half = Math.ceil(glossaryItems.length / 2);
-    const left = glossaryItems.slice(0, half), right = glossaryItems.slice(half);
+  doc.setFontSize(bodySize);
+  doc.setFont('times', 'normal');
 
-    doc.setFontSize(11);
-    for (let i = 0; i < Math.max(left.length, right.length); i++) {
-      checkPage();
-      if (left[i]) {
-        doc.setFont('helvetica','bold'); doc.setTextColor(124,58,237);
-        doc.text(left[i].tl, margin, y);
-        doc.setFont('helvetica','normal'); doc.setTextColor(75,85,99);
-        doc.text(`= ${left[i].sl}`, margin+30, y);
+  function textWidth(str, bold) {
+    doc.setFont('times', bold ? 'bold' : 'normal');
+    doc.setFontSize(bodySize);
+    return doc.getTextWidth(str);
+  }
+
+  // Split segments into lines
+  const lines = []; // each: { pieces: [{text, isSwapped, label}], fnLabels: Set }
+  let   curLine   = { pieces: [], fnLabels: new Set(), width: 0 };
+
+  function commitLine() {
+    lines.push(curLine);
+    curLine = { pieces: [], fnLabels: new Set(), width: 0 };
+  }
+
+  for (const seg of segments) {
+    // Handle explicit newlines
+    const parts = seg.text.split('\n');
+    for (let pi = 0; pi < parts.length; pi++) {
+      const piece = parts[pi];
+      if (piece !== '') {
+        // Try to fit word by word
+        const words = piece.split(/(?<=\s)|(?=\s)/); // split keeping spaces
+        for (const w of words) {
+          const ww = textWidth(w, seg.isSwapped);
+          if (curLine.width + ww > usableW && curLine.pieces.length > 0) {
+            commitLine();
+          }
+          curLine.pieces.push({ text: w, isSwapped: seg.isSwapped, label: seg.label });
+          if (seg.label) curLine.fnLabels.add(seg.label);
+          curLine.width += ww;
+        }
       }
-      if (right[i]) {
-        doc.setFont('helvetica','bold'); doc.setTextColor(124,58,237);
-        doc.text(right[i].tl, margin+colW, y);
-        doc.setFont('helvetica','normal'); doc.setTextColor(75,85,99);
-        doc.text(`= ${right[i].sl}`, margin+colW+30, y);
-      }
-      y += 6;
+      if (pi < parts.length - 1) commitLine(); // explicit line break
+    }
+  }
+  if (curLine.pieces.length) commitLine();
+
+  // ── Collect all footnote entries in label order ───────────────────────────
+  const allFn = Array.from(fnRegistry.values())
+    .sort((a, b) => a.label.localeCompare(b.label));
+
+  // Map label → footnote entry
+  const fnByLabel = new Map(allFn.map(f => [f.label, f]));
+
+  // ── Helpers to render superscript ────────────────────────────────────────
+  function drawSuper(label, x, y) {
+    doc.setFontSize(7);
+    doc.setFont('times', 'normal');
+    doc.setTextColor(80, 80, 80);
+    doc.text(label, x, y - 2.5);
+    doc.setFontSize(bodySize);
+    doc.setFont('times', 'normal');
+    doc.setTextColor(30, 30, 30);
+  }
+
+  // ── Paginate ──────────────────────────────────────────────────────────────
+  // We'll do a two-pass approach: first figure out which footnote labels
+  // appear on each page, then render.
+  // For simplicity, do a single layout pass tracking pages on the fly.
+
+  let pageNum     = 1;
+  let y           = margin + 14; // start below title block
+  const bodyBottom = pageH - footerH - margin;
+
+  // Collect labels seen on current page
+  let pageLabels = new Set();
+
+  // We need to know footnote height before we draw them — so we do:
+  // Before adding each body line, check if it fits considering footnotes for that page.
+  // Simplified: reserve fnAreaMax if there are any footnotes on this page.
+
+  function fnBlockHeight(labels) {
+    if (!labels.size) return 0;
+    // Each footnote = 1 line of fnLH, plus a 4mm header line
+    return 4 + labels.size * fnLH + 2;
+  }
+
+  function drawFootnoteBlock(labels, pageIdx) {
+    if (!labels.size) return;
+    const fnY0 = pageH - footerH - margin - fnBlockHeight(labels);
+    // thin rule
+    doc.setDrawColor(180, 180, 180);
+    doc.setLineWidth(0.3);
+    doc.line(margin, fnY0, margin + usableW * 0.4, fnY0);
+    let fy = fnY0 + 4;
+    const sortedLabels = Array.from(labels).sort((a,b) => a.localeCompare(b));
+    for (const lbl of sortedLabels) {
+      const fn = fnByLabel.get(lbl);
+      if (!fn) continue;
+      // superscript label
+      doc.setFontSize(7); doc.setFont('times','normal'); doc.setTextColor(80,80,80);
+      doc.text(lbl, margin, fy - 1.5);
+      // footnote text
+      doc.setFontSize(fnSize); doc.setFont('times','italic'); doc.setTextColor(60,60,60);
+      doc.text(`  ${fn.tgt} — ${fn.src}`, margin + 2, fy);
+      fy += fnLH;
     }
   }
 
-  // Footer
-  const pages = doc.internal.getNumberOfPages();
-  for (let i = 1; i <= pages; i++) {
-    doc.setPage(i); doc.setFontSize(9); doc.setTextColor(156,163,175);
-    doc.text(`Diglot Weave — Life OS  |  Page ${i} of ${pages}`, margin, pageH-8);
+  function drawPageNumber(pn) {
+    doc.setFontSize(9); doc.setFont('times','normal'); doc.setTextColor(160,160,160);
+    const pnText = String(pn);
+    const pnW = doc.getTextWidth(pnText);
+    doc.text(pnText, (pageW - pnW) / 2, pageH - 8);
   }
+
+  // Draw title on page 1
+  doc.setFont('times', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(120, 120, 120);
+  const subtitle = `${src.toUpperCase()} → ${tgt.toUpperCase()}  ·  LEVEL ${level.toUpperCase()}  ·  ${new Date().toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'})}`;
+  doc.text(subtitle, (pageW - doc.getTextWidth(subtitle)) / 2, margin + 5);
+  y = margin + 14;
+
+  // ── Main render loop ──────────────────────────────────────────────────────
+  for (let li = 0; li < lines.length; li++) {
+    const line = lines[li];
+
+    // Compute available body area on this page (leaving room for footnotes accumulated so far)
+    const fnH       = fnBlockHeight(pageLabels);
+    const available = bodyBottom - fnH;
+
+    if (y + bodyLH > available) {
+      // Render footnotes for current page
+      drawFootnoteBlock(pageLabels, pageNum);
+      drawPageNumber(pageNum);
+      doc.addPage();
+      pageNum++;
+      pageLabels = new Set();
+      y = margin;
+    }
+
+    // Add this line's labels to the page set
+    for (const lbl of line.fnLabels) pageLabels.add(lbl);
+
+    // Draw the line piece by piece
+    let x = margin;
+    doc.setFontSize(bodySize);
+    doc.setTextColor(30, 30, 30);
+
+    for (const piece of line.pieces) {
+      if (piece.isSwapped) {
+        doc.setFont('times', 'bold');
+      } else {
+        doc.setFont('times', 'normal');
+      }
+      doc.text(piece.text, x, y);
+      const pw = doc.getTextWidth(piece.text);
+      x += pw;
+
+      // Superscript after swapped word (first occurrence per label per line)
+      if (piece.label) {
+        drawSuper(piece.label, x, y);
+        doc.setFontSize(7);
+        x += doc.getTextWidth(piece.label) + 0.5;
+        doc.setFontSize(bodySize);
+      }
+    }
+    y += bodyLH;
+  }
+
+  // Final page footnotes + page number
+  drawFootnoteBlock(pageLabels, pageNum);
+  drawPageNumber(pageNum);
 
   doc.save(`diglot-weave-${level}-${new Date().toISOString().slice(0,10)}.pdf`);
 }
@@ -1115,9 +1296,9 @@ const EL_VOICE_ID   = 'EXAVITQu4vr4xnSDxMaL';
 const EL_MODEL      = 'eleven_multilingual_v2';
 
 function buildAudioCacheKey() {
-  if (!lastPDFData.tokens.length) return null;
-  const { level, src, tgt } = lastPDFData;
-  const textSnippet = lastPDFData.tokens.slice(0,30).map(t=>t.token).join('').slice(0,60);
+  if (!lastPDFData.sourceText) return null;
+  const { level, src, tgt, sourceText } = lastPDFData;
+  const textSnippet = sourceText.slice(0, 60);
   return `audio_${src}_${tgt}_${level}_${textSnippet.length}_${textSnippet.replace(/\s+/g,'_')}`;
 }
 
