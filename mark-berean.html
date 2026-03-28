@@ -337,7 +337,7 @@ let currentChapter = 1;
 // ── Load data from Supabase ──
 async function loadData() {
   const [freqRes, versesRes] = await Promise.all([
-    supabase.from('diglot_berean_frequency').select('*'),
+    supabase.from('diglot_berean_frequency').select('*').limit(5000),
     supabase.from('diglot_berean_verses').select('*').order('chapter').order('verse'),
   ]);
 
