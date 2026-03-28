@@ -451,11 +451,21 @@ function update() {
     // always show it in Spanish — these are inseparable chunks that
     // must be swapped as a unit whenever any word is in range.
     if (rank === undefined) {
-      if (s.dataset.es && hi > 0) {
-        s.textContent = s.dataset.es;
-        s.classList.add('spanish');
+      if (hi > 0 && s.dataset.es !== undefined) {
+        // Empty string means this word is absorbed into an adjacent
+        // Spanish phrase — hide the span so no English leaks through.
+        if (s.dataset.es === '') {
+          s.textContent = '';
+          s.style.display = 'none';
+          s.classList.add('spanish');
+        } else {
+          s.textContent = s.dataset.es;
+          s.style.display = '';
+          s.classList.add('spanish');
+        }
       } else {
         s.textContent = s.dataset.orig;
+        s.style.display = '';
         s.classList.remove('spanish');
       }
       return;
@@ -466,11 +476,21 @@ function update() {
       // over the generic frequency-table translation. The frequency table
       // stores dictionary forms (e.g. "decir") while dataset.es has the
       // conjugated, context-correct form (e.g. "digo").
-      const freqEntry = FREQ[s.dataset.w];
-      s.textContent = s.dataset.es || (freqEntry ? freqEntry[1] : s.dataset.orig);
-      s.classList.add('spanish');
+      if (s.dataset.es === '') {
+        // Absorbed into adjacent phrase — hide span
+        s.textContent = '';
+        s.style.display = 'none';
+        s.classList.add('spanish');
+      } else {
+        const freqEntry = FREQ[s.dataset.w];
+        const esText = s.dataset.es || (freqEntry ? freqEntry[1] : s.dataset.orig);
+        s.textContent = esText;
+        s.style.display = '';
+        s.classList.add('spanish');
+      }
     } else {
       s.textContent = s.dataset.orig;
+      s.style.display = '';
       s.classList.remove('spanish');
     }
   });
