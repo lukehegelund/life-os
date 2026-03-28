@@ -462,8 +462,12 @@ function update() {
     }
 
     if (rank >= lo && rank <= hi) {
+      // Prefer the contextual pair translation (dataset.es) from word_pairs
+      // over the generic frequency-table translation. The frequency table
+      // stores dictionary forms (e.g. "decir") while dataset.es has the
+      // conjugated, context-correct form (e.g. "digo").
       const freqEntry = FREQ[s.dataset.w];
-      s.textContent = freqEntry ? freqEntry[1] : (s.dataset.es || s.dataset.orig);
+      s.textContent = s.dataset.es || (freqEntry ? freqEntry[1] : s.dataset.orig);
       s.classList.add('spanish');
     } else {
       s.textContent = s.dataset.orig;
