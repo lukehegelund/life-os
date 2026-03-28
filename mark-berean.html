@@ -331,7 +331,7 @@ const loadingDiv = document.getElementById('loading');
 // ── State ──
 let FREQ = {};        // { english_lc: [rank, spanish_text] }
 let VERSES = [];      // all verses from DB
-let MAX_RANK = 2087;
+let MAX_RANK = 2098;
 let currentChapter = 1;
 
 // ── Load data from Supabase ──
@@ -446,7 +446,20 @@ function update() {
   // Update spans
   spans.forEach(s => {
     const rank = getWordRank(s);
-    if (rank === undefined) return;
+    // Multi-word tokens (e.g. "of the" → "del") have no rank in the
+    // frequency table. If a Spanish translation exists in dataset.es,
+    // always show it in Spanish — these are inseparable chunks that
+    // must be swapped as a unit whenever any word is in range.
+    if (rank === undefined) {
+      if (s.dataset.es && hi > 0) {
+        s.textContent = s.dataset.es;
+        s.classList.add('spanish');
+      } else {
+        s.textContent = s.dataset.orig;
+        s.classList.remove('spanish');
+      }
+      return;
+    }
 
     if (rank >= lo && rank <= hi) {
       const freqEntry = FREQ[s.dataset.w];
