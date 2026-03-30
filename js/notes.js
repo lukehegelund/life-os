@@ -908,10 +908,10 @@ window.deleteFolder = async function(folderId) {
 
 // ── Set folder on a note ──────────────────────────────────────────
 window.setNoteFolder = async function(noteId, folderIdStr) {
-  const note = allNotes.find(n => n.id === noteId);
+  const note = allNotes.find(n => n.id == noteId); // loose equality — id may be number or string
   if (!note) return;
 
-  const folderId = folderIdStr ? Number(folderIdStr) : null;
+  const folderId = (folderIdStr !== '' && folderIdStr != null) ? Number(folderIdStr) : null;
   note.folderId = folderId;
 
   const folderMeta = { is_note: true, body: note.body || '', color: note.color || 'none', pinned: note.pinned || false, folder_id: folderId };
@@ -988,7 +988,7 @@ async function saveNote(noteId) {
   const bodyText = stripHtml(bodyHtml);
   if (!title && !bodyText) return;
 
-  const existing      = allNotes.find(n => n.id === noteId);
+  const existing      = allNotes.find(n => n.id == noteId);
   const color         = existing?.color        || 'none';
   const pinned        = existing?.pinned        || false;
   const folderId      = existing?.folderId      ?? null;
@@ -1057,7 +1057,7 @@ window.createNewNote = async function() {
 
 // ── Set color ─────────────────────────────────────────────────────
 window.setNoteColor = async function(noteId, color) {
-  const note = allNotes.find(n => n.id === noteId);
+  const note = allNotes.find(n => n.id == noteId);
   if (!note) return;
 
   if (saveTimeouts[noteId]) {
@@ -1093,7 +1093,7 @@ window.setNoteColor = async function(noteId, color) {
 
 // ── Pin/unpin ─────────────────────────────────────────────────────
 window.toggleNotePin = async function(noteId) {
-  const note = allNotes.find(n => n.id === noteId);
+  const note = allNotes.find(n => n.id == noteId);
   if (!note) return;
 
   if (saveTimeouts[noteId]) {
@@ -1113,7 +1113,7 @@ window.toggleNotePin = async function(noteId) {
 
 // ── Copy note to clipboard ────────────────────────────────────────
 window.copyNote = function(noteId, refBtn) {
-  const note = allNotes.find(n => n.id === noteId);
+  const note = allNotes.find(n => n.id == noteId);
   if (!note) return;
 
   const titlePart = note.title ? note.title + '\n' + '─'.repeat(Math.min(note.title.length, 40)) + '\n' : '';
