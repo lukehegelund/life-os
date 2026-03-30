@@ -428,7 +428,7 @@ function showSlashPopup(cmd, lineText, bodyEl) {
   popup.style.bottom = '120px';
 
   if (cmd === '/task') {
-    const cats = JSON.parse(localStorage.getItem('tasks-cat-order') || 'null') || ['RT', 'TOV', 'Personal', 'Health', 'LifeOS'];
+    const cats = JSON.parse(localStorage.getItem('tasks-cat-order') || 'null') || ['RT', 'RT Admin', 'TOV', 'Personal', 'Health', 'LifeOS'];
     popup.innerHTML = `
       <div style="font-size:14px;font-weight:700;color:var(--gray-800);margin-bottom:4px">✅ Crear tarea</div>
       <div style="font-size:12px;color:var(--gray-500);margin-bottom:10px">
@@ -1250,12 +1250,26 @@ window.openLinkTaskPicker = async function(noteId) {
     </div>`;
   }).join('');
 
+  const cats = JSON.parse(localStorage.getItem('tasks-cat-order') || 'null') || ['RT', 'RT Admin', 'TOV', 'Personal', 'Health', 'LifeOS'];
+  const catBtns = cats.map(c => `<button class="btn btn-sm btn-ghost tlp-cat-btn"
+    data-cat="${c}" style="border-radius:20px;font-size:12px">${c}</button>`).join('');
+
   const picker = document.createElement('div');
   picker.id = 'task-link-picker';
   picker.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:700;display:flex;align-items:flex-end;justify-content:center';
   picker.innerHTML = `
     <div style="background:var(--white);border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:600px;max-height:75vh;display:flex;flex-direction:column">
       <div style="font-size:16px;font-weight:700;margin-bottom:12px">🔗 Vincular una tarea</div>
+      <!-- Create new task section -->
+      <div id="tlp-create-section" style="margin-bottom:14px;border:1.5px dashed var(--gray-200);border-radius:12px;padding:12px">
+        <div style="font-size:13px;font-weight:600;color:var(--gray-700);margin-bottom:8px">✨ Crear tarea nueva y vincular</div>
+        <input id="tlp-new-task-title" type="text" placeholder="Título de la tarea…"
+          style="width:100%;padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:13px;margin-bottom:8px;box-sizing:border-box" />
+        <div style="font-size:12px;font-weight:600;color:var(--gray-600);margin-bottom:6px">Categoría:</div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px">${catBtns}</div>
+        <button id="tlp-create-btn" class="btn btn-sm btn-primary" style="width:100%;opacity:0.4;cursor:default" disabled>Crear y vincular</button>
+      </div>
+      <div style="font-size:12px;font-weight:600;color:var(--gray-500);margin-bottom:6px">— o vincular tarea existente —</div>
       <div style="overflow-y:auto;flex:1">${rows || '<div style="color:var(--gray-400);text-align:center;padding:20px">No hay tareas abiertas</div>'}</div>
       <button class="btn btn-ghost" style="margin-top:12px" onclick="document.getElementById(\'task-link-picker\').remove()">Cancelar</button>
     </div>`;
@@ -1263,9 +1277,48 @@ window.openLinkTaskPicker = async function(noteId) {
   if (!document.getElementById('task-link-picker-style')) {
     const s = document.createElement('style');
     s.id = 'task-link-picker-style';
-    s.textContent = '.task-link-row{padding:10px 12px;border-radius:10px;cursor:pointer;margin-bottom:4px;border:1.5px solid var(--gray-100);}.task-link-row:hover{background:var(--gray-50);border-color:var(--blue);}';
+    s.textContent = '.task-link-row{padding:10px 12px;border-radius:10px;cursor:pointer;margin-bottom:4px;border:1.5px solid var(--gray-100);}.task-link-row:hover{background:var(--gray-50);border-color:var(--blue);}.tlp-cat-btn.selected{background:var(--blue)!important;color:white!important;}';
     document.head.appendChild(s);
   }
+
+  // Category selection logic
+  let selectedCat = null;
+  picker.querySelectorAll('.tlp-cat-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      picker.querySelectorAll('.tlp-cat-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      selectedCat = btn.dataset.cat;
+      const createBtn = picker.querySelector('#tlp-create-btn');
+      const titleVal = picker.querySelector('#tlp-new-task-title').value.trim();
+      createBtn.disabled = !titleVal;
+      createBtn.style.opacity = titleVal ? '1' : '0.4';
+      createBtn.style.cursor = titleVal ? 'pointer' : 'default';
+    });
+  });
+
+  // Title input logic — enable/disable create button
+  picker.querySelector('#tlp-new-task-title').addEventListener('input', e => {
+    const createBtn = picker.querySelector('#tlp-create-btn');
+    createBtn.disabled = !e.target.value.trim() || !selectedCat;
+    createBtn.style.opacity = (e.target.value.trim() && selectedCat) ? '1' : '0.4';
+    createBtn.style.cursor = (e.target.value.trim() && selectedCat) ? 'pointer' : 'default';
+  });
+
+  // Create & link
+  picker.querySelector('#tlp-create-btn').addEventListener('click', async () => {
+    const titleVal = picker.querySelector('#tlp-new-task-title').value.trim();
+    if (!titleVal || !selectedCat) return;
+    picker.remove();
+    // Create the task
+    const storeMod = selectedCat === 'RT Admin' ? 'RT' : selectedCat;
+    const notesJson = selectedCat === 'RT Admin' ? JSON.stringify({ rt_admin: true }) : null;
+    const { data: newTask } = await sb.from('tasks').insert({
+      title: titleVal, module: storeMod, notes: notesJson, status: 'open', priority: 'normal'
+    }).select('id, title').single();
+    if (newTask) {
+      window._selectLinkedTask(noteId, newTask.id, newTask.title);
+    }
+  });
 
   picker.addEventListener('click', e => { if (e.target === picker) picker.remove(); });
   document.body.appendChild(picker);
