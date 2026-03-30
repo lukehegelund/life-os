@@ -179,7 +179,7 @@ async function fetchEvents() {
       .select('id, name, wedding_date')
       .gte('wedding_date', startStr)
       .lte('wedding_date', endStr),
-    supabase.from('classes').select('id, name, day_of_week, time_start, time_end, subject'),
+    supabase.from('classes').select('id, name, day_of_week, time_start, time_end, subject, show_on_calendar').eq('show_on_calendar', true),
     // Rule-based: fetch templates (is_template=true) that could overlap the view range
     // Template start_time = the base/anchor date; they recur indefinitely unless recurrence_end is set
     supabase.from('calendar_events')
