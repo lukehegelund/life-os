@@ -13,6 +13,25 @@ let defaultViewCategories = JSON.parse(localStorage.getItem('tasks-default-cats'
 // Task order within each group: { groupKey: [id, id, ...] }
 let taskOrderMap = JSON.parse(localStorage.getItem('tasks-item-order') || '{}');
 
+// ── Local task cache for optimistic UI (avoids re-fetch after mutations) ──────
+let _taskCache = []; // full list from last loadTasks() fetch
+
+function _cacheUpdate(id, patch) {
+  const idx = _taskCache.findIndex(t => t.id === id);
+  if (idx !== -1) Object.assign(_taskCache[idx], patch);
+}
+function _cacheAdd(task) {
+  _taskCache.push(task);
+}
+function _cacheRemove(id) {
+  const idx = _taskCache.findIndex(t => t.id === id);
+  if (idx !== -1) _taskCache.splice(idx, 1);
+}
+// Re-render tasks from cache without hitting the network
+function renderFromCache() {
+  _renderTaskList(_taskCache);
+}
+
 const MODULE_ICONS   = { RT: '🏫', 'RT Admin': '🏛️', TOV: '💍', Personal: '👤', Health: '🏃', LifeOS: '🖥️' };
 const MODULE_COLORS  = { RT: 'var(--blue)', 'RT Admin': '#7c3aed', TOV: 'var(--green)', Personal: 'var(--orange)', Health: 'var(--coral)', LifeOS: '#0891b2' };
 
@@ -307,10 +326,22 @@ window.closeSchedulePicker = () => {
 window.applyScheduleLabel = async (label) => {
   if (!_schedulePendingId) return;
   const realLabel = label === 'none' ? null : label;
-  await setScheduleLabel(_schedulePendingId, realLabel);
+  const taskId = _schedulePendingId;
+
+  // Optimistic: update cache immediately
+  const cached = _taskCache.find(t => t.id === taskId);
+  if (cached) {
+    let parsed = {};
+    try { parsed = JSON.parse(cached.notes || '{}'); } catch {}
+    if (realLabel) { parsed.schedule_label = realLabel; } else { delete parsed.schedule_label; }
+    _cacheUpdate(taskId, { notes: Object.keys(parsed).length ? JSON.stringify(parsed) : null });
+  }
   window.closeSchedulePicker();
+  renderFromCache();
   toast(realLabel ? `Scheduled: ${realLabel}` : 'Label removed', 'success');
-  loadTasks();
+
+  // Background save
+  await setScheduleLabel(taskId, realLabel);
 };
 
 // ── Task ordering helpers ─────────────────────────────────────────────────────
@@ -390,7 +421,12 @@ async function loadTasks() {
     .in('status', ['open', 'in_progress'])
     .order('created_at');
 
-  let tasks = res.data || [];
+  _taskCache = res.data || [];
+  _renderTaskList(_taskCache);
+}
+
+function _renderTaskList(allData) {
+  let tasks = allData.slice();
   if (activeModule === 'Default') {
     // Show tasks from selected default categories only
     tasks = tasks.filter(t => {
@@ -704,13 +740,33 @@ window.submitInlineTask = async (mod) => {
   if (!title) { input?.focus(); return; }
   const module = storageModule(mod);
   const notes  = storageNotes(mod, '');
-  const { error } = await supabase.from('tasks').insert({
-    title, module, notes: notes || null, priority: 'normal', status: 'open'
-  });
-  if (error) { toast('Error: ' + error.message, 'error'); return; }
-  toast('Task added! ✅', 'success');
+
+  // Optimistic: add temp task to cache and re-render immediately
+  const tempId = -(Date.now()); // negative temp ID
+  const tempTask = { id: tempId, title, module, notes: notes || null, priority: 'normal', status: 'open', created_at: new Date().toISOString(), due_date: null, linked_student_id: null, linked_client_id: null, time_estimate_minutes: null, completed_at: null };
+  _cacheAdd(tempTask);
+  renderFromCache();
   window.hideInlineAdd(mod);
-  loadTasks();
+  toast('Task added! ✅', 'success');
+
+  // Background save
+  const { data, error } = await supabase.from('tasks').insert({
+    title, module, notes: notes || null, priority: 'normal', status: 'open'
+  }).select('id').single();
+  if (error) {
+    toast('Error saving task: ' + error.message, 'error');
+    _cacheRemove(tempId);
+    renderFromCache();
+    return;
+  }
+  // Replace temp with real ID in cache
+  _cacheUpdate(tempId, { id: data.id });
+  // Also update taskOrderMap to use real ID
+  for (const key of Object.keys(taskOrderMap)) {
+    const arr = taskOrderMap[key];
+    const ti = arr.indexOf(tempId);
+    if (ti !== -1) { arr[ti] = data.id; saveTaskOrder(); }
+  }
 };
 
 // ── Inline task creation inside schedule sections ─────────────────────────────
@@ -931,27 +987,29 @@ window.openCategoryPicker = (id, currentMod, e) => {
 
 window.setCategoryForTask = async (id, newCat, el) => {
   document.getElementById('cat-picker-popup')?.remove();
-  const row = document.getElementById(`task-${id}`);
-  if (row) { row.style.opacity = '0.5'; }
 
-  // Fetch current notes so we can preserve note text and schedule_label
-  const { data: existing } = await supabase.from('tasks').select('notes').eq('id', id).single();
+  // Use cached notes — no extra fetch needed
+  const cached = _taskCache.find(t => t.id === id);
   let parsed = {};
-  try { parsed = JSON.parse(existing?.notes || '{}'); } catch(e) { parsed = {}; }
+  try { parsed = JSON.parse(cached?.notes || '{}'); } catch(e) { parsed = {}; }
 
-  // Build updated notes: set/clear rt_admin flag, preserve note + schedule_label
-  if (newCat === 'RT Admin') {
-    parsed.rt_admin = true;
-  } else {
-    delete parsed.rt_admin;
-  }
+  if (newCat === 'RT Admin') { parsed.rt_admin = true; } else { delete parsed.rt_admin; }
   const newNotes = Object.keys(parsed).length ? JSON.stringify(parsed) : null;
-  const storeModule = storageModule(newCat); // 'RT Admin' → 'RT', everything else → itself
+  const storeModule = storageModule(newCat);
 
-  const { error } = await supabase.from('tasks').update({ module: storeModule, notes: newNotes }).eq('id', id);
-  if (error) { toast('Error: ' + error.message, 'error'); if (row) row.style.opacity = ''; return; }
+  // Optimistic update
+  _cacheUpdate(id, { module: storeModule, notes: newNotes });
+  renderFromCache();
   toast(`Moved to ${newCat} ✅`, 'success');
-  load();
+
+  // Background save
+  const { error } = await supabase.from('tasks').update({ module: storeModule, notes: newNotes }).eq('id', id);
+  if (error) {
+    toast('Error: ' + error.message, 'error');
+    // Revert
+    if (cached) _cacheUpdate(id, { module: cached.module, notes: cached.notes });
+    renderFromCache();
+  }
 };
 
 window.markDone = async (id, checkEl) => {
@@ -961,24 +1019,26 @@ window.markDone = async (id, checkEl) => {
   if (svg) svg.style.display = 'block';
   const row = document.getElementById(`task-${id}`);
   if (row) { row.style.opacity = '0.4'; row.style.transition = 'opacity 0.3s'; }
+  // Optimistic: remove from cache immediately
+  _cacheRemove(id);
+  setTimeout(() => { if (row) row.remove(); }, 300);
+  toast('Task done! ✅', 'success');
+
+  // Background save
   const { error } = await supabase.from('tasks').update({ status: 'done', completed_at: new Date().toISOString() }).eq('id', id);
   if (error) {
     toast('Error: ' + error.message, 'error');
-    checkEl.style.background = ''; checkEl.style.borderColor = '';
-    if (svg) svg.style.display = 'none';
-    if (row) row.style.opacity = '';
-    return;
+    // Revert UI — need a fresh load since we already removed from cache
+    loadTasks();
   }
-  setTimeout(() => { if (row) row.remove(); }, 400);
-  toast('Task done! ✅', 'success');
 };
 
 // ── Edit Task modal ───────────────────────────────────────────────────────────
 window.openEditTaskModal = async (id, event) => {
   if (event) event.stopPropagation();
-  // Fetch current task data
-  const { data: t, error } = await supabase.from('tasks').select('*').eq('id', id).single();
-  if (error || !t) { toast('Could not load task', 'error'); return; }
+  // Use cached task data — no DB fetch needed
+  const t = _taskCache.find(task => task.id === id);
+  if (!t) { toast('Could not load task', 'error'); return; }
 
   const parsed = (() => { try { return JSON.parse(t.notes || '{}'); } catch { return {}; } })();
   const currentLabel  = parsed.schedule_label || '';
@@ -1076,13 +1136,17 @@ window.saveEditTask = async () => {
   if (linkedNoteId) base.linked_note_id = linkedNoteId;
   const notes = Object.keys(base).length ? JSON.stringify(base) : null;
 
+  // Optimistic update
+  _cacheUpdate(parseInt(id), { title, module, priority, due_date: due || null, notes });
+  document.getElementById('edit-task-modal').remove();
+  renderFromCache();
+  toast('Task updated ✅', 'success');
+
+  // Background save
   const { error } = await supabase.from('tasks').update({ title, module, priority, due_date: due, notes }).eq('id', id);
-  if (error) { toast('Error saving: ' + error.message, 'error'); return; }
+  if (error) { toast('Error saving: ' + error.message, 'error'); loadTasks(); return; }
   // Sync linked_task_id on the note
   if (linkedNoteId) await linkNoteToTask(linkedNoteId, parseInt(id));
-  toast('Task updated ✅', 'success');
-  document.getElementById('edit-task-modal').remove();
-  load();
 };
 
 // ── Add Task modal ────────────────────────────────────────────────────────────
@@ -1115,7 +1179,14 @@ window.submitTask = async () => {
   document.getElementById('task-notes').value = '';
   if (document.getElementById('task-linked-note-id')) document.getElementById('task-linked-note-id').value = '';
   clearLinkedNoteAdd();
-  load();
+  // Add to cache and re-render (no full reload needed)
+  if (newTask?.id) {
+    _cacheAdd({ id: newTask.id, title, module, notes, priority, due_date: due || null, status: 'open', created_at: new Date().toISOString(), completed_at: null, linked_student_id: null, linked_client_id: null, time_estimate_minutes: null });
+    if (linkedNoteId && newTask.id) await linkNoteToTask(parseInt(linkedNoteId), newTask.id);
+    renderFromCache();
+  } else {
+    loadTasks();
+  }
 };
 
 // ── Recurring Tasks ───────────────────────────────────────────────────────────
