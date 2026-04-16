@@ -51,6 +51,39 @@ function storageNotes(displayMod, notesStr) {
   return buildNotesJson(displayMod, notesStr, null);
 }
 
+// ── Google Doc per task ───────────────────────────────────────────────────────
+window.openTaskDoc = async function(taskId, taskTitle, taskModule, btnEl) {
+  if (btnEl) {
+    btnEl.disabled = true;
+    btnEl.textContent = '⏳';
+  }
+  try {
+    const res = await fetch('https://kxsuzgpnvtepsyhkezin.supabase.co/functions/v1/create-task-doc', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ taskId, taskTitle, taskModule }),
+    });
+    const data = await res.json();
+    if (data.docUrl) {
+      window.open(data.docUrl, '_blank');
+      // Update button to show doc exists
+      if (btnEl) {
+        btnEl.textContent = '📄';
+        btnEl.style.background = '#dbeafe';
+        btnEl.style.color = '#2563eb';
+        btnEl.title = 'Open Google Doc';
+        btnEl.disabled = false;
+      }
+    } else {
+      if (btnEl) { btnEl.textContent = '📄'; btnEl.disabled = false; }
+      alert('Error creating doc: ' + (data.error || 'Unknown error'));
+    }
+  } catch (e) {
+    if (btnEl) { btnEl.textContent = '📄'; btnEl.disabled = false; }
+    alert('Error: ' + e.message);
+  }
+};
+
 // Update schedule_label in a task's notes JSON
 async function setScheduleLabel(taskId, label) {
   const { data } = await supabase.from('tasks').select('notes,module').eq('id', taskId).single();
@@ -633,6 +666,9 @@ function renderTaskGroup(tasks, inTodaySection, groupKey) {
           <button id="dn-${t.id}" class="btn btn-sm" style="background:var(--gray-100);color:var(--gray-500);border:none;font-size:10px;padding:2px 5px;line-height:1;${isLast ? 'opacity:0.3' : ''}"
             onclick="moveTask(${t.id}, '${groupKey}', 'down')" title="Move down" ${isLast ? 'disabled' : ''}>▼</button>
         </div>
+        <button class="btn btn-sm task-doc-btn" id="docbtn-${t.id}"
+          style="background:${parseNotes(t).doc_id ? '#dbeafe' : '#f3f4f6'};color:${parseNotes(t).doc_id ? '#2563eb' : '#6b7280'};border:none;font-size:13px;padding:4px 6px;line-height:1"
+          onclick="event.stopPropagation();openTaskDoc(${t.id}, ${JSON.stringify(t.title)}, '${(displayModule(t)).replace(/'/g, "\'")}', this)" title="${parseNotes(t).doc_id ? 'Open Google Doc' : 'Create Google Doc'}">📄</button>
         <button class="btn btn-sm" style="background:#f3f4f6;color:#6b7280;border:none;font-size:13px;padding:4px 6px;line-height:1"
           onclick="openSchedulePicker(${t.id}, ${label ? `'${label}'` : 'null'}, event)" title="Schedule">📅</button>
         <button class="btn btn-sm" style="background:#f3f4f6;color:#6b7280;border:none;font-size:11px;padding:4px 7px;line-height:1"
