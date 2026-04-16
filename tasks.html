@@ -56,6 +56,18 @@
 .ntfy-badge { display:inline-flex; align-items:center; gap:3px; padding:2px 6px; border-radius:99px; font-size:10px; font-weight:600; background:#ecfdf5; color:#059669; }
 .rem-section-label { font-size:11px; font-weight:700; color:var(--gray-500); text-transform:uppercase; letter-spacing:.5px; margin:10px 0 6px; }
 .rem-section-label:first-child { margin-top:0; }
+
+/* Hide scrollbars in tab rows (they're swipeable) */
+#mod-tabs-row::-webkit-scrollbar,
+.sched-filter-row::-webkit-scrollbar { display: none; }
+
+/* Ensure sticky header always shows above content */
+.page-header {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 200 !important;
+  will-change: transform;
+}
 </style>
 </head>
 <body>
@@ -69,11 +81,11 @@
   </div>
   <!-- Module filter tabs (dynamically rendered by tasks.js) -->
   <div style="display:flex;align-items:center;gap:6px;margin-top:8px">
-    <div id="mod-tabs-row" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;flex:1"></div>
+    <div id="mod-tabs-row" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;flex:1;-webkit-overflow-scrolling:touch;scrollbar-width:none;-ms-overflow-style:none"></div>
     <button class="btn btn-sm btn-ghost" onclick="openCategoryManager()" title="Manage categories" style="flex-shrink:0;font-size:15px;padding:4px 8px">⚙️</button>
   </div>
   <!-- Schedule label filter tabs -->
-  <div class="sched-filter-row" style="display:flex;gap:6px;margin-top:6px;overflow-x:auto;padding-bottom:2px">
+  <div class="sched-filter-row" style="display:flex;gap:6px;margin-top:6px;overflow-x:auto;padding-bottom:2px;-webkit-overflow-scrolling:touch;scrollbar-width:none;-ms-overflow-style:none">
     <button class="btn btn-sm btn-ghost sched-filter-btn" id="sf-All" onclick="setScheduleFilter('All')" style="border-radius:20px">All schedules</button>
     <button class="btn btn-sm btn-ghost sched-filter-btn" id="sf-Today" onclick="setScheduleFilter('Today')" style="border-radius:20px;border-color:#f59e0b;color:#92400e">📅 Today</button>
     <button class="btn btn-sm btn-ghost sched-filter-btn" id="sf-Next Up" onclick="setScheduleFilter('Next Up')" style="border-radius:20px;border-color:var(--blue);color:var(--blue)">Next Up</button>
@@ -420,7 +432,7 @@
 </div>
 
 <script type="module" src="js/auth-guard.js"></script>
-<script type="module" src="js/tasks.js?v=16"></script>
+<script type="module" src="js/tasks.js?v=17"></script>
 <script type="module" src="js/error-reporter.js?v=1"></script>
 <script type="module" src="js/topbar.js?v=7"></script>
 </body>
