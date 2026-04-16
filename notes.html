@@ -58,6 +58,20 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
   color: var(--gray-400);
   pointer-events: none;
 }
+/* Bullet/ordered list inside note editor */
+.note-edit-body ul,
+.note-edit-body ol {
+  padding-left: 1.4em;
+  margin: 4px 0;
+}
+.note-edit-body ul li {
+  list-style: disc;
+  margin: 2px 0;
+}
+.note-edit-body ol li {
+  list-style: decimal;
+  margin: 2px 0;
+}
 /* ── Note list ──────────────────────────────────────────────── */
 .notes-list-stack {
   display: flex;
@@ -495,7 +509,7 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
 </nav>
 
 <script type="module" src="js/auth-guard.js"></script>
-<script type="module" src="js/notes.js?v=13"></script>
+<script type="module" src="js/notes.js?v=14"></script>
 <script type="module" src="js/error-reporter.js?v=1"></script>
 <script type="module" src="js/topbar.js?v=6"></script>
 </body>
