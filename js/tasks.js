@@ -140,10 +140,16 @@ function renderModuleTabs() {
           style="white-space:nowrap;border-radius:0 20px 20px 0;padding:0 8px;font-size:13px;${isActive ? '' : 'border-left:1px solid var(--gray-200)'}">✏️</button>
       </div>`;
     }
-    return `<button class="btn btn-sm ${isActive ? 'btn-primary' : 'btn-ghost'} mod-btn"
-      id="mod-${mod.replace(/\s+/g,'-')}"
-      onclick="setModule('${mod.replace(/'/g, "\\'")}')"
-      style="white-space:nowrap">${label}</button>`;
+    // Custom categories: split button with label + × remove
+    return `<div style="display:inline-flex;align-items:center;flex-shrink:0">
+      <button class="btn btn-sm ${isActive ? 'btn-primary' : 'btn-ghost'} mod-btn"
+        id="mod-${mod.replace(/\s+/g,'-')}"
+        onclick="setModule('${mod.replace(/'/g, "\\'")}')"
+        style="white-space:nowrap;border-radius:20px 0 0 20px;border-right:none;padding-right:8px">${label}</button><button class="btn btn-sm ${isActive ? 'btn-primary' : 'btn-ghost'}"
+        onclick="event.stopPropagation();removeCategory('${mod.replace(/'/g, "\\'")}')"
+        title="Remove category"
+        style="border-radius:0 20px 20px 0;padding:0 7px;font-size:12px;line-height:1;${isActive ? '' : 'border-left:1px solid var(--gray-200)'}">×</button>
+    </div>`;
   }).join('');
 }
 
@@ -187,6 +193,17 @@ window.addCategory = () => {
   _catDraft.push(name);
   renderCatList();
   if (inp) inp.value = '';
+};
+
+// Quick-remove a category directly from the tab bar
+window.removeCategory = (mod) => {
+  if (!confirm(`Remove "${mod}" category? Tasks in this category won't be deleted.`)) return;
+  categoryOrder = categoryOrder.filter(c => c !== mod);
+  localStorage.setItem('tasks-cat-order', JSON.stringify(categoryOrder));
+  renderModuleTabs();
+  if (activeModule === mod) setModule('Default');
+  else renderFromCache();
+  toast(`Removed "${mod}" ✓`, 'success');
 };
 
 window.saveCategoryManager = () => {
