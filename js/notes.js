@@ -355,11 +355,41 @@ function tryAutoBullet(noteId, event) {
   const offset = range.startOffset;
 
   if (offset < 2) return false;
+
+  // In contenteditable, each line is its own block element (div/p/br),
+  // so we check if the current text node's content up to cursor is '- '
+  // We look at the text within the immediate block ancestor for this node.
   const before = text.slice(0, offset);
-  const lineStart = before.lastIndexOf('\n') + 1;
-  const lineText = before.slice(lineStart);
+
+  // Get the block-level parent of this text node to detect line boundaries
+  let blockParent = node.parentElement;
+  while (blockParent && blockParent !== bodyEl) {
+    const display = window.getComputedStyle(blockParent).display;
+    if (display === 'block' || display === 'list-item' || blockParent.tagName === 'DIV' || blockParent.tagName === 'P') break;
+    blockParent = blockParent.parentElement;
+  }
+
+  // Get full text of the block up to cursor position
+  let lineText = before;
+  if (blockParent && blockParent !== bodyEl) {
+    // Walk all text nodes in block up to current node
+    const walker = document.createTreeWalker(blockParent, NodeFilter.SHOW_TEXT);
+    let accumulated = '';
+    let found = false;
+    while (walker.nextNode()) {
+      const n = walker.currentNode;
+      if (n === node) {
+        accumulated += text.slice(0, offset);
+        found = true;
+        break;
+      }
+      accumulated += n.textContent;
+    }
+    if (found) lineText = accumulated;
+  }
 
   if (lineText === '- ') {
+    // Remove the "- " text before converting to list
     node.textContent = text.slice(0, offset - 2) + text.slice(offset);
     const r = document.createRange();
     r.setStart(node, Math.max(0, offset - 2));
