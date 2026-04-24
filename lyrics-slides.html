@@ -617,7 +617,7 @@
 <!-- ==================== LOADING ==================== -->
 <div class="loading" id="loading">
   <div class="spinner"></div>
-  <div class="loading-text" id="loading-text">Labeling sections with Claude…</div>
+  <div class="loading-text" id="loading-text">Loading…</div>
 </div>
 
 <!-- ==================== OPERATOR VIEW ==================== -->
@@ -2032,9 +2032,12 @@ async function generateFromLyrics({ id, title, artist, lyrics, palette: paletteC
   loadingText.textContent = 'Processing lyrics…';
 
   try {
-    // Use cached slides if available AND lyrics haven't changed
+    // Use cached slides if available AND lyrics haven't changed.
+    // Exception: if the input uses /heading syntax, always re-parse — it's free
+    // (pure JS) and avoids serving stale cache when the parser has been updated.
+    const hasSlashHeaders = /^\s*\/\S/m.test(lyrics);
     const lyricsUnchanged = cachedSlides && cachedLyrics && cachedLyrics.trim() === lyrics.trim();
-    let useCache = lyricsUnchanged && Array.isArray(cachedSlides) && cachedSlides.length > 0;
+    let useCache = lyricsUnchanged && Array.isArray(cachedSlides) && cachedSlides.length > 0 && !hasSlashHeaders;
 
     if (useCache) {
       loadingText.textContent = 'Loading cached slides…';
