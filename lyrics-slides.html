@@ -606,7 +606,8 @@
 
   <div class="helper-card">
     <strong>Slide breaks:</strong> each <em>blank line</em> starts a new slide. Lines between blank lines stay on one slide — the font auto-shrinks to fit.<br><br>
-    <strong>Sections:</strong> mark headings with a leading slash like <code>/V1</code> or <code>/Chorus</code>. Lines under the heading <em>define</em> that section. Reuse it later by writing the same heading on its own line (e.g. <code>/Chorus</code>) — the previous content plays again. Add <code>x2</code> / <code>x3</code> for multiple repeats (e.g. <code>/Chorus x2</code>). Heading names match case-insensitively.
+    <strong>Sections:</strong> mark headings with a leading slash like <code>/V1</code> or <code>/Chorus</code>. Lines under the heading <em>define</em> that section. Reuse it later by writing the same heading on its own line (e.g. <code>/Chorus</code>) — the previous content plays again. Add <code>x2</code> / <code>x3</code> for multiple repeats (e.g. <code>/Chorus x2</code>). Heading names match case-insensitively.<br><br>
+    <strong>Blank slides:</strong> use <code>/blank</code> (or <code>/black</code>, <code>/silence</code>) on its own line to drop a blank slide in. Repeats with <code>x2</code> too.
   </div>
 
   <input type="hidden" id="current-song-id">
@@ -1427,6 +1428,16 @@ function parseStructuredLyrics(raw) {
       flushChunk();
       const key = e.name.toLowerCase();
 
+      // Reserved keywords: /blank, /black, /silence, /- — insert a blank slide here
+      // (or N blanks if "x N" suffix was used).
+      if (key === 'blank' || key === 'black' || key === 'silence' || key === '-' || key === '_') {
+        for (let r = 0; r < e.repeat; r++) {
+          program.push({ key: '__blank__', repeat: 1 });
+        }
+        currentKey = null;
+        continue;
+      }
+
       // Look ahead past blanks: is the next event content?
       let look = i + 1;
       while (look < events.length && events[look].type === 'blank') look++;
@@ -1458,6 +1469,10 @@ function parseStructuredLyrics(raw) {
   // Pass 3 — expand program into slides
   const slides = [];
   for (const step of program) {
+    if (step.key === '__blank__') {
+      slides.push({ kind: 'blank', lines: [], sectionType: null });
+      continue;
+    }
     const sec = sections[step.key];
     if (!sec || sec.chunks.length === 0) continue;
     for (let r = 0; r < step.repeat; r++) {
