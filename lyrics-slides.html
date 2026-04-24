@@ -1863,6 +1863,7 @@ async function generateFromLyrics({ id, title, artist, lyrics, palette: paletteC
     let useCache = lyricsUnchanged && Array.isArray(cachedSlides) && cachedSlides.length > 0;
 
     if (useCache) {
+      loadingText.textContent = 'Loading cached slides…';
       slides = cachedSlides;
     } else {
       const cleaned = cleanLyrics(lyrics);
