@@ -1895,6 +1895,9 @@ async function generateFromLyrics({ id, title, artist, lyrics, palette: paletteC
       });
       savedId = saved?.id || id;
       $('current-song-id').value = savedId || '';
+    } else if (!useCache && id) {
+      // Loading an old song that had no cached slides — patch the cache in the background so next load is instant.
+      patchSong(id, { slides_data: slides }).catch(e => console.warn('cache patch failed', e));
     }
     currentSong = {
       id: savedId, title, artist, lyrics, palette: paletteChoice,
