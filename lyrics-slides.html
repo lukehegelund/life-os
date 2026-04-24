@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Lyric Slides</title>
+<!-- Supabase JS SDK for Realtime cross-device sync -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <style>
   :root {
     --bg: #0b0d12;
@@ -245,15 +247,11 @@
 
   .op-main {
     flex: 1;
-    display: grid;
-    grid-template-columns: 1.8fr 1fr;
-    grid-template-rows: 1fr;
-    gap: 12px;
-    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px;
     min-height: 0;
-  }
-  @media (max-width: 900px) {
-    .op-main { grid-template-columns: 1fr; grid-template-rows: 1.5fr 1fr; }
   }
 
   .op-preview {
@@ -283,25 +281,33 @@
     font-size: 11px; font-weight: 500; letter-spacing: 0.03em;
   }
 
-  .op-side { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+  /* LIVE preview takes most of the vertical space */
+  .op-preview-live { flex: 1 1 auto; min-height: 0; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+  /* Tap zones for click-to-advance — invisible overlay above the slide content */
+  .op-tap-zone { position: absolute; top: 0; bottom: 0; z-index: 30; cursor: pointer; }
+  .op-tap-zone-prev { left: 0; width: 28%; }
+  .op-tap-zone-next { right: 0; width: 72%; }
 
+  /* Horizontal scrollable strip below the LIVE preview */
   .op-strip {
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: 10px;
-    padding: 10px;
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    grid-auto-rows: 86px;       /* fixed row height — prevents overlap */
+    padding: 8px;
+    display: flex;            /* horizontal row */
     gap: 8px;
-    overflow-y: auto;
-    flex: 1 1 auto;
-    min-height: 0;
-    align-content: start;
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex: 0 0 auto;
+    height: 96px;
+    scrollbar-width: thin;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
   }
   .op-strip-item {
     position: relative;
-    height: 86px;
+    flex: 0 0 144px;          /* fixed width, no shrink */
+    height: 80px;
     border: 2px solid transparent;
     border-radius: 8px;
     overflow: hidden;
@@ -377,6 +383,79 @@
   .op-preview-hud.color-blue   { background: rgba(54,113,193,0.85); }
   .op-preview-hud.color-orange { background: rgba(212,128,32,0.85); }
   .op-preview-hud.color-grey   { background: rgba(80,86,98,0.85); }
+
+  /* Section heading buttons row — under the strip */
+  .op-section-buttons {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px;
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex: 0 0 auto;
+    height: 60px;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+  }
+  .op-section-btn {
+    flex: 1 1 0;
+    min-width: 90px;
+    max-width: 220px;
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-size: 14px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    transition: filter 0.1s, transform 0.05s;
+    height: 100%;
+    padding: 0 14px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .op-section-btn:hover  { filter: brightness(1.15); }
+  .op-section-btn:active { transform: scale(0.97); }
+  /* Reuse existing pill colors */
+  .op-section-btn.btn-color-green  { background: rgba(56,142,72,0.92); }
+  .op-section-btn.btn-color-blue   { background: rgba(54,113,193,0.92); }
+  .op-section-btn.btn-color-orange { background: rgba(212,128,32,0.92); }
+  .op-section-btn.btn-color-grey   { background: rgba(80,86,98,0.92); }
+
+  /* Session sync display in footer */
+  .op-session {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12px; color: var(--muted);
+  }
+  .op-session-code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    color: var(--text);
+    padding: 3px 9px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  .op-qr-toggle {
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+    padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 11px;
+  }
+  .op-qr-toggle:hover { border-color: var(--muted); }
+  .op-qr-popover {
+    position: absolute; bottom: 56px; right: 16px; z-index: 50;
+    background: white; padding: 12px; border-radius: 10px;
+    box-shadow: 0 6px 30px rgba(0,0,0,0.55);
+    display: none;
+  }
+  .op-qr-popover.visible { display: block; }
+  .op-qr-popover img { display: block; width: 200px; height: 200px; }
+  .op-qr-popover .qr-cap { color: #333; text-align: center; font-size: 11px; margin-top: 6px; font-weight: 600; }
 
   .op-footer {
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
@@ -682,17 +761,29 @@
       <div class="op-preview-label">Live</div>
       <div class="op-preview-hud" id="op-current-hud">—</div>
       <!-- bg layer + content injected here -->
+      <!-- Tap zones for click-to-advance and swipe (above content via z-index) -->
+      <div class="op-tap-zone op-tap-zone-prev" id="op-tap-prev"></div>
+      <div class="op-tap-zone op-tap-zone-next" id="op-tap-next"></div>
     </div>
-    <div class="op-side">
-      <div class="op-strip" id="op-strip"></div>
-    </div>
+    <div class="op-strip" id="op-strip"></div>
+    <div class="op-section-buttons" id="op-section-buttons"></div>
+  </div>
+
+  <div class="op-qr-popover" id="op-qr-popover">
+    <img id="op-qr-img" alt="Join code">
+    <div class="qr-cap">Scan with your phone</div>
   </div>
 
   <div class="op-footer">
     <div class="op-footer-group">
       <span class="op-broadcast-indicator">
         <span class="op-broadcast-dot" id="op-broadcast-dot"></span>
-        <span id="op-broadcast-status">Broadcast window closed</span>
+        <span id="op-broadcast-status">Broadcast closed</span>
+      </span>
+      <span class="op-session" id="op-session" style="display:none;">
+        Session
+        <span class="op-session-code" id="op-session-code">—</span>
+        <button class="op-qr-toggle" id="op-qr-toggle">QR</button>
       </span>
     </div>
     <div class="op-footer-group">
@@ -795,6 +886,12 @@ let channel = null;
 let selectedVideos = [];            // active urls for current song
 let videoModalSelection = new Set(); // temporary set while choosing in modal
 let videoModalResults   = [];        // current search results
+
+// Cross-device sync (Supabase Realtime)
+let sbClient = null;
+let realtimeChannel = null;
+let sessionCode = null;
+const JOIN_CODE = urlParams.get('join') || null;
 
 // Video playback timers (per-stage)
 const stageVideoState = new WeakMap();
@@ -1730,8 +1827,52 @@ function renderOperator() {
   // Current + next previews
   renderCurrentPreview();
   renderNextPreview();
+  renderSectionButtons();
   updateCurrentHud();
   updateBroadcastIndicator();
+}
+
+/**
+ * Render up to N section buttons across the bottom — one per unique section name,
+ * plus a "Blank" button that cycles through blank slides.
+ * Tapping a section button jumps to the first slide of that section.
+ */
+function renderSectionButtons() {
+  const container = $('op-section-buttons');
+  if (!container) return;
+  container.innerHTML = '';
+
+  // Collect unique sections in first-appearance order, with their first slide index
+  const seen = new Map(); // sectionType → firstSlideIdx
+  slides.forEach((s, i) => {
+    if (s.kind === 'lyric' && s.sectionType && !seen.has(s.sectionType)) {
+      seen.set(s.sectionType, i);
+    }
+  });
+
+  // Render one button per section
+  seen.forEach((firstIdx, sectionType) => {
+    const btn = document.createElement('button');
+    btn.className = `op-section-btn btn-color-${sectionColor(sectionType)}`;
+    btn.textContent = sectionType;
+    btn.title = `Jump to first slide of ${sectionType}`;
+    btn.addEventListener('click', () => showSlide(firstIdx));
+    container.appendChild(btn);
+  });
+
+  // Always-on "Blank" button — cycles through blank slides
+  const blankIndices = slides.map((s, i) => s.kind === 'blank' ? i : -1).filter(i => i >= 0);
+  if (blankIndices.length > 0) {
+    const blankBtn = document.createElement('button');
+    blankBtn.className = 'op-section-btn btn-color-grey';
+    blankBtn.textContent = 'Blank';
+    blankBtn.title = 'Jump to next blank slide';
+    blankBtn.addEventListener('click', () => {
+      const nextBlank = blankIndices.find(i => i > currentIdx) ?? blankIndices[0];
+      showSlide(nextBlank);
+    });
+    container.appendChild(blankBtn);
+  }
 }
 
 function renderCurrentPreview() {
@@ -1757,13 +1898,146 @@ function updateCurrentHud() {
   // Color the HUD chip to match the section
   ['color-green','color-blue','color-orange','color-grey'].forEach(c => hud.classList.remove(c));
   hud.classList.add(`color-${sectionColor(s?.sectionType)}`);
-  // Active class in strip
+  // Active class in strip + horizontal scroll into view
   document.querySelectorAll('.op-strip-item').forEach((el, i) => {
     el.classList.toggle('active', i === currentIdx);
   });
-  // Scroll into view in strip
   const activeItem = document.querySelector('.op-strip-item.active');
-  if (activeItem) activeItem.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  if (activeItem) activeItem.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+}
+
+// ========================= SUPABASE REALTIME (cross-device sync) =========================
+
+function getSupabaseClient() {
+  if (sbClient) return sbClient;
+  if (!window.supabase || !window.supabase.createClient) {
+    console.warn('Supabase JS SDK not loaded yet');
+    return null;
+  }
+  sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+  return sbClient;
+}
+
+function generateSessionCode() {
+  // 4-character code, easy to type. Avoids confusable chars (0/O, 1/I/L).
+  const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  let s = '';
+  for (let i = 0; i < 4; i++) s += alphabet[Math.floor(Math.random() * alphabet.length)];
+  return s;
+}
+
+/**
+ * Open a Realtime channel for cross-device sync. Both host (computer) and client
+ * (joined phone) call this with the same code; messages flow both ways.
+ */
+function startRealtimeChannel(code) {
+  const sb = getSupabaseClient();
+  if (!sb) return null;
+  if (realtimeChannel) {
+    try { realtimeChannel.unsubscribe(); } catch {}
+    realtimeChannel = null;
+  }
+  const channel = sb.channel(`lyric-slides:${code}`, {
+    config: { broadcast: { self: false } }   // never receive my own messages
+  });
+
+  // Phone side ("client") asks for the current song state when joining
+  channel.on('broadcast', { event: 'state' }, ({ payload }) => {
+    if (!payload) return;
+    slides = payload.slides || [];
+    currentIdx = payload.idx || 0;
+    palette = payload.palette || palette;
+    selectedVideos = Array.isArray(payload.videos) ? payload.videos : [];
+    currentSong = payload.song || currentSong;
+    autoAdvanceSec = payload.autoAdvanceSec ?? autoAdvanceSec;
+    if (!operatorView.classList.contains('visible')) enterOperator();
+    else { renderOperator(); }
+  });
+
+  channel.on('broadcast', { event: 'nav' }, ({ payload }) => {
+    if (typeof payload?.idx === 'number') {
+      currentIdx = payload.idx;
+      if (operatorView.classList.contains('visible')) {
+        renderCurrentPreview();
+        updateCurrentHud();
+      } else if (broadcastView.classList.contains('visible')) {
+        renderBroadcast();
+      }
+      // Mirror locally on broadcast window via BroadcastChannel
+      pushNavToBroadcast();
+    }
+  });
+
+  channel.on('broadcast', { event: 'palette' }, ({ payload }) => {
+    if (payload?.palette) {
+      palette = payload.palette;
+      if (operatorView.classList.contains('visible')) {
+        const sel = $('op-palette-select'); if (sel) sel.value = palette;
+        renderCurrentPreview();
+      }
+      pushPaletteToBroadcast();
+    }
+  });
+
+  // Phone (client) requests state on connect; host responds with current song
+  channel.on('broadcast', { event: 'request_state' }, () => {
+    if (slides.length > 0) {
+      channel.send({
+        type: 'broadcast', event: 'state',
+        payload: {
+          slides, idx: currentIdx, palette, videos: selectedVideos,
+          song: currentSong, autoAdvanceSec
+        }
+      });
+    }
+  });
+
+  channel.subscribe((status) => {
+    if (status === 'SUBSCRIBED') {
+      // If we're the joined client, ask the host for current state
+      if (JOIN_CODE) {
+        channel.send({ type: 'broadcast', event: 'request_state', payload: {} });
+      }
+    }
+  });
+
+  realtimeChannel = channel;
+  return channel;
+}
+
+function broadcastNavRealtime() {
+  if (!realtimeChannel) return;
+  try {
+    realtimeChannel.send({ type: 'broadcast', event: 'nav', payload: { idx: currentIdx } });
+  } catch (e) { console.warn('rt nav send failed', e); }
+}
+function broadcastPaletteRealtime() {
+  if (!realtimeChannel) return;
+  try {
+    realtimeChannel.send({ type: 'broadcast', event: 'palette', payload: { palette } });
+  } catch {}
+}
+function broadcastStateRealtime() {
+  if (!realtimeChannel || slides.length === 0) return;
+  try {
+    realtimeChannel.send({
+      type: 'broadcast', event: 'state',
+      payload: { slides, idx: currentIdx, palette, videos: selectedVideos, song: currentSong, autoAdvanceSec }
+    });
+  } catch {}
+}
+
+function showSessionCodeUI(code) {
+  const wrap = $('op-session');
+  const codeEl = $('op-session-code');
+  const qrImg = $('op-qr-img');
+  if (!wrap || !codeEl) return;
+  codeEl.textContent = code;
+  wrap.style.display = 'inline-flex';
+  if (qrImg) {
+    const joinUrl = `${location.origin}${location.pathname}?join=${code}`;
+    qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=8&data=${encodeURIComponent(joinUrl)}`;
+  }
 }
 
 // ========================= BROADCAST CHANNEL =========================
@@ -1910,9 +2184,9 @@ function showSlide(idx) {
     if (channel) channel.postMessage({ type: 'nav', from: 'broadcast', idx: currentIdx });
   } else {
     renderCurrentPreview();
-    renderNextPreview();
     updateCurrentHud();
-    pushNavToBroadcast();
+    pushNavToBroadcast();        // same-browser broadcast tab
+    broadcastNavRealtime();      // cross-device peers
     resetAutoAdvance();
   }
 }
@@ -1986,6 +2260,24 @@ function enterOperator() {
   broadcastView.classList.remove('visible');
   renderOperator();
   initChannel();
+
+  // Start a Supabase Realtime session if not already joined.
+  // Joined clients use the JOIN_CODE from URL; hosts generate a fresh one.
+  if (JOIN_CODE) {
+    sessionCode = JOIN_CODE;
+    startRealtimeChannel(sessionCode);
+    showSessionCodeUI(sessionCode);
+  } else if (!sessionCode) {
+    sessionCode = generateSessionCode();
+    startRealtimeChannel(sessionCode);
+    showSessionCodeUI(sessionCode);
+  } else {
+    showSessionCodeUI(sessionCode);
+  }
+
+  // Broadcast fresh state for any already-connected phone client (after a tick to let
+  // the channel finish subscribing).
+  setTimeout(() => broadcastStateRealtime(), 600);
 }
 function exitOperator() {
   // Close broadcast window
@@ -2219,6 +2511,37 @@ generateBtn?.addEventListener('click', async () => {
 
 $('refresh-library')?.addEventListener('click', renderLibrary);
 
+// =========================================================================
+// LIVE preview: tap zones + touch swipe for slide navigation
+// =========================================================================
+$('op-tap-prev')?.addEventListener('click', (e) => { e.stopPropagation(); prevSlide(); });
+$('op-tap-next')?.addEventListener('click', (e) => { e.stopPropagation(); nextSlide(); });
+
+// Touch swipe on the LIVE preview — left swipe = next, right swipe = prev
+(function attachSwipe() {
+  const stage = $('op-preview-current');
+  if (!stage) return;
+  let startX = 0, startY = 0, startT = 0, isTouch = false;
+  stage.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) return;
+    isTouch = true;
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    startT = Date.now();
+  }, { passive: true });
+  stage.addEventListener('touchend', (e) => {
+    if (!isTouch || e.changedTouches.length !== 1) return;
+    isTouch = false;
+    const dx = e.changedTouches[0].clientX - startX;
+    const dy = e.changedTouches[0].clientY - startY;
+    const dt = Date.now() - startT;
+    // Horizontal swipe: ≥40px and mostly horizontal and under 600ms
+    if (Math.abs(dx) >= 40 && Math.abs(dx) > Math.abs(dy) * 1.5 && dt < 600) {
+      if (dx < 0) nextSlide(); else prevSlide();
+    }
+  }, { passive: true });
+})();
+
 // Video modal
 $('open-video-modal')?.addEventListener('click', openVideoModal);
 $('video-close')?.addEventListener('click', closeVideoModal);
@@ -2239,13 +2562,25 @@ $('op-present')?.addEventListener('click', () => {
 $('op-palette-select')?.addEventListener('change', (e) => {
   palette = e.target.value;
   renderCurrentPreview();
-  renderNextPreview();
   // Re-render strip so thumbnails get the new gradient
   document.querySelectorAll('.op-strip-item').forEach(item => {
     GRADIENTS.forEach(g => item.classList.remove(g));
     item.classList.add(palette);
   });
   pushPaletteToBroadcast();
+  broadcastPaletteRealtime();
+});
+
+// QR popover toggle
+$('op-qr-toggle')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  $('op-qr-popover')?.classList.toggle('visible');
+});
+document.addEventListener('click', (e) => {
+  const pop = $('op-qr-popover');
+  if (pop?.classList.contains('visible') && !pop.contains(e.target) && e.target.id !== 'op-qr-toggle') {
+    pop.classList.remove('visible');
+  }
 });
 $('op-auto-advance')?.addEventListener('change', (e) => {
   autoAdvanceSec = parseInt(e.target.value, 10) || 0;
@@ -2291,6 +2626,25 @@ if (IS_BROADCAST) {
 
   // Kick off Claude key load just in case it's needed (it's not in broadcast mode)
   // ...nothing to do here — broadcast just displays
+} else if (JOIN_CODE) {
+  // Joined client mode (phone) — wait for state from host via Realtime
+  setupView.style.display = 'none';
+  // Start the Realtime channel; renderOperator will be called when 'state' arrives
+  sessionCode = JOIN_CODE;
+  // Need to wait until SDK is ready (script in <head>, but defer until DOM ready just in case)
+  const tryStart = () => {
+    if (window.supabase && window.supabase.createClient) {
+      startRealtimeChannel(sessionCode);
+      showSessionCodeUI(sessionCode);
+      // Show operator shell with empty state until host sends state
+      operatorView.classList.add('visible');
+      const titleEl = $('op-title-name');
+      if (titleEl) titleEl.textContent = 'Connecting…';
+    } else {
+      setTimeout(tryStart, 100);
+    }
+  };
+  tryStart();
 } else {
   // Setup mode
   showSetup();
