@@ -181,40 +181,35 @@
   .grad-rose .slide-bg::before { background: linear-gradient(135deg, #d68ba4, #e4a8bc, #c978a4, #b86a97, #d68ba4); }
   .grad-rose .slide-bg::after  { background: radial-gradient(circle at 45% 60%, #f0bccd 0%, transparent 55%), radial-gradient(circle at 75% 30%, #a05585 0%, transparent 50%); }
 
+  /* Vignette — subtle edge-darkening to improve text legibility without drop shadow */
+  .slide-vignette {
+    position: absolute; inset: 0; z-index: 1;
+    background: radial-gradient(ellipse at center,
+                rgba(0,0,0,0) 0%,
+                rgba(0,0,0,0) 35%,
+                rgba(0,0,0,0.18) 75%,
+                rgba(0,0,0,0.32) 100%);
+    pointer-events: none;
+  }
+
   /* Slide content */
   .slide-content {
     position: relative; z-index: 2;
-    max-width: 920px;
+    max-width: 1400px;
     width: 100%;
     text-align: center;
     color: white;
-    text-shadow: 0 2px 24px rgba(0,0,0,0.45), 0 1px 3px rgba(0,0,0,0.35);
+    font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'Inter', system-ui, sans-serif;
   }
   .slide-line {
-    font-size: clamp(28px, 5.5vw, 64px);
-    font-weight: 600;
-    line-height: 1.25;
-    letter-spacing: -0.01em;
-    margin: 0.2em 0;
-  }
-  .slide-line + .slide-line { margin-top: 0.35em; }
-
-  /* Section label slide — bigger, serif-ish */
-  .slide.section-label-slide .slide-label {
-    font-size: clamp(40px, 8vw, 96px);
+    font-size: clamp(40px, 7.5vw, 112px);
     font-weight: 300;
+    line-height: 1.1;
     letter-spacing: 0.04em;
     text-transform: uppercase;
-    opacity: 0.95;
+    margin: 0;
   }
-  .slide.section-label-slide .slide-label-number {
-    display: block;
-    font-size: 0.35em;
-    font-weight: 500;
-    letter-spacing: 0.3em;
-    color: rgba(255,255,255,0.75);
-    margin-bottom: 0.2em;
-  }
+  .slide-line + .slide-line { margin-top: 0.55em; }
 
   /* Blank slides — no content, just gradient */
 
@@ -534,12 +529,9 @@ function buildSlides(sections, title, artist, paletteMode) {
     const sectionText = (section.text || '').trim();
     if (!sectionText) return;
 
-    // Section label slide (e.g., "VERSE 1")
-    out.push({
-      kind: 'section-label',
-      label: sectionType,
-      palette: pickPalette(paletteMode, out.length)
-    });
+    // NOTE: section labels are intentionally NOT projected as standalone slides.
+    // The sectionType travels with each lyric slide for the (future) operator view
+    // and the HUD chip, but the broadcast audience only sees lyric + blank slides.
 
     // Split section text into lines, drop empty lines, group in pairs
     const lines = sectionText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
@@ -571,12 +563,11 @@ function renderSlides() {
   slides.forEach((slide, idx) => {
     const el = document.createElement('div');
     el.className = `slide ${slide.palette}`;
-    if (slide.kind === 'section-label') el.classList.add('section-label-slide');
     if (slide.kind === 'blank') el.classList.add('blank-slide');
     el.dataset.idx = idx;
 
-    // Background layers
-    el.innerHTML = `<div class="slide-bg"></div>`;
+    // Background + vignette layers
+    el.innerHTML = `<div class="slide-bg"></div><div class="slide-vignette"></div>`;
 
     // Content
     const content = document.createElement('div');
@@ -589,17 +580,6 @@ function renderSlides() {
         p.textContent = line;
         content.appendChild(p);
       });
-    } else if (slide.kind === 'section-label') {
-      const label = document.createElement('div');
-      label.className = 'slide-label';
-      // Split "Verse 1" → label "VERSE" with "1" as sub
-      const match = slide.label.match(/^(.*?)\s+(\d+)$/);
-      if (match) {
-        label.innerHTML = `<span class="slide-label-number">${match[2]}</span>${match[1]}`;
-      } else {
-        label.textContent = slide.label;
-      }
-      content.appendChild(label);
     }
     // blank slide: no content
 
@@ -618,7 +598,8 @@ function showSlide(idx) {
   all.forEach((el, i) => {
     el.classList.toggle('active', i === idx);
   });
-  slideCounter.textContent = `${idx + 1} / ${slides.length}`;
+  const sec = slides[idx]?.sectionType ? `${slides[idx].sectionType.toUpperCase()} · ` : '';
+  slideCounter.textContent = `${sec}${idx + 1} / ${slides.length}`;
   resetAutoAdvance();
 }
 
