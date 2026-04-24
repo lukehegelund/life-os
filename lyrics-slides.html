@@ -197,7 +197,9 @@
     padding: 6%;
   }
   .slide-content {
-    display: inline-block;       /* hugs widest line so the bg box fits the text */
+    display: block;
+    width: max-content;          /* explicitly size to widest line, overriding flex constraints */
+    max-width: 100%;             /* but never wider than the wrap area visually */
     text-align: center;
     color: white;
     font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'Inter', system-ui, sans-serif;
@@ -206,8 +208,6 @@
     background: rgba(0,0,0,0.5);  /* 50% opaque black box around the text */
     padding: 0.55em 1.4em;
     border-radius: 14px;
-    /* No max-width: shrink-wrap to widest line + padding. The auto-fit JS scales font down
-       so the box always fits the stage. */
   }
   /* Blank slides have a slide-content but no text — don't render the box for those */
   .slide-content:empty { background: transparent; padding: 0; }
