@@ -197,14 +197,19 @@
     padding: 6%;
   }
   .slide-content {
-    max-width: 1600px;
-    width: 100%;
+    display: inline-block;       /* hugs widest line so the bg box fits the text */
+    max-width: 92%;
     text-align: center;
     color: white;
     font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'Inter', system-ui, sans-serif;
     opacity: 0;
     transition: opacity 0.18s ease-in-out;
+    background: rgba(0,0,0,0.5);  /* 50% opaque black box around the text */
+    padding: 0.55em 1.4em;
+    border-radius: 14px;
   }
+  /* Blank slides have a slide-content but no text — don't render the box for those */
+  .slide-content:empty { background: transparent; padding: 0; }
   .slide-content.visible { opacity: 1; }
   .slide-line {
     font-size: clamp(36px, 6.5vw, 96px);
@@ -278,20 +283,6 @@
   }
 
   .op-side { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
-  .op-next-preview {
-    background: #000;
-    border-radius: 10px;
-    overflow: hidden;
-    position: relative;
-    flex: 0 0 42%;
-    min-height: 0;
-  }
-  .op-next-preview.empty {
-    background: var(--panel);
-    display: flex; align-items: center; justify-content: center;
-    color: var(--muted); font-size: 12px;
-    border: 1px dashed var(--border);
-  }
 
   .op-strip {
     background: var(--panel);
@@ -300,6 +291,7 @@
     padding: 10px;
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    grid-auto-rows: 86px;       /* fixed row height — prevents overlap */
     gap: 8px;
     overflow-y: auto;
     flex: 1 1 auto;
@@ -308,12 +300,14 @@
   }
   .op-strip-item {
     position: relative;
-    aspect-ratio: 16 / 9;
+    height: 86px;
     border: 2px solid transparent;
     border-radius: 8px;
     overflow: hidden;
     cursor: pointer;
     background: #000;
+    background-size: cover;
+    background-position: center;
     transition: border-color 0.1s, transform 0.08s;
   }
   .op-strip-item:hover { border-color: rgba(255,255,255,0.25); }
@@ -558,10 +552,9 @@
   }
   .video-layer video.visible { opacity: 0.92; }
 
-  /* When a stage has a live video, freeze the gradient animation — the video covers it anyway,
-     and animating gradients while decoding video is a major source of choppiness. */
-  .has-video .bg-layer::before,
-  .has-video .bg-layer::after { animation-play-state: paused; }
+  /* When a stage has a live video, hide the gradient entirely — the video covers it
+     anyway, and animating gradients while decoding video is a major source of choppiness. */
+  .has-video .bg-layer { display: none; }
 
   /* Make vignette sit above video */
   .bg-vignette { z-index: 3 !important; }
@@ -690,10 +683,6 @@
       <!-- bg layer + content injected here -->
     </div>
     <div class="op-side">
-      <div class="op-next-preview" id="op-preview-next">
-        <div class="op-preview-label">Next</div>
-        <!-- bg layer + content injected here -->
-      </div>
       <div class="op-strip" id="op-strip"></div>
     </div>
   </div>
@@ -1389,6 +1378,11 @@ function parseStructuredLyrics(raw) {
       events.push({ type: 'blank' });
       continue;
     }
+    // Bare "-" or "_" on its own line → blank slide
+    if (trimmed === '-' || trimmed === '_') {
+      events.push({ type: 'header', name: 'blank', repeat: 1 });
+      continue;
+    }
     if (trimmed.startsWith('/')) {
       let body = trimmed.slice(1).trim();
       // " xN" or " ×N" suffix → repeat count
@@ -1566,19 +1560,17 @@ function fitSlideContent(contentEl, stageEl) {
   lines.forEach(l => { l.style.fontSize = ''; });
 
   const stageRect = stageEl.getBoundingClientRect();
-  // Leave generous margin (12% horiz, 18% vert) so text never crowds the edge
-  const availW = stageRect.width * 0.88;
-  const availH = stageRect.height * 0.82;
+  const availW = stageRect.width  * 0.86;
+  const availH = stageRect.height * 0.80;
 
-  // Measure widest line at natural size (nowrap is already applied via CSS)
-  let widestW = 0;
-  lines.forEach(l => { widestW = Math.max(widestW, l.scrollWidth); });
-  // Total height including margins between lines
-  const totalH = contentEl.scrollHeight;
-  if (widestW === 0 || totalH === 0) return;
+  // Measure the whole content box (text + the new black-box padding).
+  // Padding uses em units, so it scales together with font-size on subsequent passes.
+  const neededW = contentEl.scrollWidth;
+  const neededH = contentEl.scrollHeight;
+  if (neededW === 0 || neededH === 0) return;
 
-  const scaleW = availW / widestW;
-  const scaleH = availH / totalH;
+  const scaleW = availW / neededW;
+  const scaleH = availH / neededH;
   const scale  = Math.min(1, scaleW, scaleH);
 
   if (scale < 0.999) {
@@ -1678,28 +1670,38 @@ function renderOperator() {
   });
   paletteSel.value = palette;
 
-  // Strip — visual thumbnails (gradient + text + slide number + colored section pill)
+  // Strip — visual thumbnails. Background is a still from the song's video
+  // (if any), otherwise the gradient palette. Text + slide number + section pill overlaid.
   const strip = $('op-strip');
   strip.innerHTML = '';
+  const videoPoster = (selectedVideos && selectedVideos[0] && selectedVideos[0].thumb) || null;
   slides.forEach((s, i) => {
     const item = document.createElement('div');
-    item.className = `op-strip-item ${palette}` + (i === currentIdx ? ' active' : '');
+    item.className = `op-strip-item${i === currentIdx ? ' active' : ''}`;
     item.dataset.idx = i;
 
-    // Background layers replicate the actual slide's look
-    const bg = document.createElement('div');
-    bg.className = 'bg-layer';
-    item.appendChild(bg);
-    const vg = document.createElement('div');
-    vg.className = 'bg-vignette';
-    item.appendChild(vg);
+    if (videoPoster) {
+      // Use the video's still as the thumbnail background
+      item.style.backgroundImage = `url("${videoPoster}")`;
+      item.classList.add('has-video-thumb');
+    } else {
+      // Gradient + vignette layers
+      item.classList.add(palette);
+      const bg = document.createElement('div');
+      bg.className = 'bg-layer';
+      item.appendChild(bg);
+      const vg = document.createElement('div');
+      vg.className = 'bg-vignette';
+      item.appendChild(vg);
+    }
 
     // Text overlay
     const txt = document.createElement('div');
     txt.className = 'op-strip-thumb-text';
     if (s.kind === 'blank') {
       txt.classList.add('blank');
-      txt.innerHTML = `<div class="op-strip-thumb-text-inner">${i === 0 ? 'opening' : 'closing'}</div>`;
+      const label = (i === 0) ? 'opening' : (i === slides.length - 1 ? 'closing' : 'blank');
+      txt.innerHTML = `<div class="op-strip-thumb-text-inner">${label}</div>`;
     } else {
       const safe = (s.lines || []).map(l => l.replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]))).join('<br>');
       txt.innerHTML = `<div class="op-strip-thumb-text-inner">${safe}</div>`;
@@ -1744,26 +1746,7 @@ function renderCurrentPreview() {
   }
 }
 
-function renderNextPreview() {
-  const stage = $('op-preview-next');
-  const next = slides[currentIdx + 1];
-  // Clear "empty" state class if present
-  stage.classList.remove('empty');
-  if (!next) {
-    stage.classList.add('empty');
-    // Wipe inner stage and show placeholder
-    stage.innerHTML = '<div class="op-preview-label">Next</div><div style="color:var(--muted); font-size:12px;">End of slideshow</div>';
-    return;
-  }
-  // Ensure stage has label
-  if (!stage.querySelector('.op-preview-label')) {
-    const lbl = document.createElement('div');
-    lbl.className = 'op-preview-label';
-    lbl.textContent = 'Next';
-    stage.prepend(lbl);
-  }
-  renderSlideOnStage(stage, next, palette);
-}
+function renderNextPreview() { /* removed — next preview replaced by visual thumbnails in the strip */ }
 
 function updateCurrentHud() {
   const s = slides[currentIdx];
