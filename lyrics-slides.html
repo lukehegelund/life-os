@@ -557,7 +557,8 @@
   <div class="divider-text"><span>Or create / edit a song</span></div>
 
   <div class="helper-card">
-    <strong>Slide breaks:</strong> each <em>blank line</em> starts a new slide. Every line between blank lines stays on one slide; the font shrinks to fit long chunks. Section tags like <code>[Verse 1]</code> are fine — they're stripped before display.
+    <strong>Slide breaks:</strong> each <em>blank line</em> starts a new slide. Lines between blank lines stay on one slide — the font auto-shrinks to fit.<br><br>
+    <strong>Sections:</strong> mark headings with a leading slash like <code>/V1</code> or <code>/Chorus</code>. Lines under the heading <em>define</em> that section. Reuse it later by writing the same heading on its own line (e.g. <code>/Chorus</code>) — the previous content plays again. Add <code>x2</code> / <code>x3</code> for multiple repeats (e.g. <code>/Chorus x2</code>). Heading names match case-insensitively.
   </div>
 
   <input type="hidden" id="current-song-id">
@@ -575,7 +576,7 @@
 
   <div class="field">
     <label>Lyrics <span style="color:var(--muted); font-weight:500; text-transform:none; letter-spacing:0; font-size:11px; margin-left:6px;">— blank line = new slide</span></label>
-    <textarea id="lyrics-input" placeholder="When I feel the spirit moving&#10;Moving in my soul&#10;&#10;I want to let go, let you take control&#10;And lift me up&#10;&#10;That is why I'm singing&#10;&#10;Let me fly&#10;Way up high"></textarea>
+    <textarea id="lyrics-input" placeholder="/V1&#10;I call upon Your name&#10;You delivered me from harm&#10;&#10;No fear comes&#10;I turn to You alone&#10;&#10;/Chorus&#10;You are my strong tower&#10;&#10;/V1&#10;&#10;/Chorus x2"></textarea>
   </div>
 
   <div class="video-field">
@@ -1074,12 +1075,12 @@ function ensureVideoLayer(stageEl) {
     layer = document.createElement('div');
     layer.className = 'video-layer';
     // Two stacked <video> elements for crossfade.
-    // preload="metadata" buffers far less than "auto" — crucial for smooth playback
-    // on the operator laptop where multiple stages may be running at once.
+    // - preload="metadata": buffers far less than "auto" → smoother playback
+    // - loop=false: we crossfade ourselves at end-of-clip rather than abrupt restart
     for (let i = 0; i < 2; i++) {
       const v = document.createElement('video');
       v.muted = true;
-      v.loop = true;
+      v.loop = false;
       v.playsInline = true;
       v.preload = 'metadata';
       v.disablePictureInPicture = true;
@@ -1114,8 +1115,9 @@ function stopVideoLayer(stageEl) {
 }
 
 /**
- * Attach a rotating video loop to a stage. Crossfades between the selected
- * videos every ~45s. If only one video, it just loops forever.
+ * Attach a rotating video loop to a stage. Each clip plays through, then crossfades
+ * to the next clip (or the same clip from 0 if there's only one selected) so the
+ * loop point is never an abrupt cut.
  */
 function startVideoLayer(stageEl, videos) {
   if (!stageEl || !Array.isArray(videos) || videos.length === 0) {
@@ -1126,15 +1128,51 @@ function startVideoLayer(stageEl, videos) {
   const layer = ensureVideoLayer(stageEl);
   const [videoA, videoB] = layer.querySelectorAll('video');
   let state = stageVideoState.get(stageEl);
-  if (!state) { state = { idx: -1, active: 'A', switchTimer: null }; stageVideoState.set(stageEl, state); }
+  if (!state) {
+    state = { idx: -1, active: 'A' };
+    stageVideoState.set(stageEl, state);
+  }
+
+  // Window before end-of-clip during which we start the crossfade.
+  // Must be ≤ the CSS opacity transition duration (currently 2.5s).
+  const FADE_WINDOW = 2.2;
 
   const playVideo = (vEl, url) => {
     if (vEl.src !== url) {
       vEl.src = url;
-      vEl.load();
+      try { vEl.load(); } catch {}
     }
+    // Always restart from 0 — handles both first-play and looping back to start
+    try { vEl.currentTime = 0; } catch {}
     const p = vEl.play();
     if (p && typeof p.catch === 'function') p.catch(() => {/* autoplay blocked */});
+  };
+
+  // Hook timeupdate on a video so we trigger crossfade just before its natural end.
+  const attachEndDetection = (vEl) => {
+    if (vEl._endHandler) {
+      vEl.removeEventListener('timeupdate', vEl._endHandler);
+    }
+    let triggered = false;
+    const handler = () => {
+      if (triggered) return;
+      const dur = vEl.duration;
+      if (!isFinite(dur) || dur <= 0) return;
+      // Trigger crossfade once, when we're FADE_WINDOW seconds from the end
+      if (vEl.currentTime >= dur - FADE_WINDOW) {
+        triggered = true;
+        switchTo(state.idx + 1, false);
+      }
+    };
+    vEl._endHandler = handler;
+    vEl.addEventListener('timeupdate', handler);
+  };
+
+  const detachEndDetection = (vEl) => {
+    if (vEl._endHandler) {
+      vEl.removeEventListener('timeupdate', vEl._endHandler);
+      vEl._endHandler = null;
+    }
   };
 
   const switchTo = (newIdx, firstCall) => {
@@ -1143,26 +1181,29 @@ function startVideoLayer(stageEl, videos) {
     if (!next) return;
     const fromEl = state.active === 'A' ? videoA : videoB;
     const toEl   = state.active === 'A' ? videoB : videoA;
+
     if (firstCall) {
-      // Immediately show the first video without crossfade
+      // Initial play — no crossfade
       playVideo(fromEl, next.src);
       fromEl.classList.add('visible');
       toEl.classList.remove('visible');
+      attachEndDetection(fromEl);
     } else {
+      // Crossfade: start the next clip in the inactive element while the active
+      // one is still playing. After the fade completes, pause the outgoing one.
       playVideo(toEl, next.src);
-      // Crossfade
       requestAnimationFrame(() => {
         toEl.classList.add('visible');
         fromEl.classList.remove('visible');
         state.active = state.active === 'A' ? 'B' : 'A';
-        // Pause the outgoing one after the fade completes to save resources
-        setTimeout(() => { try { fromEl.pause(); } catch {} }, 2800);
+        // After the CSS opacity transition (2.5s), stop the outgoing video to save CPU.
+        setTimeout(() => {
+          try { fromEl.pause(); } catch {}
+          detachEndDetection(fromEl);
+        }, 2700);
+        // Switch end-detection to the now-active video
+        attachEndDetection(toEl);
       });
-    }
-    // Schedule next switch if there's more than one video
-    if (state.switchTimer) clearTimeout(state.switchTimer);
-    if (videos.length > 1) {
-      state.switchTimer = setTimeout(() => switchTo(state.idx + 1, false), 45000);
     }
   };
 
@@ -1257,187 +1298,129 @@ Return ONLY valid JSON, no markdown, no extra text, in this exact shape (with EX
 // ========================= LYRICS PARSING =========================
 
 /**
- * Normalize a section header string into a canonical name.
- *   "v1" → "Verse 1", "ch" → "Chorus", "br" → "Bridge", etc.
- * Returns null if not recognizable.
- */
-function normalizeSection(s) {
-  const t = s.trim();
-
-  // Verse: V1, V2, V, Verse 1, Verse 2, Verse
-  let m = t.match(/^v(?:erse)?\s*(\d+)$/i);
-  if (m) return `Verse ${m[1]}`;
-  if (/^v(?:erse)?$/i.test(t)) return 'Verse';
-
-  // Chorus: C, Ch, Chorus, Chorus 1
-  m = t.match(/^(?:c|ch|chorus)\s*(\d+)$/i);
-  if (m) return `Chorus ${m[1]}`;
-  if (/^(?:c|ch|chorus)$/i.test(t)) return 'Chorus';
-
-  // Pre-Chorus: Pre, PC, Pre-Chorus, PreChorus
-  if (/^(?:pre[\s-]?chorus|pc|pre)$/i.test(t)) return 'Pre-Chorus';
-
-  // Bridge: Br, Bridge
-  if (/^br(?:idge)?$/i.test(t)) return 'Bridge';
-
-  // Outro: O, Outro, End, Ending
-  if (/^(?:o(?:utro)?|end(?:ing)?)$/i.test(t)) return 'Outro';
-
-  // Intro: I, Intro
-  if (/^i(?:ntro)?$/i.test(t)) return 'Intro';
-
-  // Vamp
-  if (/^vamp$/i.test(t)) return 'Vamp';
-
-  // Instrumental: Instr, Instrumental
-  if (/^instr(?:umental)?$/i.test(t)) return 'Instrumental';
-
-  // Tag
-  if (/^tag$/i.test(t)) return 'Tag';
-
-  // Refrain
-  if (/^ref(?:rain)?$/i.test(t)) return 'Refrain';
-
-  // Interlude
-  if (/^interlude$/i.test(t)) return 'Interlude';
-
-  return null;
-}
-
-/**
- * Parse a possibly-compound header line like "V1", "Chorus x2", "V1 and V2".
- * Returns { sections: ['Verse 1', 'Verse 2'], repeat: 2 } or null if not a header.
- */
-function parseHeaderLine(line) {
-  const trimmed = line.trim();
-  if (!trimmed) return null;
-
-  // Strip leading bracket markers like [Verse 1]
-  const noBrackets = trimmed.replace(/^\[(.+)\]$/, '$1').trim();
-
-  // Pull off "x N" / "× N" repeat suffix
-  const repeatMatch = noBrackets.match(/^(.+?)\s*[x×]\s*(\d+)\s*$/i);
-  let repeat = 1;
-  let body = noBrackets;
-  if (repeatMatch) {
-    repeat = Math.max(1, Math.min(8, parseInt(repeatMatch[2], 10)));
-    body = repeatMatch[1].trim();
-  }
-
-  // Split on " and " / " & "
-  const parts = body.split(/\s+(?:and|&|,)\s+/i).map(p => p.trim()).filter(Boolean);
-
-  const names = [];
-  for (const p of parts) {
-    const n = normalizeSection(p);
-    if (!n) return null; // any unrecognized part → not a header line
-    names.push(n);
-  }
-  if (names.length === 0) return null;
-
-  return { sections: names, repeat, isCompound: names.length > 1 || repeat > 1 };
-}
-
-/**
- * Try to parse the input as a structured song script (with V1/V2/Chorus headers
- * and repeat directives). Returns { slides, sections } if structure detected,
- * else null.
+ * Parse a song script using the explicit "/" heading convention:
+ *
+ *   /Verse 1            ← heading line. Case-insensitive matching, original casing preserved.
+ *   I call upon Your name
+ *   You delivered me
+ *
+ *   No fear comes
+ *   I turn to You
+ *
+ *   /Chorus
+ *   For I say out loud
+ *
+ *   /Verse 1            ← CALL: no content under, repeats the previously defined "Verse 1"
+ *   /Chorus x2          ← CALL with multiplier: plays Chorus twice
+ *
+ * Rules:
+ *   - A line beginning with "/" is a heading. Optional " xN" / " ×N" suffix repeats N times.
+ *   - If the next non-blank line is content (not another heading), the heading DEFINES that
+ *     section AND plays it once (or N times) right here.
+ *   - If the next non-blank line is another heading (or end of input), the heading CALLS the
+ *     previously-defined section, playing it once (or N times).
+ *   - Within a section, blank lines split content into separate slide chunks.
+ *
+ * Returns { slides, sectionCount } when at least one "/" heading exists, else null
+ * (caller falls back to Claude for free-form lyrics).
  */
 function parseStructuredLyrics(raw) {
-  const text = raw.replace(/\r\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  const text = (raw || '').replace(/\r\n/g, '\n').trim();
   if (!text) return null;
 
-  // Split into blocks separated by blank lines
-  const rawBlocks = text.split(/\n\s*\n/).map(b => b.trim()).filter(Boolean);
-
-  // Classify each block. The FIRST line of any block may be a header.
-  // - "V1\n<lyrics>" → header V1 + content "<lyrics>"
-  // - "V1" alone   → header V1 (definition or reference, decided later)
-  // - "<lyrics>"   → plain content
-  const blocks = [];
-  for (const b of rawBlocks) {
-    const lines = b.split('\n').map(l => l.trim()).filter(Boolean);
-    if (lines.length === 0) continue;
-    const headerCandidate = parseHeaderLine(lines[0]);
-    if (headerCandidate) {
-      blocks.push({ kind: 'header', ...headerCandidate });
-      if (lines.length > 1) {
-        blocks.push({ kind: 'content', lines: lines.slice(1) });
-      }
-    } else {
-      blocks.push({ kind: 'content', lines });
-    }
-  }
-
-  // Count headers. If there are no recognized headers, the input doesn't use shorthand —
-  // signal "no structure" so caller falls back to Claude.
-  const headerCount = blocks.filter(b => b.kind === 'header').length;
-  if (headerCount === 0) return null;
-
-  // Build sections dictionary AND program list.
-  // sections[name] = array of slide chunks (each chunk = array of lyric lines)
-  // program = ordered list of { section, repeat } to emit
-  const sections = {};
-  const program = [];
-  let currentSection = null;
-
-  for (let i = 0; i < blocks.length; i++) {
-    const b = blocks[i];
-
-    if (b.kind === 'header') {
-      // A header block is a definition only when followed by content blocks BEFORE the next header.
-      // It's a reference if it's compound (V1 and V2, Chorus x2), or if it's NOT followed by content
-      // (i.e. next block is another header or end of input).
-      const nextBlock = blocks[i + 1];
-      const followedByContent = nextBlock && nextBlock.kind === 'content';
-
-      if (b.isCompound || !followedByContent) {
-        // This is a REFERENCE — emit each section's chunks `repeat` times.
-        for (let r = 0; r < b.repeat; r++) {
-          for (const sec of b.sections) program.push({ section: sec, repeat: 1 });
-        }
-        currentSection = null;
-      } else {
-        // Single-section header followed by content → DEFINITION.
-        currentSection = b.sections[0];
-        if (!sections[currentSection]) sections[currentSection] = [];
-        program.push({ section: currentSection, repeat: 1, _isDefinition: true });
-      }
-    } else {
-      // Content block
-      if (currentSection) {
-        if (!sections[currentSection]) sections[currentSection] = [];
-        sections[currentSection].push(b.lines);
-      } else {
-        // Orphan content — bucket under "Unlabeled"
-        if (!sections['Unlabeled']) sections['Unlabeled'] = [];
-        sections['Unlabeled'].push(b.lines);
-        // Also add to program so it actually plays
-        if (program.length === 0 || program[program.length - 1].section !== 'Unlabeled') {
-          program.push({ section: 'Unlabeled', repeat: 1 });
-        }
-      }
-    }
-  }
-
-  // Walk program and emit slides
-  const slides = [];
-  for (const step of program) {
-    const chunks = sections[step.section] || [];
-    if (chunks.length === 0) {
-      console.warn(`Section "${step.section}" referenced but has no content`);
+  // Pass 1 — tokenize line-by-line into events
+  const events = [];
+  for (const line of text.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      events.push({ type: 'blank' });
       continue;
     }
+    if (trimmed.startsWith('/')) {
+      let body = trimmed.slice(1).trim();
+      // " xN" or " ×N" suffix → repeat count
+      let repeat = 1;
+      const m = body.match(/^(.+?)\s+[x×]\s*(\d+)\s*$/i);
+      if (m) {
+        repeat = Math.max(1, Math.min(16, parseInt(m[2], 10)));
+        body = m[1].trim();
+      }
+      if (body) {
+        events.push({ type: 'header', name: body, repeat });
+        continue;
+      }
+    }
+    events.push({ type: 'content', text: trimmed });
+  }
+
+  // No "/" headings? Let the caller fall back to Claude.
+  if (!events.some(e => e.type === 'header')) return null;
+
+  // Pass 2 — build sections dictionary + linear program
+  // sections[lowercaseKey] = { displayName, chunks: [[line1, line2, ...], ...] }
+  // program = [{ key, repeat }, ...] — order in which sections play
+  const sections = {};
+  const program = [];
+
+  let currentKey = null;
+  let currentChunk = [];
+
+  const flushChunk = () => {
+    if (currentKey && currentChunk.length) {
+      sections[currentKey].chunks.push([...currentChunk]);
+    }
+    currentChunk = [];
+  };
+
+  for (let i = 0; i < events.length; i++) {
+    const e = events[i];
+
+    if (e.type === 'header') {
+      flushChunk();
+      const key = e.name.toLowerCase();
+
+      // Look ahead past blanks: is the next event content?
+      let look = i + 1;
+      while (look < events.length && events[look].type === 'blank') look++;
+      const followedByContent = look < events.length && events[look].type === 'content';
+
+      if (followedByContent) {
+        // DEFINITION — fresh-start the section's chunks (re-defining wipes prior content)
+        sections[key] = { displayName: e.name, chunks: [] };
+        currentKey = key;
+        program.push({ key, repeat: e.repeat });
+      } else {
+        // CALL — only emit if the section was already defined
+        if (sections[key]) {
+          program.push({ key, repeat: e.repeat });
+        } else {
+          console.warn(`/${e.name} called before being defined — skipping`);
+        }
+        currentKey = null;
+      }
+    } else if (e.type === 'content') {
+      if (currentKey) currentChunk.push(e.text);
+      // else: orphan content (no preceding heading) is silently ignored
+    } else if (e.type === 'blank') {
+      flushChunk();
+    }
+  }
+  flushChunk();
+
+  // Pass 3 — expand program into slides
+  const slides = [];
+  for (const step of program) {
+    const sec = sections[step.key];
+    if (!sec || sec.chunks.length === 0) continue;
     for (let r = 0; r < step.repeat; r++) {
-      for (const chunk of chunks) {
-        slides.push({ kind: 'lyric', sectionType: step.section, lines: chunk });
+      for (const chunk of sec.chunks) {
+        slides.push({ kind: 'lyric', sectionType: sec.displayName, lines: chunk });
       }
     }
   }
 
   if (slides.length === 0) return null;
 
-  // Sandwich with blank slides
   return {
     slides: [
       { kind: 'blank', lines: [], sectionType: null },
