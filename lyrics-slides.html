@@ -203,7 +203,7 @@
     color: white;
     font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'Inter', system-ui, sans-serif;
     opacity: 0;
-    transition: opacity 0.55s ease-in-out;
+    transition: opacity 0.18s ease-in-out;
   }
   .slide-content.visible { opacity: 1; }
   .slide-line {
@@ -385,6 +385,143 @@
   @keyframes spin { to { transform: rotate(360deg); } }
   .loading-text { color: var(--muted); font-size: 14px; }
 
+  /* =========== MODAL =========== */
+  .modal-backdrop {
+    position: fixed; inset: 0; z-index: 900;
+    background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+    display: none; align-items: center; justify-content: center;
+    padding: 24px;
+  }
+  .modal-backdrop.visible { display: flex; }
+  .modal {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    max-width: 900px; width: 100%;
+    max-height: 88vh;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  .modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+  }
+  .modal-header h3 { margin: 0; font-size: 16px; font-weight: 700; }
+  .modal-close {
+    background: transparent; border: none; color: var(--muted);
+    font-size: 18px; cursor: pointer; padding: 4px 8px;
+    border-radius: 6px;
+  }
+  .modal-close:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+  .modal-body { padding: 18px; overflow-y: auto; flex: 1; }
+  .modal-footer {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 12px 18px;
+    border-top: 1px solid var(--border);
+    background: var(--panel-2);
+  }
+  .modal-footer-info { color: var(--muted); font-size: 12px; }
+  .modal-footer-actions { display: flex; gap: 8px; }
+
+  /* =========== VIDEO MODAL =========== */
+  .video-search-row {
+    display: flex; gap: 10px; margin-bottom: 14px;
+  }
+  .video-search-row input {
+    flex: 1; padding: 10px 13px; background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 8px; font-size: 14px; color: var(--text);
+  }
+  .video-search-row input:focus { outline: none; border-color: var(--accent); }
+  .video-search-row button { white-space: nowrap; }
+
+  .video-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 10px;
+  }
+  .video-item {
+    position: relative;
+    aspect-ratio: 16/9;
+    background: var(--panel-2);
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: border-color 0.1s, transform 0.1s;
+  }
+  .video-item:hover { border-color: var(--muted); }
+  .video-item.selected { border-color: var(--accent); }
+  .video-item img, .video-item video {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+  }
+  .video-item-badge {
+    position: absolute; top: 6px; right: 6px;
+    background: rgba(0,0,0,0.6); color: white;
+    padding: 2px 8px; border-radius: 999px; font-size: 10px;
+    font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+    backdrop-filter: blur(4px);
+  }
+  .video-item-check {
+    position: absolute; top: 6px; left: 6px;
+    width: 24px; height: 24px;
+    background: rgba(0,0,0,0.55);
+    border: 2px solid rgba(255,255,255,0.75);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: white; font-size: 14px;
+    transition: all 0.12s;
+    backdrop-filter: blur(4px);
+  }
+  .video-item.selected .video-item-check {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  .video-item.selected .video-item-check::before { content: '✓'; }
+
+  .video-provider-tag {
+    position: absolute; bottom: 6px; left: 6px;
+    background: rgba(0,0,0,0.6); color: white;
+    padding: 2px 7px; border-radius: 4px; font-size: 10px; letter-spacing: 0.02em;
+  }
+
+  .video-empty-state {
+    padding: 40px; text-align: center; color: var(--muted); font-size: 13px;
+  }
+
+  /* Badge on the main form showing how many videos are selected */
+  .video-field { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 14px; }
+  .video-field-left { display: flex; align-items: center; gap: 10px; color: var(--text); font-size: 13px; }
+  .video-field-left strong { font-weight: 600; }
+  .video-field-left .badge { color: var(--muted); font-size: 12px; }
+
+  /* =========== VIDEO PLAYBACK LAYER =========== */
+  .video-layer {
+    position: absolute; inset: 0; z-index: 1; /* above bg-layer (0) and bg-vignette (1 → move to 2)*/
+    pointer-events: none;
+    overflow: hidden;
+  }
+  .video-layer video {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    opacity: 0;
+    transition: opacity 2.5s ease-in-out;
+  }
+  .video-layer video.visible { opacity: 0.92; }
+
+  /* Make vignette sit above video */
+  .bg-vignette { z-index: 3 !important; }
+  .slide-content-wrap { z-index: 4 !important; }
+
+  /* Settings button in header */
+  .settings-btn {
+    background: transparent; color: var(--muted); border: 1px solid var(--border);
+    padding: 7px 12px; border-radius: 8px; cursor: pointer; font-size: 13px;
+    margin-right: 8px;
+  }
+  .settings-btn:hover { color: var(--text); border-color: var(--muted); }
+
   /* =========== MISC =========== */
   .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 
@@ -396,7 +533,10 @@
 <div class="setup" id="setup-view">
   <div class="setup-header">
     <h1>🎤 Lyric Slides</h1>
-    <a href="apps.html" class="back">← Apps</a>
+    <div style="display:flex; align-items:center;">
+      <button class="settings-btn" id="open-settings" title="API keys">⚙ Settings</button>
+      <a href="apps.html" class="back">← Apps</a>
+    </div>
   </div>
   <p class="subtitle">
     Paste song lyrics, use <strong>blank lines</strong> to mark where one slide ends and the next begins. Claude labels each chunk with its section.
@@ -434,6 +574,14 @@
   <div class="field">
     <label>Lyrics <span style="color:var(--muted); font-weight:500; text-transform:none; letter-spacing:0; font-size:11px; margin-left:6px;">— blank line = new slide</span></label>
     <textarea id="lyrics-input" placeholder="When I feel the spirit moving&#10;Moving in my soul&#10;&#10;I want to let go, let you take control&#10;And lift me up&#10;&#10;That is why I'm singing&#10;&#10;Let me fly&#10;Way up high"></textarea>
+  </div>
+
+  <div class="video-field">
+    <div class="video-field-left">
+      🎞️ <strong>Background videos</strong>
+      <span class="badge" id="video-count-badge">None yet</span>
+    </div>
+    <button class="btn-secondary" id="open-video-modal" type="button">Find videos…</button>
   </div>
 
   <div class="options-row">
@@ -527,6 +675,69 @@
   <!-- bg + content injected here -->
 </div>
 
+<!-- ==================== SETTINGS MODAL ==================== -->
+<div class="modal-backdrop" id="settings-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Settings — API keys</h3>
+      <button class="modal-close" id="settings-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--muted); font-size:13px; line-height:1.5; margin-top:0;">
+        To pull background videos from Pexels and Pixabay, paste your API keys below. Both are free — sign up links below. Keys are stored in your browser's localStorage (only on this device).
+      </p>
+      <div class="field">
+        <label>Pexels API key</label>
+        <input type="text" id="settings-pexels" placeholder="Your Pexels API key">
+        <div style="font-size:11px; color:var(--muted); margin-top:4px;">
+          Sign up at <a href="https://www.pexels.com/api/" target="_blank" style="color:var(--accent);">pexels.com/api</a>
+        </div>
+      </div>
+      <div class="field">
+        <label>Pixabay API key</label>
+        <input type="text" id="settings-pixabay" placeholder="Your Pixabay API key">
+        <div style="font-size:11px; color:var(--muted); margin-top:4px;">
+          Sign up at <a href="https://pixabay.com/api/docs/" target="_blank" style="color:var(--accent);">pixabay.com/api/docs</a>
+        </div>
+      </div>
+      <div id="settings-status" style="font-size:12px; color:var(--muted); min-height:16px; margin-top:6px;"></div>
+    </div>
+    <div class="modal-footer">
+      <div class="modal-footer-info">Keys never leave your browser.</div>
+      <div class="modal-footer-actions">
+        <button class="btn-ghost" id="settings-cancel">Cancel</button>
+        <button class="btn-secondary" id="settings-save" style="background:var(--accent); color:white;">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== VIDEO IMPORT MODAL ==================== -->
+<div class="modal-backdrop" id="video-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Find background videos</h3>
+      <button class="modal-close" id="video-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="video-search-row">
+        <input type="text" id="video-query" placeholder="e.g. ocean waves, mountain sunrise, clouds, forest…">
+        <button class="btn-secondary" id="video-search-btn" style="background:var(--accent); color:white;">Search</button>
+      </div>
+      <div class="video-grid" id="video-grid">
+        <div class="video-empty-state">Type a query above and click Search to find nature videos from Pexels and Pixabay.</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <div class="modal-footer-info" id="video-modal-info">No videos selected yet</div>
+      <div class="modal-footer-actions">
+        <button class="btn-ghost" id="video-cancel">Cancel</button>
+        <button class="btn-secondary" id="video-save" style="background:var(--accent); color:white;">Save selection</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 /* =====================================================================
    LYRIC SLIDES — dual-window version with library
@@ -575,6 +786,18 @@ let broadcastWindow = null;
 let broadcastPingTimer = null;
 let channel = null;
 
+// Video state
+let selectedVideos = [];            // active urls for current song
+let videoModalSelection = new Set(); // temporary set while choosing in modal
+let videoModalResults   = [];        // current search results
+
+// Video playback timers (per-stage)
+const stageVideoState = new WeakMap();
+
+// localStorage keys for API keys
+const LS_PEXELS  = 'ls_pexels_api_key';
+const LS_PIXABAY = 'ls_pixabay_api_key';
+
 // ========================= SUPABASE HELPERS =========================
 
 const pgHeaders = (extra = {}) => ({
@@ -592,10 +815,17 @@ async function loadLibrary() {
   return r.json();
 }
 
-async function saveSong({ id, title, artist, lyrics, palette }) {
-  const body = { title, artist: artist || null, lyrics, palette: palette || null, updated_at: new Date().toISOString() };
+async function saveSong({ id, title, artist, lyrics, palette, slides_data, video_urls }) {
+  const body = {
+    title,
+    artist: artist || null,
+    lyrics,
+    palette: palette || null,
+    updated_at: new Date().toISOString()
+  };
+  if (slides_data !== undefined) body.slides_data = slides_data;
+  if (video_urls !== undefined)  body.video_urls  = video_urls;
   if (id) {
-    // UPDATE
     const r = await fetch(`${SONGS_URL}?id=eq.${id}`, {
       method: 'PATCH',
       headers: pgHeaders({ 'Prefer': 'return=representation' }),
@@ -605,7 +835,6 @@ async function saveSong({ id, title, artist, lyrics, palette }) {
     const rows = await r.json();
     return rows[0];
   } else {
-    // INSERT
     const r = await fetch(SONGS_URL, {
       method: 'POST',
       headers: pgHeaders({ 'Prefer': 'return=representation' }),
@@ -615,6 +844,17 @@ async function saveSong({ id, title, artist, lyrics, palette }) {
     const rows = await r.json();
     return rows[0];
   }
+}
+
+async function patchSong(id, patch) {
+  patch.updated_at = new Date().toISOString();
+  const r = await fetch(`${SONGS_URL}?id=eq.${id}`, {
+    method: 'PATCH',
+    headers: pgHeaders({ 'Prefer': 'return=representation' }),
+    body: JSON.stringify(patch)
+  });
+  if (!r.ok) throw new Error(`patch ${r.status}`);
+  return (await r.json())[0];
 }
 
 async function deleteSong(id) {
@@ -630,6 +870,304 @@ async function fetchSong(id) {
   if (!r.ok) throw new Error(`fetch ${r.status}`);
   const rows = await r.json();
   return rows[0];
+}
+
+// ========================= SETTINGS / API KEYS =========================
+
+function getPexelsKey()  { return localStorage.getItem(LS_PEXELS)  || ''; }
+function getPixabayKey() { return localStorage.getItem(LS_PIXABAY) || ''; }
+
+function openSettingsModal() {
+  $('settings-pexels').value  = getPexelsKey();
+  $('settings-pixabay').value = getPixabayKey();
+  $('settings-status').textContent = '';
+  $('settings-modal').classList.add('visible');
+}
+function closeSettingsModal() {
+  $('settings-modal').classList.remove('visible');
+}
+function saveSettings() {
+  const pex = $('settings-pexels').value.trim();
+  const pix = $('settings-pixabay').value.trim();
+  if (pex) localStorage.setItem(LS_PEXELS,  pex); else localStorage.removeItem(LS_PEXELS);
+  if (pix) localStorage.setItem(LS_PIXABAY, pix); else localStorage.removeItem(LS_PIXABAY);
+  $('settings-status').textContent = 'Saved ✓';
+  setTimeout(closeSettingsModal, 600);
+}
+
+// ========================= PEXELS / PIXABAY =========================
+
+async function searchPexels(query, perPage = 20) {
+  const key = getPexelsKey();
+  if (!key) return [];
+  const r = await fetch(`https://api.pexels.com/videos/search?query=${encodeURIComponent(query)}&per_page=${perPage}&orientation=landscape&size=medium`, {
+    headers: { 'Authorization': key }
+  });
+  if (!r.ok) throw new Error(`Pexels ${r.status}`);
+  const data = await r.json();
+  return (data.videos || []).map(v => {
+    // Pick a reasonable quality file (prefer HD but not 4K)
+    const files = (v.video_files || []).filter(f => f.file_type === 'video/mp4' && f.width && f.width <= 1920);
+    files.sort((a, b) => (b.width || 0) - (a.width || 0));
+    const file = files.find(f => f.width <= 1920 && f.width >= 960) || files[0];
+    if (!file) return null;
+    return {
+      id: `pexels-${v.id}`,
+      provider: 'Pexels',
+      src: file.link,
+      thumb: v.image,
+      duration: v.duration,
+      width: file.width,
+      height: file.height
+    };
+  }).filter(Boolean);
+}
+
+async function searchPixabay(query, perPage = 20) {
+  const key = getPixabayKey();
+  if (!key) return [];
+  const r = await fetch(`https://pixabay.com/api/videos/?key=${encodeURIComponent(key)}&q=${encodeURIComponent(query)}&per_page=${perPage}&safesearch=true`);
+  if (!r.ok) throw new Error(`Pixabay ${r.status}`);
+  const data = await r.json();
+  return (data.hits || []).map(v => {
+    const medium = v.videos?.medium || v.videos?.large || v.videos?.small;
+    if (!medium?.url) return null;
+    return {
+      id: `pixabay-${v.id}`,
+      provider: 'Pixabay',
+      src: medium.url,
+      thumb: `https://i.vimeocdn.com/video/${v.picture_id}_640x360.jpg`,
+      duration: v.duration,
+      width: medium.width,
+      height: medium.height
+    };
+  }).filter(Boolean);
+}
+
+async function searchAllVideos(query) {
+  // Kick off both in parallel
+  const [pexRes, pixRes] = await Promise.allSettled([
+    searchPexels(query, 20),
+    searchPixabay(query, 20)
+  ]);
+  const out = [];
+  if (pexRes.status === 'fulfilled') out.push(...pexRes.value);
+  if (pixRes.status === 'fulfilled') out.push(...pixRes.value);
+  // Shuffle so the two providers are interleaved
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+// ========================= VIDEO MODAL =========================
+
+function openVideoModal() {
+  if (!getPexelsKey() && !getPixabayKey()) {
+    alert('Add a Pexels or Pixabay API key in Settings first.');
+    openSettingsModal();
+    return;
+  }
+  // Preload selection from loaded song if editing
+  videoModalSelection = new Set();
+  if (loadedSong?.video_urls) {
+    loadedSong.video_urls.forEach(v => videoModalSelection.add(v.id || v.src));
+  }
+  videoModalResults = loadedSong?.video_candidates || [];
+  if (Array.isArray(loadedSong?.video_candidates) && loadedSong.video_candidates.length) {
+    renderVideoGrid(loadedSong.video_candidates);
+  } else {
+    const grid = $('video-grid');
+    grid.innerHTML = '<div class="video-empty-state">Type a query above and click Search.</div>';
+  }
+  // Suggest a query based on title
+  const defaultQ = ($('song-title').value.trim() || '').split(/\s+/)[0] || 'nature';
+  $('video-query').value = $('video-query').value || defaultQ;
+  updateVideoModalInfo();
+  $('video-modal').classList.add('visible');
+  $('video-query').focus();
+}
+function closeVideoModal() {
+  $('video-modal').classList.remove('visible');
+}
+
+function updateVideoModalInfo() {
+  const n = videoModalSelection.size;
+  $('video-modal-info').textContent = n === 0 ? 'No videos selected yet' : `${n} video${n === 1 ? '' : 's'} selected`;
+}
+
+function renderVideoGrid(results) {
+  const grid = $('video-grid');
+  grid.innerHTML = '';
+  if (!results.length) {
+    grid.innerHTML = '<div class="video-empty-state">No results. Try a different query.</div>';
+    return;
+  }
+  results.forEach(v => {
+    const key = v.id || v.src;
+    const item = document.createElement('div');
+    item.className = 'video-item' + (videoModalSelection.has(key) ? ' selected' : '');
+    item.innerHTML = `
+      <img src="${v.thumb}" alt="" loading="lazy">
+      <div class="video-item-check"></div>
+      <div class="video-provider-tag">${v.provider}</div>
+    `;
+    item.addEventListener('click', () => {
+      if (videoModalSelection.has(key)) {
+        videoModalSelection.delete(key);
+        item.classList.remove('selected');
+      } else {
+        videoModalSelection.add(key);
+        item.classList.add('selected');
+      }
+      updateVideoModalInfo();
+    });
+    grid.appendChild(item);
+  });
+}
+
+async function runVideoSearch() {
+  const q = $('video-query').value.trim();
+  if (!q) return;
+  const grid = $('video-grid');
+  grid.innerHTML = '<div class="video-empty-state">Searching Pexels and Pixabay…</div>';
+  try {
+    const results = await searchAllVideos(q);
+    // Merge with any previous candidates (dedupe by id)
+    const byId = new Map();
+    [...videoModalResults, ...results].forEach(v => byId.set(v.id || v.src, v));
+    videoModalResults = Array.from(byId.values());
+    renderVideoGrid(videoModalResults);
+  } catch (e) {
+    grid.innerHTML = `<div class="video-empty-state" style="color:var(--danger);">Search failed: ${e.message}</div>`;
+  }
+}
+
+async function saveVideoSelection() {
+  const selected = videoModalResults.filter(v => videoModalSelection.has(v.id || v.src));
+  const songId = $('current-song-id').value;
+  const badge = $('video-count-badge');
+  if (badge) badge.textContent = selected.length > 0 ? `${selected.length} selected` : 'None yet';
+  if (songId) {
+    try {
+      await patchSong(songId, {
+        video_urls: selected,
+        video_candidates: videoModalResults
+      });
+      // Refresh loadedSong cache
+      if (loadedSong) {
+        loadedSong.video_urls = selected;
+        loadedSong.video_candidates = videoModalResults;
+      }
+      selectedVideos = selected;
+    } catch (e) {
+      alert('Save failed: ' + e.message);
+      return;
+    }
+  } else {
+    // New song not yet saved — just keep in memory; they'll be persisted on Generate
+    selectedVideos = selected;
+    // Stash candidates for persistence on generate
+    window._pendingVideoCandidates = videoModalResults;
+  }
+  closeVideoModal();
+}
+
+// ========================= VIDEO PLAYBACK LAYER =========================
+
+function ensureVideoLayer(stageEl) {
+  let layer = stageEl.querySelector('.video-layer');
+  if (!layer) {
+    layer = document.createElement('div');
+    layer.className = 'video-layer';
+    // Two stacked <video> elements for crossfade
+    for (let i = 0; i < 2; i++) {
+      const v = document.createElement('video');
+      v.muted = true;
+      v.loop = true;
+      v.playsInline = true;
+      v.preload = 'auto';
+      v.setAttribute('muted','');
+      v.setAttribute('playsinline','');
+      layer.appendChild(v);
+    }
+    // Insert BEFORE vignette so videos sit under vignette but above bg-layer
+    const vignette = stageEl.querySelector('.bg-vignette');
+    if (vignette) stageEl.insertBefore(layer, vignette);
+    else stageEl.appendChild(layer);
+  }
+  return layer;
+}
+
+function stopVideoLayer(stageEl) {
+  const state = stageVideoState.get(stageEl);
+  if (state?.switchTimer) clearTimeout(state.switchTimer);
+  const layer = stageEl.querySelector('.video-layer');
+  if (layer) {
+    layer.querySelectorAll('video').forEach(v => {
+      v.pause();
+      v.removeAttribute('src'); v.load();
+      v.classList.remove('visible');
+    });
+    layer.remove();
+  }
+  stageVideoState.delete(stageEl);
+}
+
+/**
+ * Attach a rotating video loop to a stage. Crossfades between the selected
+ * videos every ~45s. If only one video, it just loops forever.
+ */
+function startVideoLayer(stageEl, videos) {
+  if (!stageEl || !Array.isArray(videos) || videos.length === 0) {
+    stopVideoLayer(stageEl);
+    return;
+  }
+  const layer = ensureVideoLayer(stageEl);
+  const [videoA, videoB] = layer.querySelectorAll('video');
+  let state = stageVideoState.get(stageEl);
+  if (!state) { state = { idx: -1, active: 'A', switchTimer: null }; stageVideoState.set(stageEl, state); }
+
+  const playVideo = (vEl, url) => {
+    if (vEl.src !== url) {
+      vEl.src = url;
+      vEl.load();
+    }
+    const p = vEl.play();
+    if (p && typeof p.catch === 'function') p.catch(() => {/* autoplay blocked */});
+  };
+
+  const switchTo = (newIdx, firstCall) => {
+    state.idx = newIdx;
+    const next = videos[newIdx % videos.length];
+    if (!next) return;
+    const fromEl = state.active === 'A' ? videoA : videoB;
+    const toEl   = state.active === 'A' ? videoB : videoA;
+    if (firstCall) {
+      // Immediately show the first video without crossfade
+      playVideo(fromEl, next.src);
+      fromEl.classList.add('visible');
+      toEl.classList.remove('visible');
+    } else {
+      playVideo(toEl, next.src);
+      // Crossfade
+      requestAnimationFrame(() => {
+        toEl.classList.add('visible');
+        fromEl.classList.remove('visible');
+        state.active = state.active === 'A' ? 'B' : 'A';
+        // Pause the outgoing one after the fade completes to save resources
+        setTimeout(() => { try { fromEl.pause(); } catch {} }, 2800);
+      });
+    }
+    // Schedule next switch if there's more than one video
+    if (state.switchTimer) clearTimeout(state.switchTimer);
+    if (videos.length > 1) {
+      state.switchTimer = setTimeout(() => switchTo(state.idx + 1, false), 45000);
+    }
+  };
+
+  switchTo(0, true);
 }
 
 // ========================= CLAUDE API =========================
@@ -865,7 +1403,7 @@ function renderSlideOnStage(stageEl, slide, palette, options = {}) {
   if (options.noFade) {
     swap();
   } else {
-    setTimeout(swap, 180);
+    setTimeout(swap, 90);
   }
 }
 
@@ -922,6 +1460,14 @@ function renderOperator() {
 function renderCurrentPreview() {
   const stage = $('op-preview-current');
   renderSlideOnStage(stage, slides[currentIdx], palette);
+  // Only (re)start the video layer on the first render — it persists across slides
+  if (!stage._videoStarted && selectedVideos.length > 0) {
+    startVideoLayer(stage, selectedVideos);
+    stage._videoStarted = true;
+  } else if (selectedVideos.length === 0 && stage._videoStarted) {
+    stopVideoLayer(stage);
+    stage._videoStarted = false;
+  }
 }
 
 function renderNextPreview() {
@@ -971,6 +1517,9 @@ function initChannel() {
         slides = msg.slides || [];
         currentIdx = msg.idx || 0;
         palette = msg.palette || palette;
+        if (Array.isArray(msg.videos)) selectedVideos = msg.videos;
+        // Video layer restart: drop old, start new
+        broadcastView._videoStarted = false;
         renderBroadcast();
       } else if (msg.type === 'nav') {
         currentIdx = msg.idx;
@@ -1009,7 +1558,8 @@ function pushStateToBroadcast() {
   channel.postMessage({
     type: 'state',
     from: 'operator',
-    slides, idx: currentIdx, palette
+    slides, idx: currentIdx, palette,
+    videos: selectedVideos
   });
 }
 function pushNavToBroadcast() {
@@ -1077,6 +1627,13 @@ function updateBroadcastIndicator() {
 function renderBroadcast() {
   const stage = broadcastView;
   renderSlideOnStage(stage, slides[currentIdx], palette);
+  if (!stage._videoStarted && selectedVideos.length > 0) {
+    startVideoLayer(stage, selectedVideos);
+    stage._videoStarted = true;
+  } else if (selectedVideos.length === 0 && stage._videoStarted) {
+    stopVideoLayer(stage);
+    stage._videoStarted = false;
+  }
 }
 
 // ========================= NAVIGATION =========================
@@ -1228,21 +1785,38 @@ async function renderLibrary() {
   }
 }
 
+let loadedSong = null; // full song record when user is editing
+
 async function loadIntoEditor(id) {
   try {
     const song = await fetchSong(id);
     if (!song) throw new Error('song not found');
+    loadedSong = song;
     $('current-song-id').value = song.id;
     $('song-title').value  = song.title || '';
     $('song-artist').value = song.artist || '';
     $('lyrics-input').value = song.lyrics || '';
     $('palette-select').value = song.palette || 'random';
+    // Reflect selected video count in editor
+    const vcount = Array.isArray(song.video_urls) ? song.video_urls.length : 0;
+    $('video-count-badge').textContent = vcount > 0 ? `${vcount} selected` : 'None yet';
     // Scroll to form
     $('song-title').scrollIntoView({ behavior: 'smooth', block: 'center' });
     setStatus(`Editing "${song.title}" — change lyrics and click Generate to save.`);
   } catch (e) {
     setStatus(`Couldn't load song: ${e.message}`, true);
   }
+}
+
+function clearEditor() {
+  loadedSong = null;
+  $('current-song-id').value = '';
+  $('song-title').value  = '';
+  $('song-artist').value = '';
+  $('lyrics-input').value = '';
+  $('palette-select').value = 'random';
+  const badge = $('video-count-badge');
+  if (badge) badge.textContent = 'None yet';
 }
 
 async function loadAndPresent(id) {
@@ -1256,17 +1830,20 @@ async function loadAndPresent(id) {
       title: song.title,
       artist: song.artist,
       lyrics: song.lyrics,
-      palette: song.palette || 'random'
+      palette: song.palette || 'random',
+      cachedSlides: song.slides_data,
+      cachedLyrics: song.lyrics,
+      videoUrls: song.video_urls || []
     }, { savePersisted: false });
   } catch (e) {
     loading.classList.remove('visible');
-    alert(`Couldn't load: ${e.message}`);
+    setStatus(`Couldn't load: ${e.message}`, true);
   }
 }
 
 // ========================= GENERATE FLOW =========================
 
-async function generateFromLyrics({ id, title, artist, lyrics, palette: paletteChoice }, { savePersisted = true } = {}) {
+async function generateFromLyrics({ id, title, artist, lyrics, palette: paletteChoice, cachedSlides, cachedLyrics, videoUrls }, { savePersisted = true } = {}) {
   if (!lyrics.trim()) {
     setStatus('Paste some lyrics first.', true);
     loading.classList.remove('visible');
@@ -1281,32 +1858,48 @@ async function generateFromLyrics({ id, title, artist, lyrics, palette: paletteC
   loadingText.textContent = 'Processing lyrics…';
 
   try {
-    const cleaned = cleanLyrics(lyrics);
-    const chunks  = splitIntoChunks(cleaned);
-    if (chunks.length === 0) throw new Error('No lyrics found after cleaning');
+    // Use cached slides if available AND lyrics haven't changed
+    const lyricsUnchanged = cachedSlides && cachedLyrics && cachedLyrics.trim() === lyrics.trim();
+    let useCache = lyricsUnchanged && Array.isArray(cachedSlides) && cachedSlides.length > 0;
 
-    loadingText.textContent = `Labeling ${chunks.length} slides with Claude…`;
-    const labels = await labelChunksWithClaude(chunks, title, artist);
+    if (useCache) {
+      slides = cachedSlides;
+    } else {
+      const cleaned = cleanLyrics(lyrics);
+      const chunks  = splitIntoChunks(cleaned);
+      if (chunks.length === 0) throw new Error('No lyrics found after cleaning');
 
-    // Resolve palette
+      loadingText.textContent = `Labeling ${chunks.length} slides with Claude…`;
+      const labels = await labelChunksWithClaude(chunks, title, artist);
+      slides = buildSlides(chunks, labels);
+    }
+
     palette = resolvePalette(paletteChoice);
-
-    slides = buildSlides(chunks, labels);
     currentIdx = 0;
     autoAdvanceSec = parseInt($('auto-advance').value, 10) || 0;
     $('op-auto-advance').value = autoAdvanceSec;
+
+    // Hand the videos off to the playback layer
+    selectedVideos = Array.isArray(videoUrls) ? videoUrls : [];
 
     // Save to library
     let savedId = id;
     if (savePersisted) {
       loadingText.textContent = 'Saving…';
+      // Always persist the slides_data cache so future loads skip Claude
       const saved = await saveSong({
         id, title, artist, lyrics,
-        palette: paletteChoice === 'random' ? null : paletteChoice
+        palette: paletteChoice === 'random' ? null : paletteChoice,
+        slides_data: slides,
+        video_urls: selectedVideos
       });
       savedId = saved?.id || id;
+      $('current-song-id').value = savedId || '';
     }
-    currentSong = { id: savedId, title, artist, lyrics, palette: paletteChoice };
+    currentSong = {
+      id: savedId, title, artist, lyrics, palette: paletteChoice,
+      video_urls: selectedVideos
+    };
 
     loading.classList.remove('visible');
     enterOperator();
@@ -1328,12 +1921,18 @@ generateBtn?.addEventListener('click', async () => {
   generateBtn.disabled = true;
   setStatus('');
   try {
+    const id = $('current-song-id').value || null;
+    // Videos may come from the loaded song (editing) OR from the modal (new song, pre-generate)
+    const videoUrls = loadedSong?.video_urls ?? selectedVideos ?? [];
     await generateFromLyrics({
-      id: $('current-song-id').value || null,
+      id,
       title: $('song-title').value.trim(),
       artist: $('song-artist').value.trim(),
       lyrics: $('lyrics-input').value,
-      palette: $('palette-select').value
+      palette: $('palette-select').value,
+      cachedSlides: loadedSong?.slides_data,
+      cachedLyrics: loadedSong?.lyrics,
+      videoUrls
     });
   } finally {
     generateBtn.disabled = false;
@@ -1341,6 +1940,20 @@ generateBtn?.addEventListener('click', async () => {
 });
 
 $('refresh-library')?.addEventListener('click', renderLibrary);
+
+// Settings modal
+$('open-settings')?.addEventListener('click', openSettingsModal);
+$('settings-close')?.addEventListener('click', closeSettingsModal);
+$('settings-cancel')?.addEventListener('click', closeSettingsModal);
+$('settings-save')?.addEventListener('click', saveSettings);
+
+// Video modal
+$('open-video-modal')?.addEventListener('click', openVideoModal);
+$('video-close')?.addEventListener('click', closeVideoModal);
+$('video-cancel')?.addEventListener('click', closeVideoModal);
+$('video-search-btn')?.addEventListener('click', runVideoSearch);
+$('video-query')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); runVideoSearch(); } });
+$('video-save')?.addEventListener('click', saveVideoSelection);
 
 // Operator buttons
 $('op-back')?.addEventListener('click', exitOperator);
