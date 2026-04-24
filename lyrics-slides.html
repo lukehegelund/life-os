@@ -1029,9 +1029,13 @@ function openBroadcastWindow() {
     return;
   }
   const features = 'width=1280,height=720,menubar=no,toolbar=no,location=no,status=no,resizable=yes';
-  broadcastWindow = window.open('?mode=broadcast', BROADCAST_WIN_NAME, features);
+  // Explicit URL avoids any ambiguity about how ?mode=broadcast gets resolved
+  const url = location.pathname + '?mode=broadcast';
+  broadcastWindow = window.open(url, BROADCAST_WIN_NAME, features);
   if (!broadcastWindow) {
-    alert('Popup blocked. Please allow popups for this site, then click Present again.');
+    // Popup blocked (common with programmatic clicks). Show non-blocking UI notice.
+    const txt = $('op-broadcast-status');
+    if (txt) txt.innerHTML = 'Popup blocked — <a href="' + url + '" target="_blank" style="color:var(--accent);">click to open broadcast</a>';
     return;
   }
   broadcastReady = false;
