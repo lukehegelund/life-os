@@ -1036,7 +1036,7 @@ function closeVideoModal() {
 
 function updateVideoModalInfo() {
   const n = videoModalSelection.size;
-  $('video-modal-info').textContent = n === 0 ? 'No videos selected yet' : `${n} video${n === 1 ? '' : 's'} selected`;
+  $('video-modal-info').textContent = n === 0 ? 'No video selected yet' : 'Video selected';
 }
 
 function renderVideoGrid(results) {
@@ -1057,9 +1057,13 @@ function renderVideoGrid(results) {
     `;
     item.addEventListener('click', () => {
       if (videoModalSelection.has(key)) {
+        // Click an already-selected item to deselect
         videoModalSelection.delete(key);
         item.classList.remove('selected');
       } else {
+        // Single-select: clear any prior selection, then choose this one
+        videoModalSelection.clear();
+        document.querySelectorAll('.video-item.selected').forEach(el => el.classList.remove('selected'));
         videoModalSelection.add(key);
         item.classList.add('selected');
       }
