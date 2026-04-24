@@ -198,7 +198,6 @@
   }
   .slide-content {
     display: inline-block;       /* hugs widest line so the bg box fits the text */
-    max-width: 92%;
     text-align: center;
     color: white;
     font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'Inter', system-ui, sans-serif;
@@ -207,6 +206,8 @@
     background: rgba(0,0,0,0.5);  /* 50% opaque black box around the text */
     padding: 0.55em 1.4em;
     border-radius: 14px;
+    /* No max-width: shrink-wrap to widest line + padding. The auto-fit JS scales font down
+       so the box always fits the stage. */
   }
   /* Blank slides have a slide-content but no text — don't render the box for those */
   .slide-content:empty { background: transparent; padding: 0; }
@@ -1839,14 +1840,14 @@ function openBroadcastWindow() {
     pushStateToBroadcast();
     return;
   }
-  const features = 'width=1280,height=720,menubar=no,toolbar=no,location=no,status=no,resizable=yes';
   // Explicit URL avoids any ambiguity about how ?mode=broadcast gets resolved
   const url = location.pathname + '?mode=broadcast';
-  broadcastWindow = window.open(url, BROADCAST_WIN_NAME, features);
+  // No features → opens as a normal tab/window (not a stripped-down popup) that the user
+  // can drag to a second display, fullscreen, etc. BroadcastChannel still works across tabs.
+  broadcastWindow = window.open(url, BROADCAST_WIN_NAME);
   if (!broadcastWindow) {
-    // Popup blocked (common with programmatic clicks). Show non-blocking UI notice.
     const txt = $('op-broadcast-status');
-    if (txt) txt.innerHTML = 'Popup blocked — <a href="' + url + '" target="_blank" style="color:var(--accent);">click to open broadcast</a>';
+    if (txt) txt.innerHTML = 'Popup blocked — <a href="' + url + '" target="_blank" style="color:var(--accent);">click here to open broadcast</a>';
     return;
   }
   broadcastReady = false;
