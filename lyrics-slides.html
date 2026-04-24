@@ -510,6 +510,11 @@
   }
   .video-layer video.visible { opacity: 0.92; }
 
+  /* When a stage has a live video, freeze the gradient animation — the video covers it anyway,
+     and animating gradients while decoding video is a major source of choppiness. */
+  .has-video .bg-layer::before,
+  .has-video .bg-layer::after { animation-play-state: paused; }
+
   /* Make vignette sit above video */
   .bg-vignette { z-index: 3 !important; }
   .slide-content-wrap { z-index: 4 !important; }
@@ -890,10 +895,15 @@ async function searchPexels(query, perPage = 20) {
   if (!r.ok) throw new Error(`Pexels ${r.status}`);
   const data = await r.json();
   return (data.videos || []).map(v => {
-    // Pick a reasonable quality file (prefer HD but not 4K)
-    const files = (v.video_files || []).filter(f => f.file_type === 'video/mp4' && f.width && f.width <= 1920);
-    files.sort((a, b) => (b.width || 0) - (a.width || 0));
-    const file = files.find(f => f.width <= 1920 && f.width >= 960) || files[0];
+    // Pick a low-CPU file: prefer ~720p, never above 1280 — much smoother playback
+    // than 1080p/4K, especially when stacking 2 videos for crossfade
+    const files = (v.video_files || []).filter(f => f.file_type === 'video/mp4' && f.width);
+    // Sort ascending by width
+    files.sort((a, b) => (a.width || 0) - (b.width || 0));
+    // Sweet spot: 640–1280, prefer ~720
+    const file = files.find(f => f.width >= 640 && f.width <= 1280)
+              || files.find(f => f.width <= 1280)
+              || files[0];
     if (!file) return null;
     return {
       id: `pexels-${v.id}`,
@@ -1063,15 +1073,20 @@ function ensureVideoLayer(stageEl) {
   if (!layer) {
     layer = document.createElement('div');
     layer.className = 'video-layer';
-    // Two stacked <video> elements for crossfade
+    // Two stacked <video> elements for crossfade.
+    // preload="metadata" buffers far less than "auto" — crucial for smooth playback
+    // on the operator laptop where multiple stages may be running at once.
     for (let i = 0; i < 2; i++) {
       const v = document.createElement('video');
       v.muted = true;
       v.loop = true;
       v.playsInline = true;
-      v.preload = 'auto';
+      v.preload = 'metadata';
+      v.disablePictureInPicture = true;
       v.setAttribute('muted','');
       v.setAttribute('playsinline','');
+      v.setAttribute('disablepictureinpicture','');
+      v.setAttribute('disableremoteplayback','');
       layer.appendChild(v);
     }
     // Insert BEFORE vignette so videos sit under vignette but above bg-layer
@@ -1094,6 +1109,7 @@ function stopVideoLayer(stageEl) {
     });
     layer.remove();
   }
+  stageEl.classList.remove('has-video');
   stageVideoState.delete(stageEl);
 }
 
@@ -1106,6 +1122,7 @@ function startVideoLayer(stageEl, videos) {
     stopVideoLayer(stageEl);
     return;
   }
+  stageEl.classList.add('has-video');
   const layer = ensureVideoLayer(stageEl);
   const [videoA, videoB] = layer.querySelectorAll('video');
   let state = stageVideoState.get(stageEl);
@@ -1238,6 +1255,198 @@ Return ONLY valid JSON, no markdown, no extra text, in this exact shape (with EX
 }
 
 // ========================= LYRICS PARSING =========================
+
+/**
+ * Normalize a section header string into a canonical name.
+ *   "v1" → "Verse 1", "ch" → "Chorus", "br" → "Bridge", etc.
+ * Returns null if not recognizable.
+ */
+function normalizeSection(s) {
+  const t = s.trim();
+
+  // Verse: V1, V2, V, Verse 1, Verse 2, Verse
+  let m = t.match(/^v(?:erse)?\s*(\d+)$/i);
+  if (m) return `Verse ${m[1]}`;
+  if (/^v(?:erse)?$/i.test(t)) return 'Verse';
+
+  // Chorus: C, Ch, Chorus, Chorus 1
+  m = t.match(/^(?:c|ch|chorus)\s*(\d+)$/i);
+  if (m) return `Chorus ${m[1]}`;
+  if (/^(?:c|ch|chorus)$/i.test(t)) return 'Chorus';
+
+  // Pre-Chorus: Pre, PC, Pre-Chorus, PreChorus
+  if (/^(?:pre[\s-]?chorus|pc|pre)$/i.test(t)) return 'Pre-Chorus';
+
+  // Bridge: Br, Bridge
+  if (/^br(?:idge)?$/i.test(t)) return 'Bridge';
+
+  // Outro: O, Outro, End, Ending
+  if (/^(?:o(?:utro)?|end(?:ing)?)$/i.test(t)) return 'Outro';
+
+  // Intro: I, Intro
+  if (/^i(?:ntro)?$/i.test(t)) return 'Intro';
+
+  // Vamp
+  if (/^vamp$/i.test(t)) return 'Vamp';
+
+  // Instrumental: Instr, Instrumental
+  if (/^instr(?:umental)?$/i.test(t)) return 'Instrumental';
+
+  // Tag
+  if (/^tag$/i.test(t)) return 'Tag';
+
+  // Refrain
+  if (/^ref(?:rain)?$/i.test(t)) return 'Refrain';
+
+  // Interlude
+  if (/^interlude$/i.test(t)) return 'Interlude';
+
+  return null;
+}
+
+/**
+ * Parse a possibly-compound header line like "V1", "Chorus x2", "V1 and V2".
+ * Returns { sections: ['Verse 1', 'Verse 2'], repeat: 2 } or null if not a header.
+ */
+function parseHeaderLine(line) {
+  const trimmed = line.trim();
+  if (!trimmed) return null;
+
+  // Strip leading bracket markers like [Verse 1]
+  const noBrackets = trimmed.replace(/^\[(.+)\]$/, '$1').trim();
+
+  // Pull off "x N" / "× N" repeat suffix
+  const repeatMatch = noBrackets.match(/^(.+?)\s*[x×]\s*(\d+)\s*$/i);
+  let repeat = 1;
+  let body = noBrackets;
+  if (repeatMatch) {
+    repeat = Math.max(1, Math.min(8, parseInt(repeatMatch[2], 10)));
+    body = repeatMatch[1].trim();
+  }
+
+  // Split on " and " / " & "
+  const parts = body.split(/\s+(?:and|&|,)\s+/i).map(p => p.trim()).filter(Boolean);
+
+  const names = [];
+  for (const p of parts) {
+    const n = normalizeSection(p);
+    if (!n) return null; // any unrecognized part → not a header line
+    names.push(n);
+  }
+  if (names.length === 0) return null;
+
+  return { sections: names, repeat, isCompound: names.length > 1 || repeat > 1 };
+}
+
+/**
+ * Try to parse the input as a structured song script (with V1/V2/Chorus headers
+ * and repeat directives). Returns { slides, sections } if structure detected,
+ * else null.
+ */
+function parseStructuredLyrics(raw) {
+  const text = raw.replace(/\r\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  if (!text) return null;
+
+  // Split into blocks separated by blank lines
+  const rawBlocks = text.split(/\n\s*\n/).map(b => b.trim()).filter(Boolean);
+
+  // Classify each block. The FIRST line of any block may be a header.
+  // - "V1\n<lyrics>" → header V1 + content "<lyrics>"
+  // - "V1" alone   → header V1 (definition or reference, decided later)
+  // - "<lyrics>"   → plain content
+  const blocks = [];
+  for (const b of rawBlocks) {
+    const lines = b.split('\n').map(l => l.trim()).filter(Boolean);
+    if (lines.length === 0) continue;
+    const headerCandidate = parseHeaderLine(lines[0]);
+    if (headerCandidate) {
+      blocks.push({ kind: 'header', ...headerCandidate });
+      if (lines.length > 1) {
+        blocks.push({ kind: 'content', lines: lines.slice(1) });
+      }
+    } else {
+      blocks.push({ kind: 'content', lines });
+    }
+  }
+
+  // Count headers. If there are no recognized headers, the input doesn't use shorthand —
+  // signal "no structure" so caller falls back to Claude.
+  const headerCount = blocks.filter(b => b.kind === 'header').length;
+  if (headerCount === 0) return null;
+
+  // Build sections dictionary AND program list.
+  // sections[name] = array of slide chunks (each chunk = array of lyric lines)
+  // program = ordered list of { section, repeat } to emit
+  const sections = {};
+  const program = [];
+  let currentSection = null;
+
+  for (let i = 0; i < blocks.length; i++) {
+    const b = blocks[i];
+
+    if (b.kind === 'header') {
+      // A header block is a definition only when followed by content blocks BEFORE the next header.
+      // It's a reference if it's compound (V1 and V2, Chorus x2), or if it's NOT followed by content
+      // (i.e. next block is another header or end of input).
+      const nextBlock = blocks[i + 1];
+      const followedByContent = nextBlock && nextBlock.kind === 'content';
+
+      if (b.isCompound || !followedByContent) {
+        // This is a REFERENCE — emit each section's chunks `repeat` times.
+        for (let r = 0; r < b.repeat; r++) {
+          for (const sec of b.sections) program.push({ section: sec, repeat: 1 });
+        }
+        currentSection = null;
+      } else {
+        // Single-section header followed by content → DEFINITION.
+        currentSection = b.sections[0];
+        if (!sections[currentSection]) sections[currentSection] = [];
+        program.push({ section: currentSection, repeat: 1, _isDefinition: true });
+      }
+    } else {
+      // Content block
+      if (currentSection) {
+        if (!sections[currentSection]) sections[currentSection] = [];
+        sections[currentSection].push(b.lines);
+      } else {
+        // Orphan content — bucket under "Unlabeled"
+        if (!sections['Unlabeled']) sections['Unlabeled'] = [];
+        sections['Unlabeled'].push(b.lines);
+        // Also add to program so it actually plays
+        if (program.length === 0 || program[program.length - 1].section !== 'Unlabeled') {
+          program.push({ section: 'Unlabeled', repeat: 1 });
+        }
+      }
+    }
+  }
+
+  // Walk program and emit slides
+  const slides = [];
+  for (const step of program) {
+    const chunks = sections[step.section] || [];
+    if (chunks.length === 0) {
+      console.warn(`Section "${step.section}" referenced but has no content`);
+      continue;
+    }
+    for (let r = 0; r < step.repeat; r++) {
+      for (const chunk of chunks) {
+        slides.push({ kind: 'lyric', sectionType: step.section, lines: chunk });
+      }
+    }
+  }
+
+  if (slides.length === 0) return null;
+
+  // Sandwich with blank slides
+  return {
+    slides: [
+      { kind: 'blank', lines: [], sectionType: null },
+      ...slides,
+      { kind: 'blank', lines: [], sectionType: null }
+    ],
+    sectionCount: Object.keys(sections).length
+  };
+}
 
 function cleanLyrics(raw) {
   return raw
@@ -1848,13 +2057,22 @@ async function generateFromLyrics({ id, title, artist, lyrics, palette: paletteC
       loadingText.textContent = 'Loading cached slides…';
       slides = cachedSlides;
     } else {
-      const cleaned = cleanLyrics(lyrics);
-      const chunks  = splitIntoChunks(cleaned);
-      if (chunks.length === 0) throw new Error('No lyrics found after cleaning');
+      // First try the structured parser — handles V1/V2/Chorus shorthand AND repeat directives
+      // ("Chorus x2", "V1 and V2"). If it finds a song structure, we don't need Claude at all.
+      const structured = parseStructuredLyrics(lyrics);
+      if (structured) {
+        loadingText.textContent = 'Building slides from song structure…';
+        slides = structured.slides;
+      } else {
+        // Fall back to Claude for free-form lyrics with no recognizable headers
+        const cleaned = cleanLyrics(lyrics);
+        const chunks  = splitIntoChunks(cleaned);
+        if (chunks.length === 0) throw new Error('No lyrics found after cleaning');
 
-      loadingText.textContent = `Labeling ${chunks.length} slides with Claude…`;
-      const labels = await labelChunksWithClaude(chunks, title, artist);
-      slides = buildSlides(chunks, labels);
+        loadingText.textContent = `Labeling ${chunks.length} slides with Claude…`;
+        const labels = await labelChunksWithClaude(chunks, title, artist);
+        slides = buildSlides(chunks, labels);
+      }
     }
 
     palette = resolvePalette(paletteChoice);
