@@ -533,10 +533,7 @@
 <div class="setup" id="setup-view">
   <div class="setup-header">
     <h1>🎤 Lyric Slides</h1>
-    <div style="display:flex; align-items:center;">
-      <button class="settings-btn" id="open-settings" title="API keys">⚙ Settings</button>
-      <a href="apps.html" class="back">← Apps</a>
-    </div>
+    <a href="apps.html" class="back">← Apps</a>
   </div>
   <p class="subtitle">
     Paste song lyrics, use <strong>blank lines</strong> to mark where one slide ends and the next begins. Claude labels each chunk with its section.
@@ -675,43 +672,6 @@
   <!-- bg + content injected here -->
 </div>
 
-<!-- ==================== SETTINGS MODAL ==================== -->
-<div class="modal-backdrop" id="settings-modal">
-  <div class="modal">
-    <div class="modal-header">
-      <h3>Settings — API keys</h3>
-      <button class="modal-close" id="settings-close">✕</button>
-    </div>
-    <div class="modal-body">
-      <p style="color:var(--muted); font-size:13px; line-height:1.5; margin-top:0;">
-        To pull background videos from Pexels and Pixabay, paste your API keys below. Both are free — sign up links below. Keys are stored in your browser's localStorage (only on this device).
-      </p>
-      <div class="field">
-        <label>Pexels API key</label>
-        <input type="text" id="settings-pexels" placeholder="Your Pexels API key">
-        <div style="font-size:11px; color:var(--muted); margin-top:4px;">
-          Sign up at <a href="https://www.pexels.com/api/" target="_blank" style="color:var(--accent);">pexels.com/api</a>
-        </div>
-      </div>
-      <div class="field">
-        <label>Pixabay API key</label>
-        <input type="text" id="settings-pixabay" placeholder="Your Pixabay API key">
-        <div style="font-size:11px; color:var(--muted); margin-top:4px;">
-          Sign up at <a href="https://pixabay.com/api/docs/" target="_blank" style="color:var(--accent);">pixabay.com/api/docs</a>
-        </div>
-      </div>
-      <div id="settings-status" style="font-size:12px; color:var(--muted); min-height:16px; margin-top:6px;"></div>
-    </div>
-    <div class="modal-footer">
-      <div class="modal-footer-info">Keys never leave your browser.</div>
-      <div class="modal-footer-actions">
-        <button class="btn-ghost" id="settings-cancel">Cancel</button>
-        <button class="btn-secondary" id="settings-save" style="background:var(--accent); color:white;">Save</button>
-      </div>
-    </div>
-  </div>
-</div>
-
 <!-- ==================== VIDEO IMPORT MODAL ==================== -->
 <div class="modal-backdrop" id="video-modal">
   <div class="modal">
@@ -794,9 +754,11 @@ let videoModalResults   = [];        // current search results
 // Video playback timers (per-stage)
 const stageVideoState = new WeakMap();
 
-// localStorage keys for API keys
-const LS_PEXELS  = 'ls_pexels_api_key';
-const LS_PIXABAY = 'ls_pixabay_api_key';
+// Cached video API keys (loaded once from Supabase app_secrets)
+let _pexelsKey  = null;
+let _pixabayKey = null;
+let _pexelsKeyLoadPromise  = null;
+let _pixabayKeyLoadPromise = null;
 
 // ========================= SUPABASE HELPERS =========================
 
@@ -872,33 +834,55 @@ async function fetchSong(id) {
   return rows[0];
 }
 
-// ========================= SETTINGS / API KEYS =========================
+// ========================= API KEYS (auto-loaded from Supabase) =========================
 
-function getPexelsKey()  { return localStorage.getItem(LS_PEXELS)  || ''; }
-function getPixabayKey() { return localStorage.getItem(LS_PIXABAY) || ''; }
+/**
+ * Fetch a key from app_secrets via db-proxy. Cached after first call.
+ * Returns '' if not configured (gracefully degrades).
+ */
+async function fetchAppSecret(secretKey) {
+  const r = await fetch(DB_PROXY_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${SUPABASE_ANON}`,
+      'apikey': SUPABASE_ANON
+    },
+    body: JSON.stringify({
+      table: 'app_secrets',
+      op: 'select',
+      filters: { eq: { key: secretKey } },
+      select: 'value'
+    })
+  });
+  if (!r.ok) throw new Error(`db-proxy ${r.status}`);
+  const data = await r.json();
+  const row = Array.isArray(data) ? data[0] : (data?.data?.[0]);
+  return row?.value || '';
+}
 
-function openSettingsModal() {
-  $('settings-pexels').value  = getPexelsKey();
-  $('settings-pixabay').value = getPixabayKey();
-  $('settings-status').textContent = '';
-  $('settings-modal').classList.add('visible');
+function loadPexelsKey() {
+  if (_pexelsKey !== null) return Promise.resolve(_pexelsKey);
+  if (_pexelsKeyLoadPromise) return _pexelsKeyLoadPromise;
+  _pexelsKeyLoadPromise = fetchAppSecret('pexels_api_key')
+    .then(v => { _pexelsKey = v || ''; return _pexelsKey; })
+    .catch(e => { console.warn('pexels key load failed', e); _pexelsKey = ''; return ''; });
+  return _pexelsKeyLoadPromise;
 }
-function closeSettingsModal() {
-  $('settings-modal').classList.remove('visible');
-}
-function saveSettings() {
-  const pex = $('settings-pexels').value.trim();
-  const pix = $('settings-pixabay').value.trim();
-  if (pex) localStorage.setItem(LS_PEXELS,  pex); else localStorage.removeItem(LS_PEXELS);
-  if (pix) localStorage.setItem(LS_PIXABAY, pix); else localStorage.removeItem(LS_PIXABAY);
-  $('settings-status').textContent = 'Saved ✓';
-  setTimeout(closeSettingsModal, 600);
+
+function loadPixabayKey() {
+  if (_pixabayKey !== null) return Promise.resolve(_pixabayKey);
+  if (_pixabayKeyLoadPromise) return _pixabayKeyLoadPromise;
+  _pixabayKeyLoadPromise = fetchAppSecret('pixabay_api_key')
+    .then(v => { _pixabayKey = v || ''; return _pixabayKey; })
+    .catch(e => { console.warn('pixabay key load failed', e); _pixabayKey = ''; return ''; });
+  return _pixabayKeyLoadPromise;
 }
 
 // ========================= PEXELS / PIXABAY =========================
 
 async function searchPexels(query, perPage = 20) {
-  const key = getPexelsKey();
+  const key = await loadPexelsKey();
   if (!key) return [];
   const r = await fetch(`https://api.pexels.com/videos/search?query=${encodeURIComponent(query)}&per_page=${perPage}&orientation=landscape&size=medium`, {
     headers: { 'Authorization': key }
@@ -924,7 +908,7 @@ async function searchPexels(query, perPage = 20) {
 }
 
 async function searchPixabay(query, perPage = 20) {
-  const key = getPixabayKey();
+  const key = await loadPixabayKey();
   if (!key) return [];
   const r = await fetch(`https://pixabay.com/api/videos/?key=${encodeURIComponent(key)}&q=${encodeURIComponent(query)}&per_page=${perPage}&safesearch=true`);
   if (!r.ok) throw new Error(`Pixabay ${r.status}`);
@@ -964,11 +948,9 @@ async function searchAllVideos(query) {
 // ========================= VIDEO MODAL =========================
 
 function openVideoModal() {
-  if (!getPexelsKey() && !getPixabayKey()) {
-    alert('Add a Pexels or Pixabay API key in Settings first.');
-    openSettingsModal();
-    return;
-  }
+  // Preload keys in background — keys are loaded lazily on search
+  loadPexelsKey();
+  loadPixabayKey();
   // Preload selection from loaded song if editing
   videoModalSelection = new Set();
   if (loadedSong?.video_urls) {
@@ -1944,12 +1926,6 @@ generateBtn?.addEventListener('click', async () => {
 });
 
 $('refresh-library')?.addEventListener('click', renderLibrary);
-
-// Settings modal
-$('open-settings')?.addEventListener('click', openSettingsModal);
-$('settings-close')?.addEventListener('click', closeSettingsModal);
-$('settings-cancel')?.addEventListener('click', closeSettingsModal);
-$('settings-save')?.addEventListener('click', saveSettings);
 
 // Video modal
 $('open-video-modal')?.addEventListener('click', openVideoModal);
