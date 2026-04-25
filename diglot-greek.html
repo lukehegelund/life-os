@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Greek Diglot Reader — Life OS</title>
+<link rel="stylesheet" href="css/main.css?v=2" onerror="this.remove()">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cardo:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --reader-accent: #0369a1;
+    --reader-accent-bg: #f0f9ff;
+    --reader-accent-border: #bae6fd;
+    --english-color: #6b7280;
+    --vnum-color: #9ca3af;
+    --reader-bg: #fafaf9;
+    --reader-text: #1c1917;
+    --reader-muted: #a8a29e;
+    --reader-hr: #e7e5e4;
+    --popup-bg: #1c1917;
+    --popup-text: #fafaf9;
+  }
+
+  /* ── Controls bar ── */
+  #controls {
+    position: sticky; top: 0; z-index: 100;
+    background: var(--white, #fff); border-bottom: 1px solid var(--reader-hr);
+    padding: 10px 16px; display: flex; flex-wrap: wrap;
+    align-items: center; gap: 8px 14px;
+    box-shadow: 0 1px 6px rgba(0,0,0,.06);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 13px;
+  }
+  #controls label { color: #57534e; white-space: nowrap; }
+  .ctrl-row { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
+
+  /* Per-case selector layout */
+  .case-controls { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; }
+  .case-ctrl { display: flex; align-items: center; gap: 5px; }
+  .case-tag {
+    font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 3px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    white-space: nowrap;
+  }
+  .case-tag.G { background: #fef3c7; color: #92400e; }
+  .case-tag.A { background: #fee2e2; color: #991b1b; }
+  .case-tag.N { background: #dbeafe; color: #1d4ed8; }
+  .case-tag.D { background: #d1fae5; color: #065f46; }
+  .case-tag.conj { background: #ffedd5; color: #c2410c; }
+  .case-tag.prep { background: #ccfbf1; color: #0f766e; }
+
+  /* Tier panel visibility */
+  .tier-panel { display: none; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .tier-panel.active { display: flex; }
+
+  /* Toggle groups */
+  [data-case="G"] button.active { background: #d97706; color: white; border-color: #d97706; }
+  [data-case="A"] button.active { background: #dc2626; color: white; border-color: #dc2626; }
+  [data-case="N"] button.active { background: #2563eb; color: white; border-color: #2563eb; }
+  [data-case="D"] button.active { background: #059669; color: white; border-color: #059669; }
+  [data-case] button[data-val="0"].active { background: #6b7280; color: white; border-color: #6b7280; }
+  .toggle-group {
+    display: inline-flex; border: 1px solid var(--reader-accent-border);
+    border-radius: 6px; overflow: hidden; background: white;
+  }
+  .toggle-group button {
+    border: none; padding: 5px 10px; background: white;
+    color: #57534e; cursor: pointer; font-family: inherit; font-size: 12px;
+    border-right: 1px solid var(--reader-accent-border);
+  }
+  .toggle-group button:last-child { border-right: none; }
+  .toggle-group button.active { background: var(--reader-accent); color: white; }
+  .checkbox-toggle { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+
+  /* Color key */
+  #colorKey {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px;
+    font-size: 12px; color: #57534e; min-height: 18px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  /* ── Reader text area ── */
+  #reader-body {
+    max-width: 720px; margin: 0 auto; padding: 24px 20px 80px;
+    font-family: 'Cardo', Georgia, 'Times New Roman', serif;
+    color: var(--reader-text); background: var(--reader-bg);
+    line-height: 1.85;
+  }
+  #reader-body h1 {
+    font-size: 1.6rem; font-weight: 700; color: #44403c; margin-bottom: 4px;
+    font-family: 'Cardo', Georgia, serif;
+  }
+  #reader-body p.subtitle {
+    font-style: italic; font-size: .9rem; color: var(--reader-muted); margin-bottom: 20px;
+  }
+  #reader-body hr { border: none; border-top: 1px solid var(--reader-hr); margin: 14px 0; }
+
+  .verse-block { margin-bottom: 20px; }
+  p.verse { font-size: 1.08rem; line-height: 2.4; }
+  p.greek-line {
+    font-size: .95rem; color: #78716c; margin-top: 4px; padding-left: 4px;
+    line-height: 1.6;
+  }
+  .vnum {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: .72rem; font-weight: 600; color: var(--vnum-color);
+    vertical-align: super; margin-right: 4px; user-select: none;
+  }
+
+  /* Tokens */
+  .tok {
+    transition: background .12s, color .12s;
+    border-radius: 3px; cursor: pointer; padding: 0 1px;
+    display: inline-block; vertical-align: middle;
+  }
+  .tok:hover { background: rgba(124,58,237,.12); }
+  .tok.english { color: var(--english-color); }
+
+  /* Stacked tokens */
+  .tok.stacked {
+    display: inline-flex; flex-direction: column;
+    align-items: center; line-height: 1.05;
+    vertical-align: middle; padding: 2px 5px; border-radius: 4px;
+  }
+  .tok.stacked:hover { filter: brightness(0.96); }
+
+  /* Case/category colors — text only */
+  .tok.case-N { color: #2563eb; }
+  .tok.case-G { color: #d97706; }
+  .tok.case-D { color: #059669; }
+  .tok.case-A { color: #dc2626; }
+  .tok.case-V { color: #7c3aed; }
+  .tok.cat-conj { color: #ea580c; }
+  .tok.cat-prep { color: #0d9488; }
+  .tok.cased-flat { display: inline-block; padding: 0 2px; vertical-align: middle; }
+
+  .tok .form-en { font-size: .82rem; color: inherit; font-style: italic; font-family: inherit; }
+  .tok .form-tr { font-size: .82rem; color: inherit; font-style: italic; font-family: 'Cardo', Georgia, serif; }
+  .tok .form-gr { font-size: 1.05rem; color: inherit; font-family: 'Cardo', Georgia, serif; }
+  .tok.stacked .form-en + .form-tr,
+  .tok.stacked .form-tr + .form-gr {
+    border-top: 1px dashed #e7e5e4; margin-top: 1px; padding-top: 1px;
+  }
+
+  .greek-line .tok { font-style: normal; color: #78716c; cursor: pointer; }
+  .greek-line .tok:hover { background: rgba(3,105,161,.12); color: var(--reader-accent); }
+
+  /* Popup */
+  #popup {
+    position: fixed; background: var(--popup-bg); color: var(--popup-text);
+    padding: 14px 16px; border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.35);
+    max-width: 360px; z-index: 9999;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 13px; line-height: 1.5; display: none;
+  }
+  #popup.show { display: block; }
+  #popup .pop-surface { font-family: 'Cardo', Georgia, serif; font-size: 22px; line-height: 1.2; margin-bottom: 2px; }
+  #popup .pop-translit { color: #7dd3fc; font-style: italic; margin-bottom: 10px; }
+  #popup .pop-row { display: flex; gap: 6px; margin-bottom: 4px; }
+  #popup .pop-label { color: #7dd3fc; font-weight: 600; min-width: 64px; flex-shrink: 0; }
+  #popup .lemma-greek { font-family: 'Cardo', Georgia, serif; font-size: 16px; }
+  #popup .gloss { color: #fde68a; }
+  #popup .pop-close {
+    position: absolute; top: 6px; right: 8px;
+    background: none; border: none; color: #7dd3fc;
+    font-size: 18px; cursor: pointer;
+  }
+  #popup .strongs { color: #94a3b8; font-size: 11px; margin-top: 6px; }
+  #popup .freq { color: #94a3b8; font-size: 11px; }
+
+  @media (max-width: 600px) {
+    #controls { padding: 8px 12px; gap: 7px 10px; }
+    #reader-body { padding: 20px 16px 80px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- LifeOS-style back header -->
+<header class="page-header" style="margin-bottom:0;">
+  <div class="header-row">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <a href="apps.html" style="font-size:22px;text-decoration:none;color:var(--gray-400,#9ca3af);line-height:1;">&#8592;</a>
+      <div>
+        <h1 style="font-size:1.2rem;margin:0;">Greek Diglot Reader</h1>
+        <div class="subtitle" style="font-size:12px;">Mark 1:1–10 · SBLGNT (MorphGNT)</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- Sticky controls bar -->
+<div id="controls">
+  <!-- Tier selector -->
+  <div class="ctrl-row">
+    <label>Tier:</label>
+    <div class="toggle-group" id="tierToggle">
+      <button data-val="1" class="active">1 · Articles</button>
+      <button data-val="2">2 · Conjunctions</button>
+      <button data-val="3">3 · Prepositions</button>
+    </div>
+  </div>
+  <!-- Tier 1: article case controls -->
+  <div class="ctrl-row tier-panel active" data-tier="1">
+    <label>By case:</label>
+    <div class="case-controls">
+      <div class="case-ctrl">
+        <span class="case-tag G">Gen</span>
+        <div class="toggle-group" data-case="G">
+          <button data-val="0" class="active">Off</button>
+          <button data-val="1">1</button>
+          <button data-val="2">2</button>
+          <button data-val="3">3</button>
+        </div>
+      </div>
+      <div class="case-ctrl">
+        <span class="case-tag A">Acc</span>
+        <div class="toggle-group" data-case="A">
+          <button data-val="0" class="active">Off</button>
+          <button data-val="1">1</button>
+          <button data-val="2">2</button>
+          <button data-val="3">3</button>
+        </div>
+      </div>
+      <div class="case-ctrl">
+        <span class="case-tag N">Nom</span>
+        <div class="toggle-group" data-case="N">
+          <button data-val="0" class="active">Off</button>
+          <button data-val="1">1</button>
+          <button data-val="2">2</button>
+          <button data-val="3">3</button>
+        </div>
+      </div>
+      <div class="case-ctrl">
+        <span class="case-tag D">Dat</span>
+        <div class="toggle-group" data-case="D">
+          <button data-val="0" class="active">Off</button>
+          <button data-val="1">1</button>
+          <button data-val="2">2</button>
+          <button data-val="3">3</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Tier 2: conjunction control -->
+  <div class="ctrl-row tier-panel" data-tier="2">
+    <span class="case-tag conj" style="margin-right:2px;">Conj</span>
+    <div class="toggle-group" id="conjToggle">
+      <button data-val="0" class="active">Off</button>
+      <button data-val="1">1</button>
+      <button data-val="2">2</button>
+      <button data-val="3">3</button>
+    </div>
+    <span style="font-size:12px;color:#9ca3af;">καί, δέ, ὅτι, ἀλλά …</span>
+  </div>
+  <!-- Tier 3: preposition control -->
+  <div class="ctrl-row tier-panel" data-tier="3">
+    <span class="case-tag prep" style="margin-right:2px;">Prep</span>
+    <div class="toggle-group" id="prepToggle">
+      <button data-val="0" class="active">Off</button>
+      <button data-val="1">1</button>
+      <button data-val="2">2</button>
+      <button data-val="3">3</button>
+    </div>
+    <span style="font-size:12px;color:#9ca3af;">ἐν, εἰς, ἐκ, ἀπό, πρό …</span>
+  </div>
+  <!-- Color key — populated dynamically -->
+  <div id="colorKey" class="ctrl-row"></div>
+  <!-- Secondary controls -->
+  <div class="ctrl-row">
+    <label>Script:</label>
+    <div class="toggle-group" id="displayToggle">
+      <button data-val="polytonic" class="active">Polytonic</button>
+      <button data-val="monotonic">Monotonic</button>
+    </div>
+    <label class="checkbox-toggle" style="margin-left:4px;">
+      <input type="checkbox" id="greekLineCheck" checked>
+      Greek line
+    </label>
+    <label class="checkbox-toggle" style="margin-left:4px;">
+      <input type="checkbox" id="colorToggle" checked>
+      Colors
+    </label>
+  </div>
+</div>
+
+<!-- Reader content -->
+<div id="reader-body">
+  <div id="content"></div>
+</div>
+
+<!-- Popup -->
+<div id="popup">
+  <button class="pop-close">×</button>
+  <div class="pop-surface" id="popSurface"></div>
+  <div class="pop-translit" id="popTranslit"></div>
+  <div class="pop-row"><span class="pop-label">Lemma:</span><span class="lemma-greek" id="popLemma"></span> <span style="color:#7dd3fc">·</span> <span style="color:#7dd3fc;font-style:italic" id="popLemmaTr"></span></div>
+  <div class="pop-row"><span class="pop-label">Form:</span><span id="popMorph"></span></div>
+  <div class="pop-row"><span class="pop-label">Meaning:</span><span class="gloss" id="popGloss"></span></div>
+  <div class="pop-row"><span class="pop-label">In English:</span><span id="popEn" style="color:#fbbf24;"></span></div>
+  <div class="freq" id="popFreq"></div>
+  <div class="strongs" id="popStrongs"></div>
+</div>
+
+<script id="data" type="application/json">{"book":"Mark","range":"1:1-10","max_rank_used":3597,"lemmas":{"ἀρχή":{"tr":"archē","rank":289,"count":55,"gloss":"beginning","long":"beginning, corner, (at the, the) first (estate), magistrate, power, principality, principle, rule","strongs":"G746","proper":false},"ὁ":{"tr":"ho","rank":1,"count":19769,"gloss":"the","long":"the, this, that, one, he, she, it, etc","strongs":"G3588","proper":false},"εὐαγγέλιον":{"tr":"euangelion","rank":227,"count":75,"gloss":"gospel","long":"gospel","strongs":"G2098","proper":false},"Ἰησοῦς":{"tr":"Iēsous","rank":20,"count":906,"gloss":"Jesus","long":"Jesus","strongs":"G2424","proper":true},"Χριστός":{"tr":"Christos","rank":35,"count":528,"gloss":"Christ","long":"Christ","strongs":"G5547","proper":true},"καθώς":{"tr":"kathōs","rank":86,"count":182,"gloss":"according to","long":"according to, (according, even) as, how, when","strongs":"G2531","proper":false},"γράφω":{"tr":"graphō","rank":84,"count":190,"gloss":"describe","long":"describe, write(-ing, -ten)","strongs":"G1125","proper":false},"ἐν":{"tr":"en","rank":6,"count":2733,"gloss":"about","long":"about, after, against, + almost, X altogether, among, X as, at, before, between, (here-)by (+ all means), for (… sake of), + give self wholly to, (here-)in(-to, -wardly), X mightily, (because) of, (up-)on, (open-)ly, X outwardly, one, X quickly, X shortly, (speedi-)ly, X that, X there(-in, -on), through(-out), (un-)to(-ward), under, when, where(-with), while, with(-in)","strongs":"G1722","proper":false},"Ἠσαΐας":{"tr":"Ēsaias","rank":580,"count":22,"gloss":"Esaias","long":"Esaias","strongs":"G2268","proper":true},"προφήτης":{"tr":"prophētēs","rank":115,"count":144,"gloss":"prophet","long":"prophet","strongs":"G4396","proper":false},"ἰδού":{"tr":"idou","rank":79,"count":200,"gloss":"behold","long":"--behold, lo, see","strongs":"G2400","proper":false},"ἀποστέλλω":{"tr":"apostellō","rank":130,"count":132,"gloss":"put in","long":"put in, send (away, forth, out), set (at liberty)","strongs":"G649","proper":false},"ἄγγελος":{"tr":"angelos","rank":90,"count":175,"gloss":"angel","long":"angel, messenger","strongs":"G32","proper":false},"ἐγώ":{"tr":"egō","rank":7,"count":2572,"gloss":"I","long":"I, me","strongs":"G1473","proper":false},"πρό":{"tr":"pro","rank":321,"count":47,"gloss":"above","long":"above, ago, before, or ever","strongs":"G4253","proper":false},"πρόσωπον":{"tr":"prosōpon","rank":222,"count":76,"gloss":"appearance","long":"(outward) appearance, X before, countenance, face, fashion, (men's) person, presence","strongs":"G4383","proper":false},"σύ":{"tr":"sy","rank":4,"count":2894,"gloss":"thou","long":"thou","strongs":"G4771","proper":false},"ὅς":{"tr":"hos","rank":12,"count":1408,"gloss":"one","long":"one, (an-, the) other, some, that, what, which, who(-m, -se), etc","strongs":"G3739","proper":false},"κατασκευάζω":{"tr":"kataskeuazō","rank":984,"count":11,"gloss":"build","long":"build, make, ordain, prepare","strongs":"G2680","proper":false},"ὁδός":{"tr":"hodos","rank":165,"count":101,"gloss":"journey","long":"journey, (high-)way","strongs":"G3598","proper":false},"φωνή":{"tr":"phōnē","rank":124,"count":139,"gloss":"noise","long":"noise, sound, voice","strongs":"G5456","proper":false},"βοάω":{"tr":"boaō","rank":905,"count":12,"gloss":"cry","long":"cry","strongs":"G994","proper":false},"ἔρημος":{"tr":"erēmos","rank":315,"count":48,"gloss":"desert","long":"desert, desolate, solitary, wilderness","strongs":"G2048","proper":false},"ἑτοιμάζω":{"tr":"hetoimazō","rank":371,"count":40,"gloss":"prepare","long":"prepare, provide, make ready","strongs":"G2090","proper":false},"κύριος":{"tr":"kyrios","rank":22,"count":713,"gloss":"God","long":"God, Lord, master, Sir","strongs":"G2962","proper":false},"εὐθύς":{"tr":"euthys","rank":276,"count":59,"gloss":"anon","long":"anon, by and by, forthwith, immediately, straightway","strongs":"G2117","proper":false},"ποιέω":{"tr":"poieō","rank":31,"count":568,"gloss":"abide","long":"abide, + agree, appoint, X avenge, + band together, be, bear, + bewray, bring (forth), cast out, cause, commit, + content, continue, deal, + without any delay, (would) do(-ing), execute, exercise, fulfil, gain, give, have, hold, X journeying, keep, + lay wait, + lighten the ship, make, X mean, + none of these things move me, observe, ordain, perform, provide, + have purged, purpose, put, + raising up, X secure, shew, X shoot out, spend, take, tarry, + transgress the law, work, yield","strongs":"G4160","proper":false},"τρίβος":{"tr":"tribos","rank":2191,"count":3,"gloss":"path","long":"path","strongs":"G5147","proper":false},"αὐτός":{"tr":"autos","rank":3,"count":5546,"gloss":"her","long":"her, it(-self), one, the other, (mine) own, said, (self-), the) same, ((him-, my-, thy- )self, (your-)selves, she, that, their(-s), them(-selves), there(-at, - by, -in, -into, -of, -on, -with), they, (these) things, this (man), those, together, very, which","strongs":"G846","proper":false},"γίνομαι":{"tr":"ginomai","rank":25,"count":667,"gloss":"arise","long":"arise, be assembled, be(-come, -fall, -have self), be brought (to pass), (be) come (to pass), continue, be divided, draw, be ended, fall, be finished, follow, be found, be fulfilled, + God forbid, grow, happen, have, be kept, be made, be married, be ordained to be, partake, pass, be performed, be published, require, seem, be showed, X soon as it was, sound, be taken, be turned, use, wax, will, would, be wrought","strongs":"G1096","proper":false},"Ἰωάννης":{"tr":"Iōannēs","rank":126,"count":135,"gloss":"John","long":"John","strongs":"G2491","proper":true},"βαπτίζω":{"tr":"baptizō","rank":219,"count":77,"gloss":"Baptist","long":"Baptist, baptize, wash","strongs":"G907","proper":false},"κηρύσσω":{"tr":"kēryssō","rank":265,"count":61,"gloss":"preacher","long":"preacher(-er), proclaim, publish","strongs":"G2784","proper":false},"βάπτισμα":{"tr":"baptisma","rank":638,"count":19,"gloss":"baptism","long":"baptism","strongs":"G908","proper":false},"μετάνοια":{"tr":"metanoia","rank":581,"count":22,"gloss":"repentance","long":"repentance","strongs":"G3341","proper":false},"εἰς":{"tr":"eis","rank":10,"count":1754,"gloss":"ly","long":"(abundant-)ly, against, among, as, at, (back-)ward, before, by, concerning, + continual, + far more exceeding, for (intent, purpose), fore, + forth, in (among, at, unto, -so much that, -to), to the intent that, + of one mind, + never, of, (up-)on, + perish, + set at one again, (so) that, therefore(-unto), throughout, til, to (be, the end, -ward), (here-)until(-to), …ward, (where-)fore, with","strongs":"G1519","proper":false},"ἄφεσις":{"tr":"aphesis","rank":714,"count":17,"gloss":"deliverance","long":"deliverance, forgiveness, liberty, remission","strongs":"G859","proper":false},"ἁμαρτία":{"tr":"hamartia","rank":92,"count":172,"gloss":"offence","long":"offence, sin(-ful)","strongs":"G266","proper":false},"καί":{"tr":"kai","rank":2,"count":8973,"gloss":"and","long":"and, also, both, but, even, for, if, or, so, that, then, therefore, when, yet","strongs":"G2532","proper":false},"ἐκπορεύομαι":{"tr":"ekporeuomai","rank":426,"count":33,"gloss":"come forth","long":"come (forth, out of), depart, go (forth, out), issue, proceed (out of)","strongs":"G1607","proper":false},"πρός":{"tr":"pros","rank":24,"count":696,"gloss":"about","long":"about, according to , against, among, at, because of, before, between, (where-)by, for, X at thy house, in, for intent, nigh unto, of, which pertain to, that, to (the end that), X together, to (you) -ward, unto, with(-in)","strongs":"G4314","proper":false},"πᾶς":{"tr":"pas","rank":16,"count":1244,"gloss":"all manner of","long":"all (manner of, means), alway(-s), any (one), X daily, + ever, every (one, way), as many as, + no(-thing), X thoroughly, whatsoever, whole, whosoever","strongs":"G3956","proper":false},"Ἰουδαία":{"tr":"Ioudaia","rank":341,"count":44,"gloss":"Judæa","long":"Judæa","strongs":"G2449","proper":false},"χώρα":{"tr":"chōra","rank":483,"count":28,"gloss":"coast","long":"coast, county, fields, ground, land, region","strongs":"G5561","proper":false},"Ἱεροσολυμίτης":{"tr":"Hierosolymitēs","rank":2817,"count":2,"gloss":"of Jerusalem","long":"of Jerusalem","strongs":"G2415","proper":true},"ὑπό":{"tr":"hypo","rank":71,"count":220,"gloss":"among","long":"among, by, from, in, of, under, with","strongs":"G5259","proper":false},"Ἰορδάνης":{"tr":"Iordanēs","rank":760,"count":15,"gloss":"Jordan","long":"Jordan","strongs":"G2446","proper":true},"ποταμός":{"tr":"potamos","rank":688,"count":17,"gloss":"flood","long":"flood, river, stream, water","strongs":"G4215","proper":false},"ἐξομολογέω":{"tr":"exomologeō","rank":1045,"count":10,"gloss":"confess","long":"confess, profess, promise","strongs":"G1843","proper":false},"εἰμί":{"tr":"eimi","rank":8,"count":2456,"gloss":"am","long":"am, have been, X it is I, was","strongs":"G1510","proper":false},"ἐνδύω":{"tr":"endyō","rank":486,"count":28,"gloss":"array","long":"array, clothe (with), endue, have (put) on","strongs":"G1746","proper":false},"θρίξ":{"tr":"thrix","rank":759,"count":15,"gloss":"hair","long":"hair","strongs":"G2359","proper":false},"κάμηλος":{"tr":"kamēlos","rank":1463,"count":6,"gloss":"camel","long":"camel","strongs":"G2574","proper":false},"ζώνη":{"tr":"zōnē","rank":1229,"count":8,"gloss":"girdle","long":"girdle, purse","strongs":"G2223","proper":false},"δερμάτινος":{"tr":"dermatinos","rank":2676,"count":2,"gloss":"leathern","long":"leathern, of a skin","strongs":"G1193","proper":false},"περί":{"tr":"peri","rank":53,"count":332,"gloss":"about","long":"(there-)about, above, against, at, on behalf of, X and his company, which concern, (as) concerning, for, X how it will go with, ((there-, where-)) of, on, over, pertaining (to), for sake, X (e-)state, (as) touching, (where-)by (in), with","strongs":"G4012","proper":false},"ὀσφύς":{"tr":"osphys","rank":1230,"count":8,"gloss":"loin","long":"loin","strongs":"G3751","proper":false},"ἔσθω":{"tr":"esthō","rank":3596,"count":1,"gloss":"esthō","long":"","strongs":"","proper":false},"ἀκρίς":{"tr":"akris","rank":1863,"count":4,"gloss":"locust","long":"locust","strongs":"G200","proper":false},"μέλι":{"tr":"meli","rank":1864,"count":4,"gloss":"honey","long":"honey","strongs":"G3192","proper":false},"ἄγριος":{"tr":"agrios","rank":2192,"count":3,"gloss":"wild","long":"wild, raging","strongs":"G66","proper":false},"λέγω":{"tr":"legō","rank":9,"count":2345,"gloss":"ask","long":"ask, bid, boast, call, describe, give out, name, put forth, say(-ing, on), shew, speak, tell, utter","strongs":"G3004","proper":false},"ἔρχομαι":{"tr":"erchomai","rank":30,"count":631,"gloss":"accompany","long":"accompany, appear, bring, come, enter, fall out, go, grow, X light, X next, pass, resort, be set","strongs":"G2064","proper":false},"ἰσχυρός":{"tr":"ischyros","rank":465,"count":29,"gloss":"boisterous","long":"boisterous, mighty(-ier), powerful, strong(-er, man), valiant","strongs":"G2478","proper":false},"ὀπίσω":{"tr":"opisō","rank":411,"count":35,"gloss":"after","long":"after, back(-ward), (+ get) behind, + follow","strongs":"G3694","proper":false},"οὐ":{"tr":"ou","rank":11,"count":1605,"gloss":"long","long":"+ long, nay, neither, never, no (X man), none, (can-)not, + nothing, + special, un(-worthy), when, + without, + yet but","strongs":"G3756","proper":false},"ἱκανός":{"tr":"hikanos","rank":372,"count":40,"gloss":"able","long":"able, + content, enough, good, great, large, long (while), many, meet, much, security, sore, sufficient, worthy","strongs":"G2425","proper":false},"κύπτω":{"tr":"kyptō","rank":3597,"count":1,"gloss":"stoop","long":"stoop (down)","strongs":"G2955","proper":false},"λύω":{"tr":"lyō","rank":355,"count":42,"gloss":"break","long":"break (up), destroy, dissolve, (un-)loose, melt, put off","strongs":"G3089","proper":false},"ἱμάς":{"tr":"himas","rank":1959,"count":4,"gloss":"latchet","long":"latchet, thong","strongs":"G2438","proper":false},"ὑπόδημα":{"tr":"hypodēma","rank":1047,"count":10,"gloss":"shoe","long":"shoe","strongs":"G5266","proper":false},"ὕδωρ":{"tr":"hydōr","rank":221,"count":76,"gloss":"water","long":"water","strongs":"G5204","proper":false},"δέ":{"tr":"de","rank":5,"count":2766,"gloss":"also","long":"also, and, but, moreover, now (often unexpressed in English)","strongs":"G1161","proper":false},"πνεῦμα":{"tr":"pneuma","rank":47,"count":379,"gloss":"ghost","long":"ghost, life, spirit(-ual, -ually), mind","strongs":"G4151","proper":false},"ἅγιος":{"tr":"hagios","rank":66,"count":233,"gloss":"holy one","long":"(most) holy (one, thing), saint","strongs":"G40","proper":false},"ἐκεῖνος":{"tr":"ekeinos","rank":62,"count":242,"gloss":"he","long":"he, it, the other (same), selfsame, that (same, very), X their, X them, they, this, those","strongs":"G1565","proper":false},"ἡμέρα":{"tr":"hēmera","rank":46,"count":389,"gloss":"age","long":"age, + alway, (mid-)day (by day, (-ly)), + for ever, judgment, (day) time, while, years","strongs":"G2250","proper":false},"ἀπό":{"tr":"apo","rank":28,"count":644,"gloss":"after","long":"(X here-)after, ago, at, because of, before, by (the space of), for(-th), from, in, (out) of, off, (up-)on(-ce), since, with","strongs":"G575","proper":false},"Ναζαρέτ":{"tr":"Nazaret","rank":1862,"count":4,"gloss":"Nazaret","long":"","strongs":"","proper":true},"Γαλιλαία":{"tr":"Galilaia","rank":264,"count":61,"gloss":"Galilee","long":"Galilee","strongs":"G1056","proper":true},"ἀναβαίνω":{"tr":"anabainō","rank":205,"count":81,"gloss":"arise","long":"arise, ascend (up), climb (go, grow, rise, spring) up, come (up)","strongs":"G305","proper":false},"ἐκ":{"tr":"ek","rank":19,"count":913,"gloss":"after","long":"after, among, X are, at, betwixt(-yond), by (the means of), exceedingly, (+ abundantly above), for(- th), from (among, forth, up), + grudgingly, + heartily, X heavenly, X hereby, + very highly, in, …ly, (because, by reason) of, off (from), on, out among (from, of), over, since, X thenceforth, through, X unto, X vehemently, with(-out)","strongs":"G1537","proper":false},"ὁράω":{"tr":"horaō","rank":39,"count":476,"gloss":"behold","long":"behold, perceive, see, take heed","strongs":"G3708","proper":false},"σχίζω":{"tr":"schizō","rank":1007,"count":11,"gloss":"break","long":"break, divide, open, rend, make a rent","strongs":"G4977","proper":false},"οὐρανός":{"tr":"ouranos","rank":58,"count":273,"gloss":"air","long":"air, heaven(-ly), sky","strongs":"G3772","proper":false},"ὡς":{"tr":"hōs","rank":36,"count":503,"gloss":"about","long":"about, after (that), (according) as (it had been, it were), as soon (as), even as (like), for, how (greatly), like (as, unto), since, so (that), that, to wit, unto, when(-soever), while, X with all speed","strongs":"G5613","proper":false},"περιστερά":{"tr":"peristera","rank":1048,"count":10,"gloss":"dove","long":"dove, pigeon","strongs":"G4058","proper":false},"καταβαίνω":{"tr":"katabainō","rank":210,"count":80,"gloss":"come get","long":"come (get, go, step) down, fall (down)","strongs":"G2597","proper":false}},"verses":[{"ref":"1.1","c":1,"v":1,"tokens":[{"g":"Ἀρχὴ","tr":"Archē","l":"ἀρχή","p":"N-","m":"----NSF-","fl":1,"en":"Beginning"},{"g":"τοῦ","tr":"tou","l":"ὁ","p":"RA","m":"----GSN-","fl":1,"en":"of-the"},{"g":"εὐαγγελίου","tr":"euangeliou","l":"εὐαγγέλιον","p":"N-","m":"----GSN-","fl":1,"en":"good-news"},{"g":"Ἰησοῦ","tr":"Iēsou","l":"Ἰησοῦς","p":"N-","m":"----GSM-","fl":1,"en":"of-Jesus"},{"g":"χριστοῦ.","tr":"christou","l":"Χριστός","p":"N-","m":"----GSM-","fl":1,"en":"Christ."}]},{"ref":"1.2","c":1,"v":2,"tokens":[{"g":"Καθὼς","tr":"Kathōs","l":"καθώς","p":"C-","m":"--------","fl":1,"en":"As"},{"g":"γέγραπται","tr":"gegraptai","l":"γράφω","p":"V-","m":"3XPI-S--","fl":4,"en":"it-has-been-written"},{"g":"ἐν","tr":"en","l":"ἐν","p":"P-","m":"--------","fl":1,"en":"in"},{"g":"τῷ","tr":"tō","l":"ὁ","p":"RA","m":"----DSM-","fl":1,"en":"the"},{"g":"Ἠσαΐᾳ","tr":"Ēsaia","l":"Ἠσαΐας","p":"N-","m":"----DSM-","fl":1,"en":"Isaiah"},{"g":"τῷ","tr":"tō","l":"ὁ","p":"RA","m":"----DSM-","fl":1,"en":"the"},{"g":"προφήτῃ·","tr":"prophētē","l":"προφήτης","p":"N-","m":"----DSM-","fl":1,"en":"prophet:"},{"g":"Ἰδοὺ","tr":"Idou","l":"ἰδού","p":"X-","m":"--------","fl":1,"en":"Behold,"},{"g":"ἀποστέλλω","tr":"apostellō","l":"ἀποστέλλω","p":"V-","m":"1PAI-S--","fl":1,"en":"I-send"},{"g":"τὸν","tr":"ton","l":"ὁ","p":"RA","m":"----ASM-","fl":1,"en":"the"},{"g":"ἄγγελόν","tr":"angelon","l":"ἄγγελος","p":"N-","m":"----ASM-","fl":1,"en":"messenger"},{"g":"μου","tr":"mou","l":"ἐγώ","p":"RP","m":"----GS--","fl":1,"en":"of-me"},{"g":"πρὸ","tr":"pro","l":"πρό","p":"P-","m":"--------","fl":1,"en":"before"},{"g":"προσώπου","tr":"prosōpou","l":"πρόσωπον","p":"N-","m":"----GSN-","fl":1,"en":"face"},{"g":"σου,","tr":"sou","l":"σύ","p":"RP","m":"----GS--","fl":1,"en":"of-you,"},{"g":"ὃς","tr":"hos","l":"ὅς","p":"RR","m":"----NSM-","fl":1,"en":"who"},{"g":"κατασκευάσει","tr":"kataskeuasei","l":"κατασκευάζω","p":"V-","m":"3FAI-S--","fl":3,"en":"will-prepare"},{"g":"τὴν","tr":"tēn","l":"ὁ","p":"RA","m":"----ASF-","fl":1,"en":"the"},{"g":"ὁδόν","tr":"hodon","l":"ὁδός","p":"N-","m":"----ASF-","fl":1,"en":"way"},{"g":"σου·","tr":"sou","l":"σύ","p":"RP","m":"----GS--","fl":1,"en":"of-you;"}]},{"ref":"1.3","c":1,"v":3,"tokens":[{"g":"φωνὴ","tr":"phōnē","l":"φωνή","p":"N-","m":"----NSF-","fl":1,"en":"A-voice"},{"g":"βοῶντος","tr":"boōntos","l":"βοάω","p":"V-","m":"-PAPGSM-","fl":5,"en":"of-one-crying"},{"g":"ἐν","tr":"en","l":"ἐν","p":"P-","m":"--------","fl":1,"en":"in"},{"g":"τῇ","tr":"tē","l":"ὁ","p":"RA","m":"----DSF-","fl":1,"en":"the"},{"g":"ἐρήμῳ·","tr":"erēmō","l":"ἔρημος","p":"A-","m":"----DSF-","fl":1,"en":"wilderness:"},{"g":"Ἑτοιμάσατε","tr":"Hetoimasate","l":"ἑτοιμάζω","p":"V-","m":"2AAD-P--","fl":1,"en":"Prepare!"},{"g":"τὴν","tr":"tēn","l":"ὁ","p":"RA","m":"----ASF-","fl":1,"en":"the"},{"g":"ὁδὸν","tr":"hodon","l":"ὁδός","p":"N-","m":"----ASF-","fl":1,"en":"way"},{"g":"κυρίου,","tr":"kyriou","l":"κύριος","p":"N-","m":"----GSM-","fl":1,"en":"of-Lord,"},{"g":"εὐθείας","tr":"eutheias","l":"εὐθύς","p":"A-","m":"----APF-","fl":1,"en":"straight"},{"g":"ποιεῖτε","tr":"poieite","l":"ποιέω","p":"V-","m":"2PAD-P--","fl":1,"en":"make!"},{"g":"τὰς","tr":"tas","l":"ὁ","p":"RA","m":"----APF-","fl":1,"en":"the"},{"g":"τρίβους","tr":"tribous","l":"τρίβος","p":"N-","m":"----APF-","fl":1,"en":"paths"},{"g":"αὐτοῦ,","tr":"autou","l":"αὐτός","p":"RP","m":"----GSM-","fl":1,"en":"of-him,"}]},{"ref":"1.4","c":1,"v":4,"tokens":[{"g":"ἐγένετο","tr":"egeneto","l":"γίνομαι","p":"V-","m":"3AMI-S--","fl":3,"en":"Appeared"},{"g":"Ἰωάννης","tr":"Iōannēs","l":"Ἰωάννης","p":"N-","m":"----NSM-","fl":1,"en":"John"},{"g":"ὁ","tr":"ho","l":"ὁ","p":"RA","m":"----NSM-","fl":1,"en":"the"},{"g":"βαπτίζων","tr":"baptizōn","l":"βαπτίζω","p":"V-","m":"-PAPNSM-","fl":5,"en":"[one]-baptizing"},{"g":"ἐν","tr":"en","l":"ἐν","p":"P-","m":"--------","fl":1,"en":"in"},{"g":"τῇ","tr":"tē","l":"ὁ","p":"RA","m":"----DSF-","fl":1,"en":"the"},{"g":"ἐρήμῳ","tr":"erēmō","l":"ἔρημος","p":"A-","m":"----DSF-","fl":1,"en":"wilderness"},{"g":"κηρύσσων","tr":"kēryssōn","l":"κηρύσσω","p":"V-","m":"-PAPNSM-","fl":5,"en":"preaching"},{"g":"βάπτισμα","tr":"baptisma","l":"βάπτισμα","p":"N-","m":"----ASN-","fl":1,"en":"a-baptism"},{"g":"μετανοίας","tr":"metanoias","l":"μετάνοια","p":"N-","m":"----GSF-","fl":1,"en":"of-repentance"},{"g":"εἰς","tr":"eis","l":"εἰς","p":"P-","m":"--------","fl":1,"en":"for"},{"g":"ἄφεσιν","tr":"aphesin","l":"ἄφεσις","p":"N-","m":"----ASF-","fl":1,"en":"forgiveness"},{"g":"ἁμαρτιῶν.","tr":"hamartiōn","l":"ἁμαρτία","p":"N-","m":"----GPF-","fl":1,"en":"of-sins."}]},{"ref":"1.5","c":1,"v":5,"tokens":[{"g":"καὶ","tr":"kai","l":"καί","p":"C-","m":"--------","fl":1,"en":"And"},{"g":"ἐξεπορεύετο","tr":"exeporeueto","l":"ἐκπορεύομαι","p":"V-","m":"3IMI-S--","fl":3,"en":"was-going-out"},{"g":"πρὸς","tr":"pros","l":"πρός","p":"P-","m":"--------","fl":1,"en":"to"},{"g":"αὐτὸν","tr":"auton","l":"αὐτός","p":"RP","m":"----ASM-","fl":1,"en":"him"},{"g":"πᾶσα","tr":"pasa","l":"πᾶς","p":"A-","m":"----NSF-","fl":1,"en":"all"},{"g":"ἡ","tr":"hē","l":"ὁ","p":"RA","m":"----NSF-","fl":1,"en":"the"},{"g":"Ἰουδαία","tr":"Ioudaia","l":"Ἰουδαία","p":"A-","m":"----NSF-","fl":1,"en":"Judean"},{"g":"χώρα","tr":"chōra","l":"χώρα","p":"N-","m":"----NSF-","fl":1,"en":"countryside"},{"g":"καὶ","tr":"kai","l":"καί","p":"C-","m":"--------","fl":1,"en":"and"},{"g":"οἱ","tr":"hoi","l":"ὁ","p":"RA","m":"----NPM-","fl":1,"en":"the"},{"g":"Ἱεροσολυμῖται","tr":"Hierosolymitai","l":"Ἱεροσολυμίτης","p":"N-","m":"----NPM-","fl":1,"en":"Jerusalemites"},{"g":"πάντες,","tr":"pantes","l":"πᾶς","p":"A-","m":"----NPM-","fl":1,"en":"all,"},{"g":"καὶ","tr":"kai","l":"καί","p":"C-","m":"--------","fl":1,"en":"and"},{"g":"ἐβαπτίζοντο","tr":"ebaptizonto","l":"βαπτίζω","p":"V-","m":"3IPI-P--","fl":3,"en":"they-were-being-baptized"},{"g":"ὑπ’","tr":"hyp’","l":"ὑπό","p":"P-","m":"--------","fl":1,"en":"by"},{"g":"αὐτοῦ","tr":"autou","l":"αὐτός","p":"RP","m":"----GSM-","fl":1,"en":"him"},{"g":"ἐν","tr":"en","l":"ἐν","p":"P-","m":"--------","fl":1,"en":"in"},{"g":"τῷ","tr":"tō","l":"ὁ","p":"RA","m":"----DSM-","fl":1,"en":"the"},{"g":"Ἰορδάνῃ","tr":"Iordanē","l":"Ἰορδάνης","p":"N-","m":"----DSM-","fl":1,"en":"Jordan"},{"g":"ποταμῷ","tr":"potamō","l":"ποταμός","p":"N-","m":"----DSM-","fl":1,"en":"river"},{"g":"ἐξομολογούμενοι","tr":"exomologoumenoi","l":"ἐξομολογέω","p":"V-","m":"-PMPNPM-","fl":5,"en":"confessing"},{"g":"τὰς","tr":"tas","l":"ὁ","p":"RA","m":"----APF-","fl":1,"en":"the"},{"g":"ἁμαρτίας","tr":"hamartias","l":"ἁμαρτία","p":"N-","m":"----APF-","fl":1,"en":"sins"},{"g":"αὐτῶν.","tr":"autōn","l":"αὐτός","p":"RP","m":"----GPM-","fl":1,"en":"of-them."}]},{"ref":"1.6","c":1,"v":6,"tokens":[{"g":"καὶ","tr":"kai","l":"καί","p":"C-","m":"--------","fl":1,"en":"And"},{"g":"ἦν","tr":"ēn","l":"εἰμί","p":"V-","m":"3IAI-S--","fl":3,"en":"was"},{"g":"ὁ","tr":"ho","l":"ὁ","p":"RA","m":"----NSM-","fl":1,"en":"the"},{"g":"Ἰωάννης","tr":"Iōannēs","l":"Ἰωάννης","p":"N-","m":"----NSM-","fl":1,"en":"John"},{"g":"ἐνδεδυμένος","tr":"endedymenos","l":"ἐνδύω","p":"V-","m":"-XMPNSM-","fl":5,"en":"clothed"},{"g":"τρίχας","tr":"trichas","l":"θρίξ","p":"N-","m":"----APF-","fl":1,"en":"[in]-hairs"},{"g":"καμήλου","tr":"kamēlou","l":"κάμηλος","p":"N-","m":"----GSF-","fl":1,"en":"of-camel"},{"g":"καὶ","tr":"kai","l":"καί","p":"C-","m":"--------","fl":1,"en":"and"},{"g":"ζώνην","tr":"zōnēn","l":"ζώνη","p":"N-","m":"----ASF-","fl":1,"en":"a-belt"},{"g":"δερματίνην","tr":"dermatinēn","l":"δερμάτινος","p":"A-","m":"----ASF-","fl":1,"en":"leather"},{"g":"περὶ","tr":"peri","l":"περί","p":"P-","m":"--------","fl":1,"en":"around"},{"g":"τὴν","tr":"tēn","l":"ὁ","p":"RA","m":"----ASF-","fl":1,"en":"the"},{"g":"ὀσφὺν","tr":"osphyn","l":"ὀσφύς","p":"N-","m":"----ASF-","fl":1,"en":"waist"},{"g":"αὐτοῦ,","tr":"autou","l":"αὐτός","p":"RP","m":"----GSM-","fl":1,"en":"of-him,"},{"g":"καὶ","tr":"kai","l":"καί","p":"C-","m":"--------","fl":1,"en":"and"},{"g":"ἔσθων","tr":"esthōn","l":"ἔσθω","p":"V-","m":"-PAPNSM-","fl":5,"en":"eating"},{"g":"ἀκρίδας","tr":"akridas","l":"ἀκρίς","p":"N-","m":"----APF-","fl":1,"en":"locusts"},{"g":"καὶ","tr":"kai","l":"καί","p":"C-","m":"--------","fl":1,"en":"and"},{"g":"μέλι","tr":"meli","l":"μέλι","p":"N-","m":"----ASN-","fl":1,"en":"honey"},{"g":"ἄγριον.","tr":"agrion","l":"ἄγριος","p":"A-","m":"----ASN-","fl":1,"en":"wild."}]},{"ref":"1.7","c":1,"v":7,"tokens":[{"g":"καὶ","tr":"kai","l":"καί","p":"C-","m":"--------","fl":1,"en":"And"},{"g":"ἐκήρυσσεν","tr":"ekēryssen","l":"κηρύσσω","p":"V-","m":"3IAI-S--","fl":3,"en":"he-was-preaching"},{"g":"λέγων·","tr":"legōn","l":"λέγω","p":"V-","m":"-PAPNSM-","fl":5,"en":"saying:"},{"g":"Ἔρχεται","tr":"Erchetai","l":"ἔρχομαι","p":"V-","m":"3PMI-S--","fl":3,"en":"Comes"},{"g":"ὁ","tr":"ho","l":"ὁ","p":"RA","m":"----NSM-","fl":1,"en":"the"},{"g":"ἰσχυρότερός","tr":"ischyroteros","l":"ἰσχυρός","p":"A-","m":"----NSMC","fl":1,"en":"stronger-one"},{"g":"μου","tr":"mou","l":"ἐγώ","p":"RP","m":"----GS--","fl":1,"en":"than-me"},{"g":"ὀπίσω","tr":"opisō","l":"ὀπίσω","p":"P-","m":"--------","fl":1,"en":"after"},{"g":"μου,","tr":"mou","l":"ἐγώ","p":"RP","m":"----GS--","fl":1,"en":"me,"},{"g":"οὗ","tr":"hou","l":"ὅς","p":"RR","m":"----GSM-","fl":1,"en":"of-whom"},{"g":"οὐκ","tr":"ouk","l":"οὐ","p":"D-","m":"--------","fl":1,"en":"not"},{"g":"εἰμὶ","tr":"eimi","l":"εἰμί","p":"V-","m":"1PAI-S--","fl":1,"en":"I-am"},{"g":"ἱκανὸς","tr":"hikanos","l":"ἱκανός","p":"A-","m":"----NSM-","fl":1,"en":"worthy"},{"g":"κύψας","tr":"kypsas","l":"κύπτω","p":"V-","m":"-AAPNSM-","fl":5,"en":"having-stooped-down"},{"g":"λῦσαι","tr":"lysai","l":"λύω","p":"V-","m":"-AAN----","fl":5,"en":"to-loose"},{"g":"τὸν","tr":"ton","l":"ὁ","p":"RA","m":"----ASM-","fl":1,"en":"the"},{"g":"ἱμάντα","tr":"himanta","l":"ἱμάς","p":"N-","m":"----ASM-","fl":1,"en":"strap"},{"g":"τῶν","tr":"tōn","l":"ὁ","p":"RA","m":"----GPN-","fl":1,"en":"of-the"},{"g":"ὑποδημάτων","tr":"hypodēmatōn","l":"ὑπόδημα","p":"N-","m":"----GPN-","fl":1,"en":"sandals"},{"g":"αὐτοῦ·","tr":"autou","l":"αὐτός","p":"RP","m":"----GSM-","fl":1,"en":"of-him."}]},{"ref":"1.8","c":1,"v":8,"tokens":[{"g":"ἐγὼ","tr":"egō","l":"ἐγώ","p":"RP","m":"----NS--","fl":1,"en":"I"},{"g":"ἐβάπτισα","tr":"ebaptisa","l":"βαπτίζω","p":"V-","m":"1AAI-S--","fl":2,"en":"baptized"},{"g":"ὑμᾶς","tr":"hymas","l":"σύ","p":"RP","m":"----AP--","fl":1,"en":"you-all"},{"g":"ὕδατι,","tr":"hydati","l":"ὕδωρ","p":"N-","m":"----DSN-","fl":1,"en":"with-water,"},{"g":"αὐτὸς","tr":"autos","l":"αὐτός","p":"RP","m":"----NSM-","fl":1,"en":"he"},{"g":"δὲ","tr":"de","l":"δέ","p":"C-","m":"--------","fl":1,"en":"but"},{"g":"βαπτίσει","tr":"baptisei","l":"βαπτίζω","p":"V-","m":"3FAI-S--","fl":3,"en":"will-baptize"},{"g":"ὑμᾶς","tr":"hymas","l":"σύ","p":"RP","m":"----AP--","fl":1,"en":"you-all"},{"g":"ἐν","tr":"en","l":"ἐν","p":"P-","m":"--------","fl":1,"en":"in"},{"g":"πνεύματι","tr":"pneumati","l":"πνεῦμα","p":"N-","m":"----DSN-","fl":1,"en":"spirit"},{"g":"ἁγίῳ.","tr":"hagiō","l":"ἅγιος","p":"A-","m":"----DSN-","fl":1,"en":"holy."}]},{"ref":"1.9","c":1,"v":9,"tokens":[{"g":"Καὶ","tr":"Kai","l":"καί","p":"C-","m":"--------","fl":1,"en":"And"},{"g":"ἐγένετο","tr":"egeneto","l":"γίνομαι","p":"V-","m":"3AMI-S--","fl":3,"en":"it-came-about"},{"g":"ἐν","tr":"en","l":"ἐν","p":"P-","m":"--------","fl":1,"en":"in"},{"g":"ἐκείναις","tr":"ekeinais","l":"ἐκεῖνος","p":"RD","m":"----DPF-","fl":1,"en":"those"},{"g":"ταῖς","tr":"tais","l":"ὁ","p":"RA","m":"----DPF-","fl":1,"en":"the"},{"g":"ἡμέραις","tr":"hēmerais","l":"ἡμέρα","p":"N-","m":"----DPF-","fl":1,"en":"days"},{"g":"ἦλθεν","tr":"ēlthen","l":"ἔρχομαι","p":"V-","m":"3AAI-S--","fl":2,"en":"came"},{"g":"Ἰησοῦς","tr":"Iēsous","l":"Ἰησοῦς","p":"N-","m":"----NSM-","fl":1,"en":"Jesus"},{"g":"ἀπὸ","tr":"apo","l":"ἀπό","p":"P-","m":"--------","fl":1,"en":"from"},{"g":"Ναζαρὲτ","tr":"Nazaret","l":"Ναζαρέτ","p":"N-","m":"----GSF-","fl":1,"en":"Nazareth"},{"g":"τῆς","tr":"tēs","l":"ὁ","p":"RA","m":"----GSF-","fl":1,"en":"of-the"},{"g":"Γαλιλαίας","tr":"Galilaias","l":"Γαλιλαία","p":"N-","m":"----GSF-","fl":1,"en":"Galilee"},{"g":"καὶ","tr":"kai","l":"καί","p":"C-","m":"--------","fl":1,"en":"and"},{"g":"ἐβαπτίσθη","tr":"ebaptisthē","l":"βαπτίζω","p":"V-","m":"3API-S--","fl":3,"en":"was-baptized"},{"g":"εἰς","tr":"eis","l":"εἰς","p":"P-","m":"--------","fl":1,"en":"into"},{"g":"τὸν","tr":"ton","l":"ὁ","p":"RA","m":"----ASM-","fl":1,"en":"the"},{"g":"Ἰορδάνην","tr":"Iordanēn","l":"Ἰορδάνης","p":"N-","m":"----ASM-","fl":1,"en":"Jordan"},{"g":"ὑπὸ","tr":"hypo","l":"ὑπό","p":"P-","m":"--------","fl":1,"en":"by"},{"g":"Ἰωάννου.","tr":"Iōannou","l":"Ἰωάννης","p":"N-","m":"----GSM-","fl":1,"en":"John."}]},{"ref":"1.10","c":1,"v":10,"tokens":[{"g":"καὶ","tr":"kai","l":"καί","p":"C-","m":"--------","fl":1,"en":"And"},{"g":"εὐθὺς","tr":"euthys","l":"εὐθύς","p":"A-","m":"----NSM-","fl":1,"en":"immediately"},{"g":"ἀναβαίνων","tr":"anabainōn","l":"ἀναβαίνω","p":"V-","m":"-PAPNSM-","fl":5,"en":"going-up"},{"g":"ἐκ","tr":"ek","l":"ἐκ","p":"P-","m":"--------","fl":1,"en":"out-of"},{"g":"τοῦ","tr":"tou","l":"ὁ","p":"RA","m":"----GSN-","fl":1,"en":"the"},{"g":"ὕδατος","tr":"hydatos","l":"ὕδωρ","p":"N-","m":"----GSN-","fl":1,"en":"water"},{"g":"εἶδεν","tr":"eiden","l":"ὁράω","p":"V-","m":"3AAI-S--","fl":2,"en":"he-saw"},{"g":"σχιζομένους","tr":"schizomenous","l":"σχίζω","p":"V-","m":"-PPPAPM-","fl":5,"en":"being-torn"},{"g":"τοὺς","tr":"tous","l":"ὁ","p":"RA","m":"----APM-","fl":1,"en":"the"},{"g":"οὐρανοὺς","tr":"ouranous","l":"οὐρανός","p":"N-","m":"----APM-","fl":1,"en":"heavens"},{"g":"καὶ","tr":"kai","l":"καί","p":"C-","m":"--------","fl":1,"en":"and"},{"g":"τὸ","tr":"to","l":"ὁ","p":"RA","m":"----ASN-","fl":1,"en":"the"},{"g":"πνεῦμα","tr":"pneuma","l":"πνεῦμα","p":"N-","m":"----ASN-","fl":1,"en":"spirit"},{"g":"ὡς","tr":"hōs","l":"ὡς","p":"C-","m":"--------","fl":1,"en":"as"},{"g":"περιστερὰν","tr":"peristeran","l":"περιστερά","p":"N-","m":"----ASF-","fl":1,"en":"a-dove"},{"g":"καταβαῖνον","tr":"katabainon","l":"καταβαίνω","p":"V-","m":"-PAPASN-","fl":5,"en":"descending"},{"g":"εἰς","tr":"eis","l":"εἰς","p":"P-","m":"--------","fl":1,"en":"into"},{"g":"αὐτόν·","tr":"auton","l":"αὐτός","p":"RP","m":"----ASM-","fl":1,"en":"him."}]}]}</script>
+
+<script>
+const DATA = JSON.parse(document.getElementById('data').textContent);
+const LEMMAS = DATA.lemmas;
+const VERSES = DATA.verses;
+
+const state = {
+  tier: 1,
+  articleCases: { G: 0, A: 0, N: 0, D: 0 },
+  conjStage: 0,
+  prepStage: 0,
+  colorOn: true,
+  display: 'polytonic',
+  showGreekLine: true,
+};
+
+function toMonotonic(s) {
+  const nfd = s.normalize('NFD');
+  let out = '';
+  for (const ch of nfd) {
+    const code = ch.charCodeAt(0);
+    if (code >= 0x0300 && code <= 0x036F) {
+      if (code === 0x0301) out += ch;
+    } else { out += ch; }
+  }
+  return out.normalize('NFC');
+}
+function greekText(tok) {
+  return state.display === 'monotonic' ? toMonotonic(tok.g) : tok.g;
+}
+
+function getTokenStage(tok) {
+  const pos = tok.p;
+  if (pos === 'RA') return state.articleCases[caseLetter(tok)] || 0;
+  if (pos === 'C-') return state.conjStage;
+  if (pos === 'P-') return state.prepStage;
+  return 0;
+}
+
+function caseLetter(tok) {
+  return ((tok.m || '') + '--------').slice(0, 8)[4] || '-';
+}
+
+function renderToken(span, tok) {
+  ['stacked','english','cased-flat',
+   'case-N','case-G','case-D','case-A','case-V',
+   'cat-conj','cat-prep'].forEach(c => span.classList.remove(c));
+  span.innerHTML = '';
+  const pos = tok.p;
+  const c = caseLetter(tok);
+  const stage = getTokenStage(tok);
+  const isCaseBearing = pos !== 'RA' && pos !== 'C-' && pos !== 'P-'
+                        && (c === 'N'||c === 'G'||c === 'D'||c === 'A'||c === 'V');
+  const caseArticleActive = (state.articleCases[c] || 0) > 0;
+  const showPassiveTint = isCaseBearing && caseArticleActive && state.colorOn;
+  if (stage === 0) {
+    if (showPassiveTint) {
+      span.classList.add('cased-flat', 'case-' + c);
+      span.textContent = tok.en;
+    } else {
+      span.classList.add('english');
+      span.textContent = tok.en;
+    }
+    return;
+  }
+  if (state.colorOn) {
+    if (pos === 'RA')      span.classList.add('case-' + c);
+    else if (pos === 'C-') span.classList.add('cat-conj');
+    else if (pos === 'P-') span.classList.add('cat-prep');
+  }
+  const make = (cls, text) => {
+    const e = document.createElement('span');
+    e.className = cls; e.textContent = text; return e;
+  };
+  if (stage === 1) {
+    span.classList.add('stacked');
+    span.appendChild(make('form-en', tok.en));
+    span.appendChild(make('form-tr', tok.tr));
+  } else if (stage === 2) {
+    span.classList.add('stacked');
+    span.appendChild(make('form-tr', tok.tr));
+    span.appendChild(make('form-gr', greekText(tok)));
+  } else {
+    span.classList.add('cased-flat');
+    span.textContent = greekText(tok);
+  }
+}
+
+const content = document.getElementById('content');
+
+function buildToken(tok, vRef, idx) {
+  const span = document.createElement('span');
+  span.className = 'tok';
+  span.dataset.v = vRef;
+  span.dataset.i = idx;
+  return span;
+}
+
+function buildVerse(v) {
+  const block = document.createElement('div');
+  block.className = 'verse-block';
+  block.dataset.ref = v.ref;
+  const p = document.createElement('p');
+  p.className = 'verse';
+  const vn = document.createElement('span');
+  vn.className = 'vnum';
+  vn.textContent = v.v;
+  p.appendChild(vn);
+  p.appendChild(document.createTextNode(' '));
+  v.tokens.forEach((tok, idx) => {
+    const span = buildToken(tok, v.ref, idx);
+    p.appendChild(span);
+    if (idx < v.tokens.length - 1) p.appendChild(document.createTextNode(' '));
+  });
+  block.appendChild(p);
+  const gp = document.createElement('p');
+  gp.className = 'greek-line';
+  v.tokens.forEach((tok, idx) => {
+    const span = document.createElement('span');
+    span.className = 'tok';
+    span.dataset.v = v.ref;
+    span.dataset.i = idx;
+    span.dataset.line = 'greek';
+    gp.appendChild(span);
+    if (idx < v.tokens.length - 1) gp.appendChild(document.createTextNode(' '));
+  });
+  block.appendChild(gp);
+  return block;
+}
+
+function renderAll() {
+  content.innerHTML = '';
+  for (const v of VERSES) content.appendChild(buildVerse(v));
+  applyState();
+}
+
+const KEY_ENTRIES = [
+  { test: () => state.articleCases.N > 0, color: '#2563eb', label: 'Nominative', desc: 'subject' },
+  { test: () => state.articleCases.G > 0, color: '#d97706', label: 'Genitive', desc: 'possession / "of"' },
+  { test: () => state.articleCases.D > 0, color: '#059669', label: 'Dative', desc: 'indirect object' },
+  { test: () => state.articleCases.A > 0, color: '#dc2626', label: 'Accusative', desc: 'direct object' },
+  { test: () => state.conjStage > 0,      color: '#ea580c', label: 'Conjunction', desc: 'connects clauses' },
+  { test: () => state.prepStage > 0,      color: '#0d9488', label: 'Preposition', desc: 'location / direction' },
+];
+
+function updateColorKey() {
+  const el = document.getElementById('colorKey');
+  if (!state.colorOn) { el.innerHTML = ''; return; }
+  const active = KEY_ENTRIES.filter(e => e.test());
+  if (!active.length) { el.innerHTML = ''; return; }
+  el.innerHTML = active.map((e, i) =>
+    (i > 0 ? '<span style="color:#d1d5db;">·</span>' : '') +
+    `<span style="color:${e.color};font-weight:600;">${e.label}</span>` +
+    `<span style="color:#9ca3af;"> ${e.desc}</span>`
+  ).join('');
+}
+
+function applyState() {
+  document.querySelectorAll('.tier-panel').forEach(panel => {
+    panel.classList.toggle('active', parseInt(panel.dataset.tier) === state.tier);
+  });
+  updateColorKey();
+  const blocks = content.querySelectorAll('.verse-block');
+  blocks.forEach(block => {
+    const verse = VERSES.find(v => v.ref === block.dataset.ref);
+    const greekLine = block.querySelector('.greek-line');
+    greekLine.style.display = state.showGreekLine ? '' : 'none';
+    block.querySelectorAll('.tok').forEach(span => {
+      const tok = verse.tokens[parseInt(span.dataset.i)];
+      if (span.dataset.line === 'greek') {
+        span.textContent = greekText(tok);
+        return;
+      }
+      renderToken(span, tok);
+    });
+  });
+}
+
+// Tier selector
+document.getElementById('tierToggle').querySelectorAll('button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.getElementById('tierToggle').querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.tier = parseInt(btn.dataset.val);
+    applyState();
+  });
+});
+
+// Per-case article controls
+document.querySelectorAll('.toggle-group[data-case]').forEach(group => {
+  const key = group.dataset.case;
+  group.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      group.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.articleCases[key] = parseInt(btn.dataset.val);
+      applyState();
+    });
+  });
+});
+
+// Conjunction stage
+document.getElementById('conjToggle').querySelectorAll('button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.getElementById('conjToggle').querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.conjStage = parseInt(btn.dataset.val);
+    applyState();
+  });
+});
+
+// Preposition stage
+document.getElementById('prepToggle').querySelectorAll('button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.getElementById('prepToggle').querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.prepStage = parseInt(btn.dataset.val);
+    applyState();
+  });
+});
+
+// Greek script toggle
+document.getElementById('displayToggle').querySelectorAll('button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.getElementById('displayToggle').querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.display = btn.dataset.val;
+    applyState();
+  });
+});
+
+document.getElementById('greekLineCheck').addEventListener('change', e => {
+  state.showGreekLine = e.target.checked;
+  applyState();
+});
+document.getElementById('colorToggle').addEventListener('change', e => {
+  state.colorOn = e.target.checked;
+  applyState();
+});
+
+// Popup
+const popup = document.getElementById('popup');
+const PERSON = {'1':'1st','2':'2nd','3':'3rd'};
+const TENSE = {'P':'present','I':'imperfect','F':'future','A':'aorist','X':'perfect','Y':'pluperfect'};
+const VOICE = {'A':'active','M':'middle','P':'passive','E':'middle/passive','D':'middle/passive deponent','O':'middle/passive','N':'middle/passive','Q':'impersonal','X':'no voice'};
+const MOOD = {'I':'indicative','S':'subjunctive','O':'optative','M':'imperative','N':'infinitive','P':'participle'};
+const CASE = {'N':'nom.','G':'gen.','D':'dat.','A':'acc.','V':'voc.'};
+const NUMBER = {'S':'sg.','P':'pl.','D':'du.'};
+const GENDER = {'M':'masc.','F':'fem.','N':'neut.'};
+const POS = {'A-':'adjective','C-':'conjunction','D-':'adverb','I-':'interjection','N-':'noun','P-':'preposition','RA':'article','RD':'demonstrative','RI':'interrogative pron.','RP':'personal pron.','RR':'relative pron.','V-':'verb','X-':'particle'};
+
+function morphEnglish(pos, code) {
+  const c = (code + '--------').slice(0,8);
+  const [p,t,v,m,ca,n,g,d] = c.split('');
+  const posLabel = POS[pos] || pos;
+  const parts = [];
+  if (pos === 'V-') {
+    if (TENSE[t]) parts.push(TENSE[t]);
+    if (VOICE[v]) parts.push(VOICE[v]);
+    if (MOOD[m]) parts.push(MOOD[m]);
+    if (PERSON[p]) parts.push(PERSON[p] + ' person');
+    if (NUMBER[n]) parts.push(NUMBER[n]);
+    if (GENDER[g]) parts.push(GENDER[g]);
+    if (CASE[ca]) parts.push(CASE[ca]);
+  } else {
+    if (CASE[ca]) parts.push(CASE[ca]);
+    if (NUMBER[n]) parts.push(NUMBER[n]);
+    if (GENDER[g]) parts.push(GENDER[g]);
+  }
+  return posLabel + (parts.length ? ', ' + parts.join(' ') : '');
+}
+
+content.addEventListener('click', e => {
+  const tgt = e.target.closest('.tok');
+  if (!tgt) return;
+  const verse = VERSES.find(v => v.ref === tgt.dataset.v);
+  const tok = verse.tokens[parseInt(tgt.dataset.i)];
+  const lem = LEMMAS[tok.l];
+  document.getElementById('popSurface').textContent = tok.g;
+  document.getElementById('popTranslit').textContent = tok.tr;
+  document.getElementById('popLemma').textContent = tok.l;
+  document.getElementById('popLemmaTr').textContent = lem.tr;
+  document.getElementById('popMorph').textContent = morphEnglish(tok.p, tok.m);
+  document.getElementById('popGloss').textContent = lem.gloss || '(no gloss)';
+  document.getElementById('popEn').textContent = tok.en;
+  document.getElementById('popFreq').textContent = lem.rank > 0
+    ? `Frequency: rank ${lem.rank} in NT, occurs ${lem.count} times`
+    : 'Not in frequency list';
+  document.getElementById('popStrongs').textContent = lem.strongs ? `Strong's: ${lem.strongs}` : '';
+  const rect = e.target.getBoundingClientRect();
+  const px = Math.min(window.innerWidth - 380, rect.left);
+  const py = rect.bottom + 6;
+  popup.style.left = Math.max(10, px) + 'px';
+  popup.style.top = (py + 240 > window.innerHeight ? rect.top - 240 : py) + 'px';
+  popup.classList.add('show');
+});
+popup.querySelector('.pop-close').addEventListener('click', () => popup.classList.remove('show'));
+document.addEventListener('click', e => {
+  if (!popup.contains(e.target) && !e.target.classList.contains('tok')) {
+    popup.classList.remove('show');
+  }
+});
+
+renderAll();
+</script>
+</body>
+</html>
