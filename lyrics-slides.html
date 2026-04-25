@@ -2690,19 +2690,20 @@ async function fetchLyricsOvh(title, artist) {
   return data.lyrics;
 }
 
-// Fallback lyrics provider: ask Claude directly. Works for popular worship
-// songs and standards that lyrics.ovh doesn't index. Returns null if Claude
-// declines, says it doesn't know, or returns suspiciously short text (which
-// would suggest hallucination of just the chorus).
+// Fallback lyrics provider: ask Claude directly. Sonnet 4.5 \u2014 Haiku
+// over-refuses on well-known hymns / worship standards. Returns null if
+// Claude declines or returns suspiciously short text.
 async function fetchLyricsViaClaude(title, artist) {
   if (!title) return null;
   try {
     await loadClaudeKey();
-    const prompt = `Provide the full lyrics to the song "${title}"${artist ? ` by ${artist}` : ''}.
+    const prompt = `You are helping format lyrics for a worship-music slide projection app. The user is a musician who needs the lyrics displayed on screen during their service or rehearsal.
+
+Provide the full lyrics to "${title}"${artist ? ` (as recorded by ${artist})` : ''}. If this is a public-domain hymn or well-known worship song, reproducing the lyrics for personal worship use is fine. If the recording is a modern arrangement of a public-domain hymn (e.g. an Audrey Assad or Shane & Shane recording), use the traditional lyrics.
 
 Output ONLY the lyrics \u2014 no commentary, no chord charts, no section labels (no "[Verse]" / "[Chorus]" headings), no copyright notices, no introduction. Use blank lines between verses/sections so each can become its own slide.
 
-If you don't know this song's lyrics with high confidence, respond with exactly: UNKNOWN`;
+Only respond with exactly UNKNOWN if you genuinely have no information about a song with this title.`;
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -2713,7 +2714,7 @@ If you don't know this song's lyrics with high confidence, respond with exactly:
         'anthropic-dangerous-direct-browser-access': 'true'
       },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
+        model: 'claude-sonnet-4-5',
         max_tokens: 2000,
         messages: [{ role: 'user', content: prompt }]
       })
@@ -2723,10 +2724,8 @@ If you don't know this song's lyrics with high confidence, respond with exactly:
     const text = ((data.content && data.content[0]?.text) || '').trim();
     if (!text) return null;
     if (/^unknown$/i.test(text.split('\n')[0].trim())) return null;
-    // Sanity check: a song should have at least a few lines and a few hundred chars.
-    // Anything shorter is probably a refusal / partial recall.
     const lineCount = text.split(/\n+/).filter((l) => l.trim().length > 0).length;
-    if (text.length < 200 || lineCount < 6) return null;
+    if (text.length < 150 || lineCount < 4) return null;
     return text;
   } catch (e) {
     console.warn('fetchLyricsViaClaude failed', e);
@@ -2963,90 +2962,111 @@ async function runAutoImport(mode) {
     statusEl.className = 'import-status' + (type ? ' ' + type : '');
   }
 
+  // Helper: write a YouTube URL into the song's audio-youtube-url field +
+  // refresh any dependent UI. Idempotent.
+  function applyYoutubeUrl(url) {
+    if (!url) return false;
+    const ytField = $('audio-youtube-url');
+    if (!ytField) return false;
+    ytField.value = url;
+    _pendingYoutubeUrl = url;
+    try {
+      if (typeof updateYouTubeEditorUI === 'function') {
+        updateYouTubeEditorUI(url, loadedSong?.audio_url || currentSong?.audio_url || null);
+      }
+    } catch {}
+    return true;
+  }
+
+  let title = '', artist = '';
+  let resolvedYoutubeUrl = null;
+
   try {
     if (runBtn) runBtn.disabled = true;
-    setImportStatus('Looking up lyrics…');
 
-    let title = '', artist = '', rawLyrics = '';
-
+    // ---- Step 1: figure out title / artist + save any URL the user pasted ----
     if (mode === 'title') {
-      // Read from the top-level Song title / Artist fields — those are the
-      // single source of truth now that we no longer have duplicate inputs
-      // inside the import panel.
       title  = ($('song-title')?.value || '').trim();
       artist = ($('song-artist')?.value || '').trim();
       if (!title) { setImportStatus('Enter a song title first (the field above).', 'err'); return; }
-      rawLyrics = await fetchLyricsWithFallback(title, artist);
     } else {
       const ytUrl = ($('import-yt-url')?.value || '').trim();
       if (!ytUrl) { setImportStatus('Paste a YouTube URL first.', 'err'); return; }
+      // Save the URL FIRST \u2014 if anything later fails (lyrics, oEmbed, AI
+      // formatting), the URL the user explicitly pasted should still stick.
+      resolvedYoutubeUrl = ytUrl;
+      applyYoutubeUrl(ytUrl);
       setImportStatus('Fetching YouTube video info\u2026');
-      const ytTitle = await extractYouTubeInfo(ytUrl);
-      const parsed  = parseArtistAndTitle(ytTitle);
-      // Prefer values the user typed in the main SONG TITLE / ARTIST fields
-      // when they're set \u2014 those are usually cleaner than what we can parse
-      // from a YouTube video title (which may have channel branding noise).
-      const editorTitle  = ($('song-title')?.value || '').trim();
-      const editorArtist = ($('song-artist')?.value || '').trim();
-      title  = editorTitle  || parsed.title;
-      artist = editorArtist || parsed.artist;
-      setImportStatus(`Found: "${ytTitle}" \u2014 looking up lyrics\u2026`);
-      rawLyrics = await fetchLyricsWithFallback(title, artist);
-    }
-
-    setImportStatus('Formatting sections with AI…');
-    const formatted = await formatLyricsWithClaude(rawLyrics, title, artist);
-
-    // Fill in the editor
-    const titleInput  = $('song-title');
-    const artistInput = $('song-artist');
-    const lyricsArea  = $('lyrics-input');
-
-    if (titleInput && !titleInput.value.trim()) titleInput.value = title;
-    if (artistInput && !artistInput.value.trim()) artistInput.value = artist;
-    if (lyricsArea) {
-      lyricsArea.value = formatted;
-      // Trigger the editor overlay re-render
-      lyricsArea.dispatchEvent(new Event('input'));
-    }
-
-    // Auto-fill the YouTube URL field on the song. URL-mode just reuses what
-    // the user pasted; title-mode asks Claude to suggest a URL and verifies
-    // it via oEmbed before saving (no save if Claude doesn't know it).
-    let resolvedYoutubeUrl = null;
-    if (mode === 'yt') {
-      resolvedYoutubeUrl = ($('import-yt-url')?.value || '').trim() || null;
-    } else {
       try {
-        setImportStatus('Looking for a matching YouTube video\u2026');
-        resolvedYoutubeUrl = await findYoutubeUrlWithClaude(title, artist);
-      } catch {}
+        const ytTitle = await extractYouTubeInfo(ytUrl);
+        const parsed  = parseArtistAndTitle(ytTitle);
+        const editorTitle  = ($('song-title')?.value || '').trim();
+        const editorArtist = ($('song-artist')?.value || '').trim();
+        title  = editorTitle  || parsed.title;
+        artist = editorArtist || parsed.artist;
+        if (!editorTitle  && $('song-title'))  $('song-title').value  = title;
+        if (!editorArtist && $('song-artist')) $('song-artist').value = artist;
+      } catch (e) {
+        console.warn('extractYouTubeInfo failed, continuing', e);
+        title  = ($('song-title')?.value || '').trim()  || title;
+        artist = ($('song-artist')?.value || '').trim() || artist;
+      }
     }
-    const ytField = $('audio-youtube-url');
-    if (resolvedYoutubeUrl && ytField) {
-      ytField.value = resolvedYoutubeUrl;
-      _pendingYoutubeUrl = resolvedYoutubeUrl;
+
+    // ---- Step 2: kick off lyrics + YouTube-search in parallel ----
+    setImportStatus('Looking up lyrics\u2026');
+    const lyricsTask = fetchLyricsWithFallback(title, artist).catch((e) => {
+      console.warn('lyrics lookup failed', e);
+      return null;
+    });
+    const ytSearchTask = (mode === 'title')
+      ? findYoutubeUrlWithClaude(title, artist).catch(() => null)
+      : Promise.resolve(null);
+
+    const [rawLyrics, foundYoutubeUrl] = await Promise.all([lyricsTask, ytSearchTask]);
+
+    if (mode === 'title' && foundYoutubeUrl) {
+      resolvedYoutubeUrl = foundYoutubeUrl;
+      applyYoutubeUrl(foundYoutubeUrl);
+    }
+
+    // ---- Step 3: format + apply lyrics if we got them ----
+    let lyricsApplied = false;
+    if (rawLyrics) {
       try {
-        if (typeof updateYouTubeEditorUI === 'function') {
-          updateYouTubeEditorUI(resolvedYoutubeUrl, loadedSong?.audio_url || currentSong?.audio_url || null);
+        setImportStatus('Formatting sections with AI\u2026');
+        const formatted = await formatLyricsWithClaude(rawLyrics, title, artist);
+        const lyricsArea = $('lyrics-input');
+        if (lyricsArea) {
+          lyricsArea.value = formatted;
+          lyricsArea.dispatchEvent(new Event('input'));
         }
-      } catch {}
+        lyricsApplied = true;
+      } catch (e) {
+        console.warn('lyrics formatting failed', e);
+      }
     }
 
-    if (resolvedYoutubeUrl) {
+    if ($('song-title') && !$('song-title').value.trim() && title)  $('song-title').value  = title;
+    if ($('song-artist') && !$('song-artist').value.trim() && artist) $('song-artist').value = artist;
+
+    // ---- Step 4: status message based on what succeeded ----
+    if (lyricsApplied && resolvedYoutubeUrl) {
       setImportStatus('\u2713 Lyrics + YouTube linked! Review and click Generate.', 'ok');
-    } else if (mode === 'title') {
-      setImportStatus('\u2713 Lyrics imported (no YouTube match found). Paste one in the YouTube field if you want pitch shift.', 'ok');
+    } else if (lyricsApplied) {
+      setImportStatus('\u2713 Lyrics imported. (No YouTube match found \u2014 paste one below if you want pitch shift.)', 'ok');
+    } else if (resolvedYoutubeUrl) {
+      setImportStatus('\u2713 YouTube URL saved. Lyrics couldn\u2019t be auto-found \u2014 paste them in the lyrics box manually.', 'ok');
     } else {
-      setImportStatus('\u2713 Lyrics imported! Review and click Generate.', 'ok');
+      setImportStatus('Couldn\u2019t find lyrics or a YouTube match \u2014 try a different title/artist or paste manually.', 'err');
     }
-
-    // (No field-sync needed — song-title / song-artist are the source of
-    // truth in title-mode; in YT-mode they're filled by the block above
-    // when they were empty.)
   } catch (e) {
     console.error('Auto-import error:', e);
-    setImportStatus(e.message || 'Import failed.', 'err');
+    if (resolvedYoutubeUrl) {
+      setImportStatus('YouTube URL saved, but lyrics import errored: ' + (e.message || 'unknown error'), 'err');
+    } else {
+      setImportStatus(e.message || 'Import failed.', 'err');
+    }
   } finally {
     if (runBtn) runBtn.disabled = false;
   }
