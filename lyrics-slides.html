@@ -1248,7 +1248,7 @@
     <div style="display:flex;align-items:center;gap:8px;flex:1;flex-wrap:wrap;min-width:200px;">
       <input type="text" id="audio-youtube-url" placeholder="https://www.youtube.com/watch?v=..."
              style="flex:1;min-width:220px;background:var(--panel-2);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:6px;font-size:13px;">
-      <label class="audio-key-label">Key:
+      <label class="audio-key-label" title="The key the recording is actually in">Original:
         <select class="audio-key-select" id="audio-original-key">
           <option value="">Unknown</option>
           <option>C</option><option>C#</option><option>Db</option><option>D</option>
@@ -1256,6 +1256,19 @@
           <option>F#</option><option>Gb</option><option>G</option><option>G#</option>
           <option>Ab</option><option>A</option><option>A#</option><option>Bb</option><option>B</option>
         </select>
+      </label>
+      <label class="audio-key-label" title="Your preferred performance key \u2014 operator's key dropdown defaults to this on song load">Default:
+        <select class="audio-key-select" id="audio-default-key">
+          <option value="">Same as original</option>
+          <option>C</option><option>C#</option><option>Db</option><option>D</option>
+          <option>D#</option><option>Eb</option><option>E</option><option>F</option>
+          <option>F#</option><option>Gb</option><option>G</option><option>G#</option>
+          <option>Ab</option><option>A</option><option>A#</option><option>Bb</option><option>B</option>
+        </select>
+      </label>
+      <label class="audio-key-label" title="Fine tune in cents \u2014 useful when the YouTube video is slightly out of tune (positive = video is sharp, we shift it down)">\u00a2:
+        <input type="number" id="audio-cent-offset" value="0" min="-100" max="100" step="1"
+               style="width:54px;background:var(--panel-2);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:6px;font-size:13px;">
       </label>
     </div>
     <div class="audio-field-right">
@@ -1413,6 +1426,12 @@
         <label>Key:</label>
         <select id="ds-key-select"></select>
       </div>
+      <div class="ds-key-row" id="ds-capo-row" style="display:none;align-items:center;gap:8px;margin-top:6px;">
+        <label title="Capo fret \u2014 chord display drops by this many semitones for guitarists with a capo">Capo:</label>
+        <input type="number" id="ds-capo-input" min="0" max="11" step="1" value="0"
+               style="width:54px;background:var(--panel-2);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:6px;font-size:13px;">
+        <span id="ds-capo-effective" style="font-size:11px;color:var(--muted);"></span>
+      </div>
     </div>
     <div class="ds-section">
       <div class="ds-label">Slide layout</div>
@@ -1533,7 +1552,7 @@ const BROADCAST_CHANNEL_NAME = 'lyric-slides-sync';
 const BROADCAST_WIN_NAME     = 'LyricSlidesBroadcast';
 
 // ---- App state ----
-let currentSong  = { id: null, title: '', artist: '', lyrics: '', palette: null, audio_url: null, original_key: null, youtube_url: null };
+let currentSong  = { id: null, title: '', artist: '', lyrics: '', palette: null, audio_url: null, original_key: null, youtube_url: null, default_key: null, cent_offset: 0 };
 let slides       = [];     // [{ kind, lines, sectionType }]
 let currentIdx   = 0;
 let palette      = 'grad-ocean';
@@ -1592,7 +1611,7 @@ async function loadLibrary() {
   return r.json();
 }
 
-async function saveSong({ id, title, artist, lyrics, palette, slides_data, video_urls, audio_url, original_key, youtube_url }) {
+async function saveSong({ id, title, artist, lyrics, palette, slides_data, video_urls, audio_url, original_key, youtube_url, default_key, cent_offset }) {
   const body = {
     title,
     artist: artist || null,
@@ -1605,6 +1624,8 @@ async function saveSong({ id, title, artist, lyrics, palette, slides_data, video
   if (audio_url  !== undefined)  body.audio_url   = audio_url  || null;
   if (original_key !== undefined) body.original_key = original_key || null;
   if (youtube_url !== undefined) body.youtube_url = youtube_url || null;
+  if (default_key !== undefined) body.default_key = default_key || null;
+  if (cent_offset !== undefined) body.cent_offset = (cent_offset === null || cent_offset === undefined || isNaN(cent_offset)) ? 0 : Math.round(cent_offset);
   if (id) {
     const r = await fetch(`${SONGS_URL}?id=eq.${id}`, {
       method: 'PATCH',
@@ -2520,7 +2541,8 @@ function sendKeyToIframe(originalKey, targetKey) {
     source: 'lyric-slides-app',
     action: 'setKey',
     originalKey: originalKey || null,
-    targetKey: targetKey || null
+    targetKey: targetKey || null,
+    centOffset: (currentSong && typeof currentSong.cent_offset === 'number') ? currentSong.cent_offset : 0
   }, 'https://www.youtube.com');
 }
 
@@ -2606,11 +2628,24 @@ function initAudioForSong(audioUrl, originalKey, youtubeUrl) {
   teardownAudioPlayer();
   unmountYoutubeIframe();
   _isAudioPlaying = false;
+  // Set the operator key dropdown once on song load to the song's preferred
+  // performance key (default_key), falling back to original_key. Subsequent
+  // user changes are sticky until the next song load.
+  const sel = document.getElementById('op-audio-key-select');
+  if (sel) {
+    const initial = normalizeKey(currentSong?.default_key || currentSong?.original_key);
+    if (initial) {
+      const optionVals = [...sel.options].map(o => o.value);
+      if (optionVals.includes(initial)) sel.value = initial;
+    }
+  }
+  refreshOpKeyDropdownMarkers();
+  // Re-render slides so chord display reflects the new effective key
+  if (typeof renderCurrentPreview === 'function' && slides && slides.length > 0) {
+    try { renderCurrentPreview(); renderNextSlot && renderNextSlot(); renderStripContents && renderStripContents(); } catch {}
+  }
   updateAudioBar();
   if (youtubeUrl) {
-    // Pre-mount the iframe so the first Play has minimal delay. Pitch shift
-    // is wired up by the extension's content script when the parent posts
-    // the first setKey message (handled by sendKeyToIframe in onReady).
     mountYoutubeIframe(youtubeUrl).catch((e) => console.warn('iframe mount failed', e));
     return;
   }
@@ -2776,12 +2811,9 @@ function updateAudioBar() {
       infoEl.textContent = '🎵';
     }
   }
-  // Sync key selector to current song's original key
-  if (keyEl && currentSong?.original_key) {
-    const k = currentSong.original_key;
-    const optionVals = [...keyEl.options].map(o => o.value);
-    if (optionVals.includes(k)) keyEl.value = k;
-  }
+  // Note: we no longer auto-reset the key dropdown here. The dropdown is set
+  // once on song load (in initAudioForSong) to the song's default_key (or
+  // original_key as fallback) and the user's overrides are sticky after that.
 }
 
 async function changeAudioKey(newKey) {
@@ -2958,9 +2990,10 @@ function renderChord(chord, mode, key, semitoneOffset = 0) {
 const LS_DEVICE_SETTINGS = 'ls_device_settings_v1';
 let deviceSettings = {
   chords: 'off',          // 'off' | 'numbers' | 'key'
-  chordKey: 'C',          // when chords === 'key'
+  chordKey: 'C',          // when chords === 'key' (legacy fallback; the live audio key takes precedence)
   view: 'control',        // 'control' | 'fullscreen'
-  layout: 'current'       // 'current' | 'with_next'
+  layout: 'current',      // 'current' | 'with_next'
+  capo: 0                 // 0..11 — chord display shifted DOWN this many semitones for capo'd guitarists
 };
 try {
   const saved = JSON.parse(localStorage.getItem(LS_DEVICE_SETTINGS) || '{}');
@@ -2968,6 +3001,60 @@ try {
 } catch {}
 function saveDeviceSettings() {
   try { localStorage.setItem(LS_DEVICE_SETTINGS, JSON.stringify(deviceSettings)); } catch {}
+}
+
+// ========================= KEY HELPERS =========================
+// Normalize an enharmonic key to whatever spelling the operator dropdown uses.
+// The operator dropdown (op-audio-key-select) carries 12 options; the editor's
+// "Original key" + "Default key" allow flat-spellings too. This maps one-way to
+// match what the operator UI displays so the visual markers align correctly.
+function normalizeKey(k) {
+  if (!k) return null;
+  const map = { 'Db': 'C#', 'D#': 'Eb', 'Gb': 'F#', 'G#': 'Ab', 'A#': 'Bb' };
+  return map[k] || k;
+}
+
+// Refresh the operator key dropdown's option labels with colored dots:
+// 🟠 = song's original key, 🟢 = song's default (preferred performance) key,
+// both = song's original is also its default.
+function refreshOpKeyDropdownMarkers() {
+  const sel = document.getElementById('op-audio-key-select');
+  if (!sel) return;
+  const orig = normalizeKey(currentSong?.original_key);
+  const def  = normalizeKey(currentSong?.default_key);
+  for (const opt of sel.options) {
+    const k = opt.value;
+    let label = k;
+    const isOrig = k === orig;
+    const isDef  = k === def;
+    if (isOrig && isDef)      label += ' \u{1F7E0}\u{1F7E2}';
+    else if (isOrig)          label += ' \u{1F7E0}';
+    else if (isDef)           label += ' \u{1F7E2}';
+    opt.textContent = label;
+  }
+}
+
+// Shift a key by N semitones (negative = down). Returns sharp-spelling.
+function shiftKeyBySemitones(key, semitones) {
+  const NOTES = ['C','C#','D','Eb','E','F','F#','G','Ab','A','Bb','B'];
+  const idx = NOTE_SEMITONES[key];
+  if (idx === undefined) return key;
+  return NOTES[((idx + (semitones | 0)) % 12 + 12) % 12];
+}
+
+// Effective chord-display key. When the operator's audio key dropdown is
+// active (i.e., a song with audio is playing), it drives chord display too —
+// transposing chords to match what the leader is hearing. Capo on the device
+// shifts chord display DOWN by capo semitones (so a guitarist capo'd at 2
+// reads chords two semitones lower than the sounding key).
+function getEffectiveChordKey() {
+  const opKeyEl = document.getElementById('op-audio-key-select');
+  // Use op key only if the audio bar is actually visible (i.e., song has audio)
+  const audioBarVisible = document.getElementById('op-audio-bar')?.classList.contains('visible');
+  const sourceKey = (audioBarVisible && opKeyEl?.value) ? opKeyEl.value
+                  : (deviceSettings.chordKey || 'G');
+  const capo = (deviceSettings.capo | 0) || 0;
+  return shiftKeyBySemitones(sourceKey, -capo);
 }
 
 // ========================= LYRICS PARSING =========================
@@ -3353,7 +3440,7 @@ function renderSlideOnStage(stageEl, slide, palette, options = {}) {
           const ch = document.createElement('span');
           ch.className = 'ch-chord';
           ch.textContent = tok.chord
-            ? renderChord(tok.chord, deviceSettings.chords, deviceSettings.chordKey, curOffset)
+            ? renderChord(tok.chord, deviceSettings.chords, getEffectiveChordKey(), curOffset)
             : ' ';
           tokSpan.appendChild(ch);
           const tx = document.createElement('span');
@@ -4093,6 +4180,10 @@ async function loadIntoEditor(id) {
     // Reflect audio in editor (YouTube URL + legacy MP3)
     const ytInput = $('audio-youtube-url');
     if (ytInput) ytInput.value = song.youtube_url || '';
+    const dkInput = $('audio-default-key');
+    if (dkInput) dkInput.value = song.default_key || '';
+    const coInput = $('audio-cent-offset');
+    if (coInput) coInput.value = song.cent_offset || 0;
     updateYouTubeEditorUI(song.youtube_url, song.audio_url);
     updateAudioEditorUI(song.audio_url, song.original_key);
     // Scroll to form
@@ -4114,6 +4205,10 @@ function clearEditor() {
   if (badge) badge.textContent = 'None yet';
   const ytInput = $('audio-youtube-url');
   if (ytInput) ytInput.value = '';
+  const dkInput = $('audio-default-key');
+  if (dkInput) dkInput.value = '';
+  const coInput = $('audio-cent-offset');
+  if (coInput) coInput.value = 0;
   _pendingYoutubeUrl = undefined;
   updateYouTubeEditorUI(null, null);
   updateAudioEditorUI(null, null);
@@ -4142,7 +4237,9 @@ async function loadAndPresent(id, opts = {}) {
       videoUrls: song.video_urls || [],
       audioUrl: song.audio_url || null,
       audioOriginalKey: song.original_key || null,
-      youtubeUrl: song.youtube_url || null
+      youtubeUrl: song.youtube_url || null,
+      defaultKey: song.default_key || null,
+      centOffset: typeof song.cent_offset === 'number' ? song.cent_offset : 0
     }, { savePersisted: false });
     // Tell peers (phone↔computer) to load the same song. Suppress when we're
     // *receiving* a load_song event ourselves (avoids feedback loops).
@@ -4164,7 +4261,7 @@ function broadcastLoadSongRealtime(songId) {
 
 // ========================= GENERATE FLOW =========================
 
-async function generateFromLyrics({ id, title, artist, lyrics, palette: paletteChoice, cachedSlides, cachedLyrics, videoUrls, audioUrl, audioOriginalKey, youtubeUrl }, { savePersisted = true } = {}) {
+async function generateFromLyrics({ id, title, artist, lyrics, palette: paletteChoice, cachedSlides, cachedLyrics, videoUrls, audioUrl, audioOriginalKey, youtubeUrl, defaultKey, centOffset }, { savePersisted = true } = {}) {
   if (!lyrics.trim()) {
     setStatus('Paste some lyrics first.', true);
     loading.classList.remove('visible');
@@ -4220,6 +4317,8 @@ async function generateFromLyrics({ id, title, artist, lyrics, palette: paletteC
     const resolvedAudioUrl = audioUrl !== undefined ? audioUrl : (loadedSong?.audio_url || null);
     const resolvedOriginalKey = audioOriginalKey !== undefined ? audioOriginalKey : (loadedSong?.original_key || null);
     const resolvedYoutubeUrl = youtubeUrl !== undefined ? youtubeUrl : (loadedSong?.youtube_url || null);
+    const resolvedDefaultKey = defaultKey !== undefined ? defaultKey : (loadedSong?.default_key || null);
+    const resolvedCentOffset = centOffset !== undefined ? centOffset : (typeof loadedSong?.cent_offset === 'number' ? loadedSong.cent_offset : 0);
     if (savePersisted) {
       loadingText.textContent = 'Saving…';
       // Always persist the slides_data cache so future loads skip Claude
@@ -4230,7 +4329,9 @@ async function generateFromLyrics({ id, title, artist, lyrics, palette: paletteC
         video_urls: selectedVideos,
         audio_url: resolvedAudioUrl,
         original_key: resolvedOriginalKey,
-        youtube_url: resolvedYoutubeUrl
+        youtube_url: resolvedYoutubeUrl,
+        default_key: resolvedDefaultKey,
+        cent_offset: resolvedCentOffset
       });
       savedId = saved?.id || id;
       $('current-song-id').value = savedId || '';
@@ -4243,7 +4344,9 @@ async function generateFromLyrics({ id, title, artist, lyrics, palette: paletteC
       video_urls: selectedVideos,
       audio_url: resolvedAudioUrl,
       original_key: resolvedOriginalKey,
-      youtube_url: resolvedYoutubeUrl
+      youtube_url: resolvedYoutubeUrl,
+      default_key: resolvedDefaultKey,
+      cent_offset: resolvedCentOffset
     };
 
     loading.classList.remove('visible');
@@ -4284,7 +4387,9 @@ generateBtn?.addEventListener('click', async () => {
       audioOriginalKey: $('audio-original-key')?.value || loadedSong?.original_key || null,
       youtubeUrl: _pendingYoutubeUrl !== undefined
         ? _pendingYoutubeUrl
-        : ($('audio-youtube-url')?.value?.trim() || loadedSong?.youtube_url || null)
+        : ($('audio-youtube-url')?.value?.trim() || loadedSong?.youtube_url || null),
+      defaultKey: $('audio-default-key')?.value || loadedSong?.default_key || null,
+      centOffset: parseInt($('audio-cent-offset')?.value || '0', 10) || 0
     });
   } finally {
     generateBtn.disabled = false;
@@ -4408,14 +4513,48 @@ $('refresh-library')?.addEventListener('click', renderLibrary);
     if (songId) {
       await patchSong(songId, { original_key: newKey }).catch(e => console.warn('key patch failed', e));
       currentSong.original_key = newKey;
+      if (loadedSong) loadedSong.original_key = newKey;
       if (currentSong.audio_url) {
         teardownAudioPlayer();
         await _setupTonePlayer(currentSong.audio_url, newKey, _getDisplayKey());
         updateAudioBar();
       }
-      // If extension+YouTube is active, also push the new key
-      if (currentSong?.youtube_url && _extensionPresent) {
-        try { await setKeyViaExtension(newKey, _getDisplayKey()); } catch (e) { console.warn(e); }
+      // If a YouTube iframe is active, also push the new key
+      if (currentSong?.youtube_url) {
+        try { sendKeyToIframe(newKey, _getDisplayKey()); } catch {}
+      }
+      // Refresh marker dots in operator dropdown
+      refreshOpKeyDropdownMarkers();
+    }
+  });
+
+  // Default key — operator dropdown defaults to this on song load
+  const defaultKeySel = $('audio-default-key');
+  defaultKeySel?.addEventListener('change', async () => {
+    const songId = $('current-song-id')?.value;
+    const newDefault = defaultKeySel.value || null;
+    if (songId) {
+      await patchSong(songId, { default_key: newDefault }).catch(e => console.warn('default_key patch failed', e));
+      currentSong.default_key = newDefault;
+      if (loadedSong) loadedSong.default_key = newDefault;
+      refreshOpKeyDropdownMarkers();
+    }
+  });
+
+  // Cent offset — fine-tune for slightly-out-of-tune YouTube videos
+  const centInput = $('audio-cent-offset');
+  centInput?.addEventListener('change', async () => {
+    let v = parseInt(centInput.value || '0', 10) || 0;
+    v = Math.max(-100, Math.min(100, v));
+    centInput.value = v;
+    const songId = $('current-song-id')?.value;
+    if (songId) {
+      await patchSong(songId, { cent_offset: v }).catch(e => console.warn('cent_offset patch failed', e));
+      currentSong.cent_offset = v;
+      if (loadedSong) loadedSong.cent_offset = v;
+      // If iframe is active, push updated key+cents now
+      if (currentSong?.youtube_url) {
+        try { sendKeyToIframe(currentSong.original_key, _getDisplayKey()); } catch {}
       }
     }
   });
@@ -4484,6 +4623,15 @@ $('op-audio-play')?.addEventListener('click', () => toggleAudioPlayback());
 
 $('op-audio-key-select')?.addEventListener('change', async (e) => {
   await changeAudioKey(e.target.value);
+  // The performance key drives chord display too — re-render slides + strip
+  // and refresh the capo "effective key" hint in the settings popover
+  if (slides && slides.length > 0) {
+    try { renderCurrentPreview(); renderNextSlot && renderNextSlot(); renderStripContents && renderStripContents(); } catch {}
+  }
+  const ce = document.getElementById('ds-capo-effective');
+  if (ce && (deviceSettings.capo || 0) > 0) {
+    ce.textContent = `\u2192 chords shown in ${getEffectiveChordKey()}`;
+  }
 });
 
 // =========================================================================
@@ -4663,9 +4811,21 @@ function applyDeviceSettings() {
       b.classList.toggle('active', b.dataset.val === v);
     });
   });
-  // 2. Show/hide the key dropdown when chords === 'key'
+  // 2. Show/hide the key dropdown + capo row when chords === 'key'
   const kr = $('ds-key-row'); if (kr) kr.style.display = deviceSettings.chords === 'key' ? 'flex' : 'none';
   const ks = $('ds-key-select'); if (ks) ks.value = deviceSettings.chordKey;
+  const cr = $('ds-capo-row'); if (cr) cr.style.display = deviceSettings.chords === 'key' ? 'flex' : 'none';
+  const ci = $('ds-capo-input'); if (ci) ci.value = deviceSettings.capo || 0;
+  const ce = $('ds-capo-effective');
+  if (ce) {
+    const capo = deviceSettings.capo || 0;
+    if (capo > 0) {
+      const eff = getEffectiveChordKey();
+      ce.textContent = `\u2192 chords shown in ${eff}`;
+    } else {
+      ce.textContent = '';
+    }
+  }
 
   // 3. Apply layout class on operator
   operatorView.classList.toggle('layout-with-next', deviceSettings.layout === 'with_next');
@@ -4734,6 +4894,13 @@ document.querySelectorAll('#ds-view .ds-opt').forEach(btn => {
 });
 $('ds-key-select')?.addEventListener('change', (e) => {
   deviceSettings.chordKey = e.target.value;
+  saveDeviceSettings();
+  applyDeviceSettings();
+});
+$('ds-capo-input')?.addEventListener('input', (e) => {
+  let v = parseInt(e.target.value, 10) || 0;
+  v = Math.max(0, Math.min(11, v));
+  deviceSettings.capo = v;
   saveDeviceSettings();
   applyDeviceSettings();
 });
