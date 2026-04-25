@@ -71,6 +71,71 @@
   .library-card-actions button.del:hover { color: var(--danger); }
   .library-empty { color: var(--muted); font-size: 13px; font-style: italic; padding: 8px 0; }
 
+  /* =========== SETLISTS =========== */
+  .setlists-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+  .setlist-card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 14px;
+    display: flex; flex-direction: column; gap: 6px;
+    cursor: pointer; transition: border-color 0.15s, transform 0.05s;
+  }
+  .setlist-card:hover { border-color: var(--accent); }
+  .setlist-card:active { transform: scale(0.99); }
+  .setlist-card-title { font-weight: 700; font-size: 14px; color: var(--text); }
+  .setlist-card-meta { font-size: 11px; color: var(--muted); }
+  .setlist-card-songs {
+    font-size: 12px; color: var(--muted);
+    overflow: hidden; text-overflow: ellipsis;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  }
+  .setlist-card-actions { display: flex; gap: 6px; margin-top: 4px; }
+  .setlist-card-actions button {
+    background: var(--panel-2); border: 1px solid var(--border);
+    color: var(--muted); padding: 4px 10px; border-radius: 6px;
+    font-size: 11px; cursor: pointer; transition: color 0.1s, border-color 0.1s;
+  }
+  .setlist-card-actions button:hover { color: var(--text); border-color: var(--muted); }
+  .setlist-card-actions .danger:hover { color: var(--danger); border-color: var(--danger); }
+
+  /* Setlist editor modal */
+  .setlist-editor-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .setlist-editor-col { display: flex; flex-direction: column; min-height: 320px; }
+  .setlist-editor-col h4 {
+    margin: 0 0 8px; font-size: 12px; font-weight: 700; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .setlist-list-box {
+    flex: 1; overflow-y: auto;
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 4px; min-height: 200px; max-height: 50vh;
+  }
+  .setlist-empty-hint { color: var(--muted); font-size: 12px; font-style: italic; padding: 12px; text-align: center; }
+  .setlist-row {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 8px; margin: 4px 0; font-size: 13px;
+  }
+  .setlist-row-num {
+    background: var(--accent); color: white; min-width: 22px; height: 22px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 4px; font-size: 11px; font-weight: 700;
+  }
+  .setlist-row-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .setlist-row-artist { font-size: 11px; color: var(--muted); }
+  .setlist-row-actions { display: flex; gap: 2px; }
+  .setlist-row-actions button {
+    background: transparent; border: 1px solid transparent; color: var(--muted);
+    padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 12px;
+  }
+  .setlist-row-actions button:hover { color: var(--text); border-color: var(--border); }
+  .setlist-row-actions .remove:hover { color: var(--danger); border-color: var(--danger); }
+  .setlist-name-input {
+    width: 100%; padding: 10px 13px; background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 8px; font-size: 16px; font-weight: 600; color: var(--text);
+    margin-bottom: 14px;
+  }
+  .setlist-name-input:focus { outline: none; border-color: var(--accent); }
+
   .divider-text {
     display: flex; align-items: center; gap: 12px; margin: 24px 0 16px;
     color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600;
@@ -1259,6 +1324,16 @@
     </div>
   </div>
 
+  <div class="library-wrap" style="margin-top:24px;">
+    <div class="library-header">
+      <div class="library-title">📋 Setlists</div>
+      <button class="btn-ghost" id="new-setlist-btn">+ New setlist</button>
+    </div>
+    <div class="setlists-grid" id="setlists-grid">
+      <div class="library-empty">Loading…</div>
+    </div>
+  </div>
+
   <div class="divider-text"><span>Or create / edit a song</span></div>
 
   <div class="helper-card">
@@ -1583,6 +1658,40 @@
   </article>
 </div>
 
+<!-- ==================== SETLIST EDITOR MODAL ==================== -->
+<div class="modal-backdrop" id="setlist-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="setlist-modal-title">Edit setlist</h3>
+      <button class="modal-close" id="setlist-modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="text" class="setlist-name-input" id="setlist-name-input" placeholder="Setlist name (e.g. Sunday Sept 14)">
+      <div class="setlist-editor-cols">
+        <div class="setlist-editor-col">
+          <h4 id="setlist-selected-heading">Songs in setlist</h4>
+          <div class="setlist-list-box" id="setlist-selected">
+            <div class="setlist-empty-hint">No songs yet — pick from your library on the right.</div>
+          </div>
+        </div>
+        <div class="setlist-editor-col">
+          <h4>Library</h4>
+          <div class="setlist-list-box" id="setlist-available">
+            <div class="setlist-empty-hint">Loading library…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <div class="modal-footer-info" id="setlist-modal-info">0 songs</div>
+      <div class="modal-footer-actions">
+        <button class="btn-ghost" id="setlist-modal-cancel">Cancel</button>
+        <button class="btn-secondary" id="setlist-modal-save" style="background:var(--accent); color:white;">Save setlist</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ==================== VIDEO IMPORT MODAL ==================== -->
 <div class="modal-backdrop" id="video-modal">
   <div class="modal">
@@ -1642,12 +1751,19 @@ const GRADIENT_LABELS = {
 const SUPABASE_URL  = 'https://kxsuzgpnvtepsyhkezin.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4c3V6Z3BudnRlcHN5aGtlemluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3Nzc1MDAsImV4cCI6MjA4NzM1MzUwMH0.oKtpiH63heyK-wJ87ZRvkhUzRqy6NT6Z2XWF1xjbtxA';
 const SONGS_URL     = `${SUPABASE_URL}/rest/v1/lyric_slides_songs`;
+const SETLISTS_URL  = `${SUPABASE_URL}/rest/v1/lyric_slides_setlists`;
 const DB_PROXY_URL  = `${SUPABASE_URL}/functions/v1/db-proxy`;
 const BROADCAST_CHANNEL_NAME = 'lyric-slides-sync';
 const BROADCAST_WIN_NAME     = 'LyricSlidesBroadcast';
 
 // ---- App state ----
 let currentSong  = { id: null, title: '', artist: '', lyrics: '', palette: null, audio_url: null, original_key: null, youtube_url: null, default_key: null, cent_offset: 0 };
+
+// Setlist context — null when not playing inside a setlist
+let currentSetlist     = null;     // { id, name, song_ids: [...], songs: [{id,title,artist,slides_data}] }
+let currentSetlistIdx  = -1;       // index of currently-loaded song within currentSetlist.song_ids
+let _setlistEditorState = null;    // transient state for the editor modal (id, name, songIds[])
+let _libraryCache       = null;    // cached library list (id, title, artist) used by setlist editor + nav
 let slides       = [];     // [{ kind, lines, sectionType }]
 let currentIdx   = 0;
 let palette      = 'grad-ocean';
@@ -1791,6 +1907,56 @@ async function fetchSong(id) {
   if (!r.ok) throw new Error(`fetch ${r.status}`);
   const rows = await r.json();
   return rows[0];
+}
+
+// ========================= SETLISTS =========================
+
+async function fetchSetlists() {
+  const r = await fetch(`${SETLISTS_URL}?select=id,name,song_ids,updated_at&order=updated_at.desc`, {
+    headers: pgHeaders()
+  });
+  if (!r.ok) throw new Error(`setlists load ${r.status}`);
+  return r.json();
+}
+
+async function fetchSetlist(id) {
+  const r = await fetch(`${SETLISTS_URL}?id=eq.${id}`, { headers: pgHeaders() });
+  if (!r.ok) throw new Error(`setlist fetch ${r.status}`);
+  const rows = await r.json();
+  return rows[0];
+}
+
+async function saveSetlist({ id, name, song_ids }) {
+  const body = {
+    name: name || 'Untitled setlist',
+    song_ids: Array.isArray(song_ids) ? song_ids : [],
+    updated_at: new Date().toISOString()
+  };
+  if (id) {
+    const r = await fetch(`${SETLISTS_URL}?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: pgHeaders({ 'Prefer': 'return=representation' }),
+      body: JSON.stringify(body)
+    });
+    if (!r.ok) throw new Error(`setlist save ${r.status}: ${await r.text()}`);
+    return (await r.json())[0];
+  } else {
+    const r = await fetch(SETLISTS_URL, {
+      method: 'POST',
+      headers: pgHeaders({ 'Prefer': 'return=representation' }),
+      body: JSON.stringify(body)
+    });
+    if (!r.ok) throw new Error(`setlist create ${r.status}: ${await r.text()}`);
+    return (await r.json())[0];
+  }
+}
+
+async function deleteSetlist(id) {
+  const r = await fetch(`${SETLISTS_URL}?id=eq.${id}`, {
+    method: 'DELETE',
+    headers: pgHeaders()
+  });
+  if (!r.ok) throw new Error(`setlist delete ${r.status}`);
 }
 
 // ========================= API KEYS (auto-loaded from Supabase) =========================
@@ -4297,6 +4463,8 @@ async function renderLibrary() {
   grid.innerHTML = '<div class="library-empty">Loading…</div>';
   try {
     const songs = await loadLibrary();
+    _libraryCache = songs;       // cache for setlist editor
+    renderSetlists();            // setlists list refreshes whenever library refreshes
     if (!songs.length) {
       grid.innerHTML = '<div class="library-empty">No songs saved yet. Paste lyrics below to add one.</div>';
       return;
@@ -4317,6 +4485,9 @@ async function renderLibrary() {
       card.querySelector('.library-card-artist').textContent = song.artist || '';
       card.addEventListener('click', async (e) => {
         if (e.target.closest('.library-card-actions')) return;
+        // Library click outside any setlist — clear the setlist context
+        currentSetlist = null;
+        currentSetlistIdx = -1;
         await loadAndPresent(song.id);
       });
       card.querySelector('.edit').addEventListener('click', async (e) => {
@@ -4334,6 +4505,232 @@ async function renderLibrary() {
   } catch (e) {
     console.error(e);
     grid.innerHTML = `<div class="library-empty" style="color:var(--danger);">Couldn't load library: ${e.message}</div>`;
+  }
+}
+
+// ========================= SETLISTS — UI =========================
+
+async function renderSetlists() {
+  const grid = $('setlists-grid');
+  if (!grid) return;
+  grid.innerHTML = '<div class="library-empty">Loading…</div>';
+  try {
+    const setlists = await fetchSetlists();
+    if (!setlists.length) {
+      grid.innerHTML = '<div class="library-empty">No setlists yet. Click "+ New setlist" to build one.</div>';
+      return;
+    }
+    grid.innerHTML = '';
+    const songsById = new Map((_libraryCache || []).map((s) => [s.id, s]));
+    setlists.forEach((sl) => {
+      const card = document.createElement('div');
+      card.className = 'setlist-card';
+      const songIds = Array.isArray(sl.song_ids) ? sl.song_ids : [];
+      const titles = songIds.map((id) => songsById.get(id)?.title || '?').slice(0, 4);
+      const titleStr = titles.join(' • ') + (songIds.length > titles.length ? ` • +${songIds.length - titles.length} more` : '');
+      const titleEl = document.createElement('div');
+      titleEl.className = 'setlist-card-title';
+      titleEl.textContent = sl.name || 'Untitled';
+      const metaEl = document.createElement('div');
+      metaEl.className = 'setlist-card-meta';
+      metaEl.textContent = `${songIds.length} song${songIds.length === 1 ? '' : 's'}`;
+      const songsEl = document.createElement('div');
+      songsEl.className = 'setlist-card-songs';
+      songsEl.textContent = titleStr || '(empty)';
+      const actions = document.createElement('div');
+      actions.className = 'setlist-card-actions';
+      const openBtn = document.createElement('button');
+      openBtn.textContent = '▶ Open';
+      const editBtn = document.createElement('button');
+      editBtn.textContent = '✎ Edit';
+      const delBtn = document.createElement('button');
+      delBtn.className = 'danger';
+      delBtn.textContent = '✕';
+      delBtn.title = 'Delete setlist';
+      actions.appendChild(openBtn);
+      actions.appendChild(editBtn);
+      actions.appendChild(delBtn);
+      card.appendChild(titleEl);
+      card.appendChild(metaEl);
+      card.appendChild(songsEl);
+      card.appendChild(actions);
+      // Whole card click = Open (unless action button)
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('.setlist-card-actions')) return;
+        openSetlist(sl.id);
+      });
+      openBtn.addEventListener('click', (e) => { e.stopPropagation(); openSetlist(sl.id); });
+      editBtn.addEventListener('click', (e) => { e.stopPropagation(); openSetlistEditor(sl); });
+      delBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!confirm(`Delete setlist "${sl.name}"? Songs are not deleted.`)) return;
+        try {
+          await deleteSetlist(sl.id);
+          renderSetlists();
+        } catch (err) {
+          alert('Couldn’t delete: ' + err.message);
+        }
+      });
+      grid.appendChild(card);
+    });
+  } catch (e) {
+    console.error(e);
+    grid.innerHTML = `<div class="library-empty" style="color:var(--danger);">Couldn't load setlists: ${e.message}</div>`;
+  }
+}
+
+// Open a setlist: load the first song with setlist context attached.
+async function openSetlist(setlistId) {
+  try {
+    const sl = await fetchSetlist(setlistId);
+    if (!sl) throw new Error('setlist not found');
+    const songIds = Array.isArray(sl.song_ids) ? sl.song_ids : [];
+    if (!songIds.length) {
+      alert('This setlist has no songs yet. Click Edit to add some.');
+      return;
+    }
+    currentSetlist = { id: sl.id, name: sl.name, song_ids: songIds };
+    currentSetlistIdx = 0;
+    await loadAndPresent(songIds[0]);
+  } catch (e) {
+    alert('Couldn’t open setlist: ' + e.message);
+  }
+}
+
+// Jump to a specific index within the currently-active setlist.
+async function jumpToSetlistIdx(idx) {
+  if (!currentSetlist) return;
+  if (idx < 0 || idx >= currentSetlist.song_ids.length) return;
+  currentSetlistIdx = idx;
+  await loadAndPresent(currentSetlist.song_ids[idx]);
+}
+
+// ========================= SETLIST EDITOR (modal) =========================
+
+function openSetlistEditor(existing) {
+  // existing = { id, name, song_ids } if editing; null/undefined for new
+  _setlistEditorState = existing
+    ? { id: existing.id, name: existing.name || '', songIds: [...(existing.song_ids || [])] }
+    : { id: null, name: '', songIds: [] };
+  const titleEl = document.getElementById('setlist-modal-title');
+  if (titleEl) titleEl.textContent = existing ? 'Edit setlist' : 'New setlist';
+  const nameInput = document.getElementById('setlist-name-input');
+  if (nameInput) nameInput.value = _setlistEditorState.name;
+  renderSetlistEditor();
+  document.getElementById('setlist-modal').classList.add('visible');
+  setTimeout(() => nameInput?.focus(), 50);
+}
+
+function closeSetlistEditor() {
+  document.getElementById('setlist-modal').classList.remove('visible');
+  _setlistEditorState = null;
+}
+
+function renderSetlistEditor() {
+  if (!_setlistEditorState) return;
+  const songsById = new Map((_libraryCache || []).map((s) => [s.id, s]));
+
+  // Selected list (in order)
+  const selBox = document.getElementById('setlist-selected');
+  if (selBox) {
+    selBox.innerHTML = '';
+    if (!_setlistEditorState.songIds.length) {
+      const hint = document.createElement('div');
+      hint.className = 'setlist-empty-hint';
+      hint.textContent = 'No songs yet — pick from your library on the right.';
+      selBox.appendChild(hint);
+    } else {
+      _setlistEditorState.songIds.forEach((id, idx) => {
+        const song = songsById.get(id) || { id, title: '(unknown song)', artist: '' };
+        const row = document.createElement('div');
+        row.className = 'setlist-row';
+        row.innerHTML = `
+          <span class="setlist-row-num"></span>
+          <span class="setlist-row-title"></span>
+          <span class="setlist-row-actions">
+            <button class="up" title="Move up">↑</button>
+            <button class="down" title="Move down">↓</button>
+            <button class="remove" title="Remove">✕</button>
+          </span>
+        `;
+        row.querySelector('.setlist-row-num').textContent = idx + 1;
+        const titleEl = row.querySelector('.setlist-row-title');
+        titleEl.textContent = song.title;
+        if (song.artist) {
+          const artistSpan = document.createElement('span');
+          artistSpan.className = 'setlist-row-artist';
+          artistSpan.textContent = ' — ' + song.artist;
+          titleEl.appendChild(artistSpan);
+        }
+        row.querySelector('.up').addEventListener('click', () => {
+          if (idx === 0) return;
+          const arr = _setlistEditorState.songIds;
+          [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]];
+          renderSetlistEditor();
+        });
+        row.querySelector('.down').addEventListener('click', () => {
+          const arr = _setlistEditorState.songIds;
+          if (idx >= arr.length - 1) return;
+          [arr[idx + 1], arr[idx]] = [arr[idx], arr[idx + 1]];
+          renderSetlistEditor();
+        });
+        row.querySelector('.remove').addEventListener('click', () => {
+          _setlistEditorState.songIds.splice(idx, 1);
+          renderSetlistEditor();
+        });
+        selBox.appendChild(row);
+      });
+    }
+  }
+
+  // Available songs (library minus already-selected)
+  const availBox = document.getElementById('setlist-available');
+  if (availBox) {
+    availBox.innerHTML = '';
+    const selected = new Set(_setlistEditorState.songIds);
+    const available = (_libraryCache || []).filter((s) => !selected.has(s.id));
+    if (!available.length) {
+      const hint = document.createElement('div');
+      hint.className = 'setlist-empty-hint';
+      hint.textContent = (_libraryCache || []).length === 0
+        ? 'Library is empty — add songs first.'
+        : 'All library songs are already in this setlist.';
+      availBox.appendChild(hint);
+    } else {
+      available.forEach((song) => {
+        const row = document.createElement('div');
+        row.className = 'setlist-row';
+        row.style.cursor = 'pointer';
+        row.innerHTML = `
+          <span class="setlist-row-title"></span>
+          <span class="setlist-row-actions">
+            <button class="add" title="Add to setlist">+ Add</button>
+          </span>
+        `;
+        const titleEl = row.querySelector('.setlist-row-title');
+        titleEl.textContent = song.title;
+        if (song.artist) {
+          const artistSpan = document.createElement('span');
+          artistSpan.className = 'setlist-row-artist';
+          artistSpan.textContent = ' — ' + song.artist;
+          titleEl.appendChild(artistSpan);
+        }
+        const add = () => {
+          _setlistEditorState.songIds.push(song.id);
+          renderSetlistEditor();
+        };
+        row.querySelector('.add').addEventListener('click', (e) => { e.stopPropagation(); add(); });
+        row.addEventListener('click', add);
+        availBox.appendChild(row);
+      });
+    }
+  }
+
+  // Footer info
+  const info = document.getElementById('setlist-modal-info');
+  if (info) {
+    const n = _setlistEditorState.songIds.length;
+    info.textContent = `${n} song${n === 1 ? '' : 's'}`;
   }
 }
 
@@ -4571,6 +4968,43 @@ generateBtn?.addEventListener('click', async () => {
 });
 
 $('refresh-library')?.addEventListener('click', renderLibrary);
+
+// ========================= SETLIST UI WIRING =========================
+$('new-setlist-btn')?.addEventListener('click', () => openSetlistEditor(null));
+$('setlist-modal-close')?.addEventListener('click', closeSetlistEditor);
+$('setlist-modal-cancel')?.addEventListener('click', closeSetlistEditor);
+$('setlist-modal')?.addEventListener('click', (e) => {
+  if (e.target.id === 'setlist-modal') closeSetlistEditor();
+});
+$('setlist-name-input')?.addEventListener('input', (e) => {
+  if (_setlistEditorState) _setlistEditorState.name = e.target.value;
+});
+$('setlist-modal-save')?.addEventListener('click', async () => {
+  if (!_setlistEditorState) return;
+  const name = (_setlistEditorState.name || '').trim();
+  if (!name) {
+    alert('Give the setlist a name first.');
+    document.getElementById('setlist-name-input')?.focus();
+    return;
+  }
+  const btn = document.getElementById('setlist-modal-save');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  try {
+    await saveSetlist({
+      id: _setlistEditorState.id,
+      name,
+      song_ids: _setlistEditorState.songIds
+    });
+    closeSetlistEditor();
+    await renderSetlists();
+  } catch (e) {
+    alert('Couldn’t save setlist: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save setlist';
+  }
+});
 
 // =========================================================================
 // Auto-import panel
