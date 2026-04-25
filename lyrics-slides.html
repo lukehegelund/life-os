@@ -2140,16 +2140,45 @@ async function extractYouTubeInfo(youtubeUrl) {
 }
 
 function parseArtistAndTitle(youtubeTitle) {
-  // Common patterns: "Artist - Title", "Artist – Title", "Title by Artist"
-  const dashMatch = youtubeTitle.match(/^(.+?)\s*[-–—]\s*(.+?)(?:\s*[\(\[].*)?$/);
+  if (!youtubeTitle) return { artist: '', title: '' };
+
+  // Strip common YouTube parenthetical/bracket noise from anywhere in the string
+  // ((Official Video), [Lyric Video], (HD), (Live), etc.)
+  const NOISE_PAREN = /\s*[\(\[](?:official\s+(?:music\s+)?(?:video|audio|lyric\s+video)|lyric\s+video|lyrics?\s+video|music\s+video|official\s+lyric\s+video|hd|4k|live|audio)[\)\]]/gi;
+  let s = youtubeTitle.replace(NOISE_PAREN, '').trim();
+
+  // Strip "(feat. X)" / "[feat. X]" — keep meaning but simplifies artist for lyrics search
+  const FEAT = /\s*[\(\[]\s*(?:feat\.?|ft\.?)\s+[^\)\]]+[\)\]]/gi;
+  s = s.replace(FEAT, '').trim();
+
+  // Filler tokens that frequently appear as standalone segments in pipe-separated titles
+  const FILLER = /^(?:lyric\s+video|lyrics\s+video|official\s+(?:music\s+)?(?:video|audio|lyric\s+video)|music\s+video|official\s+lyric\s+video|lyric|lyrics|official|hd|4k|live|video|audio)$/i;
+
+  // Try pipe-separated YouTube convention: "Title | filler... | Artist"
+  if (s.includes('|')) {
+    const parts = s.split('|').map(p => p.trim()).filter(Boolean);
+    const meaningful = parts.filter(p => !FILLER.test(p));
+    if (meaningful.length >= 2) {
+      return { title: meaningful[0], artist: meaningful[meaningful.length - 1] };
+    } else if (meaningful.length === 1) {
+      return { title: meaningful[0], artist: '' };
+    }
+  }
+
+  // Try dash separator: "Artist - Title", "Artist – Title", "Artist — Title"
+  const dashMatch = s.match(/^(.+?)\s*[-–—]\s*(.+?)$/);
   if (dashMatch) {
     return { artist: dashMatch[1].trim(), title: dashMatch[2].trim() };
   }
-  const byMatch = youtubeTitle.match(/^(.+?)\s+by\s+(.+?)(?:\s*[\(\[].*)?$/i);
+
+  // "Title by Artist"
+  const byMatch = s.match(/^(.+?)\s+by\s+(.+?)$/i);
   if (byMatch) {
     return { artist: byMatch[2].trim(), title: byMatch[1].trim() };
   }
-  return { artist: '', title: youtubeTitle.trim() };
+
+  // Last resort: assume the whole thing is a title with no artist
+  return { artist: '', title: s };
 }
 
 async function formatLyricsWithClaude(rawLyrics, title, artist) {
