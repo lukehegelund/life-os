@@ -217,6 +217,25 @@
   .op-setlist-section-btn.btn-color-yellow { background: rgba(212,176,32,0.92); color: #1a1300; }
   .op-setlist-section-btn.btn-color-grey   { background: rgba(80,86,98,0.92); }
 
+  /* Per-song background swatch in the setlist panel */
+  .op-setlist-bg-swatch {
+    flex: 0 0 auto;
+    width: 22px; height: 22px;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    padding: 0;
+    background-color: var(--panel-2);
+    transition: border-color 0.15s, transform 0.05s;
+  }
+  .op-setlist-bg-swatch:hover { border-color: var(--accent); }
+  .op-setlist-bg-swatch:active { transform: scale(0.92); }
+  .op-setlist-bg-swatch.active {
+    border-color: var(--accent);
+    border-width: 2px;
+    box-shadow: 0 0 0 1px var(--accent) inset;
+  }
+
   .divider-text {
     display: flex; align-items: center; gap: 12px; margin: 24px 0 16px;
     color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600;
@@ -3012,12 +3031,19 @@ function initAudioForSong(audioUrl, originalKey, youtubeUrl) {
   teardownAudioPlayer();
   unmountYoutubeIframe();
   _isAudioPlaying = false;
-  // Set the operator key dropdown once on song load to the song's preferred
-  // performance key (default_key), falling back to original_key. Subsequent
-  // user changes are sticky until the next song load.
+  // Set the operator key dropdown once on song load. Priority:
+  //   1) currentSetlist.targetKey (setlist-wide override) if active
+  //   2) song's default_key
+  //   3) song's original_key
+  // Subsequent user changes via the dropdown are sticky until the next song load.
   const sel = document.getElementById('op-audio-key-select');
   if (sel) {
-    const initial = normalizeKey(currentSong?.default_key || currentSong?.original_key);
+    let initial;
+    if (currentSetlist && currentSetlist.targetKey) {
+      initial = normalizeKey(currentSetlist.targetKey);
+    } else {
+      initial = normalizeKey(currentSong?.default_key || currentSong?.original_key);
+    }
     if (initial) {
       const optionVals = [...sel.options].map(o => o.value);
       if (optionVals.includes(initial)) sel.value = initial;
@@ -4726,6 +4752,7 @@ async function jumpToSetlistIdx(idx) {
 
 // Cross-song navigation inside the setlist panel: load the target song (if
 // different from current) and jump to the requested slide index within it.
+// silent: skip the loading-screen flash so the bg/lyrics feel like one song.
 async function jumpToSetlistSongSection(songIdx, slideIdx) {
   if (!currentSetlist) return;
   const songId = currentSetlist.song_ids[songIdx];
@@ -4735,7 +4762,7 @@ async function jumpToSetlistSongSection(songIdx, slideIdx) {
     return;
   }
   currentSetlistIdx = songIdx;
-  await loadAndPresent(songId);
+  await loadAndPresent(songId, { silent: true });
   if (typeof slideIdx === 'number') {
     // showSlide may need a tick for the just-loaded slides to settle
     setTimeout(() => showSlide(slideIdx), 0);
@@ -4756,12 +4783,53 @@ function renderSetlistPanel() {
   panel.classList.add('visible');
   panel.innerHTML = '';
 
-  // Header
+  // Default bgSongIdx to 0 so the setlist starts with the first song's bg
+  if (typeof currentSetlist.bgSongIdx !== 'number') currentSetlist.bgSongIdx = 0;
+
+  // Header: name + setlist-wide key dropdown + close
   const header = document.createElement('div');
   header.className = 'op-setlist-header';
   const nameEl = document.createElement('span');
   nameEl.className = 'op-setlist-name';
   nameEl.textContent = `📋 ${currentSetlist.name || 'Setlist'}`;
+  // Setlist-wide key dropdown — overrides each song's original/default key
+  const keyWrap = document.createElement('span');
+  keyWrap.style.cssText = 'display:inline-flex;align-items:center;gap:6px;margin-left:auto;font-size:11px;color:var(--muted);';
+  const keyLabel = document.createElement('span');
+  keyLabel.textContent = 'Set key:';
+  const keySel = document.createElement('select');
+  keySel.id = 'op-setlist-key-select';
+  keySel.style.cssText = 'background:var(--panel-2);border:1px solid var(--border);color:var(--text);font-size:12px;padding:3px 7px;border-radius:5px;';
+  const KEYS = ['C','C#','D','Eb','E','F','F#','G','Ab','A','Bb','B'];
+  const optNone = document.createElement('option');
+  optNone.value = '';
+  optNone.textContent = 'Per-song';
+  keySel.appendChild(optNone);
+  KEYS.forEach((k) => {
+    const o = document.createElement('option');
+    o.value = k; o.textContent = k;
+    keySel.appendChild(o);
+  });
+  keySel.value = currentSetlist.targetKey || '';
+  keySel.addEventListener('change', async () => {
+    currentSetlist.targetKey = keySel.value || null;
+    // Update operator key dropdown + push key change immediately
+    const opSel = document.getElementById('op-audio-key-select');
+    if (opSel && currentSetlist.targetKey) {
+      const norm = normalizeKey(currentSetlist.targetKey);
+      if ([...opSel.options].map(o => o.value).includes(norm)) {
+        opSel.value = norm;
+        try { await changeAudioKey(norm); } catch {}
+      }
+    }
+    // Re-render slides so chord display reflects the new effective key
+    if (slides && slides.length > 0) {
+      try { renderCurrentPreview(); renderNextSlot && renderNextSlot(); renderStripContents && renderStripContents(); } catch {}
+    }
+  });
+  keyWrap.appendChild(keyLabel);
+  keyWrap.appendChild(keySel);
+
   const closeBtn = document.createElement('button');
   closeBtn.className = 'op-setlist-close';
   closeBtn.textContent = '✕';
@@ -4772,6 +4840,7 @@ function renderSetlistPanel() {
     renderSetlistPanel();
   });
   header.appendChild(nameEl);
+  header.appendChild(keyWrap);
   header.appendChild(closeBtn);
   panel.appendChild(header);
 
@@ -4782,6 +4851,27 @@ function renderSetlistPanel() {
     const row = document.createElement('div');
     row.className = 'op-setlist-song-row';
     if (songIdx === currentSetlistIdx) row.classList.add('current');
+
+    // BG swatch — click to use this song's palette/videos as the setlist's bg.
+    // The active swatch has a thicker accent border.
+    const swatch = document.createElement('button');
+    swatch.className = 'op-setlist-bg-swatch';
+    if (song.palette) swatch.classList.add(song.palette);
+    if (songIdx === currentSetlist.bgSongIdx) swatch.classList.add('active');
+    swatch.title = `Use ${song.title || 'this song'}'s background for the whole setlist`;
+    swatch.addEventListener('click', (e) => {
+      e.stopPropagation();
+      currentSetlist.bgSongIdx = songIdx;
+      // Apply new bg to currently-loaded song without reloading lyrics
+      const bgSong = currentSetlist.songs[songIdx];
+      if (bgSong) {
+        palette = resolvePalette(bgSong.palette || palette);
+        selectedVideos = Array.isArray(bgSong.video_urls) ? bgSong.video_urls : [];
+        try { renderCurrentPreview(); renderNextSlot && renderNextSlot(); renderStripContents && renderStripContents(); } catch {}
+      }
+      renderSetlistPanel(); // update active marker
+    });
+    row.appendChild(swatch);
 
     const nm = document.createElement('div');
     nm.className = 'op-setlist-song-name';
@@ -5023,11 +5113,13 @@ function clearEditor() {
 }
 
 async function loadAndPresent(id, opts = {}) {
-  loading.classList.add('visible');
-  loadingText.textContent = 'Loading song…';
-  // Auto-update behavior: a new song's slide pushes to the broadcast immediately.
-  // (The previous "freeze on previous slide until Update Slide is clicked"
-  // mechanism has been removed in favor of always-live broadcasting.)
+  // In setlist transitions we suppress the loading UI so the bg/lyrics swap
+  // feels instantaneous (background stays put, only the lyric text changes).
+  const silent = !!opts.silent;
+  if (!silent) {
+    loading.classList.add('visible');
+    loadingText.textContent = 'Loading song…';
+  }
   displayed = null;
   try {
     const song = await fetchSong(id);
@@ -5046,7 +5138,7 @@ async function loadAndPresent(id, opts = {}) {
       youtubeUrl: song.youtube_url || null,
       defaultKey: song.default_key || null,
       centOffset: typeof song.cent_offset === 'number' ? song.cent_offset : 0
-    }, { savePersisted: false });
+    }, { savePersisted: false, silent });
     // Tell peers (phone↔computer) to load the same song. Suppress when we're
     // *receiving* a load_song event ourselves (avoids feedback loops).
     if (opts.broadcastToPeers !== false) {
@@ -5067,19 +5159,33 @@ function broadcastLoadSongRealtime(songId) {
 
 // ========================= GENERATE FLOW =========================
 
-async function generateFromLyrics({ id, title, artist, lyrics, palette: paletteChoice, cachedSlides, cachedLyrics, videoUrls, audioUrl, audioOriginalKey, youtubeUrl, defaultKey, centOffset }, { savePersisted = true } = {}) {
+async function generateFromLyrics({ id, title, artist, lyrics, palette: paletteChoice, cachedSlides, cachedLyrics, videoUrls, audioUrl, audioOriginalKey, youtubeUrl, defaultKey, centOffset }, { savePersisted = true, silent = false } = {}) {
   if (!lyrics.trim()) {
     setStatus('Paste some lyrics first.', true);
-    loading.classList.remove('visible');
+    if (!silent) loading.classList.remove('visible');
     return;
   }
   if (!title.trim()) {
     setStatus('Give the song a title so we can save it.', true);
-    loading.classList.remove('visible');
+    if (!silent) loading.classList.remove('visible');
     return;
   }
-  loading.classList.add('visible');
-  loadingText.textContent = 'Processing lyrics…';
+  if (!silent) {
+    loading.classList.add('visible');
+    loadingText.textContent = 'Processing lyrics…';
+  }
+
+  // Setlist mode: every song shares the bg-source song's palette + videos so
+  // the visual background doesn't lurch from song to song. The user picks
+  // which song's bg via the swatch button in the setlist panel.
+  if (currentSetlist && Array.isArray(currentSetlist.songs)) {
+    const bgIdx = (typeof currentSetlist.bgSongIdx === 'number') ? currentSetlist.bgSongIdx : 0;
+    const bgSong = currentSetlist.songs[bgIdx];
+    if (bgSong) {
+      paletteChoice = bgSong.palette || paletteChoice;
+      videoUrls = Array.isArray(bgSong.video_urls) ? bgSong.video_urls : (videoUrls || []);
+    }
+  }
 
   try {
     // Use cached slides if available AND lyrics haven't changed.
