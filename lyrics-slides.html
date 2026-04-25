@@ -384,6 +384,56 @@
   .op-preview-hud.color-orange { background: rgba(212,128,32,0.85); }
   .op-preview-hud.color-grey   { background: rgba(80,86,98,0.85); }
 
+  /* Frozen-state chip (top-right of LIVE preview when displayed != loaded) */
+  .op-frozen-chip {
+    position: absolute; top: 12px; right: 14px; z-index: 22;
+    background: rgba(245,158,11,0.9);
+    backdrop-filter: blur(8px);
+    color: #1c1300;
+    padding: 5px 11px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    display: none;
+    pointer-events: none;
+    max-width: 60%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .op-frozen-chip.visible { display: block; }
+
+  /* Section buttons row + Update Slide button group */
+  .op-section-buttons-wrap {
+    display: flex;
+    gap: 8px;
+    flex: 0 0 auto;
+  }
+  .op-section-buttons-wrap .op-section-buttons { flex: 1 1 auto; }
+  .op-update-slide-btn {
+    flex: 0 0 auto;
+    padding: 0 16px;
+    height: 60px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--panel-2);
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s, color 0.12s, box-shadow 0.12s;
+    white-space: nowrap;
+  }
+  .op-update-slide-btn:hover { color: var(--text); border-color: var(--muted); }
+  .op-update-slide-btn.is-frozen {
+    background: rgba(245,158,11,0.18);
+    border-color: rgba(245,158,11,0.6);
+    color: #f5b342;
+    box-shadow: 0 0 0 1px rgba(245,158,11,0.35);
+  }
+  .op-update-slide-btn.is-frozen:hover { background: rgba(245,158,11,0.28); }
+
   /* Section heading buttons row — under the strip */
   .op-section-buttons {
     background: var(--panel);
@@ -759,6 +809,7 @@
   <div class="op-main">
     <div class="op-preview op-preview-live" id="op-preview-current">
       <div class="op-preview-label">Live</div>
+      <div class="op-frozen-chip" id="op-frozen-chip"></div>
       <div class="op-preview-hud" id="op-current-hud">—</div>
       <!-- bg layer + content injected here -->
       <!-- Tap zones for click-to-advance and swipe (above content via z-index) -->
@@ -766,7 +817,10 @@
       <div class="op-tap-zone op-tap-zone-next" id="op-tap-next"></div>
     </div>
     <div class="op-strip" id="op-strip"></div>
-    <div class="op-section-buttons" id="op-section-buttons"></div>
+    <div class="op-section-buttons-wrap">
+      <div class="op-section-buttons" id="op-section-buttons"></div>
+      <button class="op-update-slide-btn" id="op-update-slide-btn" title="Push current slide to the broadcast">↻ Update slide</button>
+    </div>
   </div>
 
   <div class="op-qr-popover" id="op-qr-popover">
@@ -892,6 +946,14 @@ let sbClient = null;
 let realtimeChannel = null;
 let sessionCode = null;
 const JOIN_CODE = urlParams.get('join') || null;
+
+// "displayed" decouples WHAT'S ON SCREEN from WHAT'S LOADED.
+// When a new song is loaded mid-set, displayed retains the previous slide so the
+// broadcast/LIVE preview keeps showing it until the operator either taps a new
+// slide or presses the Update Slide button.
+//   null = not frozen — render slides[currentIdx] / palette / selectedVideos
+//   { slide, palette, videos, fromTitle } = frozen snapshot
+let displayed = null;
 
 // Video playback timers (per-stage)
 const stageVideoState = new WeakMap();
@@ -1635,6 +1697,35 @@ function applyPaletteToStage(stageEl, pal) {
 }
 
 /**
+ * Snapshot the currently-rendered slide so it survives a song change.
+ * Call BEFORE swapping `slides`/`palette`/`selectedVideos` to a new song.
+ */
+function captureDisplay() {
+  if (!slides.length) return;
+  displayed = {
+    slide:    slides[currentIdx] || { kind: 'blank', lines: [], sectionType: null },
+    palette:  palette,
+    videos:   Array.isArray(selectedVideos) ? [...selectedVideos] : [],
+    fromTitle: currentSong?.title || null
+  };
+}
+
+/**
+ * What should the LIVE preview / broadcast actually render?
+ * If `displayed` is set, returns the frozen snapshot; otherwise returns the
+ * live state from the loaded song.
+ */
+function getDisplayState() {
+  if (displayed) return displayed;
+  return {
+    slide:    slides[currentIdx],
+    palette:  palette,
+    videos:   selectedVideos,
+    fromTitle: currentSong?.title || null
+  };
+}
+
+/**
  * Map a section name to a color family.
  * V* → green, C* → blue, B* → orange, anything else → grey.
  */
@@ -1877,15 +1968,19 @@ function renderSectionButtons() {
 
 function renderCurrentPreview() {
   const stage = $('op-preview-current');
-  renderSlideOnStage(stage, slides[currentIdx], palette);
-  // Only (re)start the video layer on the first render — it persists across slides
-  if (!stage._videoStarted && selectedVideos.length > 0) {
-    startVideoLayer(stage, selectedVideos);
-    stage._videoStarted = true;
-  } else if (selectedVideos.length === 0 && stage._videoStarted) {
-    stopVideoLayer(stage);
-    stage._videoStarted = false;
+  const d = getDisplayState();
+  renderSlideOnStage(stage, d.slide, d.palette);
+  // Manage the video layer based on displayed state's videos (NOT the loaded song's),
+  // so swapping songs while frozen keeps the previous video playing.
+  const dvids = d.videos || [];
+  const sig = dvids.map(v => v.id || v.src).join('|');
+  if (stage._videoSig !== sig) {
+    if (dvids.length > 0) startVideoLayer(stage, dvids);
+    else                  stopVideoLayer(stage);
+    stage._videoSig = sig;
+    stage._videoStarted = dvids.length > 0;
   }
+  updateFrozenIndicator();
 }
 
 function renderNextPreview() { /* removed — next preview replaced by visual thumbnails in the strip */ }
@@ -1950,6 +2045,7 @@ function startRealtimeChannel(code) {
     selectedVideos = Array.isArray(payload.videos) ? payload.videos : [];
     currentSong = payload.song || currentSong;
     autoAdvanceSec = payload.autoAdvanceSec ?? autoAdvanceSec;
+    displayed = payload.displayed || null;
     if (!operatorView.classList.contains('visible')) enterOperator();
     else { renderOperator(); }
   });
@@ -1986,10 +2082,18 @@ function startRealtimeChannel(code) {
         type: 'broadcast', event: 'state',
         payload: {
           slides, idx: currentIdx, palette, videos: selectedVideos,
-          song: currentSong, autoAdvanceSec
+          song: currentSong, autoAdvanceSec, displayed
         }
       });
     }
+  });
+
+  // Cross-device song change: peer asks us to load a song.
+  channel.on('broadcast', { event: 'load_song' }, async ({ payload }) => {
+    if (!payload?.songId) return;
+    if (currentSong?.id === payload.songId) return; // already on this song
+    // Don't re-broadcast — avoid feedback loop
+    await loadAndPresent(payload.songId, { broadcastToPeers: false });
   });
 
   channel.subscribe((status) => {
@@ -2162,13 +2266,15 @@ function updateBroadcastIndicator() {
 
 function renderBroadcast() {
   const stage = broadcastView;
-  renderSlideOnStage(stage, slides[currentIdx], palette);
-  if (!stage._videoStarted && selectedVideos.length > 0) {
-    startVideoLayer(stage, selectedVideos);
-    stage._videoStarted = true;
-  } else if (selectedVideos.length === 0 && stage._videoStarted) {
-    stopVideoLayer(stage);
-    stage._videoStarted = false;
+  const d = getDisplayState();
+  renderSlideOnStage(stage, d.slide, d.palette);
+  const dvids = d.videos || [];
+  const sig = dvids.map(v => v.id || v.src).join('|');
+  if (stage._videoSig !== sig) {
+    if (dvids.length > 0) startVideoLayer(stage, dvids);
+    else                  stopVideoLayer(stage);
+    stage._videoSig = sig;
+    stage._videoStarted = dvids.length > 0;
   }
 }
 
@@ -2179,6 +2285,8 @@ function showSlide(idx) {
   if (idx < 0) idx = 0;
   if (idx > slides.length - 1) idx = slides.length - 1;
   currentIdx = idx;
+  // Any explicit nav unfreezes the display — we're committing to the loaded song's slide.
+  displayed = null;
   if (IS_BROADCAST) {
     renderBroadcast();
     if (channel) channel.postMessage({ type: 'nav', from: 'broadcast', idx: currentIdx });
@@ -2188,6 +2296,36 @@ function showSlide(idx) {
     pushNavToBroadcast();        // same-browser broadcast tab
     broadcastNavRealtime();      // cross-device peers
     resetAutoAdvance();
+  }
+}
+
+/**
+ * "Update slide" — commits the loaded song's current slide to the display.
+ * Same effect as showSlide(currentIdx) but clearer in code & logs.
+ */
+function updateSlide() {
+  if (!slides.length) return;
+  displayed = null;
+  renderCurrentPreview();
+  updateCurrentHud();
+  pushNavToBroadcast();
+  broadcastNavRealtime();
+}
+
+/**
+ * Show/hide the "Update slide" button + frozen-state indicator on the LIVE preview.
+ * Whenever displayed is set AND the loaded song differs from displayed.fromTitle,
+ * we surface a clear visual cue.
+ */
+function updateFrozenIndicator() {
+  const btn = $('op-update-slide-btn');
+  const chip = $('op-frozen-chip');
+  if (!btn || !chip) return;
+  const isFrozen = !!displayed && displayed.fromTitle !== (currentSong?.title || null);
+  btn.classList.toggle('is-frozen', isFrozen);
+  chip.classList.toggle('visible', isFrozen);
+  if (isFrozen) {
+    chip.textContent = `Showing: ${displayed.fromTitle || 'previous'}`;
   }
 }
 function nextSlide() { showSlide(currentIdx + 1); }
@@ -2373,9 +2511,15 @@ function clearEditor() {
   if (badge) badge.textContent = 'None yet';
 }
 
-async function loadAndPresent(id) {
+async function loadAndPresent(id, opts = {}) {
   loading.classList.add('visible');
   loadingText.textContent = 'Loading song…';
+  // If a song is already loaded (mid-set song change), snapshot its current
+  // displayed slide first so the broadcast keeps showing it until the user
+  // explicitly taps a new slide or hits "Update slide".
+  if (slides.length > 0 && currentSong?.id && currentSong.id !== id && !displayed) {
+    captureDisplay();
+  }
   try {
     const song = await fetchSong(id);
     if (!song) throw new Error('song not found');
@@ -2389,10 +2533,22 @@ async function loadAndPresent(id) {
       cachedLyrics: song.lyrics,
       videoUrls: song.video_urls || []
     }, { savePersisted: false });
+    // Tell peers (phone↔computer) to load the same song. Suppress when we're
+    // *receiving* a load_song event ourselves (avoids feedback loops).
+    if (opts.broadcastToPeers !== false) {
+      broadcastLoadSongRealtime(id);
+    }
   } catch (e) {
     loading.classList.remove('visible');
     setStatus(`Couldn't load: ${e.message}`, true);
   }
+}
+
+function broadcastLoadSongRealtime(songId) {
+  if (!realtimeChannel || !songId) return;
+  try {
+    realtimeChannel.send({ type: 'broadcast', event: 'load_song', payload: { songId } });
+  } catch (e) { console.warn('rt load_song send failed', e); }
 }
 
 // ========================= GENERATE FLOW =========================
@@ -2570,6 +2726,9 @@ $('op-palette-select')?.addEventListener('change', (e) => {
   pushPaletteToBroadcast();
   broadcastPaletteRealtime();
 });
+
+// Update Slide button (commits loaded song's current slide to the broadcast)
+$('op-update-slide-btn')?.addEventListener('click', updateSlide);
 
 // QR popover toggle
 $('op-qr-toggle')?.addEventListener('click', (e) => {
