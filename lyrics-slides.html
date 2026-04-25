@@ -6175,6 +6175,24 @@ function renderNextSlot() {
     slot.prepend(lbl);
   }
   renderSlideOnStage(slot, next, palette);
+
+  // Use the song's video thumbnail (a single still image) as the NEXT preview's
+  // background — keeps the look continuous with the LIVE preview without the
+  // CPU cost of decoding a live video for the second stage. Falls back to the
+  // gradient when no video is set.
+  const bgLayer = slot.querySelector('.bg-layer');
+  const thumb = (selectedVideos && selectedVideos[0] && selectedVideos[0].thumb) || null;
+  if (bgLayer) {
+    if (thumb) {
+      bgLayer.style.backgroundImage = `url("${thumb}")`;
+      bgLayer.style.backgroundSize = 'cover';
+      bgLayer.style.backgroundPosition = 'center';
+    } else {
+      bgLayer.style.backgroundImage = '';
+      bgLayer.style.backgroundSize = '';
+      bgLayer.style.backgroundPosition = '';
+    }
+  }
   // Don't run the video layer on the next-preview to save CPU
   if (slot._videoStarted) { stopVideoLayer(slot); slot._videoStarted = false; slot._videoSig = ''; }
 }
