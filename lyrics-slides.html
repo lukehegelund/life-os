@@ -2361,7 +2361,7 @@ function _calcSemitones(originalKey, displayKey) {
   const from = NOTE_SEMITONES[originalKey] ?? 0;
   const to   = NOTE_SEMITONES[displayKey]  ?? 0;
   let diff   = (to - from + 12) % 12;
-  if (diff > 6) diff -= 12; // prefer smaller interval (-5 over +7, etc.)
+  if (diff >= 6) diff -= 12; // prefer going down for equidistant/tritone cases
   return diff;
 }
 
