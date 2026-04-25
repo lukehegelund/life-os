@@ -136,6 +136,87 @@
   }
   .setlist-name-input:focus { outline: none; border-color: var(--accent); }
 
+  /* In-operator setlist panel — shown above section buttons during setlist mode */
+  .op-setlist-panel {
+    display: none;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin: 0 0 8px 0;
+    padding: 8px 10px;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+  .op-setlist-panel.visible { display: block; }
+  .op-setlist-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 6px;
+  }
+  .op-setlist-name { font-weight: 700; font-size: 12px; color: var(--text); }
+  .op-setlist-close {
+    background: transparent; border: none; color: var(--muted);
+    cursor: pointer; padding: 2px 8px; border-radius: 4px; font-size: 13px;
+  }
+  .op-setlist-close:hover { color: var(--danger); background: rgba(255,255,255,0.06); }
+  .op-setlist-songs { display: flex; flex-direction: column; gap: 3px; }
+  .op-setlist-song-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 6px;
+    border-radius: 6px;
+    transition: background 0.1s;
+  }
+  .op-setlist-song-row.current {
+    background: rgba(99, 102, 241, 0.18);
+  }
+  .op-setlist-song-name {
+    flex: 0 0 160px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: color 0.1s;
+  }
+  .op-setlist-song-name:hover { color: var(--accent); }
+  .op-setlist-song-name.current-song::before {
+    content: "▶ "; color: var(--accent);
+  }
+  .op-setlist-song-sections {
+    flex: 1;
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    min-width: 0;
+  }
+  .op-setlist-section-btn {
+    flex: 0 0 auto;
+    min-width: 36px; height: 30px;
+    padding: 0 10px;
+    border: none;
+    border-radius: 6px;
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: filter 0.1s;
+    white-space: nowrap;
+  }
+  .op-setlist-section-btn:hover { filter: brightness(1.15); }
+  .op-setlist-section-btn.btn-color-green  { background: rgba(56,142,72,0.92); }
+  .op-setlist-section-btn.btn-color-blue   { background: rgba(54,113,193,0.92); }
+  .op-setlist-section-btn.btn-color-orange { background: rgba(212,128,32,0.92); }
+  .op-setlist-section-btn.btn-color-yellow { background: rgba(212,176,32,0.92); color: #1a1300; }
+  .op-setlist-section-btn.btn-color-grey   { background: rgba(80,86,98,0.92); }
+
   .divider-text {
     display: flex; align-items: center; gap: 12px; margin: 24px 0 16px;
     color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600;
@@ -1511,6 +1592,10 @@
       <div class="op-next-label">Next</div>
     </div>
     <div class="op-strip" id="op-strip"></div>
+    <!-- Setlist panel: visible only when the loaded song is part of an active setlist.
+         Shows every song in the setlist (current highlighted) with their section
+         buttons so the operator can jump between songs/sections in one place. -->
+    <div class="op-setlist-panel" id="op-setlist-panel"></div>
     <div class="op-section-buttons-wrap">
       <div class="op-section-buttons" id="op-section-buttons"></div>
     </div>
@@ -3888,6 +3973,9 @@ function renderOperator() {
   renderSectionButtons();
   updateCurrentHud();
   updateBroadcastIndicator();
+  // Setlist panel: visible if a setlist is active. Independent of section
+  // buttons (which always show the current song's sections).
+  renderSetlistPanel();
 }
 
 /**
@@ -4579,7 +4667,8 @@ async function renderSetlists() {
   }
 }
 
-// Open a setlist: load the first song with setlist context attached.
+// Open a setlist: preload every song's slides_data so the in-operator panel can
+// show all songs' section buttons, then load the first song with setlist context.
 async function openSetlist(setlistId) {
   try {
     const sl = await fetchSetlist(setlistId);
@@ -4589,7 +4678,14 @@ async function openSetlist(setlistId) {
       alert('This setlist has no songs yet. Click Edit to add some.');
       return;
     }
-    currentSetlist = { id: sl.id, name: sl.name, song_ids: songIds };
+    // Preload all songs in parallel so the panel renders immediately
+    const songs = await Promise.all(songIds.map((id) => fetchSong(id).catch(() => null)));
+    currentSetlist = {
+      id: sl.id,
+      name: sl.name,
+      song_ids: songIds,
+      songs: songs.map((s, i) => s || { id: songIds[i], title: '(missing)', slides_data: [] }),
+    };
     currentSetlistIdx = 0;
     await loadAndPresent(songIds[0]);
   } catch (e) {
@@ -4603,6 +4699,107 @@ async function jumpToSetlistIdx(idx) {
   if (idx < 0 || idx >= currentSetlist.song_ids.length) return;
   currentSetlistIdx = idx;
   await loadAndPresent(currentSetlist.song_ids[idx]);
+}
+
+// Cross-song navigation inside the setlist panel: load the target song (if
+// different from current) and jump to the requested slide index within it.
+async function jumpToSetlistSongSection(songIdx, slideIdx) {
+  if (!currentSetlist) return;
+  const songId = currentSetlist.song_ids[songIdx];
+  if (!songId) return;
+  if (songIdx === currentSetlistIdx) {
+    if (typeof slideIdx === 'number') showSlide(slideIdx);
+    return;
+  }
+  currentSetlistIdx = songIdx;
+  await loadAndPresent(songId);
+  if (typeof slideIdx === 'number') {
+    // showSlide may need a tick for the just-loaded slides to settle
+    setTimeout(() => showSlide(slideIdx), 0);
+  }
+}
+
+// Render the in-operator setlist panel: header with setlist name + close
+// button, then one row per song showing the song's name plus its section
+// buttons (color-coded). Current song is highlighted.
+function renderSetlistPanel() {
+  const panel = document.getElementById('op-setlist-panel');
+  if (!panel) return;
+  if (!currentSetlist || !Array.isArray(currentSetlist.songs) || currentSetlist.songs.length === 0) {
+    panel.classList.remove('visible');
+    panel.innerHTML = '';
+    return;
+  }
+  panel.classList.add('visible');
+  panel.innerHTML = '';
+
+  // Header
+  const header = document.createElement('div');
+  header.className = 'op-setlist-header';
+  const nameEl = document.createElement('span');
+  nameEl.className = 'op-setlist-name';
+  nameEl.textContent = `📋 ${currentSetlist.name || 'Setlist'}`;
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'op-setlist-close';
+  closeBtn.textContent = '✕';
+  closeBtn.title = 'Exit setlist (keep current song)';
+  closeBtn.addEventListener('click', () => {
+    currentSetlist = null;
+    currentSetlistIdx = -1;
+    renderSetlistPanel();
+  });
+  header.appendChild(nameEl);
+  header.appendChild(closeBtn);
+  panel.appendChild(header);
+
+  // Songs
+  const box = document.createElement('div');
+  box.className = 'op-setlist-songs';
+  currentSetlist.songs.forEach((song, songIdx) => {
+    const row = document.createElement('div');
+    row.className = 'op-setlist-song-row';
+    if (songIdx === currentSetlistIdx) row.classList.add('current');
+
+    const nm = document.createElement('div');
+    nm.className = 'op-setlist-song-name';
+    if (songIdx === currentSetlistIdx) nm.classList.add('current-song');
+    nm.textContent = song.title || 'Untitled';
+    nm.title = `Jump to ${song.title || 'this song'}`;
+    nm.addEventListener('click', () => jumpToSetlistSongSection(songIdx, 0));
+    row.appendChild(nm);
+
+    const sections = document.createElement('div');
+    sections.className = 'op-setlist-song-sections';
+
+    const slidesData = Array.isArray(song.slides_data) ? song.slides_data : [];
+    const seen = new Map();
+    slidesData.forEach((s, i) => {
+      if (s && s.kind === 'lyric' && s.sectionType && !seen.has(s.sectionType)) {
+        seen.set(s.sectionType, i);
+      }
+    });
+    seen.forEach((firstIdx, sectionType) => {
+      const btn = document.createElement('button');
+      btn.className = `op-setlist-section-btn btn-color-${sectionColor(sectionType)}`;
+      btn.textContent = sectionType;
+      btn.title = `${song.title || ''} — ${sectionType}`;
+      btn.addEventListener('click', () => jumpToSetlistSongSection(songIdx, firstIdx));
+      sections.appendChild(btn);
+    });
+    // Blank slide pseudo-section if any blanks exist
+    const blankIndices = slidesData.map((s, i) => (s && s.kind === 'blank') ? i : -1).filter(i => i >= 0);
+    if (blankIndices.length > 0) {
+      const blank = document.createElement('button');
+      blank.className = 'op-setlist-section-btn btn-color-grey';
+      blank.textContent = 'Blank';
+      blank.addEventListener('click', () => jumpToSetlistSongSection(songIdx, blankIndices[0]));
+      sections.appendChild(blank);
+    }
+
+    row.appendChild(sections);
+    box.appendChild(row);
+  });
+  panel.appendChild(box);
 }
 
 // ========================= SETLIST EDITOR (modal) =========================
