@@ -1396,18 +1396,12 @@
   .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 
   /* =========== AUTO-IMPORT PANEL =========== */
-  .import-toggle {
-    display: flex; align-items: center; gap: 8px; background: none; border: 1px solid var(--border);
-    color: var(--muted); padding: 7px 14px; border-radius: 8px; font-size: 13px; cursor: pointer;
-    transition: all 0.15s; margin-bottom: 12px; width: 100%; justify-content: center; font-weight: 600;
-  }
-  .import-toggle:hover { border-color: var(--accent); color: var(--accent); }
-  .import-toggle.active { background: rgba(154,126,200,0.1); border-color: var(--accent); color: var(--text); }
+  /* Panel is always visible now (no toggle button). The .open class is left
+     on the panel element for backwards compatibility with any cached JS. */
   .import-panel {
     background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
-    overflow: hidden; margin-bottom: 14px; display: none;
+    overflow: hidden; margin-bottom: 14px;
   }
-  .import-panel.open { display: block; }
   .import-tabs { display: flex; border-bottom: 1px solid var(--border); }
   .import-tab {
     flex: 1; padding: 10px 16px; font-size: 13px; font-weight: 600; background: none;
@@ -1612,20 +1606,16 @@
     </div>
   </div>
 
-  <!-- Auto-import toggle -->
-  <button class="import-toggle" id="import-toggle" type="button">✨ Auto-import lyrics from song title or YouTube</button>
-
-  <!-- Auto-import panel -->
-  <div class="import-panel" id="import-panel">
+  <!-- Auto-import panel - always visible. Uses the Song title / Artist
+       fields above as the import query so the user only fills them once. -->
+  <div class="import-panel open" id="import-panel">
     <div class="import-tabs">
       <button class="import-tab active" id="import-tab-title" type="button">By Title + Artist</button>
       <button class="import-tab" id="import-tab-yt" type="button">By YouTube URL</button>
     </div>
     <div class="import-body" id="import-body-title">
       <div class="import-row">
-        <input type="text" id="import-title" placeholder="Song title (e.g. Amazing Grace)">
-        <input type="text" id="import-artist" placeholder="Artist (e.g. Chris Tomlin)">
-        <button class="btn-import" id="import-run-title" type="button">Import</button>
+        <button class="btn-import" id="import-run-title" type="button" style="flex:1 1 100%;">✨ Import lyrics from title + artist above</button>
       </div>
       <div class="import-status" id="import-status-title"></div>
     </div>
@@ -2980,9 +2970,12 @@ async function runAutoImport(mode) {
     let title = '', artist = '', rawLyrics = '';
 
     if (mode === 'title') {
-      title  = ($('import-title')?.value || '').trim();
-      artist = ($('import-artist')?.value || '').trim();
-      if (!title) { setImportStatus('Enter a song title first.', 'err'); return; }
+      // Read from the top-level Song title / Artist fields — those are the
+      // single source of truth now that we no longer have duplicate inputs
+      // inside the import panel.
+      title  = ($('song-title')?.value || '').trim();
+      artist = ($('song-artist')?.value || '').trim();
+      if (!title) { setImportStatus('Enter a song title first (the field above).', 'err'); return; }
       rawLyrics = await fetchLyricsWithFallback(title, artist);
     } else {
       const ytUrl = ($('import-yt-url')?.value || '').trim();
@@ -3048,13 +3041,9 @@ async function runAutoImport(mode) {
       setImportStatus('\u2713 Lyrics imported! Review and click Generate.', 'ok');
     }
 
-    // Sync the import title/artist fields back to the main fields if they were empty
-    if ($('import-title') && !$('song-title')?.value) {
-      $('song-title').value = title;
-    }
-    if ($('import-artist') && !$('song-artist')?.value) {
-      $('song-artist').value = artist;
-    }
+    // (No field-sync needed — song-title / song-artist are the source of
+    // truth in title-mode; in YT-mode they're filled by the block above
+    // when they were empty.)
   } catch (e) {
     console.error('Auto-import error:', e);
     setImportStatus(e.message || 'Import failed.', 'err');
@@ -6034,19 +6023,13 @@ $('setlist-modal-save')?.addEventListener('click', async () => {
 // Auto-import panel
 // =========================================================================
 (function setupImportPanel() {
-  const toggle    = $('import-toggle');
   const panel     = $('import-panel');
   const tabTitle  = $('import-tab-title');
   const tabYt     = $('import-tab-yt');
   const bodyTitle = $('import-body-title');
   const bodyYt    = $('import-body-yt');
 
-  if (!toggle || !panel) return;
-
-  toggle.addEventListener('click', () => {
-    const open = panel.classList.toggle('open');
-    toggle.classList.toggle('active', open);
-  });
+  if (!panel) return;
 
   tabTitle?.addEventListener('click', () => {
     tabTitle.classList.add('active'); tabYt?.classList.remove('active');
@@ -6062,26 +6045,18 @@ $('setlist-modal-save')?.addEventListener('click', async () => {
   $('import-run-title')?.addEventListener('click', () => runAutoImport('title'));
   $('import-run-yt')?.addEventListener('click',    () => runAutoImport('yt'));
 
-  // Allow Enter key in import fields
-  [$('import-title'), $('import-artist')].forEach(el => {
-    el?.addEventListener('keydown', e => { if (e.key === 'Enter') runAutoImport('title'); });
+  // Enter on the top-level Song title / Artist fields fires the title-mode
+  // import (matches user expectation that "the import button below uses these").
+  [$('song-title'), $('song-artist')].forEach(el => {
+    el?.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && bodyTitle && bodyTitle.style.display !== 'none') {
+        e.preventDefault();
+        runAutoImport('title');
+      }
+    });
   });
   $('import-yt-url')?.addEventListener('keydown', e => {
     if (e.key === 'Enter') runAutoImport('yt');
-  });
-
-  // When the title/artist fields are auto-filled by import, sync them up
-  $('import-title')?.addEventListener('blur', () => {
-    const titleField = $('song-title');
-    if (titleField && !titleField.value.trim()) {
-      titleField.value = $('import-title').value;
-    }
-  });
-  $('import-artist')?.addEventListener('blur', () => {
-    const artistField = $('song-artist');
-    if (artistField && !artistField.value.trim()) {
-      artistField.value = $('import-artist').value;
-    }
   });
 })();
 
