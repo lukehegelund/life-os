@@ -2193,7 +2193,10 @@ function renderOperator() {
       const label = (i === 0) ? 'opening' : (i === slides.length - 1 ? 'closing' : 'blank');
       txt.innerHTML = `<div class="op-strip-thumb-text-inner">${label}</div>`;
     } else {
-      const safe = (s.lines || []).map(l => l.replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]))).join('<br>');
+      // Always strip chord numbers from thumbnail text — they're too small to be useful here
+      const safe = (s.lines || [])
+        .map(l => stripChordsFromLine(l).replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c])))
+        .join('<br>');
       txt.innerHTML = `<div class="op-strip-thumb-text-inner">${safe}</div>`;
     }
     item.appendChild(txt);
