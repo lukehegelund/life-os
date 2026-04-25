@@ -225,6 +225,29 @@
   }
   .slide-line + .slide-line { margin-top: 0.45em; }
 
+  /* Chord display: chord sits absolutely above the lyric character, in yellow */
+  .slide-line.chorded { padding-top: 0.85em; }
+  .slide-line.chorded + .slide-line.chorded { margin-top: 0.85em; }
+  .ch-token {
+    position: relative;
+    display: inline-block;
+    vertical-align: top;
+    line-height: 1.15;
+  }
+  .ch-chord {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    color: #ffe34d;
+    font-size: 0.55em;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    margin-bottom: 0.05em;
+    white-space: nowrap;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+  }
+  .ch-lyr { display: inline-block; }
+
   /* =========== OPERATOR VIEW =========== */
   .operator {
     display: none;
@@ -527,6 +550,98 @@
   }
   .op-broadcast-dot.live { background: #dc2626; box-shadow: 0 0 6px rgba(220,38,38,0.6); }
 
+  /* =========== DISPLAY SETTINGS POPOVER =========== */
+  .op-display-settings {
+    position: fixed;
+    bottom: 56px;
+    right: 16px;
+    z-index: 60;
+    width: 320px;
+    max-width: calc(100vw - 32px);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+    padding: 14px;
+    display: none;
+  }
+  .op-display-settings.visible { display: block; }
+  .ds-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .ds-header h4 { margin: 0; font-size: 14px; font-weight: 700; }
+  .ds-close {
+    background: transparent; border: none; color: var(--muted); cursor: pointer;
+    padding: 4px 8px; border-radius: 6px; font-size: 14px;
+  }
+  .ds-close:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+  .ds-section { margin-bottom: 14px; }
+  .ds-section:last-child { margin-bottom: 0; }
+  .ds-label {
+    font-size: 11px; font-weight: 700; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px;
+  }
+  .ds-options { display: flex; gap: 4px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 3px; }
+  .ds-opt {
+    flex: 1 1 0; background: transparent; border: none; color: var(--muted);
+    padding: 7px 10px; border-radius: 6px; cursor: pointer; font-size: 12px;
+    font-weight: 600; transition: background 0.1s, color 0.1s;
+    white-space: nowrap;
+  }
+  .ds-opt:hover { color: var(--text); }
+  .ds-opt.active { background: var(--accent); color: white; }
+  .ds-key-row {
+    display: flex; align-items: center; gap: 8px; margin-top: 8px;
+    font-size: 12px; color: var(--muted);
+  }
+  .ds-key-row select {
+    flex: 1; padding: 6px 10px; background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text); font-size: 13px; font-weight: 600;
+  }
+  .ds-hint {
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+  .ds-hint kbd {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 10px;
+  }
+
+  /* Fullscreen mode: hide all chrome, show only the LIVE preview */
+  .operator.fullscreen .op-topbar,
+  .operator.fullscreen .op-strip,
+  .operator.fullscreen .op-section-buttons-wrap,
+  .operator.fullscreen .op-footer { display: none !important; }
+  .operator.fullscreen .op-main { padding: 0; gap: 0; }
+  .operator.fullscreen .op-preview-live { border-radius: 0; }
+  .operator.fullscreen .op-preview-label { display: none; }
+  .operator.fullscreen .op-preview-hud { display: none; }
+  .operator.fullscreen .op-frozen-chip { display: none; }
+
+  /* "with next" slide layout: show next preview below current */
+  .op-next-slot {
+    flex: 0 0 32%;
+    min-height: 0;
+    background: #000;
+    border-radius: 10px;
+    overflow: hidden;
+    position: relative;
+    border: 1px solid var(--border);
+    display: none;
+  }
+  .operator.layout-with-next .op-next-slot { display: block; }
+  .op-next-label {
+    position: absolute; top: 8px; left: 12px; z-index: 20;
+    font-size: 10px; font-weight: 700; color: rgba(255,255,255,0.75);
+    text-transform: uppercase; letter-spacing: 0.1em;
+    background: rgba(0,0,0,0.45); padding: 3px 8px; border-radius: 999px;
+    backdrop-filter: blur(8px);
+  }
+
   /* =========== BROADCAST VIEW =========== */
   .broadcast {
     display: none;
@@ -816,6 +931,9 @@
       <div class="op-tap-zone op-tap-zone-prev" id="op-tap-prev"></div>
       <div class="op-tap-zone op-tap-zone-next" id="op-tap-next"></div>
     </div>
+    <div class="op-next-slot" id="op-next-slot">
+      <div class="op-next-label">Next</div>
+    </div>
     <div class="op-strip" id="op-strip"></div>
     <div class="op-section-buttons-wrap">
       <div class="op-section-buttons" id="op-section-buttons"></div>
@@ -851,8 +969,44 @@
       </label>
       <button class="btn-ghost" id="op-play-btn" title="Play/Pause (P)">▶ Play</button>
     </div>
-    <div class="op-footer-group" style="color:var(--muted); font-size:11px;">
-      <span>← → to navigate · F fullscreen · Esc back</span>
+    <div class="op-footer-group" style="color:var(--muted); font-size:11px; gap:10px;">
+      <button class="btn-ghost" id="op-settings-btn" title="Display settings">⚙ Display</button>
+      <span>← → · Swipe · F fullscreen</span>
+    </div>
+  </div>
+
+  <!-- Display settings popover (per-device preferences) -->
+  <div class="op-display-settings" id="op-display-settings">
+    <div class="ds-header">
+      <h4>Display settings</h4>
+      <button class="ds-close" id="ds-close">✕</button>
+    </div>
+    <div class="ds-section">
+      <div class="ds-label">Chords</div>
+      <div class="ds-options" id="ds-chord-mode">
+        <button class="ds-opt" data-val="off">Lyrics only</button>
+        <button class="ds-opt" data-val="numbers">Numbers</button>
+        <button class="ds-opt" data-val="key">In key</button>
+      </div>
+      <div class="ds-key-row" id="ds-key-row" style="display:none;">
+        <label>Key:</label>
+        <select id="ds-key-select"></select>
+      </div>
+    </div>
+    <div class="ds-section">
+      <div class="ds-label">Slide layout</div>
+      <div class="ds-options" id="ds-layout">
+        <button class="ds-opt" data-val="current">Current only</button>
+        <button class="ds-opt" data-val="with_next">Current + Next</button>
+      </div>
+    </div>
+    <div class="ds-section">
+      <div class="ds-label">View</div>
+      <div class="ds-options" id="ds-view">
+        <button class="ds-opt" data-val="control">Control</button>
+        <button class="ds-opt" data-val="fullscreen">Fullscreen</button>
+      </div>
+      <div class="ds-hint">In fullscreen: tap twice or press <kbd>Esc</kbd> to exit.</div>
     </div>
   </div>
 </div>
@@ -1497,6 +1651,132 @@ Return ONLY valid JSON, no markdown, no extra text, in this exact shape (with EX
   return parsed.labels;
 }
 
+// ========================= CHORDS =========================
+// Inline chord syntax: digits 1-7 with optional modifiers, written immediately
+// before the syllable they sit above. e.g. "6Pra4ise the Lord1, Oh my So5ul"
+//
+// Tokenization splits a line into [{ chord, text }] segments.
+// In lyrics-only mode, render only the .text concatenated.
+// In lyrics+chords mode, render each token with the chord above the text.
+// In key mode, the chord number is transposed to the chosen key.
+
+const CHORD_RE = /^([b#]?[1-7])(m|maj7?|maj9|sus[24]?|add9?|dim|aug|°)?(7|9|11|13)?(?:\/([b#]?[1-7]))?/;
+
+function parseChordedLine(line) {
+  const tokens = [];
+  let i = 0;
+  let pendingText = '';
+  while (i < line.length) {
+    const m = line.slice(i).match(CHORD_RE);
+    if (m && m[0]) {
+      if (pendingText) { tokens.push({ chord: null, text: pendingText }); pendingText = ''; }
+      const chord = m[0];
+      i += chord.length;
+      // Read lyric text until the next chord match or end
+      let lyricEnd = i;
+      while (lyricEnd < line.length) {
+        if (CHORD_RE.test(line.slice(lyricEnd))) break;
+        lyricEnd++;
+      }
+      tokens.push({ chord, text: line.slice(i, lyricEnd) });
+      i = lyricEnd;
+    } else {
+      pendingText += line[i];
+      i++;
+    }
+  }
+  if (pendingText) tokens.push({ chord: null, text: pendingText });
+  return tokens;
+}
+
+function stripChordsFromLine(line) {
+  return parseChordedLine(line).map(t => t.text).join('');
+}
+
+// Nashville → real key transposition --------------------------------
+const NOTES_SHARP = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const NOTES_FLAT  = ['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];
+const MAJOR_SCALE_SEMITONES = [0, 2, 4, 5, 7, 9, 11];     // 1..7
+const DEFAULT_QUALITY = ['', 'm', 'm', '', '', 'm', 'dim'];   // 1..7
+
+const TRANSPOSITION_KEYS = ['C','C#/Db','D','D#/Eb','E','F','F#/Gb','G','G#/Ab','A','A#/Bb','B'];
+function keyToIndex(key) {
+  const k = (key || '').replace(/(.+)\/.+/, '$1').trim();
+  let idx = NOTES_SHARP.indexOf(k);
+  if (idx === -1) idx = NOTES_FLAT.indexOf(k);
+  return idx === -1 ? 0 : idx;
+}
+function preferFlatKey(key) {
+  // Flat-side keys typically render chords with flat names
+  return /b/.test(key) || ['F','Bb','Eb','Ab','Db','Gb'].includes(key);
+}
+
+function transposeNashvilleToKey(chord, key) {
+  const m = chord.match(/^([b#]?)([1-7])(m|maj7?|maj9|sus[24]?|add9?|dim|aug|°)?(7|9|11|13)?(?:\/([b#]?)([1-7]))?$/);
+  if (!m) return chord;
+  const accidental = m[1] || '';
+  const degree     = parseInt(m[2], 10);
+  const qualityMod = m[3] || null;
+  const ext        = m[4] || '';
+  const slashAcc   = m[5] || '';
+  const slashDeg   = m[6] ? parseInt(m[6], 10) : null;
+
+  const keyIdx = keyToIndex(key);
+  const noteTable = preferFlatKey(key) ? NOTES_FLAT : NOTES_SHARP;
+
+  const baseDegreeShift = (d, acc) => {
+    let s = MAJOR_SCALE_SEMITONES[d - 1];
+    if (acc === 'b') s -= 1;
+    if (acc === '#') s += 1;
+    return s;
+  };
+
+  const rootIdx = (keyIdx + baseDegreeShift(degree, accidental) + 12) % 12;
+  const root = noteTable[rootIdx];
+
+  // Quality
+  let quality;
+  if (qualityMod === undefined || qualityMod === null) {
+    quality = DEFAULT_QUALITY[degree - 1];
+  } else {
+    quality = qualityMod === 'maj' ? '' : qualityMod;
+    if (quality === '°') quality = 'dim';
+  }
+
+  let out = root + quality + ext;
+
+  if (slashDeg !== null) {
+    const bassIdx = (keyIdx + baseDegreeShift(slashDeg, slashAcc) + 12) % 12;
+    out += '/' + noteTable[bassIdx];
+  }
+  return out;
+}
+
+function renderChord(chord, mode, key) {
+  if (!chord) return '';
+  if (mode === 'numbers') return chord;
+  // mode === 'key'
+  return transposeNashvilleToKey(chord, key);
+}
+
+// ========================= PER-DEVICE SETTINGS =========================
+// All display preferences live here, persisted per-device in localStorage.
+// Settings DO NOT sync across devices — each device chooses its own view.
+const LS_DEVICE_SETTINGS = 'ls_device_settings_v1';
+let deviceSettings = {
+  chords: 'off',          // 'off' | 'numbers' | 'key'
+  chordKey: 'C',          // when chords === 'key'
+  view: 'control',        // 'control' | 'fullscreen'
+  layout: 'current'       // 'current' | 'with_next'
+};
+try {
+  const saved = JSON.parse(localStorage.getItem(LS_DEVICE_SETTINGS) || '{}');
+  Object.assign(deviceSettings, saved);
+} catch {}
+function saveDeviceSettings() {
+  try { localStorage.setItem(LS_DEVICE_SETTINGS, JSON.stringify(deviceSettings)); } catch {}
+}
+
 // ========================= LYRICS PARSING =========================
 
 /**
@@ -1818,10 +2098,31 @@ function renderSlideOnStage(stageEl, slide, palette, options = {}) {
   const swap = () => {
     contentEl.innerHTML = '';
     if (slide && slide.kind === 'lyric') {
+      const showChords = deviceSettings.chords !== 'off';
       slide.lines.forEach(line => {
         const el = document.createElement('div');
-        el.className = 'slide-line';
-        el.textContent = line;
+        el.className = 'slide-line' + (showChords ? ' chorded' : '');
+        if (showChords) {
+          // Tokenize and render each chord+text pair
+          const tokens = parseChordedLine(line);
+          tokens.forEach(tok => {
+            const tokSpan = document.createElement('span');
+            tokSpan.className = 'ch-token';
+            if (tok.chord) {
+              const ch = document.createElement('span');
+              ch.className = 'ch-chord';
+              ch.textContent = renderChord(tok.chord, deviceSettings.chords, deviceSettings.chordKey);
+              tokSpan.appendChild(ch);
+            }
+            const tx = document.createElement('span');
+            tx.className = 'ch-lyr';
+            tx.textContent = tok.text || '\u00A0';   // non-breaking space if no text
+            tokSpan.appendChild(tx);
+            el.appendChild(tokSpan);
+          });
+        } else {
+          el.textContent = stripChordsFromLine(line);
+        }
         contentEl.appendChild(el);
       });
       // Auto-fit font
@@ -2292,6 +2593,7 @@ function showSlide(idx) {
     if (channel) channel.postMessage({ type: 'nav', from: 'broadcast', idx: currentIdx });
   } else {
     renderCurrentPreview();
+    if (typeof renderNextSlot === 'function') renderNextSlot();
     updateCurrentHud();
     pushNavToBroadcast();        // same-browser broadcast tab
     broadcastNavRealtime();      // cross-device peers
@@ -2370,8 +2672,17 @@ document.addEventListener('keydown', (e) => {
     else if (key === 'f' || key === 'F') { toggleFullscreen(); }
     else if (key === 'p' || key === 'P') { togglePlay(); }
     else if (key === 'Escape') {
-      if (IS_BROADCAST) { if (document.fullscreenElement) document.exitFullscreen(); else window.close(); }
-      else { exitOperator(); }
+      if (IS_BROADCAST) {
+        if (document.fullscreenElement) document.exitFullscreen(); else window.close();
+      } else if (deviceSettings.view === 'fullscreen') {
+        // First Esc in fullscreen → exit fullscreen but stay in operator
+        deviceSettings.view = 'control';
+        saveDeviceSettings();
+        applyDeviceSettings();
+        if (document.fullscreenElement) try { document.exitFullscreen(); } catch {}
+      } else {
+        exitOperator();
+      }
     }
   }
 });
@@ -2416,6 +2727,9 @@ function enterOperator() {
   // Broadcast fresh state for any already-connected phone client (after a tick to let
   // the channel finish subscribing).
   setTimeout(() => broadcastStateRealtime(), 600);
+
+  // Apply this device's saved display preferences (chord mode, layout, view)
+  applyDeviceSettings();
 }
 function exitOperator() {
   // Close broadcast window
@@ -2729,6 +3043,142 @@ $('op-palette-select')?.addEventListener('change', (e) => {
 
 // Update Slide button (commits loaded song's current slide to the broadcast)
 $('op-update-slide-btn')?.addEventListener('click', updateSlide);
+
+// =========================================================================
+// Display settings popover (per-device preferences)
+// =========================================================================
+
+function applyDeviceSettings() {
+  // 1. Sync UI controls (active class on the right buttons)
+  ['ds-chord-mode','ds-layout','ds-view'].forEach(id => {
+    const wrap = $(id);
+    if (!wrap) return;
+    const v = id === 'ds-chord-mode' ? deviceSettings.chords
+            : id === 'ds-layout'      ? deviceSettings.layout
+            :                           deviceSettings.view;
+    wrap.querySelectorAll('.ds-opt').forEach(b => {
+      b.classList.toggle('active', b.dataset.val === v);
+    });
+  });
+  // 2. Show/hide the key dropdown when chords === 'key'
+  const kr = $('ds-key-row'); if (kr) kr.style.display = deviceSettings.chords === 'key' ? 'flex' : 'none';
+  const ks = $('ds-key-select'); if (ks) ks.value = deviceSettings.chordKey;
+
+  // 3. Apply layout class on operator
+  operatorView.classList.toggle('layout-with-next', deviceSettings.layout === 'with_next');
+  // 4. Apply fullscreen class on operator
+  operatorView.classList.toggle('fullscreen', deviceSettings.view === 'fullscreen');
+  // 5. Re-render LIVE preview & next slot to reflect new chord/layout settings
+  if (slides.length > 0) {
+    renderCurrentPreview();
+    renderNextSlot();
+    renderStripContents();   // strip thumbnails reflect chord setting too
+  }
+}
+
+// Populate key dropdown
+(function populateKeyDropdown() {
+  const sel = $('ds-key-select');
+  if (!sel) return;
+  TRANSPOSITION_KEYS.forEach(k => {
+    const o = document.createElement('option');
+    o.value = k.split('/')[0]; // store the sharp form
+    o.textContent = k;
+    sel.appendChild(o);
+  });
+  sel.value = deviceSettings.chordKey;
+})();
+
+$('op-settings-btn')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  $('op-display-settings')?.classList.toggle('visible');
+});
+$('ds-close')?.addEventListener('click', () => $('op-display-settings')?.classList.remove('visible'));
+document.addEventListener('click', (e) => {
+  const pop = $('op-display-settings');
+  if (pop?.classList.contains('visible') && !pop.contains(e.target) && e.target.id !== 'op-settings-btn') {
+    pop.classList.remove('visible');
+  }
+});
+
+// Wire the option buttons
+document.querySelectorAll('#ds-chord-mode .ds-opt').forEach(btn => {
+  btn.addEventListener('click', () => {
+    deviceSettings.chords = btn.dataset.val;
+    saveDeviceSettings();
+    applyDeviceSettings();
+  });
+});
+document.querySelectorAll('#ds-layout .ds-opt').forEach(btn => {
+  btn.addEventListener('click', () => {
+    deviceSettings.layout = btn.dataset.val;
+    saveDeviceSettings();
+    applyDeviceSettings();
+  });
+});
+document.querySelectorAll('#ds-view .ds-opt').forEach(btn => {
+  btn.addEventListener('click', () => {
+    deviceSettings.view = btn.dataset.val;
+    saveDeviceSettings();
+    applyDeviceSettings();
+    if (deviceSettings.view === 'fullscreen') {
+      // Try to also engage real browser fullscreen for total focus
+      try { document.documentElement.requestFullscreen?.(); } catch {}
+    } else {
+      try { if (document.fullscreenElement) document.exitFullscreen?.(); } catch {}
+    }
+  });
+});
+$('ds-key-select')?.addEventListener('change', (e) => {
+  deviceSettings.chordKey = e.target.value;
+  saveDeviceSettings();
+  applyDeviceSettings();
+});
+
+// Render the optional next-slide preview
+function renderNextSlot() {
+  const slot = $('op-next-slot');
+  if (!slot) return;
+  const idx = currentIdx + 1;
+  const next = slides[idx];
+  if (!next || deviceSettings.layout !== 'with_next') {
+    slot.style.display = '';
+    return;
+  }
+  // Reuse the same renderSlideOnStage path. Ensure label exists.
+  if (!slot.querySelector('.op-next-label')) {
+    const lbl = document.createElement('div');
+    lbl.className = 'op-next-label';
+    lbl.textContent = 'Next';
+    slot.prepend(lbl);
+  }
+  renderSlideOnStage(slot, next, palette);
+  // Don't run the video layer on the next-preview to save CPU
+  if (slot._videoStarted) { stopVideoLayer(slot); slot._videoStarted = false; slot._videoSig = ''; }
+}
+
+// Re-render strip contents (chord display also affects thumbnail text)
+function renderStripContents() { renderOperator(); }
+
+// =========================================================================
+// Fullscreen exit: Escape OR double-tap anywhere
+// =========================================================================
+let _lastTapAt = 0;
+function maybeDoubleTapExit(e) {
+  if (deviceSettings.view !== 'fullscreen') return;
+  const now = Date.now();
+  if (now - _lastTapAt < 380) {
+    deviceSettings.view = 'control';
+    saveDeviceSettings();
+    applyDeviceSettings();
+    if (document.fullscreenElement) try { document.exitFullscreen(); } catch {}
+    _lastTapAt = 0;
+  } else {
+    _lastTapAt = now;
+  }
+}
+operatorView.addEventListener('click', maybeDoubleTapExit, true);
+operatorView.addEventListener('touchend', maybeDoubleTapExit, { passive: true });
 
 // QR popover toggle
 $('op-qr-toggle')?.addEventListener('click', (e) => {
