@@ -2435,13 +2435,21 @@ async function mountYoutubeIframe(youtubeUrl) {
   if (!container) {
     container = document.createElement('div');
     container.id = '__lyric_slides_yt_container__';
+    // Small thumbnail in the top-right corner — out of the way of operator controls.
+    // Visible enough that the user can click into it once if Chrome blocks autoplay
+    // (per-frame user-gesture rule), then subsequent plays go through the
+    // projection app's audio bar without needing to touch the thumbnail.
     container.style.cssText = [
-      'position:fixed', 'bottom:70px', 'right:16px',
-      'width:240px', 'height:135px',
-      'background:#000', 'border-radius:8px', 'overflow:hidden',
-      'z-index:100', 'box-shadow:0 4px 16px rgba(0,0,0,0.6)',
-      'border:1px solid rgba(255,255,255,0.12)'
+      'position:fixed', 'top:72px', 'right:16px',
+      'width:160px', 'height:90px',
+      'background:#000', 'border-radius:6px', 'overflow:hidden',
+      'z-index:100', 'box-shadow:0 4px 16px rgba(0,0,0,0.5)',
+      'border:1px solid rgba(255,255,255,0.12)',
+      'opacity:0.85'
     ].join(';');
+    container.title = 'YouTube audio source \u2014 click here once if audio doesn\u2019t start';
+    container.addEventListener('mouseenter', () => container.style.opacity = '1');
+    container.addEventListener('mouseleave', () => container.style.opacity = '0.85');
     document.body.appendChild(container);
   }
 
@@ -2453,15 +2461,16 @@ async function mountYoutubeIframe(youtubeUrl) {
   return new Promise((resolve, reject) => {
     _ytPlayer = new YT.Player(inner, {
       videoId,
-      width: '240',
-      height: '135',
+      width: '160',
+      height: '90',
       playerVars: {
         autoplay: 0,
-        controls: 1,        // visible controls so user can click to satisfy autoplay policy
+        controls: 1,        // keep controls so user can click play directly to satisfy gesture rule
         modestbranding: 1,
         rel: 0,
         iv_load_policy: 3,
-        playsinline: 1
+        playsinline: 1,
+        disablekb: 1
       },
       events: {
         onReady: (event) => {
