@@ -3289,6 +3289,18 @@ $('refresh-library')?.addEventListener('click', renderLibrary);
 
   ta.addEventListener('input', render);
   ta.addEventListener('scroll', syncScroll);
+  ta.addEventListener('focus', render);   // covers programmatic .value changes
+  // Programmatic value changes (loadIntoEditor sets ta.value directly) don't
+  // fire 'input', so poll for value changes as a safety net.
+  let lastValue = ta.value;
+  setInterval(() => {
+    if (ta.value !== lastValue) {
+      lastValue = ta.value;
+      render();
+    }
+  }, 200);
+  // Expose so other code can force a refresh after setting .value
+  window._renderLyricsHighlight = render;
   // Initial paint
   render();
 
