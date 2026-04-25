@@ -545,6 +545,46 @@
   }
   .op-update-slide-btn.is-frozen:hover { background: rgba(245,158,11,0.28); }
 
+  /* Find song (voice search) button */
+  .op-find-song-btn {
+    flex: 0 0 auto;
+    padding: 0 16px;
+    height: 60px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--panel-2);
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s, color 0.12s, box-shadow 0.12s;
+    white-space: nowrap;
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .op-find-song-btn:hover { color: var(--text); border-color: var(--muted); }
+  .op-find-song-btn.is-listening {
+    background: rgba(154,126,200,0.18);
+    border-color: rgba(154,126,200,0.7);
+    color: var(--accent);
+    animation: findSongPulse 1.4s ease-in-out infinite;
+  }
+  .op-find-song-btn.matched {
+    background: rgba(56,142,72,0.22);
+    border-color: rgba(56,142,72,0.6);
+    color: #5eb863;
+  }
+  .op-find-song-btn.no-match {
+    background: rgba(224,123,123,0.18);
+    border-color: rgba(224,123,123,0.55);
+    color: var(--danger);
+  }
+  @keyframes findSongPulse {
+    0%, 100% { box-shadow: 0 0 0 1px rgba(154,126,200,0.35); }
+    50%      { box-shadow: 0 0 0 5px rgba(154,126,200,0.55); }
+  }
+
   /* Section heading buttons row — under the strip */
   .op-section-buttons {
     background: var(--panel);
@@ -1147,6 +1187,7 @@
     <div class="op-strip" id="op-strip"></div>
     <div class="op-section-buttons-wrap">
       <div class="op-section-buttons" id="op-section-buttons"></div>
+      <button class="op-find-song-btn" id="op-find-song-btn" title="Listen to your voice and jump to the matching song">🎤 Find song</button>
       <button class="op-update-slide-btn" id="op-update-slide-btn" title="Push current slide to the broadcast">↻ Update slide</button>
     </div>
   </div>
@@ -1399,6 +1440,7 @@ async function saveSong({ id, title, artist, lyrics, palette, slides_data, video
     });
     if (!r.ok) throw new Error(`save ${r.status}: ${await r.text()}`);
     const rows = await r.json();
+    if (typeof invalidateFindSongIndex === 'function') invalidateFindSongIndex();
     return rows[0];
   } else {
     const r = await fetch(SONGS_URL, {
@@ -1408,6 +1450,7 @@ async function saveSong({ id, title, artist, lyrics, palette, slides_data, video
     });
     if (!r.ok) throw new Error(`save ${r.status}: ${await r.text()}`);
     const rows = await r.json();
+    if (typeof invalidateFindSongIndex === 'function') invalidateFindSongIndex();
     return rows[0];
   }
 }
@@ -1420,6 +1463,10 @@ async function patchSong(id, patch) {
     body: JSON.stringify(patch)
   });
   if (!r.ok) throw new Error(`patch ${r.status}`);
+  // Lyrics may have changed — invalidate the search index
+  if ((patch.lyrics || patch.slides_data) && typeof invalidateFindSongIndex === 'function') {
+    invalidateFindSongIndex();
+  }
   return (await r.json())[0];
 }
 
@@ -1429,6 +1476,7 @@ async function deleteSong(id) {
     headers: pgHeaders()
   });
   if (!r.ok) throw new Error(`delete ${r.status}`);
+  if (typeof invalidateFindSongIndex === 'function') invalidateFindSongIndex();
 }
 
 async function fetchSong(id) {
@@ -3513,6 +3561,9 @@ $('op-palette-select')?.addEventListener('change', (e) => {
 // Update Slide button (commits loaded song's current slide to the broadcast)
 $('op-update-slide-btn')?.addEventListener('click', updateSlide);
 
+// Find song (voice search) — listen and jump to matching song slide
+$('op-find-song-btn')?.addEventListener('click', startFindSong);
+
 // =========================================================================
 // Display settings popover (per-device preferences)
 // =========================================================================
@@ -3889,6 +3940,248 @@ async function bootChartView() {
   $('chart-print').addEventListener('click', () => window.print());
   $('chart-back').addEventListener('click', (e) => { e.preventDefault(); window.close(); });
 }
+
+// ========================= FIND SONG (voice search) =========================
+// Pressing the "Find song" button starts the Web Speech API listening to the
+// mic. Each interim transcript chunk is scored (IDF-weighted word + bigram
+// overlap) against an in-memory index of every lyric line in the library.
+// As soon as a single line scores high enough AND clearly beats the runner-up,
+// we jump to that song + slide and stop listening. One-shot — operator
+// reclaims manual control immediately.
+
+const FIND_STOPWORDS = new Set(
+  ('a an and are as at be by for from has have he her his how i in is it its me my' +
+   ' not of on or our she that the their them then there these they this to too us' +
+   ' was we were what when where which who will with you your oh yeah ooh').split(/\s+/)
+);
+
+function tokenizeForSearch(text) {
+  return text.toLowerCase()
+    .replace(/[^a-z0-9' ]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w && !FIND_STOPWORDS.has(w));
+}
+
+function makeBigrams(tokens) {
+  const set = new Set();
+  for (let i = 0; i < tokens.length - 1; i++) set.add(tokens[i] + ' ' + tokens[i+1]);
+  return set;
+}
+
+let _findIndex = null;     // cached index across uses
+
+async function buildFindSongIndex() {
+  // Pull all songs (id, title, lyrics, slides_data) and turn each lyric line
+  // into a searchable entry. Built lazily on first use.
+  const r = await fetch(`${SONGS_URL}?select=id,title,lyrics,slides_data&order=updated_at.desc`, {
+    headers: pgHeaders()
+  });
+  if (!r.ok) throw new Error('library fetch ' + r.status);
+  const songs = await r.json();
+
+  const entries = [];
+  for (const song of songs) {
+    let songSlides = song.slides_data;
+    if (!Array.isArray(songSlides) || songSlides.length === 0) {
+      // Parse lyrics on the fly if no cached slides_data
+      const parsed = parseStructuredLyrics(song.lyrics || '');
+      if (parsed) songSlides = parsed.slides;
+      else {
+        const chunks = splitIntoChunks(cleanLyrics(song.lyrics || ''));
+        songSlides = buildSlides(chunks, []);
+      }
+    }
+    songSlides.forEach((slide, idx) => {
+      if (slide.kind !== 'lyric' || !Array.isArray(slide.lines) || slide.lines.length === 0) return;
+      const cleanLine = slide.lines.map(stripChordsFromLine).join(' ');
+      const tokens = tokenizeForSearch(cleanLine);
+      if (tokens.length === 0) return;
+      entries.push({
+        songId: song.id,
+        songTitle: song.title,
+        slideIdx: idx,
+        text: cleanLine,
+        words: new Set(tokens),
+        bigrams: makeBigrams(tokens)
+      });
+    });
+  }
+
+  // IDF: rare words score higher than "love", "you", "hallelujah" etc.
+  const docFreq = new Map();
+  for (const e of entries) for (const w of e.words) docFreq.set(w, (docFreq.get(w) || 0) + 1);
+  const idf = new Map();
+  const N = entries.length;
+  for (const [w, c] of docFreq) idf.set(w, Math.log(1 + N / c));
+
+  return { entries, idf };
+}
+
+function findBestMatch(transcript, index) {
+  const tokens = tokenizeForSearch(transcript);
+  if (tokens.length < 2) return null;
+  const bigrams = makeBigrams(tokens);
+
+  const scored = [];
+  for (const e of index.entries) {
+    let s = 0;
+    // Bigram match — strong signal
+    for (const bg of bigrams) {
+      if (e.bigrams.has(bg)) s += 3;
+    }
+    // Word-overlap weighted by IDF
+    for (const w of tokens) {
+      if (e.words.has(w)) s += (index.idf.get(w) || 1);
+    }
+    if (s > 0) scored.push({ entry: e, score: s });
+  }
+  if (scored.length === 0) return null;
+  scored.sort((a, b) => b.score - a.score);
+
+  const top = scored[0];
+  const next = scored[1] || { score: 0 };
+  // Require: minimum score AND clear separation from runner-up
+  if (top.score < 4) return null;
+  if (next.score > 0 && top.score / next.score < 1.25) return null;
+  return top;
+}
+
+let _findRecognition = null;
+let _findIsListening  = false;
+let _findTimeout      = null;
+
+async function jumpToFoundMatch(songId, slideIdx) {
+  if (currentSong?.id !== songId) {
+    await loadAndPresent(songId);
+  }
+  // showSlide unfreezes any captured display and broadcasts nav over Realtime
+  showSlide(slideIdx);
+}
+
+function resetFindSongButton() {
+  const btn = $('op-find-song-btn');
+  if (!btn) return;
+  btn.textContent = '🎤 Find song';
+  btn.classList.remove('is-listening', 'matched', 'no-match');
+}
+
+function stopFindSongListening() {
+  _findIsListening = false;
+  if (_findTimeout) { clearTimeout(_findTimeout); _findTimeout = null; }
+  if (_findRecognition) {
+    try { _findRecognition.stop(); } catch {}
+    _findRecognition = null;
+  }
+  const btn = $('op-find-song-btn');
+  if (btn) btn.classList.remove('is-listening');
+}
+
+async function startFindSong() {
+  const btn = $('op-find-song-btn');
+  if (!btn) return;
+  if (_findIsListening) { stopFindSongListening(); resetFindSongButton(); return; }
+
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    btn.textContent = '× No speech support';
+    btn.classList.add('no-match');
+    setTimeout(resetFindSongButton, 2000);
+    return;
+  }
+
+  // Build (or reuse) index
+  btn.textContent = '⏳ Indexing library…';
+  btn.disabled = true;
+  try {
+    if (!_findIndex || _findIndex.entries.length === 0) {
+      _findIndex = await buildFindSongIndex();
+    }
+  } catch (e) {
+    btn.textContent = '× Index error';
+    btn.classList.add('no-match');
+    btn.disabled = false;
+    setTimeout(resetFindSongButton, 2000);
+    return;
+  }
+  btn.disabled = false;
+
+  if (_findIndex.entries.length === 0) {
+    btn.textContent = '× No songs to search';
+    btn.classList.add('no-match');
+    setTimeout(resetFindSongButton, 2200);
+    return;
+  }
+
+  // Start listening
+  const rec = new SR();
+  rec.continuous = true;
+  rec.interimResults = true;
+  rec.lang = 'en-US';
+  _findRecognition = rec;
+  _findIsListening = true;
+  btn.textContent = '🎤 Listening… (tap to cancel)';
+  btn.classList.add('is-listening');
+
+  let finalText = '';
+  // 12-second hard timeout — if nothing matches by then, give up
+  _findTimeout = setTimeout(() => {
+    if (_findIsListening) {
+      stopFindSongListening();
+      btn.textContent = '× Couldn\'t find';
+      btn.classList.add('no-match');
+      setTimeout(resetFindSongButton, 2200);
+    }
+  }, 12000);
+
+  rec.onresult = (event) => {
+    let live = '';
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const t = event.results[i][0].transcript;
+      if (event.results[i].isFinal) finalText += t + ' ';
+      else live += t + ' ';
+    }
+    const allText = (finalText + live).trim();
+    // Show what we're hearing in the button (last ~30 chars)
+    const tail = allText.length > 30 ? '…' + allText.slice(-30) : allText;
+    btn.textContent = '🎤 ' + (tail || 'Listening…');
+
+    const match = findBestMatch(allText, _findIndex);
+    if (match) {
+      stopFindSongListening();
+      const e = match.entry;
+      btn.textContent = '✓ ' + e.songTitle;
+      btn.classList.remove('is-listening');
+      btn.classList.add('matched');
+      jumpToFoundMatch(e.songId, e.slideIdx);
+      setTimeout(resetFindSongButton, 2500);
+    }
+  };
+  rec.onerror = (event) => {
+    stopFindSongListening();
+    btn.textContent = '× ' + (event.error || 'mic error');
+    btn.classList.add('no-match');
+    setTimeout(resetFindSongButton, 2500);
+  };
+  rec.onend = () => {
+    // If we ended without matching, the timeout/error handlers already cleaned up
+    if (_findIsListening) {
+      _findIsListening = false;
+      btn.classList.remove('is-listening');
+    }
+  };
+
+  try {
+    rec.start();
+  } catch (e) {
+    stopFindSongListening();
+    btn.textContent = '× Start failed';
+    btn.classList.add('no-match');
+    setTimeout(resetFindSongButton, 2200);
+  }
+}
+
+// Invalidate the search index when the library changes
+function invalidateFindSongIndex() { _findIndex = null; }
 
 // ========================= BROADCAST-MODE BOOT =========================
 
