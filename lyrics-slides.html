@@ -403,11 +403,13 @@
   .pill-color-green  { background: rgba(56,142,72,0.92);  }
   .pill-color-blue   { background: rgba(54,113,193,0.92); }
   .pill-color-orange { background: rgba(212,128,32,0.92); }
+  .pill-color-yellow { background: rgba(212,176,32,0.92); color: #1a1300; }
   .pill-color-grey   { background: rgba(80,86,98,0.92);   }
   /* Same colors but applied to the bottom HUD chip on the LIVE preview */
   .op-preview-hud.color-green  { background: rgba(56,142,72,0.85); }
   .op-preview-hud.color-blue   { background: rgba(54,113,193,0.85); }
   .op-preview-hud.color-orange { background: rgba(212,128,32,0.85); }
+  .op-preview-hud.color-yellow { background: rgba(212,176,32,0.85); color: #1a1300; }
   .op-preview-hud.color-grey   { background: rgba(80,86,98,0.85); }
 
   /* Frozen-state chip (top-right of LIVE preview when displayed != loaded) */
@@ -500,6 +502,7 @@
   .op-section-btn.btn-color-green  { background: rgba(56,142,72,0.92); }
   .op-section-btn.btn-color-blue   { background: rgba(54,113,193,0.92); }
   .op-section-btn.btn-color-orange { background: rgba(212,128,32,0.92); }
+  .op-section-btn.btn-color-yellow { background: rgba(212,176,32,0.92); color: #1a1300; }
   .op-section-btn.btn-color-grey   { background: rgba(80,86,98,0.92); }
 
   /* Session sync display in footer */
@@ -2152,7 +2155,10 @@ function getDisplayState() {
  */
 function sectionColor(sectionType) {
   if (!sectionType) return 'grey';
-  const c = sectionType.trim().charAt(0).toUpperCase();
+  const trimmed = sectionType.trim();
+  // "Va*" (Vamp, Va, Va1, etc.) → yellow before falling through to V → green
+  if (/^va/i.test(trimmed)) return 'yellow';
+  const c = trimmed.charAt(0).toUpperCase();
   if (c === 'V') return 'green';
   if (c === 'C') return 'blue';
   if (c === 'B') return 'orange';
@@ -2436,7 +2442,7 @@ function updateCurrentHud() {
   const hud = $('op-current-hud');
   hud.textContent = `${sec}${currentIdx + 1} / ${slides.length}`;
   // Color the HUD chip to match the section
-  ['color-green','color-blue','color-orange','color-grey'].forEach(c => hud.classList.remove(c));
+  ['color-green','color-blue','color-orange','color-yellow','color-grey'].forEach(c => hud.classList.remove(c));
   hud.classList.add(`color-${sectionColor(s?.sectionType)}`);
   // Active class in strip + horizontal scroll into view
   document.querySelectorAll('.op-strip-item').forEach((el, i) => {
