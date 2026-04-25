@@ -3219,21 +3219,18 @@ async function generateFromLyrics({ id, title, artist, lyrics, palette: paletteC
       loadingText.textContent = 'Loading cached slides…';
       slides = cachedSlides;
     } else {
-      // First try the structured parser — handles V1/V2/Chorus shorthand AND repeat directives
-      // ("Chorus x2", "V1 and V2"). If it finds a song structure, we don't need Claude at all.
+      loadingText.textContent = 'Building slides…';
+      // First try the structured /heading parser. If the lyrics don't use it,
+      // just split by blank lines — every chunk becomes a "Verse" slide.
+      // No Claude API call: section labels come from explicit /headings only.
       const structured = parseStructuredLyrics(lyrics);
       if (structured) {
-        loadingText.textContent = 'Building slides from song structure…';
         slides = structured.slides;
       } else {
-        // Fall back to Claude for free-form lyrics with no recognizable headers
         const cleaned = cleanLyrics(lyrics);
         const chunks  = splitIntoChunks(cleaned);
         if (chunks.length === 0) throw new Error('No lyrics found after cleaning');
-
-        loadingText.textContent = `Labeling ${chunks.length} slides with Claude…`;
-        const labels = await labelChunksWithClaude(chunks, title, artist);
-        slides = buildSlides(chunks, labels);
+        slides = buildSlides(chunks, []);   // no labels → all default to "Verse"
       }
     }
 
