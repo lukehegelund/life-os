@@ -2866,10 +2866,48 @@ Output ONLY the formatted Lyric Slides text. Start immediately with the first se
   return data.content[0].text.trim();
 }
 
-// Ask Claude to suggest a YouTube URL for a song title/artist, then verify
-// the URL is real via oEmbed. Returns null if Claude says "UNKNOWN", the
-// response doesn't contain a parseable YouTube URL, or oEmbed rejects it.
-async function findYoutubeUrlWithClaude(title, artist) {
+// YouTube Data API v3 key. Restricted server-side to the
+// https://lukehegelund.github.io/* HTTP referrer, so even though it ships
+// in the bundle it can only be used from this domain.
+const YOUTUBE_DATA_API_KEY = 'AIzaSyDPNw2WKTwY7QdweyNcpZ7BL_r17oWVuGo';
+
+// Search YouTube for a song via the Data API v3 search.list endpoint and
+// return the top video as a watch URL. Quota cost is 100 units / query
+// (default project quota = 10,000/day, so ~100 song imports/day).
+// Returns null on no result or API error so the caller can fall back.
+async function searchYoutubeViaDataApi(title, artist) {
+  if (!title || !YOUTUBE_DATA_API_KEY) return null;
+  try {
+    const q = artist ? `${title} ${artist}` : title;
+    const params = new URLSearchParams({
+      part: 'snippet',
+      q,
+      type: 'video',
+      maxResults: '1',
+      videoEmbeddable: 'true',
+      topicId: '/m/04rlf', // Music topic \u2014 biases search toward songs
+      key: YOUTUBE_DATA_API_KEY,
+    });
+    const r = await fetch(`https://www.googleapis.com/youtube/v3/search?${params}`);
+    if (!r.ok) {
+      console.warn('YouTube Data API error', r.status, await r.text().catch(() => ''));
+      return null;
+    }
+    const data = await r.json();
+    const item = data.items && data.items[0];
+    const videoId = item && item.id && item.id.videoId;
+    if (!videoId) return null;
+    return `https://www.youtube.com/watch?v=${videoId}`;
+  } catch (e) {
+    console.warn('searchYoutubeViaDataApi failed', e);
+    return null;
+  }
+}
+
+// Fallback: ask Claude to suggest a YouTube URL. Used only when the Data API
+// search returns nothing or errors out. Less reliable but keeps the import
+// flow working if the project's daily quota is exhausted.
+async function findYoutubeUrlViaClaude(title, artist) {
   if (!title) return null;
   try {
     await loadClaudeKey();
@@ -2902,16 +2940,25 @@ Respond with ONLY the full URL on a single line (e.g. https://www.youtube.com/wa
     if (!text || /^unknown$/i.test(text)) return null;
     const match = text.match(/https?:\/\/(?:www\.|m\.)?(?:youtube\.com\/watch\?v=[\w-]+|youtu\.be\/[\w-]+)/i);
     if (!match) return null;
-    const candidate = match[0];
-    // Validate via oEmbed \u2014 throws on unknown / private videos
-    try {
-      await extractYouTubeInfo(candidate);
-      return candidate;
-    } catch {
-      return null;
-    }
+    return match[0];
   } catch (e) {
-    console.warn('findYoutubeUrlWithClaude failed', e);
+    console.warn('findYoutubeUrlViaClaude failed', e);
+    return null;
+  }
+}
+
+// Try the YouTube Data API first, fall back to Claude. Whatever URL we end
+// up with is validated via oEmbed before being returned, so deleted/private
+// videos don't get saved on the song.
+async function findYoutubeUrlWithClaude(title, artist) {
+  if (!title) return null;
+  let candidate = await searchYoutubeViaDataApi(title, artist);
+  if (!candidate) candidate = await findYoutubeUrlViaClaude(title, artist);
+  if (!candidate) return null;
+  try {
+    await extractYouTubeInfo(candidate);
+    return candidate;
+  } catch {
     return null;
   }
 }
