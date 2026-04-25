@@ -2110,13 +2110,18 @@ function parseStructuredLyrics(raw) {
   };
 }
 
+// Bracket pattern that matches section tags ([Verse 1], [Chorus]) but NOT
+// transposition directives like [+2 semitones] / [-3].
+const SECTION_TAG_LINE_RE    = /^\s*\[(?!\s*[+-]?\d+\s*(?:semitones?\s*)?\])[^\]]+\]\s*$/;
+const SECTION_TAG_LEADING_RE = /^\s*\[(?!\s*[+-]?\d+\s*(?:semitones?\s*)?\])[^\]]+\]\s*/;
+
 function cleanLyrics(raw) {
   return raw
     .split('\n')
-    // Strip lines that are ONLY a section tag like [Verse 1]
-    .map(line => /^\s*\[[^\]]+\]\s*$/.test(line) ? '' : line)
-    // Strip inline leading tags: "[Chorus] lyrics here" → "lyrics here"
-    .map(line => line.replace(/^\s*\[[^\]]+\]\s*/, ''))
+    // Strip lines that are ONLY a section tag like [Verse 1] (but preserve [+2 semitones])
+    .map(line => SECTION_TAG_LINE_RE.test(line) ? '' : line)
+    // Strip inline leading tags: "[Chorus] lyrics here" → "lyrics here" (but preserve directives)
+    .map(line => line.replace(SECTION_TAG_LEADING_RE, ''))
     .join('\n')
     // Collapse 3+ consecutive newlines to 2 (one blank line max between chunks)
     .replace(/\n{3,}/g, '\n\n')
@@ -2131,13 +2136,29 @@ function splitIntoChunks(cleanText) {
 }
 
 function buildSlides(chunks, labels) {
+  // Strip [+N semitones] / [-N semitones] / [+N] directives and accumulate offset.
+  const DIRECTIVE_RE = /\[([+-]?\d+)(?:\s*semitones?)?\]/gi;
+  let runningOffset = 0;
+  const stripDirectives = (line) => {
+    return line.replace(DIRECTIVE_RE, (_full, num) => {
+      runningOffset += parseInt(num, 10);
+      return '';
+    }).replace(/\s+/g, ' ').trim();
+  };
+
   const slides = [];
-  slides.push({ kind: 'blank', lines: [], sectionType: null });
+  slides.push({ kind: 'blank', lines: [], sectionType: null, transposeOffset: 0 });
   chunks.forEach((chunk, i) => {
-    const lines = chunk.split('\n').map(l => l.trim()).filter(Boolean);
-    slides.push({ kind: 'lyric', lines, sectionType: labels[i] || 'Verse' });
+    const lines = chunk.split('\n').map(l => stripDirectives(l)).filter(Boolean);
+    if (lines.length === 0) return;
+    slides.push({
+      kind: 'lyric',
+      lines,
+      sectionType: labels[i] || 'Verse',
+      transposeOffset: runningOffset
+    });
   });
-  slides.push({ kind: 'blank', lines: [], sectionType: null });
+  slides.push({ kind: 'blank', lines: [], sectionType: null, transposeOffset: runningOffset });
   return slides;
 }
 
@@ -3078,8 +3099,9 @@ async function generateFromLyrics({ id, title, artist, lyrics, palette: paletteC
     // Exception: if the input uses /heading syntax, always re-parse — it's free
     // (pure JS) and avoids serving stale cache when the parser has been updated.
     const hasSlashHeaders = /^\s*\/\S/m.test(lyrics);
+    const hasDirectives = /\[[+-]?\d+(?:\s*semitones?)?\]/i.test(lyrics);
     const lyricsUnchanged = cachedSlides && cachedLyrics && cachedLyrics.trim() === lyrics.trim();
-    let useCache = lyricsUnchanged && Array.isArray(cachedSlides) && cachedSlides.length > 0 && !hasSlashHeaders;
+    let useCache = lyricsUnchanged && Array.isArray(cachedSlides) && cachedSlides.length > 0 && !hasSlashHeaders && !hasDirectives;
 
     if (useCache) {
       loadingText.textContent = 'Loading cached slides…';
