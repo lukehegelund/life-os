@@ -2383,6 +2383,138 @@ function onExtensionReady() {
   try { updateAudioBar(); } catch {}
 }
 
+// ========================= YOUTUBE IFRAME PLAYER =========================
+// Embeds YouTube directly in the operator view using the IFrame Player API.
+// Replaces the older "open YouTube in a new tab" flow — gives reliable
+// play/pause sync via state-change events and keeps everything in one window.
+// Pitch shift still happens inside the iframe via the extension content
+// script; we drive it via window.postMessage to the iframe.
+
+let _ytPlayer = null;
+let _ytIframeReady = false;
+let _ytApiLoadPromise = null;
+let _currentMountedYoutubeUrl = null;
+
+function loadYouTubeIframeApi() {
+  if (_ytApiLoadPromise) return _ytApiLoadPromise;
+  _ytApiLoadPromise = new Promise((resolve) => {
+    if (window.YT && window.YT.Player) { resolve(window.YT); return; }
+    const prev = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => {
+      if (typeof prev === 'function') { try { prev(); } catch {} }
+      resolve(window.YT);
+    };
+    if (!document.querySelector('script[src*="youtube.com/iframe_api"]')) {
+      const tag = document.createElement('script');
+      tag.src = 'https://www.youtube.com/iframe_api';
+      document.head.appendChild(tag);
+    }
+  });
+  return _ytApiLoadPromise;
+}
+
+function _videoIdFromUrl(url) {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    if (u.hostname.includes('youtu.be')) return u.pathname.slice(1);
+    if (u.pathname.startsWith('/embed/')) return u.pathname.split('/embed/')[1].split(/[/?#]/)[0];
+    return u.searchParams.get('v');
+  } catch { return null; }
+}
+
+async function mountYoutubeIframe(youtubeUrl) {
+  if (_currentMountedYoutubeUrl === youtubeUrl && _ytIframeReady && _ytPlayer) return _ytPlayer;
+  unmountYoutubeIframe();
+  const videoId = _videoIdFromUrl(youtubeUrl);
+  if (!videoId) throw new Error('Invalid YouTube URL');
+
+  await loadYouTubeIframeApi();
+
+  let container = document.getElementById('__lyric_slides_yt_container__');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = '__lyric_slides_yt_container__';
+    container.style.cssText = [
+      'position:fixed', 'bottom:70px', 'right:16px',
+      'width:240px', 'height:135px',
+      'background:#000', 'border-radius:8px', 'overflow:hidden',
+      'z-index:100', 'box-shadow:0 4px 16px rgba(0,0,0,0.6)',
+      'border:1px solid rgba(255,255,255,0.12)'
+    ].join(';');
+    document.body.appendChild(container);
+  }
+
+  const inner = document.createElement('div');
+  inner.id = '__lyric_slides_yt_player__';
+  container.innerHTML = '';
+  container.appendChild(inner);
+
+  return new Promise((resolve, reject) => {
+    _ytPlayer = new YT.Player(inner, {
+      videoId,
+      width: '240',
+      height: '135',
+      playerVars: {
+        autoplay: 0,
+        controls: 1,        // visible controls so user can click to satisfy autoplay policy
+        modestbranding: 1,
+        rel: 0,
+        iv_load_policy: 3,
+        playsinline: 1
+      },
+      events: {
+        onReady: (event) => {
+          _ytIframeReady = true;
+          _currentMountedYoutubeUrl = youtubeUrl;
+          // Push current pitch settings into the freshly-loaded iframe
+          try { sendKeyToIframe(currentSong?.original_key, _getDisplayKey()); } catch {}
+          resolve(event.target);
+        },
+        onStateChange: (event) => {
+          // YT states: -1 unstarted, 0 ended, 1 playing, 2 paused, 3 buffering, 5 cued
+          if (event.data === 1) {
+            _isAudioPlaying = true;
+            updateAudioBar();
+            // On resume of playback, re-push key (in case iframe was reloaded)
+            try { sendKeyToIframe(currentSong?.original_key, _getDisplayKey()); } catch {}
+          } else if (event.data === 2 || event.data === 0) {
+            _isAudioPlaying = false;
+            updateAudioBar();
+          }
+        },
+        onError: (event) => {
+          console.warn('[Lyric Slides] YT iframe error', event && event.data);
+          reject(new Error('YouTube player error: ' + (event && event.data)));
+        }
+      }
+    });
+  });
+}
+
+function unmountYoutubeIframe() {
+  if (_ytPlayer) {
+    try { _ytPlayer.destroy(); } catch {}
+    _ytPlayer = null;
+  }
+  _ytIframeReady = false;
+  _currentMountedYoutubeUrl = null;
+  const c = document.getElementById('__lyric_slides_yt_container__');
+  if (c) c.remove();
+}
+
+function sendKeyToIframe(originalKey, targetKey) {
+  const container = document.getElementById('__lyric_slides_yt_container__');
+  const iframe = container && container.querySelector('iframe');
+  if (!iframe || !iframe.contentWindow) return;
+  iframe.contentWindow.postMessage({
+    source: 'lyric-slides-app',
+    action: 'setKey',
+    originalKey: originalKey || null,
+    targetKey: targetKey || null
+  }, 'https://www.youtube.com');
+}
+
 // ========================= AUDIO PLAYER =========================
 
 const STORAGE_URL = `${SUPABASE_URL}/storage/v1`;
@@ -2463,16 +2595,17 @@ function updateYouTubeEditorUI(youtubeUrl, audioUrl) {
 
 function initAudioForSong(audioUrl, originalKey, youtubeUrl) {
   teardownAudioPlayer();
-  // Reset playback state for new song
+  unmountYoutubeIframe();
   _isAudioPlaying = false;
   updateAudioBar();
-  // YouTube path takes priority when extension is present
-  if (youtubeUrl && _extensionPresent) {
-    // Nothing to set up locally — pitch shift happens in YouTube tab on play
+  if (youtubeUrl) {
+    // Pre-mount the iframe so the first Play has minimal delay. Pitch shift
+    // is wired up by the extension's content script when the parent posts
+    // the first setKey message (handled by sendKeyToIframe in onReady).
+    mountYoutubeIframe(youtubeUrl).catch((e) => console.warn('iframe mount failed', e));
     return;
   }
   if (!audioUrl) return;
-  // Legacy MP3 path
   _setupTonePlayer(audioUrl, originalKey, _getDisplayKey());
 }
 
@@ -2526,24 +2659,24 @@ function teardownAudioPlayer() {
 }
 
 async function toggleAudioPlayback() {
-  // YouTube + extension path
-  if (currentSong?.youtube_url && _extensionPresent) {
+  // YouTube + iframe path (preferred; pitch shift via extension content script)
+  if (currentSong?.youtube_url) {
     if (_isAudioPlaying) {
-      _isAudioPlaying = false;
-      updateAudioBar();
-      try { await pauseViaExtension(); } catch (e) { console.warn('extension pause failed', e); }
+      try { _ytPlayer && _ytPlayer.pauseVideo(); }
+      catch (e) { console.warn('yt pause failed', e); }
+      // _isAudioPlaying flips via onStateChange when YouTube confirms the pause
       return;
     }
-    _isAudioPlaying = true;
-    updateAudioBar();
     try {
-      await playViaExtension(
-        currentSong.youtube_url,
-        currentSong.original_key,
-        _getDisplayKey()
-      );
+      if (!_ytPlayer || !_ytIframeReady ||
+          _currentMountedYoutubeUrl !== currentSong.youtube_url) {
+        await mountYoutubeIframe(currentSong.youtube_url);
+      }
+      // Push the current pitch BEFORE play so the first audio frame is in-key
+      sendKeyToIframe(currentSong.original_key, _getDisplayKey());
+      _ytPlayer.playVideo();
     } catch (e) {
-      console.warn('extension play failed', e);
+      console.warn('yt iframe play failed', e);
       _isAudioPlaying = false;
       updateAudioBar();
       setStatus('Audio play failed: ' + e.message, true);
@@ -2604,7 +2737,8 @@ function updateAudioBar() {
   const keyEl   = $('op-audio-key-select');
   if (!bar) return;
 
-  const hasYoutube = !!currentSong?.youtube_url && _extensionPresent;
+  // iframe-mode: YouTube playback works without extension; pitch shift requires it
+  const hasYoutube = !!currentSong?.youtube_url;
   const hasMp3     = !!currentSong?.audio_url;
   // Show audio bar if either path is available
   const visible    = hasYoutube || hasMp3;
@@ -2642,13 +2776,10 @@ function updateAudioBar() {
 }
 
 async function changeAudioKey(newKey) {
-  // YouTube + extension path — push new key to the running pitch shifter
-  if (currentSong?.youtube_url && _extensionPresent) {
-    try {
-      await setKeyViaExtension(currentSong.original_key, newKey);
-    } catch (e) {
-      console.warn('extension setKey failed', e);
-    }
+  // YouTube + iframe path — push new key to the running pitch shifter
+  if (currentSong?.youtube_url) {
+    try { sendKeyToIframe(currentSong.original_key, newKey); }
+    catch (e) { console.warn('yt setKey failed', e); }
     return;
   }
   // Legacy MP3 path — re-initialize player with new pitch offset
@@ -3881,6 +4012,10 @@ function exitOperator() {
   if (broadcastPingTimer) { clearInterval(broadcastPingTimer); broadcastPingTimer = null; }
   if (autoTimer) { clearTimeout(autoTimer); autoTimer = null; }
   isPlaying = false;
+  // Tear down audio: stop the legacy MP3 player and remove the YouTube iframe
+  try { teardownAudioPlayer(); } catch {}
+  try { unmountYoutubeIframe(); } catch {}
+  _isAudioPlaying = false;
   showSetup();
 }
 
