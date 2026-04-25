@@ -85,6 +85,54 @@
   }
   .field input:focus, .field textarea:focus, .field select:focus { border-color: var(--accent); }
   .field textarea { min-height: 280px; font-size: 14px; line-height: 1.5; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+  /* Lyrics editor with syntax highlighting:
+     A <pre> mirrors the textarea's text behind it, with digits wrapped in
+     yellow spans. The textarea is transparent text on top so the caret stays
+     visible. Both layers must use IDENTICAL font/padding/line-height. */
+  .lyrics-editor-wrap { position: relative; }
+  .lyrics-editor-wrap .lyrics-overlay,
+  .lyrics-editor-wrap > textarea {
+    width: 100%;
+    min-height: 280px;
+    padding: 11px 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-size: 14px;
+    line-height: 1.5;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    box-sizing: border-box;
+    margin: 0;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+  .lyrics-editor-wrap .lyrics-overlay {
+    position: absolute; inset: 0;
+    color: var(--text);
+    background: var(--panel);
+    pointer-events: none;
+    z-index: 1;
+    overflow: hidden;
+  }
+  .lyrics-editor-wrap > textarea {
+    position: relative;
+    z-index: 2;
+    background: transparent;
+    color: transparent;
+    caret-color: var(--text);
+    resize: vertical;
+  }
+  .lyrics-editor-wrap > textarea:focus {
+    border-color: var(--accent);
+  }
+  .lyrics-editor-wrap > textarea:focus + .lyrics-overlay,
+  .lyrics-editor-wrap .lyrics-overlay { transition: border-color 0.15s; }
+  .lyrics-editor-wrap .lyrics-overlay .num { color: #ffe34d; font-weight: 600; }
+  .lyrics-editor-wrap .lyrics-overlay .dir { color: #ffaa44; font-weight: 600; }
+
+  .lyrics-label-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+  .lyrics-strip-parens { font-size: 11px; padding: 4px 9px; }
   .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   @media (max-width: 520px) { .two-col { grid-template-columns: 1fr; } }
   .options-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -968,8 +1016,14 @@
   </div>
 
   <div class="field">
-    <label>Lyrics <span style="color:var(--muted); font-weight:500; text-transform:none; letter-spacing:0; font-size:11px; margin-left:6px;">— blank line = new slide</span></label>
-    <textarea id="lyrics-input" placeholder="/V1&#10;I call upon Your name&#10;You delivered me from harm&#10;&#10;No fear comes&#10;I turn to You alone&#10;&#10;/Chorus&#10;You are my strong tower&#10;&#10;/V1&#10;&#10;/Chorus x2"></textarea>
+    <div class="lyrics-label-row">
+      <label>Lyrics <span style="color:var(--muted); font-weight:500; text-transform:none; letter-spacing:0; font-size:11px; margin-left:6px;">— blank line = new slide</span></label>
+      <button class="btn-ghost lyrics-strip-parens" id="strip-parens-btn" type="button" title="Remove all text in (parentheses) from the lyrics">⌫ Remove (parens)</button>
+    </div>
+    <div class="lyrics-editor-wrap">
+      <pre class="lyrics-overlay" id="lyrics-overlay" aria-hidden="true"></pre>
+      <textarea id="lyrics-input" placeholder="/V1&#10;I call upon Your name&#10;You delivered me from harm&#10;&#10;No fear comes&#10;I turn to You alone&#10;&#10;/Chorus&#10;You are my strong tower&#10;&#10;/V1&#10;&#10;/Chorus x2"></textarea>
+    </div>
   </div>
 
   <div class="video-field">
@@ -3196,6 +3250,65 @@ generateBtn?.addEventListener('click', async () => {
 });
 
 $('refresh-library')?.addEventListener('click', renderLibrary);
+
+// =========================================================================
+// Lyrics editor — yellow-digit highlighting + "Remove (parens)" button
+// =========================================================================
+(function setupLyricsEditor() {
+  const ta = $('lyrics-input');
+  const overlay = $('lyrics-overlay');
+  const stripBtn = $('strip-parens-btn');
+  if (!ta || !overlay) return;
+
+  const escapeHtml = (s) =>
+    s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+  const highlightDigits = (s) =>
+    escapeHtml(s).replace(/(\d)/g, '<span class="num">$1</span>');
+
+  function render() {
+    const text = ta.value;
+    const DIRECTIVE = /\[[+-]?\d+(?:\s*semitones?)?\]/gi;
+    let result = '';
+    let lastIdx = 0;
+    let m;
+    while ((m = DIRECTIVE.exec(text)) !== null) {
+      result += highlightDigits(text.slice(lastIdx, m.index));
+      result += '<span class="dir">' + highlightDigits(m[0]) + '</span>';
+      lastIdx = m.index + m[0].length;
+    }
+    result += highlightDigits(text.slice(lastIdx));
+    // Trailing newline so a final blank line keeps the overlay sized like the textarea
+    overlay.innerHTML = result + '\n';
+  }
+
+  function syncScroll() {
+    overlay.scrollTop  = ta.scrollTop;
+    overlay.scrollLeft = ta.scrollLeft;
+  }
+
+  ta.addEventListener('input', render);
+  ta.addEventListener('scroll', syncScroll);
+  // Initial paint
+  render();
+
+  // "Remove (parens)" — strips all (...) groups, including nested. Cleans up
+  // background-vocal annotations like "(praise the Lord)" so they don't end up
+  // on slides.
+  stripBtn?.addEventListener('click', () => {
+    let val = ta.value;
+    let prev;
+    // Repeatedly strip non-nested groups so nested parens like "((a) b)" all go.
+    do {
+      prev = val;
+      val = val.replace(/\([^()]*\)/g, '');
+    } while (val !== prev);
+    // Tidy up any double spaces created by the removal
+    val = val.split('\n').map(l => l.replace(/[ \t]{2,}/g, ' ').trimEnd()).join('\n');
+    ta.value = val;
+    render();
+  });
+})();
 
 // =========================================================================
 // LIVE preview: tap zones + touch swipe for slide navigation
