@@ -1416,9 +1416,19 @@
   }
   .import-tab.active { color: var(--text); border-bottom-color: var(--accent); }
   .import-body { padding: 14px 16px; }
-  .import-row { display: flex; gap: 10px; margin-bottom: 10px; }
+  .import-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+    /* Allow wrapping on narrow viewports so the Import button doesn't overflow
+       off-screen on phones — was hiding the button entirely on the title+artist
+       tab. */
+    flex-wrap: wrap;
+  }
   .import-row input {
-    flex: 1; padding: 9px 12px; background: var(--panel-2); border: 1px solid var(--border);
+    flex: 1 1 160px;             /* grow/shrink, but at least 160px wide before wrapping */
+    min-width: 0;                 /* allow shrinking below content size in flex */
+    padding: 9px 12px; background: var(--panel-2); border: 1px solid var(--border);
     border-radius: 8px; font-size: 14px; color: var(--text); outline: none;
   }
   .import-row input:focus { border-color: var(--accent); }
@@ -2684,10 +2694,66 @@ Return ONLY valid JSON, no markdown, no extra text, in this exact shape (with EX
 async function fetchLyricsOvh(title, artist) {
   const url = `https://api.lyrics.ovh/v1/${encodeURIComponent(artist || 'unknown')}/${encodeURIComponent(title)}`;
   const r = await fetch(url);
-  if (!r.ok) throw new Error(`Lyrics not found — try a different title or artist`);
+  if (!r.ok) throw new Error(`Lyrics not found \u2014 try a different title or artist`);
   const data = await r.json();
   if (!data.lyrics) throw new Error('No lyrics returned for this song');
   return data.lyrics;
+}
+
+// Fallback lyrics provider: ask Claude directly. Works for popular worship
+// songs and standards that lyrics.ovh doesn't index. Returns null if Claude
+// declines, says it doesn't know, or returns suspiciously short text (which
+// would suggest hallucination of just the chorus).
+async function fetchLyricsViaClaude(title, artist) {
+  if (!title) return null;
+  try {
+    await loadClaudeKey();
+    const prompt = `Provide the full lyrics to the song "${title}"${artist ? ` by ${artist}` : ''}.
+
+Output ONLY the lyrics \u2014 no commentary, no chord charts, no section labels (no "[Verse]" / "[Chorus]" headings), no copyright notices, no introduction. Use blank lines between verses/sections so each can become its own slide.
+
+If you don't know this song's lyrics with high confidence, respond with exactly: UNKNOWN`;
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': CLAUDE_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 2000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    const text = ((data.content && data.content[0]?.text) || '').trim();
+    if (!text) return null;
+    if (/^unknown$/i.test(text.split('\n')[0].trim())) return null;
+    // Sanity check: a song should have at least a few lines and a few hundred chars.
+    // Anything shorter is probably a refusal / partial recall.
+    const lineCount = text.split(/\n+/).filter((l) => l.trim().length > 0).length;
+    if (text.length < 200 || lineCount < 6) return null;
+    return text;
+  } catch (e) {
+    console.warn('fetchLyricsViaClaude failed', e);
+    return null;
+  }
+}
+
+// Try lyrics.ovh first, fall back to Claude if it 404s or returns nothing.
+// Throws only if BOTH sources fail.
+async function fetchLyricsWithFallback(title, artist) {
+  try {
+    const ovh = await fetchLyricsOvh(title, artist);
+    if (ovh && ovh.trim().length > 50) return ovh;
+  } catch {}
+  const fromClaude = await fetchLyricsViaClaude(title, artist);
+  if (fromClaude) return fromClaude;
+  throw new Error(`Lyrics not found in lyrics.ovh or Claude \u2014 try a different title/artist or paste manually.`);
 }
 
 async function extractYouTubeInfo(youtubeUrl) {
@@ -2870,17 +2936,22 @@ async function runAutoImport(mode) {
       title  = ($('import-title')?.value || '').trim();
       artist = ($('import-artist')?.value || '').trim();
       if (!title) { setImportStatus('Enter a song title first.', 'err'); return; }
-      rawLyrics = await fetchLyricsOvh(title, artist);
+      rawLyrics = await fetchLyricsWithFallback(title, artist);
     } else {
       const ytUrl = ($('import-yt-url')?.value || '').trim();
       if (!ytUrl) { setImportStatus('Paste a YouTube URL first.', 'err'); return; }
-      setImportStatus('Fetching YouTube video info…');
+      setImportStatus('Fetching YouTube video info\u2026');
       const ytTitle = await extractYouTubeInfo(ytUrl);
       const parsed  = parseArtistAndTitle(ytTitle);
-      title  = parsed.title;
-      artist = parsed.artist;
-      setImportStatus(`Found: "${ytTitle}" — looking up lyrics…`);
-      rawLyrics = await fetchLyricsOvh(title, artist);
+      // Prefer values the user typed in the main SONG TITLE / ARTIST fields
+      // when they're set \u2014 those are usually cleaner than what we can parse
+      // from a YouTube video title (which may have channel branding noise).
+      const editorTitle  = ($('song-title')?.value || '').trim();
+      const editorArtist = ($('song-artist')?.value || '').trim();
+      title  = editorTitle  || parsed.title;
+      artist = editorArtist || parsed.artist;
+      setImportStatus(`Found: "${ytTitle}" \u2014 looking up lyrics\u2026`);
+      rawLyrics = await fetchLyricsWithFallback(title, artist);
     }
 
     setImportStatus('Formatting sections with AI…');
