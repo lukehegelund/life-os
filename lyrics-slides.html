@@ -225,9 +225,10 @@
   }
   .slide-line + .slide-line { margin-top: 0.45em; }
 
-  /* Chord display: chord sits absolutely above the lyric character, in yellow */
-  .slide-line.chorded { padding-top: 0.85em; }
-  .slide-line.chorded + .slide-line.chorded { margin-top: 0.85em; }
+  /* Chord display: chord sits absolutely above the lyric segment, in yellow,
+     at the same font-size as the lyric. */
+  .slide-line.chorded { padding-top: 1.25em; }
+  .slide-line.chorded + .slide-line.chorded { margin-top: 1.1em; }
   .ch-token {
     position: relative;
     display: inline-block;
@@ -239,12 +240,12 @@
     bottom: 100%;
     left: 0;
     color: #ffe34d;
-    font-size: 0.55em;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-    margin-bottom: 0.05em;
+    font-size: 1em;            /* match the lyric size */
+    font-weight: 400;          /* same weight as lyrics */
+    letter-spacing: 0.03em;
+    margin-bottom: 0.1em;
     white-space: nowrap;
-    text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+    text-shadow: 0 1px 4px rgba(0,0,0,0.5);
   }
   /* white-space: pre preserves the trailing space from "I'll " in tokens like
      "I'll 1praise" — without it, inline-block boundaries eat the space. */
