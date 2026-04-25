@@ -301,6 +301,19 @@
      "I'll 1praise" — without it, inline-block boundaries eat the space. */
   .ch-lyr { display: block; white-space: pre; line-height: 1.15; }
 
+  /* [bracket notes] like [Bridge] / [softly] — small annotations shown only
+     in chord mode. Hidden in lyrics-only via stripChordsFromLine. */
+  .bracket-note {
+    font-size: 0.5em;
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+    opacity: 0.7;
+    color: #d6d6d6;
+    font-style: italic;
+    vertical-align: 0.25em;
+  }
+
   /* =========== OPERATOR VIEW =========== */
   .operator {
     display: none;
@@ -953,6 +966,14 @@
     min-height: 1em;
   }
   .chart-paper .ch-lyr { display: block; white-space: pre; line-height: 1.2; }
+  .chart-paper .bracket-note {
+    font-size: 0.7em;
+    color: #6b6b6b;
+    font-style: italic;
+    font-weight: 400;
+    opacity: 0.85;
+    vertical-align: 0.15em;
+  }
 
   @media print {
     body { background: white !important; }
@@ -1901,7 +1922,31 @@ function parseChordedLine(line) {
 }
 
 function stripChordsFromLine(line) {
-  return parseChordedLine(line).map(t => t.text).join('');
+  // Also strip [bracket notes] like [Bridge] / [softly] / [guitar solo].
+  // Directives [+2 semitones] are already stripped before this point in slide-build.
+  return parseChordedLine(line)
+    .map(t => t.text)
+    .join('')
+    .replace(/\[[^\]]*\]/g, '')
+    .replace(/[ \t]{2,}/g, ' ')   // collapse double spaces left by stripping
+    .trim();
+}
+
+// Helper: split text containing [bracket] groups into a sequence of plain-text
+// and bracket-note nodes. Used in chord-mode rendering where we want the
+// brackets to appear as small annotation text.
+function splitTextOnBrackets(text) {
+  const parts = [];
+  const re = /\[[^\]]*\]/g;
+  let lastIdx = 0;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > lastIdx) parts.push({ kind: 'text',    value: text.slice(lastIdx, m.index) });
+    parts.push({ kind: 'bracket', value: m[0] });
+    lastIdx = m.index + m[0].length;
+  }
+  if (lastIdx < text.length) parts.push({ kind: 'text', value: text.slice(lastIdx) });
+  return parts;
 }
 
 // Nashville → real key transposition --------------------------------
@@ -2382,7 +2427,18 @@ function renderSlideOnStage(stageEl, slide, palette, options = {}) {
             tokSpan.appendChild(ch);
             const tx = document.createElement('span');
             tx.className = 'ch-lyr';
-            tx.textContent = tok.text || '\u00A0';   // non-breaking space if no text
+            // Split on [bracket notes] so they render small inside chord mode.
+            const _bparts = splitTextOnBrackets(tok.text || ' ');
+            _bparts.forEach(p => {
+              if (p.kind === 'bracket') {
+                const br = document.createElement('span');
+                br.className = 'bracket-note';
+                br.textContent = p.value;
+                tx.appendChild(br);
+              } else {
+                tx.appendChild(document.createTextNode(p.value));
+              }
+            });
             tokSpan.appendChild(tx);
             el.appendChild(tokSpan);
           });
@@ -3665,7 +3721,17 @@ function renderChartView(song, mode, key) {
             seg.appendChild(ch);
             const tx = document.createElement('span');
             tx.className = 'ch-lyr';
-            tx.textContent = tok.text || '';
+            const _cparts = splitTextOnBrackets(tok.text || '');
+            _cparts.forEach(p => {
+              if (p.kind === 'bracket') {
+                const br = document.createElement('span');
+                br.className = 'bracket-note';
+                br.textContent = p.value;
+                tx.appendChild(br);
+              } else {
+                tx.appendChild(document.createTextNode(p.value));
+              }
+            });
             seg.appendChild(tx);
             lineEl.appendChild(seg);
           });
