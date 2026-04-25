@@ -1663,7 +1663,11 @@ Return ONLY valid JSON, no markdown, no extra text, in this exact shape (with EX
 // In lyrics+chords mode, render each token with the chord above the text.
 // In key mode, the chord number is transposed to the chosen key.
 
-const CHORD_RE = /^([b#]?[1-7])(m|maj7?|maj9|sus[24]?|add9?|dim|aug|°)?(7|9|11|13)?(?:\/([b#]?[1-7]))?/;
+// Chord modifier letters (m, maj7, sus4, etc.) only apply when followed by a
+// non-letter (punctuation, space, digit, end, or uppercase). This prevents
+// "na5me" from being parsed as chord "5m" + lyric "e" — instead it becomes
+// chord "5" + lyric "me".
+const CHORD_RE = /^([b#]?[1-7])((?:m|maj7?|maj9|sus[24]?|add9?|dim|aug|°)(?![a-z]))?(7|9|11|13)?(?:\/([b#]?[1-7]))?/;
 
 function parseChordedLine(line) {
   const tokens = [];
