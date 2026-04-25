@@ -359,6 +359,12 @@
   .bg-layer.has-thumb::after {
     display: none !important;
   }
+  /* Dual-layer cross-fade for palette changes. Stages have two .bg-layer
+     elements stacked; the active one has opacity 1, the inactive 0, both
+     transitioning at the same rate so swapping which one has the new
+     palette produces a smooth cross-fade. */
+  .bg-layer { opacity: 1; transition: opacity 0.6s ease-in-out; }
+  .bg-layer.bg-layer-fade { opacity: 0; }
   @keyframes gradientShift {
     0%   { background-position: 0% 50%; }
     50%  { background-position: 100% 50%; }
@@ -371,34 +377,54 @@
   }
 
   /* Deepened palettes — rich midtones so white text always reads */
+  .bg-layer.grad-sunset::before,
   .grad-sunset   .bg-layer::before { background: linear-gradient(135deg, #a6543d, #c67755, #925676, #6b3c66, #a6543d); }
+  .bg-layer.grad-sunset::after,
   .grad-sunset   .bg-layer::after  { background: radial-gradient(circle at 30% 70%, #d89470 0%, transparent 55%), radial-gradient(circle at 75% 30%, #7a3d5e 0%, transparent 55%); }
 
+  .bg-layer.grad-ocean::before,
   .grad-ocean    .bg-layer::before { background: linear-gradient(135deg, #1f4a5c, #2a6274, #3d7e7a, #255466, #1f4a5c); }
+  .bg-layer.grad-ocean::after,
   .grad-ocean    .bg-layer::after  { background: radial-gradient(circle at 60% 40%, #4d9088 0%, transparent 55%), radial-gradient(circle at 20% 80%, #0f2c3e 0%, transparent 55%); }
 
+  .bg-layer.grad-forest::before,
   .grad-forest   .bg-layer::before { background: linear-gradient(135deg, #2d4a3a, #3f5f49, #2f5646, #4a6a4e, #2d4a3a); }
+  .bg-layer.grad-forest::after,
   .grad-forest   .bg-layer::after  { background: radial-gradient(circle at 40% 30%, #5a7a58 0%, transparent 55%), radial-gradient(circle at 80% 70%, #1b3329 0%, transparent 55%); }
 
+  .bg-layer.grad-lavender::before,
   .grad-lavender .bg-layer::before { background: linear-gradient(135deg, #6b4f7c, #8b6b9a, #9e7fa8, #624775, #6b4f7c); }
+  .bg-layer.grad-lavender::after,
   .grad-lavender .bg-layer::after  { background: radial-gradient(circle at 30% 50%, #b08dbd 0%, transparent 55%), radial-gradient(circle at 75% 25%, #4a3159 0%, transparent 55%); }
 
+  .bg-layer.grad-aurora::before,
   .grad-aurora   .bg-layer::before { background: linear-gradient(135deg, #2b6b57, #3a8288, #5e6fa3, #82548e, #2b6b57); }
+  .bg-layer.grad-aurora::after,
   .grad-aurora   .bg-layer::after  { background: radial-gradient(circle at 50% 30%, #4a9c82 0%, transparent 55%), radial-gradient(circle at 20% 70%, #3a2c66 0%, transparent 55%); }
 
+  .bg-layer.grad-midnight::before,
   .grad-midnight .bg-layer::before { background: linear-gradient(135deg, #15233e, #243355, #39335a, #151e3a, #15233e); }
+  .bg-layer.grad-midnight::after,
   .grad-midnight .bg-layer::after  { background: radial-gradient(circle at 70% 40%, #4150a0 0%, transparent 50%), radial-gradient(circle at 25% 75%, #261747 0%, transparent 55%); }
 
+  .bg-layer.grad-peach::before,
   .grad-peach    .bg-layer::before { background: linear-gradient(135deg, #b86b56, #c9815a, #a56548, #8f5344, #b86b56); }
+  .bg-layer.grad-peach::after,
   .grad-peach    .bg-layer::after  { background: radial-gradient(circle at 35% 55%, #d98c6a 0%, transparent 55%), radial-gradient(circle at 75% 30%, #6d3a33 0%, transparent 55%); }
 
+  .bg-layer.grad-golden::before,
   .grad-golden   .bg-layer::before { background: linear-gradient(135deg, #9a7630, #b38d42, #95612a, #714620, #9a7630); }
+  .bg-layer.grad-golden::after,
   .grad-golden   .bg-layer::after  { background: radial-gradient(circle at 40% 40%, #c89848 0%, transparent 55%), radial-gradient(circle at 70% 75%, #5a3515 0%, transparent 55%); }
 
+  .bg-layer.grad-sky::before,
   .grad-sky      .bg-layer::before { background: linear-gradient(135deg, #456d92, #5d84a8, #4d6d8e, #385875, #456d92); }
+  .bg-layer.grad-sky::after,
   .grad-sky      .bg-layer::after  { background: radial-gradient(circle at 50% 20%, #8aa8c4 0%, transparent 55%), radial-gradient(circle at 30% 80%, #2a4660 0%, transparent 55%); }
 
+  .bg-layer.grad-rose::before,
   .grad-rose     .bg-layer::before { background: linear-gradient(135deg, #8b4c65, #a6607d, #7a3f58, #632c48, #8b4c65); }
+  .bg-layer.grad-rose::after,
   .grad-rose     .bg-layer::after  { background: radial-gradient(circle at 45% 60%, #b87290 0%, transparent 55%), radial-gradient(circle at 75% 30%, #3e1c30 0%, transparent 55%); }
 
   /* Vignette over gradient for extra edge depth */
@@ -440,7 +466,7 @@
     color: white;
     font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'Inter', system-ui, sans-serif;
     opacity: 0;
-    transition: opacity 0.36s ease-in-out;   /* ~2x previous duration */
+    transition: opacity 0.6s ease-in-out;   /* slower for a more visible cross-fade */
     background: rgba(0,0,0,0.5);
     padding: 0.6em 1.85em;
     border-radius: 14px;
@@ -1797,12 +1823,8 @@
     <span class="op-bar-info empty" id="op-audio-info"></span>
     <button class="op-bar-btn op-audio-play" id="op-audio-play" style="display:none;">▶ Play</button>
     <span class="op-bar-key-wrap" id="op-audio-key-wrap" style="display:none;">
-      <span class="op-bar-key-label">Key:</span>
-      <select class="op-audio-key-select" id="op-audio-key-select">
-        <option>C</option><option>C#</option><option>D</option><option>Eb</option>
-        <option>E</option><option>F</option><option>F#</option><option>G</option>
-        <option>Ab</option><option>A</option><option>Bb</option><option>B</option>
-      </select>
+      <span class="op-bar-key-label" id="op-audio-key-label">Key:</span>
+      <select class="op-audio-key-select" id="op-audio-key-select"></select>
     </span>
     <span class="op-bar-scrub-wrap" id="op-yt-scrub-wrap" style="display:none;">
       <input type="range" id="op-yt-scrub" min="0" max="100" value="0" step="0.1" title="Seek">
@@ -1815,6 +1837,7 @@
       <span class="op-broadcast-dot" id="op-broadcast-dot"></span>
       <span id="op-broadcast-status">Broadcast closed</span>
     </span>
+    <button class="op-bar-btn" id="op-randomize-palette" title="Randomize the gradient color for this song" style="display:none;">🎨 Color</button>
     <button class="op-bar-btn" id="op-qr-toggle" title="Share with phones / second screen">📱 Share</button>
     <button class="op-bar-btn" id="op-settings-btn" title="Display settings">⚙</button>
     <span class="op-bar-hint">← →·Swipe·F</span>
@@ -3326,7 +3349,7 @@ async function mountYoutubeIframe(youtubeUrl) {
           _ytIframeReady = true;
           _currentMountedYoutubeUrl = youtubeUrl;
           // Push current pitch settings into the freshly-loaded iframe
-          try { sendKeyToIframe(currentSong?.original_key, _getDisplayKey()); } catch {}
+          try { _pushCurrentKeyToIframe(); } catch {}
           startYtScrub();
           resolve(event.target);
         },
@@ -3336,7 +3359,7 @@ async function mountYoutubeIframe(youtubeUrl) {
             _isAudioPlaying = true;
             updateAudioBar();
             // On resume of playback, re-push key (in case iframe was reloaded)
-            try { sendKeyToIframe(currentSong?.original_key, _getDisplayKey()); } catch {}
+            try { _pushCurrentKeyToIframe(); } catch {}
           } else if (event.data === 2 || event.data === 0) {
             _isAudioPlaying = false;
             updateAudioBar();
@@ -3454,26 +3477,86 @@ function updateYouTubeEditorUI(youtubeUrl, audioUrl) {
   if (mp3Field && audioUrl) mp3Field.style.display = '';
 }
 
+// Populate the operator-bar Key dropdown. When the song has an original_key
+// set, fill with the 12 absolute keys (default selection: default_key or
+// original_key). When it's missing, fill with semitone offsets \u22126\u2026+6
+// with 0 ("original") in the middle. The change handler reads the value as
+// either a key string or a semitone integer string.
+function populateOpAudioKeyOptions() {
+  const sel = document.getElementById('op-audio-key-select');
+  const lbl = document.getElementById('op-audio-key-label');
+  if (!sel) return;
+  const orig = currentSong?.original_key;
+  sel.innerHTML = '';
+  if (orig) {
+    if (lbl) lbl.textContent = 'Key:';
+    const KEYS = ['C','C#','D','Eb','E','F','F#','G','Ab','A','Bb','B'];
+    for (const k of KEYS) {
+      const opt = document.createElement('option');
+      opt.value = k;
+      opt.textContent = k;
+      sel.appendChild(opt);
+    }
+  } else {
+    if (lbl) lbl.textContent = 'Pitch:';
+    // Semitone offsets \u22126 to +6 with 0 in the middle.
+    for (let n = -6; n <= 6; n++) {
+      const opt = document.createElement('option');
+      opt.value = String(n);
+      opt.textContent = (n === 0) ? '0 (original)'
+        : (n > 0 ? '+' + n : '\u2212' + Math.abs(n));
+      sel.appendChild(opt);
+    }
+  }
+}
+
+// Detect a semitone-mode dropdown value (e.g. "-2", "0", "3").
+function _isSemitoneOpValue(v) {
+  return typeof v === 'string' && /^[+-]?\d+$/.test(v);
+}
+
+// Translate the op-key dropdown value into a {originalKey, targetKey} pair
+// suitable for sendKeyToIframe / _setupTonePlayer. In semitone mode we
+// synthesize a C/X pair where X is C shifted by N semitones \u2014 the audio
+// pipeline only cares about the diff.
+function _resolveShiftPair(opValue) {
+  if (_isSemitoneOpValue(opValue)) {
+    const n = parseInt(opValue, 10) || 0;
+    return { originalKey: 'C', targetKey: shiftKeyBySemitones('C', n) };
+  }
+  return { originalKey: currentSong?.original_key, targetKey: opValue };
+}
+
+// Push the current pitch settings into the YT iframe (or no-op if none).
+function _pushCurrentKeyToIframe() {
+  const opValue = document.getElementById('op-audio-key-select')?.value;
+  const { originalKey, targetKey } = _resolveShiftPair(opValue);
+  try { sendKeyToIframe(originalKey, targetKey); } catch (e) { console.warn('sendKeyToIframe failed', e); }
+}
+
 function initAudioForSong(audioUrl, originalKey, youtubeUrl) {
   teardownAudioPlayer();
   unmountYoutubeIframe();
   _isAudioPlaying = false;
-  // Set the operator key dropdown once on song load. Priority:
-  //   1) currentSetlist.targetKey (setlist-wide override) if active
-  //   2) song's default_key
-  //   3) song's original_key
-  // Subsequent user changes via the dropdown are sticky until the next song load.
+  // Repopulate the dropdown for this song (key-mode vs semitone-mode).
+  populateOpAudioKeyOptions();
   const sel = document.getElementById('op-audio-key-select');
   if (sel) {
-    let initial;
-    if (currentSetlist && currentSetlist.targetKey) {
-      initial = normalizeKey(currentSetlist.targetKey);
+    if (currentSong?.original_key) {
+      // Key-mode: priority setlist target -> default -> original.
+      let initial;
+      if (currentSetlist && currentSetlist.targetKey) {
+        initial = normalizeKey(currentSetlist.targetKey);
+      } else {
+        initial = normalizeKey(currentSong?.default_key || currentSong?.original_key);
+      }
+      if (initial) {
+        const optionVals = [...sel.options].map(o => o.value);
+        if (optionVals.includes(initial)) sel.value = initial;
+      }
     } else {
-      initial = normalizeKey(currentSong?.default_key || currentSong?.original_key);
-    }
-    if (initial) {
-      const optionVals = [...sel.options].map(o => o.value);
-      if (optionVals.includes(initial)) sel.value = initial;
+      // Semitone-mode: default to 0.
+      sel.value = '0';
     }
   }
   refreshOpKeyDropdownMarkers();
@@ -3487,7 +3570,10 @@ function initAudioForSong(audioUrl, originalKey, youtubeUrl) {
     return;
   }
   if (!audioUrl) return;
-  _setupTonePlayer(audioUrl, originalKey, _getDisplayKey());
+  // Use the resolved shift pair so semitone-mode also works for MP3 path.
+  const opValue = document.getElementById('op-audio-key-select')?.value;
+  const pair = _resolveShiftPair(opValue);
+  _setupTonePlayer(audioUrl, pair.originalKey, pair.targetKey);
 }
 
 function _getDisplayKey() {
@@ -3554,7 +3640,7 @@ async function toggleAudioPlayback() {
         await mountYoutubeIframe(currentSong.youtube_url);
       }
       // Push the current pitch BEFORE play so the first audio frame is in-key
-      sendKeyToIframe(currentSong.original_key, _getDisplayKey());
+      _pushCurrentKeyToIframe();
       _ytPlayer.playVideo();
     } catch (e) {
       console.warn('yt iframe play failed', e);
@@ -3615,6 +3701,13 @@ function updateAudioBar() {
   const playBtn = $('op-audio-play');
   const infoEl  = $('op-audio-info');
   const keyWrap = $('op-audio-key-wrap');
+  // Show the Color button only when this song has no video background.
+  // Selected videos cover the gradient anyway, making the button useless.
+  const colorBtn = $('op-randomize-palette');
+  if (colorBtn) {
+    const hasVideo = (selectedVideos && selectedVideos.length > 0);
+    colorBtn.style.display = hasVideo ? 'none' : '';
+  }
 
   // iframe-mode: YouTube playback works without extension; pitch shift requires it
   const hasYoutube = !!currentSong?.youtube_url;
@@ -3656,24 +3749,22 @@ function updateAudioBar() {
   // original_key as fallback) and the user's overrides are sticky after that.
 }
 
-async function changeAudioKey(newKey) {
-  // YouTube + iframe path — push new key to the running pitch shifter
+async function changeAudioKey(newValue) {
+  const { originalKey, targetKey } = _resolveShiftPair(newValue);
+  // YouTube + iframe path \u2014 push new key to the running pitch shifter
   if (currentSong?.youtube_url) {
-    // The pitch shift only works if the Chrome extension is installed and
-    // already injected into the iframe. If it's not present, the key
-    // dropdown change is a no-op — let the user know.
     if (!_extensionPresent) {
       showExtensionInstallPrompt();
     }
-    try { sendKeyToIframe(currentSong.original_key, newKey); }
+    try { sendKeyToIframe(originalKey, targetKey); }
     catch (e) { console.warn('yt setKey failed', e); }
     return;
   }
-  // Legacy MP3 path — re-initialize player with new pitch offset
+  // Legacy MP3 path \u2014 re-initialize player with new pitch offset
   if (currentSong?.audio_url) {
     const wasPlaying = _isAudioPlaying;
     teardownAudioPlayer();
-    await _setupTonePlayer(currentSong.audio_url, currentSong.original_key, newKey);
+    await _setupTonePlayer(currentSong.audio_url, originalKey, targetKey);
     updateAudioBar();
     if (wasPlaying) toggleAudioPlayback();
   }
@@ -3870,6 +3961,8 @@ const _OP_KEY_MARKER_RE = /\s+[\u{1F7E0}\u{1F7E2}]+\s*$/u;
 function refreshOpKeyDropdownMarkers() {
   const sel = document.getElementById('op-audio-key-select');
   if (!sel) return;
+  // No markers in semitone mode (options are numeric, not keys).
+  if (!currentSong?.original_key) return;
   const orig = normalizeKey(currentSong?.original_key);
   const def  = normalizeKey(currentSong?.default_key);
   // Remember the currently-selected bare key so we can restore it after the rewrite
@@ -3909,10 +4002,17 @@ function shiftKeyBySemitones(key, semitones) {
 // reads chords two semitones lower than the sounding key).
 function getEffectiveChordKey() {
   const opKeyEl = document.getElementById('op-audio-key-select');
-  // Use op key only when the current song actually has audio (else op key is stale)
   const songHasAudio = !!(currentSong?.youtube_url || currentSong?.audio_url);
-  const sourceKey = (songHasAudio && opKeyEl?.value) ? opKeyEl.value
-                  : (deviceSettings.chordKey || 'G');
+  let sourceKey;
+  if (songHasAudio && opKeyEl?.value && !_isSemitoneOpValue(opKeyEl.value)) {
+    // Key-mode: op-key is an absolute key, drives chord display.
+    sourceKey = opKeyEl.value;
+  } else {
+    // Semitone-mode (no original_key) or no audio: fall back to the
+    // device's chord key. The semitone selection only affects audio pitch,
+    // not chord display \u2014 we don't have an absolute key to derive from.
+    sourceKey = deviceSettings.chordKey || 'G';
+  }
   const capo = (deviceSettings.capo | 0) || 0;
   return shiftKeyBySemitones(sourceKey, -capo);
 }
@@ -4159,8 +4259,44 @@ function resolvePalette(selected) {
 }
 
 function applyPaletteToStage(stageEl, pal) {
+  // Strip any palette class on the stage itself \u2014 legacy behavior, kept
+  // for safety so stale classes don't interact with descendant selectors.
   GRADIENTS.forEach(g => stageEl.classList.remove(g));
-  stageEl.classList.add(pal);
+
+  // Cross-fade between the two stacked .bg-layer elements created by
+  // ensureStageScaffold. Each layer carries its own palette class; we swap
+  // which one is .bg-layer-active and let CSS opacity transition do the rest.
+  const layers = Array.from(stageEl.querySelectorAll('.bg-layer'))
+    .filter(l => !l.classList.contains('has-thumb'));
+  if (layers.length === 0) return;
+
+  // Single-layer fallback (e.g. NEXT slot showing a thumbnail; we don't
+  // get here normally because of the .has-thumb filter above, but just in
+  // case): just set the class.
+  if (layers.length === 1) {
+    GRADIENTS.forEach(g => layers[0].classList.remove(g));
+    layers[0].classList.add(pal);
+    return;
+  }
+
+  let active = layers.find(l => l.classList.contains('bg-layer-active')) || layers[0];
+  let inactive = layers.find(l => l !== active) || layers[1];
+
+  // No-op if the palette already matches the visible layer.
+  if (active.classList.contains(pal)) return;
+
+  // Paint new palette onto the inactive layer.
+  GRADIENTS.forEach(g => inactive.classList.remove(g));
+  inactive.classList.add(pal);
+
+  // Force a reflow so the next class change kicks off a transition.
+  void inactive.offsetHeight;
+
+  // Swap which layer is active. CSS handles the opacity transition.
+  inactive.classList.remove('bg-layer-fade');
+  inactive.classList.add('bg-layer-active');
+  active.classList.remove('bg-layer-active');
+  active.classList.add('bg-layer-fade');
 }
 
 /**
@@ -4249,15 +4385,26 @@ function fitSlideContent(contentEl, stageEl) {
 function ensureStageScaffold(stageEl) {
   if (!stageEl) return;
   // Keep existing children that aren't ours (HUD labels etc.)
+  // Two stacked .bg-layer elements so palette changes can cross-fade.
   if (!stageEl.querySelector('.bg-layer')) {
     const bg = document.createElement('div');
-    bg.className = 'bg-layer';
+    bg.className = 'bg-layer bg-layer-active';
     stageEl.prepend(bg);
+  }
+  // Add a second layer if we don't already have one. Skip on stages where the
+  // first layer is using a thumbnail (NEXT slot) \u2014 those don't cross-fade.
+  const layers = stageEl.querySelectorAll('.bg-layer');
+  if (layers.length < 2 && !layers[0].classList.contains('has-thumb')) {
+    const bg2 = document.createElement('div');
+    bg2.className = 'bg-layer bg-layer-fade';
+    stageEl.insertBefore(bg2, layers[0].nextSibling);
   }
   if (!stageEl.querySelector('.bg-vignette')) {
     const vg = document.createElement('div');
     vg.className = 'bg-vignette';
-    stageEl.insertBefore(vg, stageEl.querySelector('.bg-layer').nextSibling);
+    const lastLayer = stageEl.querySelectorAll('.bg-layer');
+    const after = lastLayer[lastLayer.length - 1];
+    stageEl.insertBefore(vg, after.nextSibling);
   }
   if (!stageEl.querySelector('.slide-content-wrap')) {
     const wrap = document.createElement('div');
@@ -6616,6 +6763,29 @@ operatorView.addEventListener('click', maybeDoubleTapExit, true);
 operatorView.addEventListener('touchend', maybeDoubleTapExit, { passive: true });
 
 // Share popover toggle
+// Randomize the gradient palette for the current song. Only meaningful
+// when no video background is set (button is hidden otherwise).
+$('op-randomize-palette')?.addEventListener('click', () => {
+  if (!GRADIENTS || GRADIENTS.length === 0) return;
+  // Pick a different palette than the current one when possible.
+  let next = palette;
+  if (GRADIENTS.length > 1) {
+    let attempts = 0;
+    while (next === palette && attempts < 8) {
+      next = GRADIENTS[Math.floor(Math.random() * GRADIENTS.length)];
+      attempts++;
+    }
+  }
+  palette = next;
+  // Re-render preview / next / strip with the new palette.
+  try { renderCurrentPreview(); } catch {}
+  try { renderNextSlot && renderNextSlot(); } catch {}
+  try { renderStripContents && renderStripContents(); } catch {}
+  // Push to broadcast + viewers.
+  try { pushPaletteToBroadcast && pushPaletteToBroadcast(); } catch {}
+  try { broadcastPaletteRealtime && broadcastPaletteRealtime(); } catch {}
+});
+
 $('op-qr-toggle')?.addEventListener('click', (e) => {
   e.stopPropagation();
   // Make sure the codes/QRs are populated (covers the case where the popover
