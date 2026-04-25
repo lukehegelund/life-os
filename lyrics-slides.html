@@ -2246,7 +2246,12 @@ function renderSlideOnStage(stageEl, slide, palette, options = {}) {
     contentEl.innerHTML = '';
     if (slide && slide.kind === 'lyric') {
       const showChords = deviceSettings.chords !== 'off';
-      slide.lines.forEach(line => {
+      slide.lines.forEach(rawLine => {
+        // Lines starting with "- " mark a chord-only progression: skipped entirely
+        // in lyrics-only mode, rendered as chords-with-empty-lyrics in chord mode.
+        const isChordsOnlyLine = /^\s*-\s/.test(rawLine);
+        if (isChordsOnlyLine && !showChords) return;   // blank in lyrics mode
+        const line = isChordsOnlyLine ? rawLine.replace(/^\s*-\s+/, '') : rawLine;
         const el = document.createElement('div');
         el.className = 'slide-line' + (showChords ? ' chorded' : '');
         if (showChords) {
@@ -3448,7 +3453,12 @@ function renderChartView(song, mode, key) {
     for (const chunk of g.chunks) {
       const chunkEl = document.createElement('div');
       chunkEl.className = 'chart-chunk';
-      for (const rawLine of chunk) {
+      for (const rawLineUntrimmed of chunk) {
+        // Lines starting with "- " are chord-only progressions: skipped in lyrics
+        // mode, rendered as chords-only otherwise.
+        const isChordsOnlyLine = /^\s*-\s/.test(rawLineUntrimmed);
+        if (isChordsOnlyLine && mode === 'lyrics') continue;
+        const rawLine = isChordsOnlyLine ? rawLineUntrimmed.replace(/^\s*-\s+/, '') : rawLineUntrimmed;
         const lineEl = document.createElement('div');
         lineEl.className = 'chart-line';
         if (mode === 'lyrics') {
