@@ -416,21 +416,29 @@
 
   .slide-content-wrap {
     position: absolute; inset: 0; z-index: 2;
-    display: flex; align-items: center; justify-content: center;
+    /* Two .slide-content layers occupy the same grid cell so they can
+       cross-fade against each other instead of fade-out-then-fade-in. */
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
+    place-items: center;
     padding: 6%;
   }
   .slide-content {
+    grid-column: 1 / -1;
+    grid-row: 1 / -1;
     display: block;
-    width: max-content;          /* explicitly size to widest line, overriding flex constraints */
-    max-width: 100%;             /* but never wider than the wrap area visually */
+    width: max-content;          /* explicitly size to widest line */
+    max-width: 100%;
     text-align: center;
     color: white;
     font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'Inter', system-ui, sans-serif;
     opacity: 0;
-    transition: opacity 0.18s ease-in-out;
-    background: rgba(0,0,0,0.5);  /* 50% opaque black box around the text */
+    transition: opacity 0.36s ease-in-out;   /* ~2x previous duration */
+    background: rgba(0,0,0,0.5);
     padding: 0.6em 1.85em;
     border-radius: 14px;
+    pointer-events: none;
   }
   /* Blank slides have a slide-content but no text — don't render the box for those */
   .slide-content:empty { background: transparent; padding: 0; }
@@ -1645,12 +1653,12 @@
 <!-- ==================== OPERATOR VIEW ==================== -->
 <div class="operator" id="operator-view">
   <div class="op-topbar">
+    <button class="btn-ghost" id="op-back" style="margin-right:12px;flex-shrink:0;">← Library</button>
     <div class="op-title">
       <div class="op-title-name" id="op-title-name"></div>
       <div class="op-title-artist" id="op-title-artist"></div>
     </div>
     <div class="op-actions">
-      <button class="btn-ghost" id="op-back">← Library</button>
       <button class="btn-ghost" id="op-edit">✎ Edit lyrics</button>
     </div>
   </div>
@@ -1963,7 +1971,27 @@ function _parseJoinMode(code) {
   if (first === 'V') return { mode: 'viewer',   suffix: code.slice(1) };
   return { mode: 'editor', suffix: code };  // legacy
 }
-const { mode: APP_MODE, suffix: JOIN_SUFFIX } = _parseJoinMode(JOIN_CODE);
+const { suffix: JOIN_SUFFIX } = _parseJoinMode(JOIN_CODE);
+
+// Share link parameters: ?song=<uuid> loads that song directly (skipping
+// the library), ?mode=<editor|operator|viewer> overrides the access mode.
+// Mode resolution priority:
+//   1. ?mode= (explicit override)
+//   2. ?join= prefix letter (session join)
+//   3. If ?song= is present (share link with no mode given): default to operator
+//   4. Editor (full app, no shared session)
+const SHARE_SONG_ID = urlParams.get('song') || null;
+const EXPLICIT_MODE = urlParams.get('mode') || null;
+let APP_MODE;
+if (EXPLICIT_MODE && ['editor', 'operator', 'viewer'].includes(EXPLICIT_MODE)) {
+  APP_MODE = EXPLICIT_MODE;
+} else if (JOIN_CODE) {
+  APP_MODE = _parseJoinMode(JOIN_CODE).mode;
+} else if (SHARE_SONG_ID) {
+  APP_MODE = 'operator';
+} else {
+  APP_MODE = 'editor';
+}
 // Apply mode class on <body> ASAP so CSS hiding rules take effect before paint
 document.documentElement.classList.add('mode-' + APP_MODE);
 if (document.body) document.body.classList.add('mode-' + APP_MODE);
@@ -2849,6 +2877,59 @@ function onExtensionReady() {
   try { updateAudioBar(); } catch {}
 }
 
+// Show a one-shot modal explaining the extension is needed to pitch-shift
+// YouTube audio. Tracked per-session so the user isn't nagged repeatedly.
+let _extensionPromptShown = false;
+function showExtensionInstallPrompt() {
+  if (_extensionPromptShown) return;
+  _extensionPromptShown = true;
+  let backdrop = document.getElementById('__lyric_ext_install_modal__');
+  if (!backdrop) {
+    backdrop = document.createElement('div');
+    backdrop.id = '__lyric_ext_install_modal__';
+    backdrop.style.cssText = [
+      'position:fixed','inset:0','z-index:2000',
+      'background:rgba(0,0,0,0.7)','backdrop-filter:blur(4px)',
+      'display:flex','align-items:center','justify-content:center',
+      'padding:24px'
+    ].join(';');
+    const card = document.createElement('div');
+    card.style.cssText = [
+      'background:var(--panel)','border:1px solid var(--border)','border-radius:12px',
+      'max-width:460px','width:100%','padding:22px',
+      'box-shadow:0 20px 60px rgba(0,0,0,0.6)',
+      'font:14px/1.55 system-ui,sans-serif','color:var(--text)'
+    ].join(';');
+    card.innerHTML = `
+      <h3 style="margin:0 0 8px;font-size:18px;font-weight:700;">🎵 Pitch shift needs the extension</h3>
+      <p style="margin:0 0 12px;color:var(--muted);">
+        To change the key on YouTube-backed songs, install the
+        <strong style="color:var(--text);">Lyric Slides Pitch Shifter</strong> Chrome extension.
+        Without it the key dropdown is just for show.
+      </p>
+      <p style="margin:0 0 12px;color:var(--muted);">
+        The extension is currently waiting for review on the Chrome Web Store
+        (submitted April 25, 2026). It should be live within about a week —
+        once it is, you'll be able to install it with one click.
+      </p>
+      <p style="margin:0 0 16px;color:var(--muted);font-size:12px;">
+        In the meantime, the dev-mode build sits at
+        <code style="background:var(--panel-2);padding:1px 5px;border-radius:4px;">
+          /Users/danhegelund/Documents/Claude/lyric-slides-extension/
+        </code>
+        — load it via <code style="background:var(--panel-2);padding:1px 5px;border-radius:4px;">chrome://extensions/</code> &rarr; Developer mode &rarr; Load unpacked.
+      </p>
+      <div style="display:flex;justify-content:flex-end;gap:8px;">
+        <button id="__lyric_ext_dismiss__" style="background:var(--accent);color:white;border:none;padding:8px 16px;border-radius:7px;font-weight:600;cursor:pointer;">Got it</button>
+      </div>
+    `;
+    backdrop.appendChild(card);
+    backdrop.addEventListener('click', (e) => { if (e.target === backdrop) backdrop.remove(); });
+    card.querySelector('#__lyric_ext_dismiss__').addEventListener('click', () => backdrop.remove());
+    document.body.appendChild(backdrop);
+  }
+}
+
 // ========================= YOUTUBE IFRAME PLAYER =========================
 // Embeds YouTube directly in the operator view using the IFrame Player API.
 // Replaces the older "open YouTube in a new tab" flow — gives reliable
@@ -3305,6 +3386,12 @@ function updateAudioBar() {
 async function changeAudioKey(newKey) {
   // YouTube + iframe path — push new key to the running pitch shifter
   if (currentSong?.youtube_url) {
+    // The pitch shift only works if the Chrome extension is installed and
+    // already injected into the iframe. If it's not present, the key
+    // dropdown change is a no-op — let the user know.
+    if (!_extensionPresent) {
+      showExtensionInstallPrompt();
+    }
     try { sendKeyToIframe(currentSong.original_key, newKey); }
     catch (e) { console.warn('yt setKey failed', e); }
     return;
@@ -3902,9 +3989,14 @@ function ensureStageScaffold(stageEl) {
   if (!stageEl.querySelector('.slide-content-wrap')) {
     const wrap = document.createElement('div');
     wrap.className = 'slide-content-wrap';
-    const inner = document.createElement('div');
-    inner.className = 'slide-content';
-    wrap.appendChild(inner);
+    // Two .slide-content layers stacked in the same grid cell so we can
+    // cross-fade between them instead of fade-out-swap-fade-in.
+    const a = document.createElement('div');
+    a.className = 'slide-content visible';
+    const b = document.createElement('div');
+    b.className = 'slide-content';
+    wrap.appendChild(a);
+    wrap.appendChild(b);
     stageEl.appendChild(wrap);
   }
 }
@@ -3914,17 +4006,15 @@ function renderSlideOnStage(stageEl, slide, palette, options = {}) {
   ensureStageScaffold(stageEl);
   applyPaletteToStage(stageEl, palette);
 
-  const contentEl = stageEl.querySelector('.slide-content');
   const wrap = stageEl.querySelector('.slide-content-wrap');
+  // Two-layer cross-fade: render the new slide into whichever .slide-content is
+  // currently NOT visible, then flip the .visible class on both at the same
+  // time. The CSS opacity transition handles the simultaneous fade-in/out.
+  const layers = Array.from(wrap.querySelectorAll('.slide-content'));
+  let activeEl = layers.find((l) => l.classList.contains('visible')) || layers[0];
+  let contentEl = layers.find((l) => l !== activeEl) || layers[1] || activeEl;
 
-  // Fade transition: quickly hide, swap, fade in
-  if (options.noFade) {
-    contentEl.classList.remove('visible');
-  } else {
-    contentEl.classList.remove('visible');
-  }
-
-  // Swap content (delayed slightly for fade-out)
+  // Swap content into the inactive layer
   const swap = () => {
     contentEl.innerHTML = '';
     if (slide && slide.kind === 'lyric') {
@@ -3989,21 +4079,29 @@ function renderSlideOnStage(stageEl, slide, palette, options = {}) {
         }
         contentEl.appendChild(el);
       });
-      // Auto-fit font
+      // Auto-fit font, then trigger cross-fade
       requestAnimationFrame(() => {
         fitSlideContent(contentEl, stageEl);
-        requestAnimationFrame(() => contentEl.classList.add('visible'));
+        requestAnimationFrame(() => {
+          // Cross-fade: hide current and show the new one in the same tick.
+          if (activeEl !== contentEl) activeEl.classList.remove('visible');
+          contentEl.classList.add('visible');
+        });
       });
     } else {
-      // Blank — still show (empty) so fade animates
-      requestAnimationFrame(() => contentEl.classList.add('visible'));
+      // Blank — still cross-fade (empty content fades in over outgoing)
+      requestAnimationFrame(() => {
+        if (activeEl !== contentEl) activeEl.classList.remove('visible');
+        contentEl.classList.add('visible');
+      });
     }
   };
 
   if (options.noFade) {
+    if (activeEl !== contentEl) activeEl.classList.remove('visible');
     swap();
   } else {
-    setTimeout(swap, 90);
+    swap();
   }
 }
 
@@ -4687,6 +4785,7 @@ async function renderLibrary() {
         <div class="library-card-title"></div>
         <div class="library-card-artist"></div>
         <div class="library-card-actions">
+          <button class="share" title="Copy a share link to send a friend">🔗</button>
           <button class="edit" title="Edit lyrics">✎</button>
           <button class="del"  title="Delete">✕</button>
         </div>
@@ -4704,6 +4803,10 @@ async function renderLibrary() {
         e.stopPropagation();
         await loadIntoEditor(song.id);
       });
+      card.querySelector('.share').addEventListener('click', (e) => {
+        e.stopPropagation();
+        openShareSongPopover(song, e.currentTarget);
+      });
       card.querySelector('.del').addEventListener('click', async (e) => {
         e.stopPropagation();
         if (!confirm(`Delete "${song.title}"?`)) return;
@@ -4716,6 +4819,75 @@ async function renderLibrary() {
     console.error(e);
     grid.innerHTML = `<div class="library-empty" style="color:var(--danger);">Couldn't load library: ${e.message}</div>`;
   }
+}
+
+// ========================= PER-SONG SHARE LINK =========================
+
+// Build a share URL for a song. mode is 'viewer' | 'operator' | 'editor'.
+function buildSongShareUrl(songId, mode) {
+  const u = new URL(location.href);
+  // Wipe any inherited params from the current page
+  u.search = '';
+  u.searchParams.set('song', songId);
+  u.searchParams.set('mode', mode);
+  return u.toString();
+}
+
+// Pop up a small panel anchored under the share button with three buttons,
+// one per access mode. Click → copies link, shows a fading "Copied" toast.
+function openShareSongPopover(song, anchorBtn) {
+  // Remove any existing one
+  const existing = document.getElementById('__lyric_share_popover__');
+  if (existing) existing.remove();
+
+  const pop = document.createElement('div');
+  pop.id = '__lyric_share_popover__';
+  const rect = anchorBtn.getBoundingClientRect();
+  pop.style.cssText = [
+    'position:fixed',
+    `top:${rect.bottom + 6}px`,
+    `right:${Math.max(8, window.innerWidth - rect.right)}px`,
+    'z-index:1500',
+    'background:var(--panel)','border:1px solid var(--border)','border-radius:10px',
+    'box-shadow:0 12px 40px rgba(0,0,0,0.6)',
+    'padding:10px','width:240px',
+    'font:13px/1.4 system-ui,sans-serif','color:var(--text)'
+  ].join(';');
+  pop.innerHTML = `
+    <div style="font-weight:700;font-size:12px;margin-bottom:6px;">Share "${(song.title || 'song').replace(/[<>&]/g, '')}"</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Copies a link that opens just this song.</div>
+    <button data-mode="viewer"   style="display:block;width:100%;text-align:left;background:#16a34a;color:white;border:none;padding:7px 10px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;margin-bottom:5px;">▶ Viewer link (lyrics only)</button>
+    <button data-mode="operator" style="display:block;width:100%;text-align:left;background:var(--accent);color:white;border:none;padding:7px 10px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;margin-bottom:5px;">🎮 Operator link (slides + key)</button>
+    <button data-mode="editor"   style="display:block;width:100%;text-align:left;background:#6366f1;color:white;border:none;padding:7px 10px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">🛠 Editor link (full app)</button>
+    <div id="__lyric_share_toast__" style="margin-top:8px;font-size:11px;color:var(--accent);min-height:14px;"></div>
+  `;
+  document.body.appendChild(pop);
+
+  pop.querySelectorAll('button[data-mode]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const url = buildSongShareUrl(song.id, btn.dataset.mode);
+      try {
+        await navigator.clipboard.writeText(url);
+        const toast = pop.querySelector('#__lyric_share_toast__');
+        if (toast) toast.textContent = `Copied — ${btn.dataset.mode} link`;
+        setTimeout(() => pop.remove(), 1200);
+      } catch (e) {
+        // Clipboard API failed — show URL in a prompt for manual copy
+        prompt('Copy this link:', url);
+        pop.remove();
+      }
+    });
+  });
+  // Click outside dismisses
+  setTimeout(() => {
+    const dismiss = (e) => {
+      if (!pop.contains(e.target)) {
+        pop.remove();
+        document.removeEventListener('click', dismiss);
+      }
+    };
+    document.addEventListener('click', dismiss);
+  }, 0);
 }
 
 // ========================= SETLISTS — UI =========================
@@ -6561,6 +6733,18 @@ if (IS_CHART) {
     }
   };
   tryStart();
+} else if (SHARE_SONG_ID) {
+  // Standalone share-link mode: load the requested song directly, skipping
+  // the library. Body class (mode-operator/viewer/editor) already applied
+  // earlier so the appropriate UI is hidden/shown.
+  setupView.style.display = 'none';
+  loadClaudeKey().catch(() => {});
+  loadAndPresent(SHARE_SONG_ID).catch((e) => {
+    console.error('share-link load failed', e);
+    operatorView.classList.add('visible');
+    const t = $('op-title-name');
+    if (t) t.textContent = 'Song not found';
+  });
 } else {
   // Setup mode
   showSetup();
