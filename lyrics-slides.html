@@ -225,31 +225,31 @@
   }
   .slide-line + .slide-line { margin-top: 0.45em; }
 
-  /* Chord display: chord sits absolutely above the lyric segment, in yellow,
-     at the same font-size as the lyric. Tight spacing keeps consecutive lines close. */
-  .slide-line.chorded { padding-top: 1.05em; }
-  .slide-line.chorded + .slide-line.chorded { margin-top: 0.25em; }
+  /* Chord display: chord sits as a block ABOVE the lyric inside each inline-block
+     token. Because chord and lyric are both block-level inside the same shrink-to-fit
+     parent, the token width = max(chord-width, lyric-width). This prevents wider
+     chords (like "C#M") from overflowing into adjacent chord names. */
+  .slide-line.chorded + .slide-line.chorded { margin-top: 0.35em; }
   .ch-token {
-    position: relative;
     display: inline-block;
     vertical-align: top;
     line-height: 1.15;
   }
   .ch-chord {
-    position: absolute;
-    bottom: 100%;
-    left: 0;
+    display: block;
     color: #ffe34d;
     font-size: 1em;            /* match the lyric size */
-    font-weight: 400;          /* same weight as lyrics */
+    font-weight: 400;
     letter-spacing: 0.03em;
-    margin-bottom: 0.1em;
+    line-height: 1.1;
     white-space: nowrap;
     text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+    padding-right: 0.35em;     /* breathing room before the next chord */
+    min-height: 1.1em;         /* keep the chord row even on tokens with no chord */
   }
   /* white-space: pre preserves the trailing space from "I'll " in tokens like
      "I'll 1praise" — without it, inline-block boundaries eat the space. */
-  .ch-lyr { display: inline-block; white-space: pre; }
+  .ch-lyr { display: block; white-space: pre; line-height: 1.15; }
 
   /* =========== OPERATOR VIEW =========== */
   .operator {
@@ -876,31 +876,30 @@
   }
   .chart-paper .chart-chunk { margin-bottom: 14px; }
   .chart-paper .chart-line {
-    position: relative;
-    padding-top: 1.4em;
     margin-bottom: 0.15em;
     font-size: 15px;
     font-weight: 500;
   }
-  .chart-paper .chart-line + .chart-line { padding-top: 1.4em; margin-top: 0.05em; }
+  .chart-paper .chart-line + .chart-line { margin-top: 0.4em; }
   .chart-paper .ch-token {
-    position: relative;
     display: inline-block;
     vertical-align: top;
     line-height: 1.15;
   }
+  /* Same chord-collision safeguard as the slides: chord block reserves its own
+     width so wider chords (C#M) don't overlap the next chord. */
   .chart-paper .ch-chord {
-    position: absolute;
-    bottom: 100%;
-    left: 0;
+    display: block;
     color: #c0392b;             /* red-ish accent that prints clearly */
     font-size: 0.95em;
     font-weight: 700;
     letter-spacing: 0.02em;
-    margin-bottom: 0.18em;
+    line-height: 1.15;
+    padding-right: 0.5em;       /* breathing room before next chord */
     white-space: nowrap;
+    min-height: 1em;
   }
-  .chart-paper .ch-lyr { display: inline-block; white-space: pre; }
+  .chart-paper .ch-lyr { display: block; white-space: pre; line-height: 1.2; }
 
   @media print {
     body { background: white !important; }
