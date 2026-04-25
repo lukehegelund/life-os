@@ -1257,7 +1257,7 @@
           <option>Ab</option><option>A</option><option>A#</option><option>Bb</option><option>B</option>
         </select>
       </label>
-      <label class="audio-key-label" title="Your preferred performance key \u2014 operator's key dropdown defaults to this on song load">Default:
+      <label class="audio-key-label" title="Your preferred performance key — operator's key dropdown defaults to this on song load">Default:
         <select class="audio-key-select" id="audio-default-key">
           <option value="">Same as original</option>
           <option>C</option><option>C#</option><option>Db</option><option>D</option>
@@ -1266,7 +1266,7 @@
           <option>Ab</option><option>A</option><option>A#</option><option>Bb</option><option>B</option>
         </select>
       </label>
-      <label class="audio-key-label" title="Fine tune in cents \u2014 useful when the YouTube video is slightly out of tune (positive = video is sharp, we shift it down)">\u00a2:
+      <label class="audio-key-label" title="Fine tune in cents — useful when the YouTube video is slightly out of tune (positive = video is sharp, we shift it down)">¢:
         <input type="number" id="audio-cent-offset" value="0" min="-100" max="100" step="1"
                style="width:54px;background:var(--panel-2);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:6px;font-size:13px;">
       </label>
@@ -1427,7 +1427,7 @@
         <select id="ds-key-select"></select>
       </div>
       <div class="ds-key-row" id="ds-capo-row" style="display:none;align-items:center;gap:8px;margin-top:6px;">
-        <label title="Capo fret \u2014 chord display drops by this many semitones for guitarists with a capo">Capo:</label>
+        <label title="Capo fret — chord display drops by this many semitones for guitarists with a capo">Capo:</label>
         <input type="number" id="ds-capo-input" min="0" max="11" step="1" value="0"
                style="width:54px;background:var(--panel-2);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:6px;font-size:13px;">
         <span id="ds-capo-effective" style="font-size:11px;color:var(--muted);"></span>
@@ -2468,7 +2468,7 @@ async function mountYoutubeIframe(youtubeUrl) {
       'border:1px solid rgba(255,255,255,0.12)',
       'opacity:0.85'
     ].join(';');
-    container.title = 'YouTube audio source \u2014 click here once if audio doesn\u2019t start';
+    container.title = 'YouTube audio source — click here once if audio doesn’t start';
     container.addEventListener('mouseenter', () => container.style.opacity = '1');
     container.addEventListener('mouseleave', () => container.style.opacity = '0.85');
     document.body.appendChild(container);
@@ -3015,22 +3015,36 @@ function normalizeKey(k) {
 }
 
 // Refresh the operator key dropdown's option labels with colored dots:
-// 🟠 = song's original key, 🟢 = song's default (preferred performance) key,
-// both = song's original is also its default.
+// orange = song's original key, green = song's default (preferred performance) key,
+// both = song's original is also its default. We strip any prior marker from
+// the option's value before re-applying so the value never includes the emoji
+// (HTML <option> with no explicit value falls back to textContent — which
+// would otherwise corrupt the value when the marker is appended).
+const _OP_KEY_MARKER_RE = /\s+[\u{1F7E0}\u{1F7E2}]+\s*$/u;
 function refreshOpKeyDropdownMarkers() {
   const sel = document.getElementById('op-audio-key-select');
   if (!sel) return;
   const orig = normalizeKey(currentSong?.original_key);
   const def  = normalizeKey(currentSong?.default_key);
+  // Remember the currently-selected bare key so we can restore it after the rewrite
+  const selectedBare = (sel.value || '').replace(_OP_KEY_MARKER_RE, '').trim();
   for (const opt of sel.options) {
-    const k = opt.value;
+    // Recover the bare key from whatever's currently in value (may already have a marker)
+    const k = (opt.value || opt.textContent || '').replace(_OP_KEY_MARKER_RE, '').trim();
     let label = k;
     const isOrig = k === orig;
     const isDef  = k === def;
-    if (isOrig && isDef)      label += ' \u{1F7E0}\u{1F7E2}';
-    else if (isOrig)          label += ' \u{1F7E0}';
-    else if (isDef)           label += ' \u{1F7E2}';
+    if (isOrig && isDef)      label += ' 🟠🟢';
+    else if (isOrig)          label += ' 🟠';
+    else if (isDef)           label += ' 🟢';
+    // Explicit value FIRST so the textContent change doesn't poison the value attribute
+    opt.value = k;
     opt.textContent = label;
+  }
+  // Restore selection (option indices/values are unchanged; just re-set in case the live value got corrupted)
+  if (selectedBare) {
+    const opts = [...sel.options].map((o) => o.value);
+    if (opts.includes(selectedBare)) sel.value = selectedBare;
   }
 }
 
@@ -4630,7 +4644,7 @@ $('op-audio-key-select')?.addEventListener('change', async (e) => {
   }
   const ce = document.getElementById('ds-capo-effective');
   if (ce && (deviceSettings.capo || 0) > 0) {
-    ce.textContent = `\u2192 chords shown in ${getEffectiveChordKey()}`;
+    ce.textContent = `→ chords shown in ${getEffectiveChordKey()}`;
   }
 });
 
@@ -4821,7 +4835,7 @@ function applyDeviceSettings() {
     const capo = deviceSettings.capo || 0;
     if (capo > 0) {
       const eff = getEffectiveChordKey();
-      ce.textContent = `\u2192 chords shown in ${eff}`;
+      ce.textContent = `→ chords shown in ${eff}`;
     } else {
       ce.textContent = '';
     }
