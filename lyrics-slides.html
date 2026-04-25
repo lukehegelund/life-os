@@ -603,9 +603,8 @@
     -webkit-overflow-scrolling: touch;
   }
   .op-section-btn {
-    flex: 1 1 0;
-    min-width: 90px;
-    max-width: 220px;
+    flex: 0 0 auto;            /* width driven by content, not stretched */
+    min-width: 44px;           /* tappable square minimum */
     border: none;
     border-radius: 8px;
     color: white;
@@ -617,8 +616,6 @@
     transition: filter 0.1s, transform 0.05s;
     height: 100%;
     padding: 0 14px;
-    overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
   .op-section-btn:hover  { filter: brightness(1.15); }
@@ -746,7 +743,8 @@
   .operator.fullscreen .op-topbar,
   .operator.fullscreen .op-strip,
   .operator.fullscreen .op-section-buttons-wrap,
-  .operator.fullscreen .op-footer { display: none !important; }
+  .operator.fullscreen .op-footer,
+  .operator.fullscreen .op-bar { display: none !important; }
   .operator.fullscreen .op-main { padding: 0; gap: 0; }
   .operator.fullscreen .op-preview-live { border-radius: 0; }
   .operator.fullscreen .op-preview-label { display: none; }
@@ -1128,26 +1126,37 @@
   }
   .btn-audio-clear:hover { color: var(--danger); }
 
-  /* =========== OPERATOR AUDIO BAR =========== */
-  .op-audio-bar {
-    display: none; align-items: center; gap: 10px; padding: 8px 14px;
-    background: var(--panel-2); border-top: 1px solid var(--border);
-    flex-wrap: wrap; font-size: 13px;
+  /* =========== OPERATOR BOTTOM BAR (consolidated) =========== */
+  /* One row: audio info/play/key (when audio present) + broadcast indicator
+     + share QR + display settings + shortcuts hint. Replaces the old
+     two-row audio-bar + footer. */
+  .op-bar {
+    display: flex; align-items: center; gap: 10px; padding: 8px 14px;
+    background: var(--panel); border-top: 1px solid var(--border);
+    flex-wrap: wrap; font-size: 12px; color: var(--muted);
   }
-  .op-audio-bar.visible { display: flex; }
-  .op-audio-info { font-size: 12px; color: var(--muted); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .op-audio-play {
-    font-size: 12px; padding: 5px 12px; border-radius: 7px; border: 1px solid var(--border);
-    background: none; color: var(--text); cursor: pointer; transition: border-color 0.15s; white-space: nowrap;
+  .op-bar-info {
+    font-size: 13px; color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: 280px;
   }
-  .op-audio-play:hover { border-color: var(--accent); }
-  .op-audio-progress { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .op-audio-key-wrap { display: flex; align-items: center; gap: 6px; }
-  .op-audio-key-label { font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .op-bar-info.empty { display: none; }
+  .op-bar-btn {
+    font-size: 12px; padding: 5px 10px; border-radius: 7px;
+    border: 1px solid var(--border); background: none; color: var(--text);
+    cursor: pointer; transition: border-color 0.15s; white-space: nowrap;
+  }
+  .op-bar-btn:hover { border-color: var(--accent); }
+  .op-bar-btn:disabled { opacity: 0.5; cursor: default; }
+  .op-bar-key-wrap { display: inline-flex; align-items: center; gap: 6px; }
+  .op-bar-key-label { font-size: 11px; color: var(--muted); white-space: nowrap; }
   .op-audio-key-select {
     background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
     font-size: 12px; padding: 4px 8px; border-radius: 6px;
   }
+  .op-audio-progress { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .op-bar-spacer { flex: 1 1 auto; }
+  .op-bar-hint { font-size: 11px; color: var(--muted); }
 
 </style>
 </head>
@@ -1353,7 +1362,6 @@
     <div class="op-strip" id="op-strip"></div>
     <div class="op-section-buttons-wrap">
       <div class="op-section-buttons" id="op-section-buttons"></div>
-      <button class="op-find-song-btn" id="op-find-song-btn" title="Listen to your voice and jump to the matching song">🎤 Find song</button>
       <button class="op-update-slide-btn" id="op-update-slide-btn" title="Push current slide to the broadcast">↻ Update slide</button>
     </div>
   </div>
@@ -1363,50 +1371,28 @@
     <div class="qr-cap">Scan with your phone</div>
   </div>
 
-  <!-- Audio bar — visible when current song has audio attached -->
-  <div class="op-audio-bar" id="op-audio-bar">
-    <div class="op-audio-info" id="op-audio-info">🎵</div>
-    <div class="op-audio-btns" style="display:flex;align-items:center;gap:8px;">
-      <button class="op-audio-play" id="op-audio-play">▶ Play</button>
-      <span class="op-audio-progress" id="op-audio-progress"></span>
-    </div>
-    <div class="op-audio-key-wrap">
-      <span class="op-audio-key-label">Key:</span>
+  <!-- Consolidated bottom bar: audio (when present) + broadcast + share + display -->
+  <div class="op-bar" id="op-bar">
+    <span class="op-bar-info empty" id="op-audio-info"></span>
+    <button class="op-bar-btn op-audio-play" id="op-audio-play" style="display:none;">▶ Play</button>
+    <span class="op-bar-key-wrap" id="op-audio-key-wrap" style="display:none;">
+      <span class="op-bar-key-label">Key:</span>
       <select class="op-audio-key-select" id="op-audio-key-select">
         <option>C</option><option>C#</option><option>D</option><option>Eb</option>
         <option>E</option><option>F</option><option>F#</option><option>G</option>
         <option>Ab</option><option>A</option><option>Bb</option><option>B</option>
       </select>
-    </div>
-  </div>
+    </span>
 
-  <div class="op-footer">
-    <div class="op-footer-group">
-      <span class="op-broadcast-indicator">
-        <span class="op-broadcast-dot" id="op-broadcast-dot"></span>
-        <span id="op-broadcast-status">Broadcast closed</span>
-      </span>
-      <span class="op-session" id="op-session" style="display:none;">
-        Session
-        <span class="op-session-code" id="op-session-code">—</span>
-        <button class="op-qr-toggle" id="op-qr-toggle">QR</button>
-      </span>
-    </div>
-    <div class="op-footer-group">
-      <label style="font-size:11px; color:var(--muted); display:inline-flex; align-items:center; gap:6px;">
-        Palette
-        <select id="op-palette-select" title="Change gradient"></select>
-      </label>
-      <label style="font-size:11px; color:var(--muted); display:inline-flex; align-items:center; gap:6px;">
-        Auto
-        <input type="number" id="op-auto-advance" min="0" max="60" value="0" style="width:56px; background:var(--panel-2); border:1px solid var(--border); color:var(--text); font-size:12px; padding:4px 6px; border-radius:6px;">s
-      </label>
-      <button class="btn-ghost" id="op-play-btn" title="Play/Pause (P)">▶ Play</button>
-    </div>
-    <div class="op-footer-group" style="color:var(--muted); font-size:11px; gap:10px;">
-      <button class="btn-ghost" id="op-settings-btn" title="Display settings">⚙ Display</button>
-      <span>← → · Swipe · F fullscreen</span>
-    </div>
+    <span class="op-bar-spacer"></span>
+
+    <span class="op-broadcast-indicator">
+      <span class="op-broadcast-dot" id="op-broadcast-dot"></span>
+      <span id="op-broadcast-status">Broadcast closed</span>
+    </span>
+    <button class="op-bar-btn" id="op-qr-toggle" title="Share with phones / second screen">📱 Share</button>
+    <button class="op-bar-btn" id="op-settings-btn" title="Display settings">⚙</button>
+    <span class="op-bar-hint">← →·Swipe·F</span>
   </div>
 
   <!-- Display settings popover (per-device preferences) -->
@@ -2775,25 +2761,25 @@ function _fmtTime(s) {
 }
 
 function updateAudioBar() {
-  const bar     = $('op-audio-bar');
   const playBtn = $('op-audio-play');
   const infoEl  = $('op-audio-info');
-  const keyEl   = $('op-audio-key-select');
-  if (!bar) return;
+  const keyWrap = $('op-audio-key-wrap');
 
   // iframe-mode: YouTube playback works without extension; pitch shift requires it
   const hasYoutube = !!currentSong?.youtube_url;
   const hasMp3     = !!currentSong?.audio_url;
-  // Show audio bar if either path is available
-  const visible    = hasYoutube || hasMp3;
-  bar.classList.toggle('visible', visible);
+  const hasAudio   = hasYoutube || hasMp3;
+
+  // Show/hide the audio-related controls within the consolidated bar
+  if (playBtn) playBtn.style.display = hasAudio ? '' : 'none';
+  if (keyWrap) keyWrap.style.display = hasAudio ? '' : 'none';
 
   if (playBtn) {
     if (hasYoutube) {
       playBtn.textContent = _isAudioPlaying ? '⏸ Pause' : '▶ Play';
       playBtn.disabled    = false;
       playBtn.title       = '';
-    } else {
+    } else if (hasMp3) {
       const loaded = _audioPlayer?.loaded ?? false;
       playBtn.textContent = _isAudioPlaying ? '⏸ Pause' : '▶ Play';
       playBtn.disabled    = !loaded;
@@ -2803,12 +2789,15 @@ function updateAudioBar() {
   if (infoEl) {
     if (hasYoutube) {
       infoEl.textContent = `📺 ${currentSong.title || 'YouTube'}`;
+      infoEl.classList.remove('empty');
     } else if (hasMp3) {
       const raw   = currentSong.audio_url.split('/').pop() || 'audio';
       const clean = raw.replace(/^\d+_[a-z0-9]+\./, '').replace(/_/g, ' ');
       infoEl.textContent = `🎵 ${currentSong.title || clean}`;
+      infoEl.classList.remove('empty');
     } else {
-      infoEl.textContent = '🎵';
+      infoEl.textContent = '';
+      infoEl.classList.add('empty');
     }
   }
   // Note: we no longer auto-reset the key dropdown here. The dropdown is set
@@ -3063,9 +3052,9 @@ function shiftKeyBySemitones(key, semitones) {
 // reads chords two semitones lower than the sounding key).
 function getEffectiveChordKey() {
   const opKeyEl = document.getElementById('op-audio-key-select');
-  // Use op key only if the audio bar is actually visible (i.e., song has audio)
-  const audioBarVisible = document.getElementById('op-audio-bar')?.classList.contains('visible');
-  const sourceKey = (audioBarVisible && opKeyEl?.value) ? opKeyEl.value
+  // Use op key only when the current song actually has audio (else op key is stale)
+  const songHasAudio = !!(currentSong?.youtube_url || currentSong?.audio_url);
+  const sourceKey = (songHasAudio && opKeyEl?.value) ? opKeyEl.value
                   : (deviceSettings.chordKey || 'G');
   const capo = (deviceSettings.capo | 0) || 0;
   return shiftKeyBySemitones(sourceKey, -capo);
@@ -3528,15 +3517,18 @@ function renderOperator() {
   $('op-title-name').textContent = currentSong.title || 'Untitled';
   $('op-title-artist').textContent = currentSong.artist || '';
 
-  // Populate palette dropdown (keep selection in sync)
+  // Operator palette dropdown was removed in the bottom-bar consolidation;
+  // legacy code below silently no-ops if the element is gone.
   const paletteSel = $('op-palette-select');
-  paletteSel.innerHTML = '';
-  GRADIENTS.forEach(g => {
-    const o = document.createElement('option');
-    o.value = g; o.textContent = GRADIENT_LABELS[g];
-    paletteSel.appendChild(o);
-  });
-  paletteSel.value = palette;
+  if (paletteSel) {
+    paletteSel.innerHTML = '';
+    GRADIENTS.forEach(g => {
+      const o = document.createElement('option');
+      o.value = g; o.textContent = GRADIENT_LABELS[g];
+      paletteSel.appendChild(o);
+    });
+    paletteSel.value = palette;
+  }
 
   // Strip — visual thumbnails. Background is a still from the song's video
   // (if any), otherwise the gradient palette. Text + slide number + section pill overlaid.
@@ -4319,8 +4311,9 @@ async function generateFromLyrics({ id, title, artist, lyrics, palette: paletteC
 
     palette = resolvePalette(paletteChoice);
     currentIdx = 0;
-    autoAdvanceSec = parseInt($('auto-advance').value, 10) || 0;
-    $('op-auto-advance').value = autoAdvanceSec;
+    autoAdvanceSec = parseInt($('auto-advance')?.value || '0', 10) || 0;
+    const opAuto = $('op-auto-advance');
+    if (opAuto) opAuto.value = autoAdvanceSec;
 
     // Hand the videos off to the playback layer
     selectedVideos = Array.isArray(videoUrls) ? videoUrls : [];
