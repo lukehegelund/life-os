@@ -246,7 +246,9 @@
     white-space: nowrap;
     text-shadow: 0 1px 4px rgba(0,0,0,0.6);
   }
-  .ch-lyr { display: inline-block; }
+  /* white-space: pre preserves the trailing space from "I'll " in tokens like
+     "I'll 1praise" — without it, inline-block boundaries eat the space. */
+  .ch-lyr { display: inline-block; white-space: pre; }
 
   /* =========== OPERATOR VIEW =========== */
   .operator {
