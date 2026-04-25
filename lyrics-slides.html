@@ -1101,6 +1101,9 @@ let realtimeChannel = null;
 let sessionCode = null;
 const JOIN_CODE = urlParams.get('join') || null;
 
+// (Chord engine + device settings live further down in the file — see deviceSettings,
+//  parseChordedLine, translateChord, renderChord around line 1760+.)
+
 // "displayed" decouples WHAT'S ON SCREEN from WHAT'S LOADED.
 // When a new song is loaded mid-set, displayed retains the previous slide so the
 // broadcast/LIVE preview keeps showing it until the operator either taps a new
