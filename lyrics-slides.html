@@ -130,6 +130,12 @@
   .lyrics-editor-wrap .lyrics-overlay { transition: border-color 0.15s; }
   .lyrics-editor-wrap .lyrics-overlay .num { color: #ffe34d; font-weight: 600; }
   .lyrics-editor-wrap .lyrics-overlay .dir { color: #ffaa44; font-weight: 600; }
+  /* /heading lines: whole line tinted with section color, no per-digit highlight */
+  .lyrics-editor-wrap .lyrics-overlay .h-green  { color: #5eb863; font-weight: 700; }
+  .lyrics-editor-wrap .lyrics-overlay .h-blue   { color: #6ba7dc; font-weight: 700; }
+  .lyrics-editor-wrap .lyrics-overlay .h-orange { color: #f5a623; font-weight: 700; }
+  .lyrics-editor-wrap .lyrics-overlay .h-yellow { color: #ffd24a; font-weight: 700; }
+  .lyrics-editor-wrap .lyrics-overlay .h-grey   { color: var(--muted); font-weight: 700; }
 
   .lyrics-label-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
   .lyrics-strip-parens { font-size: 11px; padding: 4px 9px; }
@@ -3319,20 +3325,44 @@ $('refresh-library')?.addEventListener('click', renderLibrary);
   const highlightDigits = (s) =>
     escapeHtml(s).replace(/(\d)/g, '<span class="num">$1</span>');
 
-  function render() {
-    const text = ta.value;
+  // /heading lines get a single tint based on section type. Numbers in those
+  // lines are part of the section name (V1, Chorus 2), not chord positions.
+  function headerColorFor(name) {
+    if (/^(blank|black|silence|-|_)$/i.test(name.trim())) return 'grey';
+    if (typeof sectionColor === 'function') return sectionColor(name);
+    return 'grey';
+  }
+
+  function renderLine(line) {
+    // Detect /heading: optional leading whitespace, then "/", then a name (with
+    // optional " xN" repeat). The whole non-whitespace span gets tinted.
+    const headerMatch = line.match(/^(\s*)(\/\S.*)$/);
+    if (headerMatch) {
+      const lead = headerMatch[1];
+      const body = headerMatch[2];
+      // Strip leading "/" and trailing repeat suffix to determine color
+      const name = body.replace(/^\/\s*/, '').replace(/\s*[xX×]\s*\d+\s*$/, '');
+      const color = headerColorFor(name);
+      return escapeHtml(lead) + '<span class="h-' + color + '">' + escapeHtml(body) + '</span>';
+    }
+    // Non-header line — directives + per-digit highlighting
     const DIRECTIVE = /\[[+-]?\d+(?:\s*semitones?)?\]/gi;
     let result = '';
     let lastIdx = 0;
     let m;
-    while ((m = DIRECTIVE.exec(text)) !== null) {
-      result += highlightDigits(text.slice(lastIdx, m.index));
+    while ((m = DIRECTIVE.exec(line)) !== null) {
+      result += highlightDigits(line.slice(lastIdx, m.index));
       result += '<span class="dir">' + highlightDigits(m[0]) + '</span>';
       lastIdx = m.index + m[0].length;
     }
-    result += highlightDigits(text.slice(lastIdx));
+    result += highlightDigits(line.slice(lastIdx));
+    return result;
+  }
+
+  function render() {
+    const html = ta.value.split('\n').map(renderLine).join('\n');
     // Trailing newline so a final blank line keeps the overlay sized like the textarea
-    overlay.innerHTML = result + '\n';
+    overlay.innerHTML = html + '\n';
   }
 
   function syncScroll() {
