@@ -246,6 +246,8 @@
     text-shadow: 0 1px 4px rgba(0,0,0,0.5);
     padding-right: 0.35em;     /* breathing room before the next chord */
     min-height: 1.1em;         /* keep the chord row even on tokens with no chord */
+    /* Don't uppercase chord names — keep "Em" / "C#m" with lowercase minor "m" */
+    text-transform: none;
   }
   /* white-space: pre preserves the trailing space from "I'll " in tokens like
      "I'll 1praise" — without it, inline-block boundaries eat the space. */
