@@ -477,6 +477,10 @@
     min-height: 1.1em;         /* keep the chord row even on tokens with no chord */
     /* Don't uppercase chord names — keep "Em" / "C#m" with lowercase minor "m" */
     text-transform: none;
+    /* Align the chord to the START of the token's lyric segment (above the
+       syllable that the original "1call" / "de5livered" notation marks),
+       overriding the .slide-content centering inherited from above. */
+    text-align: left;
   }
   /* white-space: pre preserves the trailing space from "I'll " in tokens like
      "I'll 1praise" — without it, inline-block boundaries eat the space. */
@@ -1276,6 +1280,7 @@
     padding-right: 0.5em;       /* breathing room before next chord */
     white-space: nowrap;
     min-height: 1em;
+    text-align: left;           /* chord sits at the start of its syllable, not centered above the token */
   }
   .chart-paper .ch-lyr { display: block; white-space: pre; line-height: 1.2; }
   .chart-paper .bracket-note {
