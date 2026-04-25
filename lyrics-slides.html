@@ -1804,7 +1804,18 @@ Return ONLY valid JSON, no markdown, no extra text, in this exact shape (with EX
 // non-letter (punctuation, space, digit, end, or uppercase). This prevents
 // "na5me" from being parsed as chord "5m" + lyric "e" — instead it becomes
 // chord "5" + lyric "me".
-const CHORD_RE = /^([b#]?[1-7])((?:m|maj7?|maj9|sus[24]?|add9?|dim|aug|°)(?![a-z]))?(7|9|11|13)?(?:\/([b#]?[1-7]))?/;
+//
+// Accidentals can be either before the digit (b3, #4) or after (3b, 4#).
+// The trailing form for "b" requires the next char NOT be a letter, so
+// "1bChicken" is chord "1b" + "Chicken" but "1bchicken" is chord "1" + "bchicken".
+// "#" is unambiguous (not a word letter) so trailing "#" always counts.
+const CHORD_ROOT = '(?:[b#]?[1-7](?:#|b(?![a-z]))?)';
+const CHORD_RE = new RegExp(
+  '^(' + CHORD_ROOT + ')' +
+  '((?:m|maj7?|maj9|sus[24]?|add9?|dim|aug|°)(?![a-z]))?' +
+  '(7|9|11|13)?' +
+  '(?:\\/(' + CHORD_ROOT + '))?'
+);
 
 function parseChordedLine(line) {
   const tokens = [];
@@ -1855,17 +1866,20 @@ function preferFlatKey(key) {
   return /b/.test(key) || ['F','Bb','Eb','Ab','Db','Gb'].includes(key);
 }
 
-function transposeNashvilleToKey(chord, key) {
-  const m = chord.match(/^([b#]?)([1-7])(m|maj7?|maj9|sus[24]?|add9?|dim|aug|°)?(7|9|11|13)?(?:\/([b#]?)([1-7]))?$/);
+function transposeNashvilleToKey(chord, key, semitoneOffset = 0) {
+  // Accept either accidental position: leading (b3, #4) or trailing (3b, 4#).
+  const m = chord.match(/^([b#]?)([1-7])([b#]?)(m|maj7?|maj9|sus[24]?|add9?|dim|aug|°)?(7|9|11|13)?(?:\/([b#]?)([1-7])([b#]?))?$/);
   if (!m) return chord;
-  const accidental = m[1] || '';
+  const accidental = m[1] || m[3] || '';      // pick whichever side has it
   const degree     = parseInt(m[2], 10);
-  const qualityMod = m[3] || null;
-  const ext        = m[4] || '';
-  const slashAcc   = m[5] || '';
-  const slashDeg   = m[6] ? parseInt(m[6], 10) : null;
+  const qualityMod = m[4] || null;
+  const ext        = m[5] || '';
+  const slashAcc   = m[6] || m[8] || '';
+  const slashDeg   = m[7] ? parseInt(m[7], 10) : null;
 
-  const keyIdx = keyToIndex(key);
+  // Apply semitone offset (e.g. from [+2 semitones] directive)
+  const baseKeyIdx = keyToIndex(key);
+  const keyIdx = (baseKeyIdx + (semitoneOffset || 0) + 144) % 12;
   const noteTable = preferFlatKey(key) ? NOTES_FLAT : NOTES_SHARP;
 
   const baseDegreeShift = (d, acc) => {
@@ -1896,11 +1910,12 @@ function transposeNashvilleToKey(chord, key) {
   return out;
 }
 
-function renderChord(chord, mode, key) {
+function renderChord(chord, mode, key, semitoneOffset = 0) {
   if (!chord) return '';
+  // In numbers mode the chord stays the same regardless of any [+N semitones]
+  // directive — Nashville numbers are relative to the song's key, not absolute.
   if (mode === 'numbers') return chord;
-  // mode === 'key'
-  return transposeNashvilleToKey(chord, key);
+  return transposeNashvilleToKey(chord, key, semitoneOffset);
 }
 
 // ========================= PER-DEVICE SETTINGS =========================
@@ -2048,18 +2063,37 @@ function parseStructuredLyrics(raw) {
   }
   flushChunk();
 
-  // Pass 3 — expand program into slides
+  // Pass 3 — expand program into slides. As we build slides in song order, also
+  // accumulate any [+N semitones] / [-N semitones] directives encountered in
+  // line text. Each slide gets a `transposeOffset` reflecting the running total
+  // at that point in the song.
+  const DIRECTIVE_RE = /\[([+-]?\d+)(?:\s*semitones?)?\]/gi;
+  let runningOffset = 0;
+  const stripDirectives = (line) => {
+    return line.replace(DIRECTIVE_RE, (_full, num) => {
+      runningOffset += parseInt(num, 10);
+      return '';
+    }).replace(/\s+/g, ' ').trim();
+  };
+
   const slides = [];
   for (const step of program) {
     if (step.key === '__blank__') {
-      slides.push({ kind: 'blank', lines: [], sectionType: null });
+      slides.push({ kind: 'blank', lines: [], sectionType: null, transposeOffset: runningOffset });
       continue;
     }
     const sec = sections[step.key];
     if (!sec || sec.chunks.length === 0) continue;
     for (let r = 0; r < step.repeat; r++) {
       for (const chunk of sec.chunks) {
-        slides.push({ kind: 'lyric', sectionType: sec.displayName, lines: chunk });
+        const cleanedLines = chunk.map(line => stripDirectives(line)).filter(line => line !== '');
+        if (cleanedLines.length === 0) continue;
+        slides.push({
+          kind: 'lyric',
+          sectionType: sec.displayName,
+          lines: cleanedLines,
+          transposeOffset: runningOffset
+        });
       }
     }
   }
@@ -2068,9 +2102,9 @@ function parseStructuredLyrics(raw) {
 
   return {
     slides: [
-      { kind: 'blank', lines: [], sectionType: null },
+      { kind: 'blank', lines: [], sectionType: null, transposeOffset: 0 },
       ...slides,
-      { kind: 'blank', lines: [], sectionType: null }
+      { kind: 'blank', lines: [], sectionType: null, transposeOffset: runningOffset }
     ],
     sectionCount: Object.keys(sections).length
   };
@@ -2246,6 +2280,7 @@ function renderSlideOnStage(stageEl, slide, palette, options = {}) {
     contentEl.innerHTML = '';
     if (slide && slide.kind === 'lyric') {
       const showChords = deviceSettings.chords !== 'off';
+      const slideOffset = slide.transposeOffset || 0;
       slide.lines.forEach(rawLine => {
         // Lines starting with "- " mark a chord-only progression: skipped entirely
         // in lyrics-only mode, rendered as chords-with-empty-lyrics in chord mode.
@@ -2265,7 +2300,7 @@ function renderSlideOnStage(stageEl, slide, palette, options = {}) {
             const ch = document.createElement('span');
             ch.className = 'ch-chord';
             ch.textContent = tok.chord
-              ? renderChord(tok.chord, deviceSettings.chords, deviceSettings.chordKey)
+              ? renderChord(tok.chord, deviceSettings.chords, deviceSettings.chordKey, slideOffset)
               : ' ';
             tokSpan.appendChild(ch);
             const tx = document.createElement('span');
@@ -3418,21 +3453,24 @@ function renderChartView(song, mode, key) {
     return;
   }
 
-  // Collapse the slide-list into [{section, chunks: [[lines], ...]}, ...] for chart layout.
+  // Collapse the slide-list into [{section, chunks: [{lines, offset}, ...]}, ...]
   // We walk slides, grouping consecutive lyric slides with the same sectionType.
+  // Each chunk also carries the slide's accumulated transpose offset (from any
+  // [+N semitones] directives encountered up to that point).
   const groups = [];
   let lastSection = null;
   let currentChunks = [];
   for (const s of parsed.slides) {
     if (s.kind !== 'lyric') continue;
+    const chunkObj = { lines: s.lines, offset: s.transposeOffset || 0 };
     if (s.sectionType !== lastSection) {
       if (lastSection !== null && currentChunks.length) {
         groups.push({ section: lastSection, chunks: currentChunks });
       }
       lastSection = s.sectionType;
-      currentChunks = [s.lines];
+      currentChunks = [chunkObj];
     } else {
-      currentChunks.push(s.lines);
+      currentChunks.push(chunkObj);
     }
   }
   if (lastSection !== null && currentChunks.length) {
@@ -3450,10 +3488,11 @@ function renderChartView(song, mode, key) {
     const h2 = document.createElement('h2');
     h2.textContent = g.section;
     sec.appendChild(h2);
-    for (const chunk of g.chunks) {
+    for (const chunkObj of g.chunks) {
+      const chunkOffset = chunkObj.offset;
       const chunkEl = document.createElement('div');
       chunkEl.className = 'chart-chunk';
-      for (const rawLineUntrimmed of chunk) {
+      for (const rawLineUntrimmed of chunkObj.lines) {
         // Lines starting with "- " are chord-only progressions: skipped in lyrics
         // mode, rendered as chords-only otherwise.
         const isChordsOnlyLine = /^\s*-\s/.test(rawLineUntrimmed);
@@ -3473,7 +3512,7 @@ function renderChartView(song, mode, key) {
             // even when a leading text segment has no chord.
             const ch = document.createElement('span');
             ch.className = 'ch-chord';
-            ch.textContent = tok.chord ? renderChord(tok.chord, mode, key) : ' ';
+            ch.textContent = tok.chord ? renderChord(tok.chord, mode, key, chunkOffset) : ' ';
             seg.appendChild(ch);
             const tx = document.createElement('span');
             tx.className = 'ch-lyr';
