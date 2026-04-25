@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lyric Slides Pitch Shifter — Privacy Policy</title>
+  <style>
+    :root {
+      --bg: #0b0d11;
+      --panel: #14171c;
+      --panel-2: #1a1e25;
+      --text: #e7e9ec;
+      --muted: #8a93a0;
+      --accent: #6366f1;
+      --border: #262a31;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 16px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 40px 20px;
+    }
+    .wrap { max-width: 720px; margin: 0 auto; }
+    h1 {
+      font-size: 28px;
+      font-weight: 700;
+      margin: 0 0 8px;
+      color: var(--text);
+    }
+    h2 {
+      font-size: 18px;
+      font-weight: 700;
+      margin-top: 32px;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+    .subtitle { color: var(--muted); margin-bottom: 24px; font-size: 14px; }
+    p { margin: 0 0 12px; }
+    ul { margin: 0 0 16px; padding-left: 20px; }
+    li { margin-bottom: 4px; }
+    code {
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 13px;
+    }
+    a { color: var(--accent); }
+    a:hover { text-decoration: none; }
+    .none { color: #16a34a; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Lyric Slides Pitch Shifter — Privacy Policy</h1>
+    <div class="subtitle">Last updated: April 25, 2026</div>
+
+    <h2>What this extension does</h2>
+    <p>Lyric Slides Pitch Shifter pairs with the Lyric Slides projection app at
+    <code>lukehegelund.github.io</code> to apply real-time pitch shifting to YouTube
+    audio. Worship leaders use it to play any YouTube song in any key without
+    restarting playback.</p>
+
+    <h2>Data we collect</h2>
+    <p class="none">None.</p>
+    <p>This extension does not collect, transmit, store on remote servers, or
+    share any user data of any kind. Specifically:</p>
+    <ul>
+      <li>We do not collect personally identifiable information.</li>
+      <li>We do not collect health or fitness data.</li>
+      <li>We do not collect financial or payment information.</li>
+      <li>We do not collect authentication credentials.</li>
+      <li>We do not collect personal communications.</li>
+      <li>We do not collect location.</li>
+      <li>We do not collect web history or browsing activity.</li>
+      <li>We do not collect user-generated content.</li>
+      <li>We do not use cookies or analytics services.</li>
+      <li>We do not contact any third-party servers.</li>
+    </ul>
+
+    <h2>Data we store locally</h2>
+    <p>The extension uses <code>chrome.storage.session</code> (an in-memory store
+    that is cleared every time you close your browser) to remember which Chrome
+    tab is currently the YouTube audio source. This is required because Chrome's
+    Manifest V3 service workers are unloaded when idle, and we need to keep
+    track of the YouTube tab across that lifecycle. No persistent or sensitive
+    data is stored.</p>
+
+    <h2>Sites the extension communicates with</h2>
+    <p>The extension only runs on two domains:</p>
+    <ul>
+      <li><strong>lukehegelund.github.io</strong> — the Lyric Slides projection
+      app it pairs with. The extension's content script listens for
+      <code>window.postMessage</code> events from this app to receive playback
+      and pitch-shift commands.</li>
+      <li><strong>youtube.com</strong> — where the audio plays. The extension's
+      content script captures the YouTube <code>&lt;video&gt;</code> element's
+      audio via the Web Audio API and applies pitch shifting locally. No
+      YouTube data leaves your browser.</li>
+    </ul>
+    <p>The extension does not communicate with any other server, including no
+    servers we control.</p>
+
+    <h2>Permissions explained</h2>
+    <ul>
+      <li><code>tabs</code> — used to find or open the YouTube tab when the
+      projection app requests audio playback. We only read tab URLs to match
+      <code>youtube.com</code>.</li>
+      <li><code>scripting</code> — used to inject the audio-routing content
+      scripts on the two domains above (declared statically in the manifest).</li>
+      <li><code>storage</code> — used with <code>chrome.storage.session</code>
+      only (see "Data we store locally" above).</li>
+    </ul>
+
+    <h2>Open source</h2>
+    <p>The full source code of this extension is available at
+    <a href="https://github.com/lukehegelund/life-os">github.com/lukehegelund/life-os</a>.
+    Anyone can audit exactly what the extension does. There are no minified,
+    obfuscated, or remotely-loaded scripts.</p>
+
+    <h2>Contact</h2>
+    <p>For privacy questions, open an issue at
+    <a href="https://github.com/lukehegelund/life-os/issues">github.com/lukehegelund/life-os/issues</a>
+    or email <a href="mailto:lukehegelund@gmail.com">lukehegelund@gmail.com</a>.</p>
+  </div>
+</body>
+</html>
