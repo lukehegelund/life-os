@@ -1698,28 +1698,11 @@
   </div>
   <input type="file" id="audio-file-input" accept="audio/*" style="display:none;">
 
-  <div class="options-row">
-    <div class="field">
-      <label>Gradient palette</label>
-      <select id="palette-select">
-        <option value="random">Random (different each song)</option>
-        <option value="grad-sunset">Sunset</option>
-        <option value="grad-ocean">Ocean</option>
-        <option value="grad-forest">Forest</option>
-        <option value="grad-lavender">Lavender</option>
-        <option value="grad-aurora">Aurora</option>
-        <option value="grad-midnight">Midnight</option>
-        <option value="grad-peach">Peach</option>
-        <option value="grad-golden">Golden Hour</option>
-        <option value="grad-sky">Sky</option>
-        <option value="grad-rose">Rose</option>
-      </select>
-    </div>
-    <div class="field">
-      <label>Auto-advance (seconds, 0 = off)</label>
-      <input type="number" id="auto-advance" min="0" max="60" step="1" value="0">
-    </div>
-  </div>
+  <!-- Palette + auto-advance removed from the visible editor; defaults are
+       retained as hidden inputs so any existing JS that reads/writes them
+       still works (palette defaults to "random"). -->
+  <input type="hidden" id="palette-select" value="random">
+  <input type="hidden" id="auto-advance" value="0">
 
   <button class="btn btn-primary" id="generate-btn">Generate slideshow</button>
   <div class="status" id="status"></div>
@@ -2817,6 +2800,56 @@ Output ONLY the formatted Lyric Slides text. Start immediately with the first se
   return data.content[0].text.trim();
 }
 
+// Ask Claude to suggest a YouTube URL for a song title/artist, then verify
+// the URL is real via oEmbed. Returns null if Claude says "UNKNOWN", the
+// response doesn't contain a parseable YouTube URL, or oEmbed rejects it.
+async function findYoutubeUrlWithClaude(title, artist) {
+  if (!title) return null;
+  try {
+    await loadClaudeKey();
+    const prompt = `What is a YouTube video URL for the song "${title}"${artist ? ` by ${artist}` : ''}?
+
+Prefer in this order:
+  1. The artist's official channel upload
+  2. An official lyric video
+  3. A popular live performance
+
+Respond with ONLY the full URL on a single line (e.g. https://www.youtube.com/watch?v=XYZ). No other text, no quotes, no explanations. If you don't know with high confidence, respond with exactly: UNKNOWN`;
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': CLAUDE_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 120,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    const text = ((data.content && data.content[0]?.text) || '').trim();
+    if (!text || /^unknown$/i.test(text)) return null;
+    const match = text.match(/https?:\/\/(?:www\.|m\.)?(?:youtube\.com\/watch\?v=[\w-]+|youtu\.be\/[\w-]+)/i);
+    if (!match) return null;
+    const candidate = match[0];
+    // Validate via oEmbed \u2014 throws on unknown / private videos
+    try {
+      await extractYouTubeInfo(candidate);
+      return candidate;
+    } catch {
+      return null;
+    }
+  } catch (e) {
+    console.warn('findYoutubeUrlWithClaude failed', e);
+    return null;
+  }
+}
+
 async function runAutoImport(mode) {
   const statusEl = mode === 'title' ? $('import-status-title') : $('import-status-yt');
   const runBtn   = mode === 'title' ? $('import-run-title')   : $('import-run-yt');
@@ -2866,7 +2899,36 @@ async function runAutoImport(mode) {
       lyricsArea.dispatchEvent(new Event('input'));
     }
 
-    setImportStatus(`✓ Lyrics imported! Review and click Generate.`, 'ok');
+    // Auto-fill the YouTube URL field on the song. URL-mode just reuses what
+    // the user pasted; title-mode asks Claude to suggest a URL and verifies
+    // it via oEmbed before saving (no save if Claude doesn't know it).
+    let resolvedYoutubeUrl = null;
+    if (mode === 'yt') {
+      resolvedYoutubeUrl = ($('import-yt-url')?.value || '').trim() || null;
+    } else {
+      try {
+        setImportStatus('Looking for a matching YouTube video\u2026');
+        resolvedYoutubeUrl = await findYoutubeUrlWithClaude(title, artist);
+      } catch {}
+    }
+    const ytField = $('audio-youtube-url');
+    if (resolvedYoutubeUrl && ytField) {
+      ytField.value = resolvedYoutubeUrl;
+      _pendingYoutubeUrl = resolvedYoutubeUrl;
+      try {
+        if (typeof updateYouTubeEditorUI === 'function') {
+          updateYouTubeEditorUI(resolvedYoutubeUrl, loadedSong?.audio_url || currentSong?.audio_url || null);
+        }
+      } catch {}
+    }
+
+    if (resolvedYoutubeUrl) {
+      setImportStatus('\u2713 Lyrics + YouTube linked! Review and click Generate.', 'ok');
+    } else if (mode === 'title') {
+      setImportStatus('\u2713 Lyrics imported (no YouTube match found). Paste one in the YouTube field if you want pitch shift.', 'ok');
+    } else {
+      setImportStatus('\u2713 Lyrics imported! Review and click Generate.', 'ok');
+    }
 
     // Sync the import title/artist fields back to the main fields if they were empty
     if ($('import-title') && !$('song-title')?.value) {
