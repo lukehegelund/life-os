@@ -1239,13 +1239,15 @@
     <button class="btn-secondary" id="open-video-modal" type="button">Find videos…</button>
   </div>
 
-  <!-- Audio attachment -->
-  <div class="audio-field">
+  <!-- YouTube audio (primary — driven by Lyric Slides Pitch Shifter extension) -->
+  <div class="audio-field" id="audio-youtube-field">
     <div class="audio-field-left">
-      🎵 <strong>Audio</strong>
-      <span class="audio-field-name" id="audio-file-name">None</span>
+      🎵 <strong>YouTube</strong>
+      <span class="audio-field-name" id="audio-youtube-status">Not set</span>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+    <div style="display:flex;align-items:center;gap:8px;flex:1;flex-wrap:wrap;min-width:200px;">
+      <input type="text" id="audio-youtube-url" placeholder="https://www.youtube.com/watch?v=..."
+             style="flex:1;min-width:220px;background:var(--panel-2);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:6px;font-size:13px;">
       <label class="audio-key-label">Key:
         <select class="audio-key-select" id="audio-original-key">
           <option value="">Unknown</option>
@@ -1257,7 +1259,19 @@
       </label>
     </div>
     <div class="audio-field-right">
-      <button class="btn-audio-action" id="audio-upload-btn" type="button">⬆ Upload audio…</button>
+      <span id="audio-extension-status" style="font-size:11px;color:var(--muted);" title="Lyric Slides Pitch Shifter extension status">Extension: not detected</span>
+      <button class="btn-audio-clear" id="audio-youtube-clear" type="button" title="Remove YouTube URL" style="display:none;">✕</button>
+    </div>
+  </div>
+
+  <!-- Legacy MP3 upload (visible only when editing a song that has an uploaded audio file) -->
+  <div class="audio-field" id="audio-mp3-field" style="display:none;">
+    <div class="audio-field-left">
+      💾 <strong>MP3 (legacy)</strong>
+      <span class="audio-field-name" id="audio-file-name">None</span>
+    </div>
+    <div class="audio-field-right">
+      <button class="btn-audio-action" id="audio-upload-btn" type="button">⬆ Replace…</button>
       <button class="btn-audio-clear" id="audio-clear-btn" type="button" title="Remove audio" style="display:none;">✕</button>
     </div>
   </div>
@@ -1519,7 +1533,7 @@ const BROADCAST_CHANNEL_NAME = 'lyric-slides-sync';
 const BROADCAST_WIN_NAME     = 'LyricSlidesBroadcast';
 
 // ---- App state ----
-let currentSong  = { id: null, title: '', artist: '', lyrics: '', palette: null, audio_url: null, original_key: null };
+let currentSong  = { id: null, title: '', artist: '', lyrics: '', palette: null, audio_url: null, original_key: null, youtube_url: null };
 let slides       = [];     // [{ kind, lines, sectionType }]
 let currentIdx   = 0;
 let palette      = 'grad-ocean';
@@ -1578,7 +1592,7 @@ async function loadLibrary() {
   return r.json();
 }
 
-async function saveSong({ id, title, artist, lyrics, palette, slides_data, video_urls, audio_url, original_key }) {
+async function saveSong({ id, title, artist, lyrics, palette, slides_data, video_urls, audio_url, original_key, youtube_url }) {
   const body = {
     title,
     artist: artist || null,
@@ -1590,6 +1604,7 @@ async function saveSong({ id, title, artist, lyrics, palette, slides_data, video
   if (video_urls !== undefined)  body.video_urls  = video_urls;
   if (audio_url  !== undefined)  body.audio_url   = audio_url  || null;
   if (original_key !== undefined) body.original_key = original_key || null;
+  if (youtube_url !== undefined) body.youtube_url = youtube_url || null;
   if (id) {
     const r = await fetch(`${SONGS_URL}?id=eq.${id}`, {
       method: 'PATCH',
@@ -2261,6 +2276,84 @@ async function runAutoImport(mode) {
   }
 }
 
+// ========================= EXTENSION MESSAGING =========================
+// The "Lyric Slides Pitch Shifter" Chrome extension injects app-bridge.js on
+// this domain. It announces presence via window.postMessage and forwards
+// playback commands to its YouTube-tab content script (which does the actual
+// Web Audio pitch shifting). When the extension isn't installed, audio bar
+// hides for YouTube-only songs and the operator gets a soft "install" hint.
+
+let _extensionPresent  = false;
+let _extensionVersion  = null;
+const _extensionPending = new Map(); // requestId -> { resolve, reject, timer }
+let _extensionReqCounter = 0;
+let _pendingYoutubeUrl   = undefined; // editor-session pending value (mirrors _pendingAudioUrl)
+
+window.addEventListener('message', (event) => {
+  if (event.source !== window) return;
+  const data = event.data;
+  if (!data || typeof data !== 'object') return;
+  if (data.source !== 'lyric-slides-extension') return;
+
+  if (data.type === 'present') {
+    if (!_extensionPresent) {
+      _extensionPresent = true;
+      _extensionVersion = data.version || '?';
+      onExtensionReady();
+    }
+    return;
+  }
+  if (data.type === 'response' && data.requestId) {
+    const pending = _extensionPending.get(data.requestId);
+    if (!pending) return;
+    _extensionPending.delete(data.requestId);
+    clearTimeout(pending.timer);
+    if (data.ok === false) pending.reject(new Error(data.error || 'extension error'));
+    else pending.resolve(data);
+    return;
+  }
+});
+
+function _extensionSend(action, args = {}, timeoutMs = 30000) {
+  if (!_extensionPresent) return Promise.reject(new Error('extension not installed'));
+  return new Promise((resolve, reject) => {
+    const requestId = `ls-${++_extensionReqCounter}`;
+    const timer = setTimeout(() => {
+      _extensionPending.delete(requestId);
+      reject(new Error('extension request timed out'));
+    }, timeoutMs);
+    _extensionPending.set(requestId, { resolve, reject, timer });
+    try {
+      window.postMessage({ source: 'lyric-slides-app', action, requestId, ...args }, '*');
+    } catch (e) {
+      _extensionPending.delete(requestId);
+      clearTimeout(timer);
+      reject(e);
+    }
+  });
+}
+
+async function playViaExtension(youtubeUrl, originalKey, targetKey) {
+  return _extensionSend('play', { youtubeUrl, originalKey, targetKey }, 20000);
+}
+async function pauseViaExtension() {
+  return _extensionSend('pause', {}, 5000);
+}
+async function setKeyViaExtension(originalKey, targetKey) {
+  return _extensionSend('setKey', { originalKey, targetKey }, 5000);
+}
+
+function onExtensionReady() {
+  // Update the editor's extension-status label
+  const statusEl = document.getElementById('audio-extension-status');
+  if (statusEl) {
+    statusEl.textContent = `Extension v${_extensionVersion} ready`;
+    statusEl.style.color = 'var(--accent, #4a9)';
+  }
+  // Update the operator audio bar visibility (it may now be eligible)
+  try { updateAudioBar(); } catch {}
+}
+
 // ========================= AUDIO PLAYER =========================
 
 const STORAGE_URL = `${SUPABASE_URL}/storage/v1`;
@@ -2303,6 +2396,7 @@ function updateAudioEditorUI(audioUrl, originalKey) {
   const nameEl   = $('audio-file-name');
   const keyEl    = $('audio-original-key');
   const clearBtn = $('audio-clear-btn');
+  const mp3Field = $('audio-mp3-field');
   if (nameEl) {
     if (audioUrl) {
       // Extract a readable name from the URL
@@ -2317,15 +2411,39 @@ function updateAudioEditorUI(audioUrl, originalKey) {
   }
   if (keyEl && originalKey) keyEl.value = originalKey;
   if (clearBtn) clearBtn.style.display = audioUrl ? '' : 'none';
+  // Show legacy MP3 row only if the song actually has one
+  if (mp3Field) mp3Field.style.display = audioUrl ? '' : 'none';
   // Track pending audio so generate picks it up
   _pendingAudioUrl = audioUrl !== null ? audioUrl : undefined;
 }
 
-function initAudioForSong(audioUrl, originalKey) {
+function updateYouTubeEditorUI(youtubeUrl, audioUrl) {
+  const status   = $('audio-youtube-status');
+  const clearBtn = $('audio-youtube-clear');
+  if (status) {
+    status.textContent = youtubeUrl ? 'Set' : 'Not set';
+  }
+  if (clearBtn) clearBtn.style.display = youtubeUrl ? '' : 'none';
+  // Track pending YouTube URL so generate picks it up (mirrors _pendingAudioUrl)
+  _pendingYoutubeUrl = youtubeUrl !== null ? youtubeUrl : undefined;
+  // The legacy MP3 field's visibility is controlled by updateAudioEditorUI;
+  // we just ensure it's visible if the loaded song has audio_url.
+  const mp3Field = $('audio-mp3-field');
+  if (mp3Field && audioUrl) mp3Field.style.display = '';
+}
+
+function initAudioForSong(audioUrl, originalKey, youtubeUrl) {
   teardownAudioPlayer();
+  // Reset playback state for new song
+  _isAudioPlaying = false;
   updateAudioBar();
+  // YouTube path takes priority when extension is present
+  if (youtubeUrl && _extensionPresent) {
+    // Nothing to set up locally — pitch shift happens in YouTube tab on play
+    return;
+  }
   if (!audioUrl) return;
-  // Lazy-setup pitch-shifted player
+  // Legacy MP3 path
   _setupTonePlayer(audioUrl, originalKey, _getDisplayKey());
 }
 
@@ -2379,8 +2497,33 @@ function teardownAudioPlayer() {
 }
 
 async function toggleAudioPlayback() {
+  // YouTube + extension path
+  if (currentSong?.youtube_url && _extensionPresent) {
+    if (_isAudioPlaying) {
+      _isAudioPlaying = false;
+      updateAudioBar();
+      try { await pauseViaExtension(); } catch (e) { console.warn('extension pause failed', e); }
+      return;
+    }
+    _isAudioPlaying = true;
+    updateAudioBar();
+    try {
+      await playViaExtension(
+        currentSong.youtube_url,
+        currentSong.original_key,
+        _getDisplayKey()
+      );
+    } catch (e) {
+      console.warn('extension play failed', e);
+      _isAudioPlaying = false;
+      updateAudioBar();
+      setStatus('Audio play failed: ' + e.message, true);
+    }
+    return;
+  }
+
+  // Legacy MP3 (Tone.Player) path
   if (!_audioPlayer) return;
-  // AudioContext must be resumed after user gesture
   if (typeof Tone !== 'undefined') await Tone.start();
   if (_isAudioPlaying) {
     _audioPlayer.stop();
@@ -2432,23 +2575,37 @@ function updateAudioBar() {
   const keyEl   = $('op-audio-key-select');
   if (!bar) return;
 
-  const hasAudio = !!currentSong?.audio_url;
-  bar.classList.toggle('visible', hasAudio);
+  const hasYoutube = !!currentSong?.youtube_url && _extensionPresent;
+  const hasMp3     = !!currentSong?.audio_url;
+  // Show audio bar if either path is available
+  const visible    = hasYoutube || hasMp3;
+  bar.classList.toggle('visible', visible);
 
   if (playBtn) {
-    const loaded = _audioPlayer?.loaded ?? false;
-    playBtn.textContent = _isAudioPlaying ? '⏸ Pause' : '▶ Play';
-    playBtn.disabled    = !loaded;
-    playBtn.title       = loaded ? '' : 'Loading audio…';
+    if (hasYoutube) {
+      playBtn.textContent = _isAudioPlaying ? '⏸ Pause' : '▶ Play';
+      playBtn.disabled    = false;
+      playBtn.title       = '';
+    } else {
+      const loaded = _audioPlayer?.loaded ?? false;
+      playBtn.textContent = _isAudioPlaying ? '⏸ Pause' : '▶ Play';
+      playBtn.disabled    = !loaded;
+      playBtn.title       = loaded ? '' : 'Loading audio…';
+    }
   }
-  if (infoEl && currentSong?.audio_url) {
-    const raw   = currentSong.audio_url.split('/').pop() || 'audio';
-    const clean = raw.replace(/^\d+_[a-z0-9]+\./, '').replace(/_/g, ' ');
-    infoEl.textContent = `🎵 ${currentSong.title || clean}`;
+  if (infoEl) {
+    if (hasYoutube) {
+      infoEl.textContent = `📺 ${currentSong.title || 'YouTube'}`;
+    } else if (hasMp3) {
+      const raw   = currentSong.audio_url.split('/').pop() || 'audio';
+      const clean = raw.replace(/^\d+_[a-z0-9]+\./, '').replace(/_/g, ' ');
+      infoEl.textContent = `🎵 ${currentSong.title || clean}`;
+    } else {
+      infoEl.textContent = '🎵';
+    }
   }
   // Sync key selector to current song's original key
   if (keyEl && currentSong?.original_key) {
-    // Map flat variants to the selector options
     const k = currentSong.original_key;
     const optionVals = [...keyEl.options].map(o => o.value);
     if (optionVals.includes(k)) keyEl.value = k;
@@ -2456,7 +2613,16 @@ function updateAudioBar() {
 }
 
 async function changeAudioKey(newKey) {
-  // Re-initialize the player with the new pitch offset
+  // YouTube + extension path — push new key to the running pitch shifter
+  if (currentSong?.youtube_url && _extensionPresent) {
+    try {
+      await setKeyViaExtension(currentSong.original_key, newKey);
+    } catch (e) {
+      console.warn('extension setKey failed', e);
+    }
+    return;
+  }
+  // Legacy MP3 path — re-initialize player with new pitch offset
   if (currentSong?.audio_url) {
     const wasPlaying = _isAudioPlaying;
     teardownAudioPlayer();
@@ -3751,7 +3917,10 @@ async function loadIntoEditor(id) {
     // Reflect selected video count in editor
     const vcount = Array.isArray(song.video_urls) ? song.video_urls.length : 0;
     $('video-count-badge').textContent = vcount > 0 ? `${vcount} selected` : 'None yet';
-    // Reflect audio in editor
+    // Reflect audio in editor (YouTube URL + legacy MP3)
+    const ytInput = $('audio-youtube-url');
+    if (ytInput) ytInput.value = song.youtube_url || '';
+    updateYouTubeEditorUI(song.youtube_url, song.audio_url);
     updateAudioEditorUI(song.audio_url, song.original_key);
     // Scroll to form
     $('song-title').scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -3770,6 +3939,10 @@ function clearEditor() {
   $('palette-select').value = 'random';
   const badge = $('video-count-badge');
   if (badge) badge.textContent = 'None yet';
+  const ytInput = $('audio-youtube-url');
+  if (ytInput) ytInput.value = '';
+  _pendingYoutubeUrl = undefined;
+  updateYouTubeEditorUI(null, null);
   updateAudioEditorUI(null, null);
 }
 
@@ -3795,7 +3968,8 @@ async function loadAndPresent(id, opts = {}) {
       cachedLyrics: song.lyrics,
       videoUrls: song.video_urls || [],
       audioUrl: song.audio_url || null,
-      audioOriginalKey: song.original_key || null
+      audioOriginalKey: song.original_key || null,
+      youtubeUrl: song.youtube_url || null
     }, { savePersisted: false });
     // Tell peers (phone↔computer) to load the same song. Suppress when we're
     // *receiving* a load_song event ourselves (avoids feedback loops).
@@ -3817,7 +3991,7 @@ function broadcastLoadSongRealtime(songId) {
 
 // ========================= GENERATE FLOW =========================
 
-async function generateFromLyrics({ id, title, artist, lyrics, palette: paletteChoice, cachedSlides, cachedLyrics, videoUrls, audioUrl, audioOriginalKey }, { savePersisted = true } = {}) {
+async function generateFromLyrics({ id, title, artist, lyrics, palette: paletteChoice, cachedSlides, cachedLyrics, videoUrls, audioUrl, audioOriginalKey, youtubeUrl }, { savePersisted = true } = {}) {
   if (!lyrics.trim()) {
     setStatus('Paste some lyrics first.', true);
     loading.classList.remove('visible');
@@ -3872,6 +4046,7 @@ async function generateFromLyrics({ id, title, artist, lyrics, palette: paletteC
     // Carry audio from loaded song if not overriding
     const resolvedAudioUrl = audioUrl !== undefined ? audioUrl : (loadedSong?.audio_url || null);
     const resolvedOriginalKey = audioOriginalKey !== undefined ? audioOriginalKey : (loadedSong?.original_key || null);
+    const resolvedYoutubeUrl = youtubeUrl !== undefined ? youtubeUrl : (loadedSong?.youtube_url || null);
     if (savePersisted) {
       loadingText.textContent = 'Saving…';
       // Always persist the slides_data cache so future loads skip Claude
@@ -3881,7 +4056,8 @@ async function generateFromLyrics({ id, title, artist, lyrics, palette: paletteC
         slides_data: slides,
         video_urls: selectedVideos,
         audio_url: resolvedAudioUrl,
-        original_key: resolvedOriginalKey
+        original_key: resolvedOriginalKey,
+        youtube_url: resolvedYoutubeUrl
       });
       savedId = saved?.id || id;
       $('current-song-id').value = savedId || '';
@@ -3893,13 +4069,14 @@ async function generateFromLyrics({ id, title, artist, lyrics, palette: paletteC
       id: savedId, title, artist, lyrics, palette: paletteChoice,
       video_urls: selectedVideos,
       audio_url: resolvedAudioUrl,
-      original_key: resolvedOriginalKey
+      original_key: resolvedOriginalKey,
+      youtube_url: resolvedYoutubeUrl
     };
 
     loading.classList.remove('visible');
     enterOperator();
-    // Set up audio for this song
-    initAudioForSong(resolvedAudioUrl, resolvedOriginalKey);
+    // Set up audio for this song (extension path takes priority if youtube_url + extension)
+    initAudioForSong(resolvedAudioUrl, resolvedOriginalKey, resolvedYoutubeUrl);
   } catch (e) {
     console.error(e);
     loading.classList.remove('visible');
@@ -3931,7 +4108,10 @@ generateBtn?.addEventListener('click', async () => {
       cachedLyrics: loadedSong?.lyrics,
       videoUrls,
       audioUrl: _pendingAudioUrl !== undefined ? _pendingAudioUrl : loadedSong?.audio_url,
-      audioOriginalKey: $('audio-original-key')?.value || loadedSong?.original_key || null
+      audioOriginalKey: $('audio-original-key')?.value || loadedSong?.original_key || null,
+      youtubeUrl: _pendingYoutubeUrl !== undefined
+        ? _pendingYoutubeUrl
+        : ($('audio-youtube-url')?.value?.trim() || loadedSong?.youtube_url || null)
     });
   } finally {
     generateBtn.disabled = false;
@@ -4060,6 +4240,66 @@ $('refresh-library')?.addEventListener('click', renderLibrary);
         await _setupTonePlayer(currentSong.audio_url, newKey, _getDisplayKey());
         updateAudioBar();
       }
+      // If extension+YouTube is active, also push the new key
+      if (currentSong?.youtube_url && _extensionPresent) {
+        try { await setKeyViaExtension(newKey, _getDisplayKey()); } catch (e) { console.warn(e); }
+      }
+    }
+  });
+})();
+
+// =========================================================================
+// YouTube URL editor wiring (drives extension-based pitch shift)
+// =========================================================================
+(function setupYoutubeAudioEditor() {
+  const ytInput  = $('audio-youtube-url');
+  const clearBtn = $('audio-youtube-clear');
+  if (!ytInput) return;
+
+  // Save URL on blur or Enter, with a small validation pass
+  const saveYoutubeUrl = async () => {
+    const raw = ytInput.value.trim();
+    const url = raw || null;
+    // Basic sanity check — must look like YouTube
+    if (url && !/^https?:\/\/(www\.|m\.)?(youtube\.com|youtu\.be)\//i.test(url)) {
+      setStatus('That doesn’t look like a YouTube URL — pasting anyway, but extension may not recognise it.', false);
+    }
+    _pendingYoutubeUrl = url;
+    updateYouTubeEditorUI(url, loadedSong?.audio_url || currentSong?.audio_url || null);
+
+    const songId = $('current-song-id')?.value;
+    if (songId) {
+      try {
+        await patchSong(songId, { youtube_url: url });
+      } catch (e) {
+        console.warn('youtube_url patch failed', e);
+        setStatus('Couldn’t save YouTube URL: ' + e.message, true);
+        return;
+      }
+      if (currentSong) currentSong.youtube_url = url;
+      if (loadedSong)  loadedSong.youtube_url  = url;
+      updateAudioBar();
+    }
+  };
+
+  ytInput.addEventListener('change', saveYoutubeUrl);
+  ytInput.addEventListener('blur', saveYoutubeUrl);
+  ytInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); ytInput.blur(); }
+  });
+
+  clearBtn?.addEventListener('click', async () => {
+    if (!confirm('Remove the YouTube URL from this song?')) return;
+    ytInput.value = '';
+    _pendingYoutubeUrl = null;
+    updateYouTubeEditorUI(null, loadedSong?.audio_url || currentSong?.audio_url || null);
+    const songId = $('current-song-id')?.value;
+    if (songId) {
+      try { await patchSong(songId, { youtube_url: null }); }
+      catch (e) { console.warn('youtube clear failed', e); }
+      if (currentSong) currentSong.youtube_url = null;
+      if (loadedSong)  loadedSong.youtube_url  = null;
+      updateAudioBar();
     }
   });
 })();
