@@ -964,6 +964,8 @@
   body.mode-viewer .op-bar { display: none !important; }
   body.mode-viewer .op-main { padding: 0; gap: 0; }
   body.mode-viewer .op-preview-live { border-radius: 0; }
+  /* Hide the red LIVE outline in viewer mode (operator-only indicator) */
+  body.mode-viewer .op-preview-live::before { display: none !important; }
   body.mode-viewer .op-preview-label,
   body.mode-viewer .op-preview-hud,
   body.mode-viewer .op-frozen-chip { display: none !important; }
@@ -1398,7 +1400,10 @@
   <div class="library-wrap">
     <div class="library-header">
       <div class="library-title">Your library</div>
-      <button class="btn-ghost" id="refresh-library">↻ Refresh</button>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn-ghost" id="refresh-library">↻ Refresh</button>
+        <button class="btn-secondary" id="new-song-btn" style="background:var(--accent);color:white;">+ New song</button>
+      </div>
     </div>
     <div class="library-grid" id="library-grid">
       <div class="library-empty">Loading…</div>
@@ -1415,7 +1420,20 @@
     </div>
   </div>
 
-  <div class="divider-text"><span>Or create / edit a song</span></div>
+  <!-- Editor section: hidden by default. Shown when user clicks "+ New song"
+       in the library header, or "✎" Edit on a library card. -->
+  <div id="editor-section" style="display:none;">
+
+  <div class="divider-text" style="position:relative;">
+    <span id="editor-section-title">Create / edit a song</span>
+    <button id="editor-close-btn" type="button"
+            title="Close editor"
+            style="position:absolute;right:0;top:50%;transform:translateY(-50%);
+                   background:transparent;border:1px solid var(--border);color:var(--muted);
+                   cursor:pointer;font-size:13px;padding:4px 10px;border-radius:6px;">
+      ✕ Close editor
+    </button>
+  </div>
 
   <div class="helper-card">
     <strong>Slide breaks:</strong> each <em>blank line</em> starts a new slide. Lines between blank lines stay on one slide — the font auto-shrinks to fit.<br><br>
@@ -1557,6 +1575,8 @@
 
   <button class="btn btn-primary" id="generate-btn">Generate slideshow</button>
   <div class="status" id="status"></div>
+
+  </div><!-- /editor-section -->
 </div>
 
 <!-- ==================== LOADING ==================== -->
@@ -4497,6 +4517,9 @@ function showSetup() {
   setupView.style.display = 'block';
   operatorView.classList.remove('visible');
   broadcastView.classList.remove('visible');
+  // Editor is hidden by default when we land on the library — user must click
+  // "+ New song" or ✎ Edit to open it again.
+  hideEditor();
   renderLibrary();
 }
 function enterOperator() {
@@ -4554,7 +4577,7 @@ async function renderLibrary() {
     _libraryCache = songs;       // cache for setlist editor
     renderSetlists();            // setlists list refreshes whenever library refreshes
     if (!songs.length) {
-      grid.innerHTML = '<div class="library-empty">No songs saved yet. Paste lyrics below to add one.</div>';
+      grid.innerHTML = '<div class="library-empty">No songs saved yet. Click <strong>+ New song</strong> above to add one.</div>';
       return;
     }
     grid.innerHTML = '';
@@ -4933,6 +4956,19 @@ function renderSetlistEditor() {
 
 let loadedSong = null; // full song record when user is editing
 
+function showEditor() {
+  const sec = document.getElementById('editor-section');
+  if (sec) sec.style.display = '';
+}
+function hideEditor() {
+  const sec = document.getElementById('editor-section');
+  if (sec) sec.style.display = 'none';
+}
+function setEditorTitle(text) {
+  const t = document.getElementById('editor-section-title');
+  if (t) t.textContent = text;
+}
+
 async function loadIntoEditor(id) {
   try {
     const song = await fetchSong(id);
@@ -4943,6 +4979,9 @@ async function loadIntoEditor(id) {
     $('song-artist').value = song.artist || '';
     $('lyrics-input').value = song.lyrics || '';
     $('palette-select').value = song.palette || 'random';
+    showEditor();
+    setEditorTitle(`Editing — ${song.title || 'Untitled'}`);
+    document.getElementById('editor-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     // Reflect selected video count in editor
     const vcount = Array.isArray(song.video_urls) ? song.video_urls.length : 0;
     $('video-count-badge').textContent = vcount > 0 ? `${vcount} selected` : 'None yet';
@@ -5165,6 +5204,18 @@ generateBtn?.addEventListener('click', async () => {
 });
 
 $('refresh-library')?.addEventListener('click', renderLibrary);
+
+// ========================= EDITOR SHOW/HIDE WIRING =========================
+$('new-song-btn')?.addEventListener('click', () => {
+  if (typeof clearEditor === 'function') clearEditor();
+  showEditor();
+  setEditorTitle('New song');
+  document.getElementById('editor-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  document.getElementById('song-title')?.focus();
+});
+$('editor-close-btn')?.addEventListener('click', () => {
+  hideEditor();
+});
 
 // ========================= SETLIST UI WIRING =========================
 $('new-setlist-btn')?.addEventListener('click', () => openSetlistEditor(null));
