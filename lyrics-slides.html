@@ -2255,12 +2255,14 @@ function renderSlideOnStage(stageEl, slide, palette, options = {}) {
           tokens.forEach(tok => {
             const tokSpan = document.createElement('span');
             tokSpan.className = 'ch-token';
-            if (tok.chord) {
-              const ch = document.createElement('span');
-              ch.className = 'ch-chord';
-              ch.textContent = renderChord(tok.chord, deviceSettings.chords, deviceSettings.chordKey);
-              tokSpan.appendChild(ch);
-            }
+            // Always include a chord slot (empty for chordless tokens) so every
+            // lyric segment shares the same vertical baseline.
+            const ch = document.createElement('span');
+            ch.className = 'ch-chord';
+            ch.textContent = tok.chord
+              ? renderChord(tok.chord, deviceSettings.chords, deviceSettings.chordKey)
+              : ' ';
+            tokSpan.appendChild(ch);
             const tx = document.createElement('span');
             tx.className = 'ch-lyr';
             tx.textContent = tok.text || '\u00A0';   // non-breaking space if no text
@@ -3457,12 +3459,12 @@ function renderChartView(song, mode, key) {
           tokens.forEach(tok => {
             const seg = document.createElement('span');
             seg.className = 'ch-token';
-            if (tok.chord) {
-              const ch = document.createElement('span');
-              ch.className = 'ch-chord';
-              ch.textContent = renderChord(tok.chord, mode, key);
-              seg.appendChild(ch);
-            }
+            // Always include a chord slot so all lyrics share the same baseline,
+            // even when a leading text segment has no chord.
+            const ch = document.createElement('span');
+            ch.className = 'ch-chord';
+            ch.textContent = tok.chord ? renderChord(tok.chord, mode, key) : ' ';
+            seg.appendChild(ch);
             const tx = document.createElement('span');
             tx.className = 'ch-lyr';
             tx.textContent = tok.text || '';
