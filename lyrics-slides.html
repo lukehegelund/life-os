@@ -1402,6 +1402,44 @@
   .op-bar-spacer { flex: 1 1 auto; }
   .op-bar-hint { font-size: 11px; color: var(--muted); }
 
+  /* YouTube timeline scrubber (visible only while iframe is mounted) */
+  .op-bar-scrub-wrap {
+    display: inline-flex; align-items: center; gap: 8px;
+    flex: 1 1 200px; min-width: 160px; max-width: 420px;
+  }
+  #op-yt-scrub {
+    flex: 1; cursor: pointer;
+    height: 4px;
+    background: var(--panel-2);
+    border-radius: 2px;
+    -webkit-appearance: none;
+    appearance: none;
+    outline: none;
+  }
+  #op-yt-scrub::-webkit-slider-runnable-track {
+    height: 4px; background: var(--panel-2); border-radius: 2px;
+  }
+  #op-yt-scrub::-moz-range-track {
+    height: 4px; background: var(--panel-2); border-radius: 2px;
+  }
+  #op-yt-scrub::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--accent); cursor: pointer;
+    margin-top: -5px;
+    border: 2px solid var(--panel);
+  }
+  #op-yt-scrub::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--accent); cursor: pointer;
+    border: 2px solid var(--panel);
+  }
+  #op-yt-scrub-time {
+    font-size: 11px; color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap; min-width: 80px; text-align: right;
+  }
+
 </style>
 </head>
 <body>
@@ -1690,6 +1728,10 @@
         <option>E</option><option>F</option><option>F#</option><option>G</option>
         <option>Ab</option><option>A</option><option>Bb</option><option>B</option>
       </select>
+    </span>
+    <span class="op-bar-scrub-wrap" id="op-yt-scrub-wrap" style="display:none;">
+      <input type="range" id="op-yt-scrub" min="0" max="100" value="0" step="0.1" title="Seek">
+      <span id="op-yt-scrub-time">0:00 / 0:00</span>
     </span>
 
     <span class="op-bar-spacer"></span>
@@ -2818,6 +2860,35 @@ let _ytPlayer = null;
 let _ytIframeReady = false;
 let _ytApiLoadPromise = null;
 let _currentMountedYoutubeUrl = null;
+let _ytScrubTimer = null;
+
+// ============ YouTube timeline scrubber ============
+// Polls _ytPlayer.getCurrentTime() ~3x/sec and updates the bottom-bar slider
+// + time text. The slider's user input seeks the player.
+function startYtScrub() {
+  if (_ytScrubTimer) return;
+  _ytScrubTimer = setInterval(updateYtScrub, 300);
+  const wrap = document.getElementById('op-yt-scrub-wrap');
+  if (wrap) wrap.style.display = '';
+}
+function stopYtScrub() {
+  if (_ytScrubTimer) { clearInterval(_ytScrubTimer); _ytScrubTimer = null; }
+  const wrap = document.getElementById('op-yt-scrub-wrap');
+  if (wrap) wrap.style.display = 'none';
+}
+function updateYtScrub() {
+  if (!_ytPlayer || !_ytIframeReady) return;
+  const cur = (typeof _ytPlayer.getCurrentTime === 'function') ? _ytPlayer.getCurrentTime() : 0;
+  const dur = (typeof _ytPlayer.getDuration === 'function') ? _ytPlayer.getDuration() : 0;
+  const slider = document.getElementById('op-yt-scrub');
+  const timeText = document.getElementById('op-yt-scrub-time');
+  if (slider && dur > 0 && !slider._dragging) {
+    slider.value = (cur / dur) * 100;
+  }
+  if (timeText) {
+    timeText.textContent = `${_fmtTime(cur)} / ${_fmtTime(dur)}`;
+  }
+}
 
 function loadYouTubeIframeApi() {
   if (_ytApiLoadPromise) return _ytApiLoadPromise;
@@ -2902,6 +2973,7 @@ async function mountYoutubeIframe(youtubeUrl) {
           _currentMountedYoutubeUrl = youtubeUrl;
           // Push current pitch settings into the freshly-loaded iframe
           try { sendKeyToIframe(currentSong?.original_key, _getDisplayKey()); } catch {}
+          startYtScrub();
           resolve(event.target);
         },
         onStateChange: (event) => {
@@ -2926,6 +2998,7 @@ async function mountYoutubeIframe(youtubeUrl) {
 }
 
 function unmountYoutubeIframe() {
+  stopYtScrub();
   if (_ytPlayer) {
     try { _ytPlayer.destroy(); } catch {}
     _ytPlayer = null;
@@ -5311,6 +5384,29 @@ generateBtn?.addEventListener('click', async () => {
 
 $('refresh-library')?.addEventListener('click', renderLibrary);
 
+// ========================= YT SCRUBBER WIRING =========================
+(function setupYtScrub() {
+  const slider = document.getElementById('op-yt-scrub');
+  if (!slider) return;
+  const setDragging = (v) => { slider._dragging = v; };
+  slider.addEventListener('mousedown', () => setDragging(true));
+  slider.addEventListener('touchstart', () => setDragging(true), { passive: true });
+  slider.addEventListener('input', () => {
+    if (!slider._dragging) return;
+    const dur = (_ytPlayer && _ytPlayer.getDuration) ? _ytPlayer.getDuration() : 0;
+    const cur = (parseFloat(slider.value) / 100) * dur;
+    const t = document.getElementById('op-yt-scrub-time');
+    if (t) t.textContent = `${_fmtTime(cur)} / ${_fmtTime(dur)}`;
+  });
+  slider.addEventListener('change', () => {
+    if (!_ytPlayer || !_ytIframeReady) { setDragging(false); return; }
+    const dur = _ytPlayer.getDuration ? _ytPlayer.getDuration() : 0;
+    const target = (parseFloat(slider.value) / 100) * dur;
+    try { _ytPlayer.seekTo(target, true); } catch {}
+    setDragging(false);
+  });
+})();
+
 // ========================= EDITOR SHOW/HIDE WIRING =========================
 $('new-song-btn')?.addEventListener('click', () => {
   if (typeof clearEditor === 'function') clearEditor();
@@ -5468,7 +5564,11 @@ $('setlist-modal-save')?.addEventListener('click', async () => {
     }
   });
 
-  // Changing the original key while editing patches it immediately if song exists
+  // Changing the original key while editing patches it immediately if song exists.
+  // If the song has a YouTube URL, pitch shift goes through the iframe path; we
+  // skip rebuilding the legacy Tone.Player so it doesn't spawn an unused
+  // AudioContext (the source of those "AudioContext was not allowed to start"
+  // warnings on songs that have both audio_url and youtube_url).
   keySelect?.addEventListener('change', async () => {
     const songId = $('current-song-id')?.value;
     const newKey = keySelect.value || null;
@@ -5476,14 +5576,13 @@ $('setlist-modal-save')?.addEventListener('click', async () => {
       await patchSong(songId, { original_key: newKey }).catch(e => console.warn('key patch failed', e));
       currentSong.original_key = newKey;
       if (loadedSong) loadedSong.original_key = newKey;
-      if (currentSong.audio_url) {
+      if (currentSong?.youtube_url) {
+        // YouTube iframe takes priority — push the new key to it
+        try { sendKeyToIframe(newKey, _getDisplayKey()); } catch {}
+      } else if (currentSong.audio_url) {
         teardownAudioPlayer();
         await _setupTonePlayer(currentSong.audio_url, newKey, _getDisplayKey());
         updateAudioBar();
-      }
-      // If a YouTube iframe is active, also push the new key
-      if (currentSong?.youtube_url) {
-        try { sendKeyToIframe(newKey, _getDisplayKey()); } catch {}
       }
       // Refresh marker dots in operator dropdown
       refreshOpKeyDropdownMarkers();
