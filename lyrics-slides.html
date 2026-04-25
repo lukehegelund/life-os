@@ -353,6 +353,12 @@
     animation: gradientShift2 62s ease-in-out infinite reverse;
     opacity: 0.65;
   }
+  /* When the bg-layer is showing a still thumbnail (NEXT slot, etc.), suppress
+     the gradient pseudo-elements that would otherwise render on top of it. */
+  .bg-layer.has-thumb::before,
+  .bg-layer.has-thumb::after {
+    display: none !important;
+  }
   @keyframes gradientShift {
     0%   { background-position: 0% 50%; }
     50%  { background-position: 100% 50%; }
@@ -803,6 +809,78 @@
   .op-section-btn.btn-color-orange { background: rgba(212,128,32,0.92); }
   .op-section-btn.btn-color-yellow { background: rgba(212,176,32,0.92); color: #1a1300; }
   .op-section-btn.btn-color-grey   { background: rgba(80,86,98,0.92); }
+
+  /* "+ Add" button at the right end of the section-buttons row. Adds another
+     song to the current setlist, or starts a new setlist with the current
+     song + the picked one. */
+  .op-add-setlist-btn {
+    flex: 0 0 auto;
+    background: var(--panel-2);
+    border: 1px dashed var(--border);
+    color: var(--muted);
+    border-radius: 8px;
+    padding: 0 14px;
+    height: 100%;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-left: 8px;
+    white-space: nowrap;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .op-add-setlist-btn:hover {
+    border-style: solid;
+    border-color: var(--accent);
+    color: var(--text);
+  }
+
+  /* Quick "+ add to setlist" picker popover */
+  .op-add-setlist-popover {
+    position: fixed;
+    z-index: 1500;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+    padding: 12px;
+    width: 320px;
+    max-width: calc(100vw - 24px);
+    max-height: 60vh;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .op-add-setlist-popover h4 { margin: 0; font-size: 13px; font-weight: 700; color: var(--text); }
+  .op-add-setlist-popover .hint { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+  .op-add-setlist-popover input[type="search"] {
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
+    padding: 7px 10px; border-radius: 6px; font-size: 13px;
+    width: 100%; box-sizing: border-box;
+  }
+  .op-add-setlist-popover input[type="search"]:focus { outline: none; border-color: var(--accent); }
+  .op-add-setlist-list {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px;
+    min-height: 100px;
+  }
+  .op-add-setlist-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 8px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text);
+    transition: background 0.1s;
+  }
+  .op-add-setlist-row:hover { background: var(--panel); }
+  .op-add-setlist-row .ttl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .op-add-setlist-row .ar { font-size: 11px; color: var(--muted); }
+  .op-add-setlist-row.empty { color: var(--muted); font-style: italic; cursor: default; padding: 12px; text-align: center; }
+  .op-add-setlist-row.empty:hover { background: transparent; }
 
   /* Session sync display in footer */
   .op-session {
@@ -1688,6 +1766,7 @@
     <div class="op-setlist-panel" id="op-setlist-panel"></div>
     <div class="op-section-buttons-wrap">
       <div class="op-section-buttons" id="op-section-buttons"></div>
+      <button class="op-add-setlist-btn" id="op-add-to-setlist" title="Add a song to the current setlist (or start a new setlist)">+ Add</button>
     </div>
   </div>
 
@@ -5000,6 +5079,140 @@ async function jumpToSetlistIdx(idx) {
   await loadAndPresent(currentSetlist.song_ids[idx]);
 }
 
+// Build an auto-name for a setlist by joining its song titles with " / ".
+function setlistAutoName(songs) {
+  if (!Array.isArray(songs) || !songs.length) return 'Untitled setlist';
+  return songs.map((s) => s?.title || 'Untitled').join(' / ');
+}
+
+// Append a song (full record with slides_data) to the active setlist, OR
+// promote the currently-loaded song into a new 2-song setlist with the
+// picked one. New setlists save via Supabase so they appear on the home
+// screen automatically. The currently-displayed song is NOT changed.
+async function addToCurrentSetlist(songFull) {
+  if (!songFull || !songFull.id) return;
+  try {
+    if (currentSetlist && Array.isArray(currentSetlist.song_ids)) {
+      // Skip duplicates
+      if (currentSetlist.song_ids.includes(songFull.id)) {
+        renderSetlistPanel();
+        return;
+      }
+      const newSongIds = [...currentSetlist.song_ids, songFull.id];
+      const newSongs = [...(currentSetlist.songs || []), songFull];
+      const newName = setlistAutoName(newSongs);
+      const saved = await saveSetlist({ id: currentSetlist.id, name: newName, song_ids: newSongIds });
+      currentSetlist.id = saved?.id || currentSetlist.id;
+      currentSetlist.song_ids = newSongIds;
+      currentSetlist.songs = newSongs;
+      currentSetlist.name = newName;
+    } else if (currentSong?.id) {
+      // No active setlist — start a new one with the current song first
+      const currentFull = await fetchSong(currentSong.id);
+      const songs = [currentFull || currentSong, songFull];
+      const songIds = songs.map((s) => s.id);
+      const name = setlistAutoName(songs);
+      const saved = await saveSetlist({ name, song_ids: songIds });
+      currentSetlist = {
+        id: saved?.id,
+        name,
+        song_ids: songIds,
+        songs,
+        bgSongIdx: 0,
+      };
+      currentSetlistIdx = 0;
+    } else {
+      alert('Load a song first, then click + Add.');
+      return;
+    }
+    renderSetlistPanel();
+  } catch (e) {
+    alert('Couldn\u2019t add to setlist: ' + e.message);
+  }
+}
+
+// Open a small popover anchored to the + button. Lists library songs not
+// already in the setlist; clicking one fetches the full record and appends.
+function openAddToSetlistPicker(anchorBtn) {
+  const existing = document.getElementById('__lyric_add_setlist_popover__');
+  if (existing) existing.remove();
+
+  const pop = document.createElement('div');
+  pop.id = '__lyric_add_setlist_popover__';
+  pop.className = 'op-add-setlist-popover';
+  // Anchor above the button (since button sits at bottom of operator view)
+  const rect = anchorBtn.getBoundingClientRect();
+  pop.style.bottom = `${Math.max(8, window.innerHeight - rect.top + 6)}px`;
+  pop.style.right = `${Math.max(8, window.innerWidth - rect.right)}px`;
+
+  const inSetlistIds = new Set();
+  if (currentSetlist?.song_ids) currentSetlist.song_ids.forEach((id) => inSetlistIds.add(id));
+  if (currentSong?.id && !currentSetlist) inSetlistIds.add(currentSong.id);
+
+  pop.innerHTML = `
+    <h4>${currentSetlist ? 'Add to "' + (currentSetlist.name || 'setlist') + '"' : 'Start a setlist'}</h4>
+    <div class="hint">${currentSetlist ? 'Pick a song to append at the end.' : 'Pick another song \u2014 a setlist will be created with the current song + this one.'}</div>
+    <input type="search" placeholder="Search library\u2026" id="__add_setlist_search__">
+    <div class="op-add-setlist-list" id="__add_setlist_list__"></div>
+  `;
+  document.body.appendChild(pop);
+
+  const listEl = pop.querySelector('#__add_setlist_list__');
+  const searchEl = pop.querySelector('#__add_setlist_search__');
+
+  function rebuild(filter) {
+    listEl.innerHTML = '';
+    const all = (_libraryCache || []).filter((s) => !inSetlistIds.has(s.id));
+    const q = (filter || '').trim().toLowerCase();
+    const filtered = q
+      ? all.filter((s) => (s.title || '').toLowerCase().includes(q) || (s.artist || '').toLowerCase().includes(q))
+      : all;
+    if (!filtered.length) {
+      const e = document.createElement('div');
+      e.className = 'op-add-setlist-row empty';
+      e.textContent = q ? 'No matches' : (all.length === 0 ? 'No other songs in your library' : 'Library empty');
+      listEl.appendChild(e);
+      return;
+    }
+    filtered.forEach((song) => {
+      const row = document.createElement('div');
+      row.className = 'op-add-setlist-row';
+      const t = document.createElement('span'); t.className = 'ttl'; t.textContent = song.title || 'Untitled';
+      row.appendChild(t);
+      if (song.artist) {
+        const a = document.createElement('span'); a.className = 'ar'; a.textContent = song.artist;
+        row.appendChild(a);
+      }
+      row.addEventListener('click', async () => {
+        pop.remove();
+        // Need full song (slides_data) for the panel rendering
+        try {
+          const full = await fetchSong(song.id);
+          if (full) await addToCurrentSetlist(full);
+        } catch (err) {
+          alert('Could not load song: ' + err.message);
+        }
+      });
+      listEl.appendChild(row);
+    });
+  }
+
+  rebuild('');
+  searchEl.addEventListener('input', (e) => rebuild(e.target.value));
+  setTimeout(() => searchEl.focus(), 50);
+
+  // Click outside dismisses
+  setTimeout(() => {
+    const dismiss = (e) => {
+      if (!pop.contains(e.target) && e.target !== anchorBtn) {
+        pop.remove();
+        document.removeEventListener('click', dismiss);
+      }
+    };
+    document.addEventListener('click', dismiss);
+  }, 0);
+}
+
 // Cross-song navigation inside the setlist panel: load the target song (if
 // different from current) and jump to the requested slide index within it.
 // silent: skip the loading-screen flash so the bg/lyrics feel like one song.
@@ -5597,6 +5810,10 @@ $('editor-close-btn')?.addEventListener('click', () => {
 });
 
 // ========================= SETLIST UI WIRING =========================
+$('op-add-to-setlist')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  openAddToSetlistPicker(e.currentTarget);
+});
 $('new-setlist-btn')?.addEventListener('click', () => openSetlistEditor(null));
 $('setlist-modal-close')?.addEventListener('click', closeSetlistEditor);
 $('setlist-modal-cancel')?.addEventListener('click', closeSetlistEditor);
@@ -6179,7 +6396,8 @@ function renderNextSlot() {
   // Use the song's video thumbnail (a single still image) as the NEXT preview's
   // background — keeps the look continuous with the LIVE preview without the
   // CPU cost of decoding a live video for the second stage. Falls back to the
-  // gradient when no video is set.
+  // gradient when no video is set. The .has-thumb class hides the gradient
+  // pseudo-elements that would otherwise paint over the thumbnail.
   const bgLayer = slot.querySelector('.bg-layer');
   const thumb = (selectedVideos && selectedVideos[0] && selectedVideos[0].thumb) || null;
   if (bgLayer) {
@@ -6187,10 +6405,12 @@ function renderNextSlot() {
       bgLayer.style.backgroundImage = `url("${thumb}")`;
       bgLayer.style.backgroundSize = 'cover';
       bgLayer.style.backgroundPosition = 'center';
+      bgLayer.classList.add('has-thumb');
     } else {
       bgLayer.style.backgroundImage = '';
       bgLayer.style.backgroundSize = '';
       bgLayer.style.backgroundPosition = '';
+      bgLayer.classList.remove('has-thumb');
     }
   }
   // Don't run the video layer on the next-preview to save CPU
