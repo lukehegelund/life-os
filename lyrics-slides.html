@@ -658,6 +658,62 @@
   .op-qr-popover img { display: block; width: 200px; height: 200px; }
   .op-qr-popover .qr-cap { color: #333; text-align: center; font-size: 11px; margin-top: 6px; font-weight: 600; }
 
+  /* =========== SHARE POPOVER (replaces simple QR popover) =========== */
+  .op-share-popover {
+    position: fixed; bottom: 56px; right: 16px; z-index: 80;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+    padding: 14px; width: 380px; max-width: calc(100vw - 32px);
+    display: none;
+  }
+  .op-share-popover.visible { display: block; }
+  .op-share-popover h4 { margin: 0 0 4px; font-size: 14px; font-weight: 700; color: var(--text); }
+  .op-share-popover .share-lead { font-size: 11px; color: var(--muted); margin-bottom: 10px; line-height: 1.4; }
+  .share-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px 12px;
+    align-items: center;
+    padding: 10px 0;
+    border-top: 1px solid var(--border);
+  }
+  .share-row:first-of-type { border-top: none; }
+  .share-row-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .share-row-mode-name {
+    font-size: 13px; font-weight: 700; color: var(--text);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .share-row-code-pill {
+    background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 4px; padding: 2px 8px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-weight: 700; font-size: 13px; color: var(--text);
+    user-select: all;
+  }
+  .share-row-desc { font-size: 11px; color: var(--muted); }
+  .share-row-qr {
+    grid-column: 1 / 2;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .share-row-qr img {
+    width: 88px; height: 88px; background: white;
+    border-radius: 6px;
+  }
+  .share-row-actions {
+    grid-column: 2 / 3;
+    grid-row: 1 / 3;
+    display: flex; flex-direction: column; gap: 6px; align-items: stretch; justify-content: center;
+  }
+  .share-row-open {
+    background: var(--accent); color: white; border: none;
+    padding: 8px 10px; border-radius: 7px; font-size: 12px; font-weight: 600;
+    cursor: pointer; white-space: nowrap;
+    transition: filter 0.1s;
+  }
+  .share-row-open:hover { filter: brightness(1.1); }
+  .share-row-open.viewer { background: #16a34a; }       /* green = present */
+  .share-row-open.operator { background: var(--accent); }
+  .share-row-open.editor { background: #6366f1; }       /* indigo = full-power */
+
   .op-footer {
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
     padding: 8px 16px; border-top: 1px solid var(--border); background: var(--panel);
@@ -745,6 +801,27 @@
   .operator.fullscreen .op-section-buttons-wrap,
   .operator.fullscreen .op-footer,
   .operator.fullscreen .op-bar { display: none !important; }
+
+  /* =========== ACCESS MODES =========== */
+  /* Operator mode: full slide nav + key control, but no editing or library exit */
+  body.mode-operator #op-back,
+  body.mode-operator #op-edit { display: none !important; }
+  /* Hide setup/landing entirely — this tab is operator-only */
+  body.mode-operator #setup-view { display: none !important; }
+
+  /* Viewer mode: fullscreen lyrics, no operator chrome at all (mirrors fullscreen) */
+  body.mode-viewer #setup-view,
+  body.mode-viewer .op-topbar,
+  body.mode-viewer .op-strip,
+  body.mode-viewer .op-section-buttons-wrap,
+  body.mode-viewer .op-footer,
+  body.mode-viewer .op-bar { display: none !important; }
+  body.mode-viewer .op-main { padding: 0; gap: 0; }
+  body.mode-viewer .op-preview-live { border-radius: 0; }
+  body.mode-viewer .op-preview-label,
+  body.mode-viewer .op-preview-hud,
+  body.mode-viewer .op-frozen-chip { display: none !important; }
+  body.mode-viewer .op-tap-zone { display: none !important; }
   .operator.fullscreen .op-main { padding: 0; gap: 0; }
   .operator.fullscreen .op-preview-live { border-radius: 0; }
   .operator.fullscreen .op-preview-label { display: none; }
@@ -1342,7 +1419,6 @@
     <div class="op-actions">
       <button class="btn-ghost" id="op-back">← Library</button>
       <button class="btn-ghost" id="op-edit">✎ Edit lyrics</button>
-      <button class="btn btn-primary" id="op-present">▶ Present</button>
     </div>
   </div>
 
@@ -1362,13 +1438,46 @@
     <div class="op-strip" id="op-strip"></div>
     <div class="op-section-buttons-wrap">
       <div class="op-section-buttons" id="op-section-buttons"></div>
-      <button class="op-update-slide-btn" id="op-update-slide-btn" title="Push current slide to the broadcast">↻ Update slide</button>
     </div>
   </div>
 
-  <div class="op-qr-popover" id="op-qr-popover">
-    <img id="op-qr-img" alt="Join code">
-    <div class="qr-cap">Scan with your phone</div>
+  <!-- Share popover: three access tiers, each with a code, QR, and "Open new tab" button -->
+  <div class="op-share-popover" id="op-qr-popover">
+    <h4>Share</h4>
+    <div class="share-lead">Send a code or QR to add a synced second screen or controller. The first letter of each code encodes the access tier — anyone joining with that code gets exactly that tier's controls.</div>
+
+    <div class="share-row">
+      <div class="share-row-info">
+        <div class="share-row-mode-name">▶ Viewer (Present) <span class="share-row-code-pill" id="share-code-viewer">—</span></div>
+        <div class="share-row-desc">Lyrics only, fullscreen, no controls. Use this for the projector.</div>
+      </div>
+      <div class="share-row-actions">
+        <button class="share-row-open viewer" data-mode="viewer">Open new tab</button>
+      </div>
+      <div class="share-row-qr"><img id="share-qr-viewer" alt="Viewer code QR"></div>
+    </div>
+
+    <div class="share-row">
+      <div class="share-row-info">
+        <div class="share-row-mode-name">🎮 Operator <span class="share-row-code-pill" id="share-code-operator">—</span></div>
+        <div class="share-row-desc">Switch songs, navigate slides, change key. No editing.</div>
+      </div>
+      <div class="share-row-actions">
+        <button class="share-row-open operator" data-mode="operator">Open new tab</button>
+      </div>
+      <div class="share-row-qr"><img id="share-qr-operator" alt="Operator code QR"></div>
+    </div>
+
+    <div class="share-row">
+      <div class="share-row-info">
+        <div class="share-row-mode-name">🛠 Editor <span class="share-row-code-pill" id="share-code-editor">—</span></div>
+        <div class="share-row-desc">Full app — edit lyrics, library, everything.</div>
+      </div>
+      <div class="share-row-actions">
+        <button class="share-row-open editor" data-mode="editor">Open new tab</button>
+      </div>
+      <div class="share-row-qr"><img id="share-qr-editor" alt="Editor code QR"></div>
+    </div>
   </div>
 
   <!-- Consolidated bottom bar: audio (when present) + broadcast + share + display -->
@@ -1557,8 +1666,26 @@ let videoModalResults   = [];        // current search results
 // Cross-device sync (Supabase Realtime)
 let sbClient = null;
 let realtimeChannel = null;
-let sessionCode = null;
+let sessionCode = null;          // The "host" full code for whichever mode this tab is acting as
+let sessionSuffix = null;        // 2-char suffix shared across all 3 mode codes for this session
 const JOIN_CODE = urlParams.get('join') || null;
+
+// Parse mode from the join code. Codes are formatted as
+// <ModePrefix><Suffix> where ModePrefix is E (Editor), O (Operator), or
+// V (Viewer). Backward-compat: legacy 4-char codes (no prefix) are treated as Editor.
+function _parseJoinMode(code) {
+  if (!code) return { mode: 'editor', suffix: null };
+  const first = code[0]?.toUpperCase();
+  if (first === 'E') return { mode: 'editor',   suffix: code.slice(1) };
+  if (first === 'O') return { mode: 'operator', suffix: code.slice(1) };
+  if (first === 'V') return { mode: 'viewer',   suffix: code.slice(1) };
+  return { mode: 'editor', suffix: code };  // legacy
+}
+const { mode: APP_MODE, suffix: JOIN_SUFFIX } = _parseJoinMode(JOIN_CODE);
+// Apply mode class on <body> ASAP so CSS hiding rules take effect before paint
+document.documentElement.classList.add('mode-' + APP_MODE);
+if (document.body) document.body.classList.add('mode-' + APP_MODE);
+else document.addEventListener('DOMContentLoaded', () => document.body.classList.add('mode-' + APP_MODE));
 
 // (Chord engine + device settings live further down in the file — see deviceSettings,
 //  parseChordedLine, translateChord, renderChord around line 1760+.)
@@ -3687,12 +3814,32 @@ function getSupabaseClient() {
   return sbClient;
 }
 
-function generateSessionCode() {
-  // 4-character code, easy to type. Avoids confusable chars (0/O, 1/I/L).
-  const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+function generateSessionSuffix() {
+  // 2-char random suffix. Codes per mode are this prefixed with E/O/V.
+  // Avoids confusable chars (0/O, 1/I/L).
+  const alphabet = 'ABCDFGHJKMNPQRSTUWXYZ23456789';
   let s = '';
-  for (let i = 0; i < 4; i++) s += alphabet[Math.floor(Math.random() * alphabet.length)];
+  for (let i = 0; i < 2; i++) s += alphabet[Math.floor(Math.random() * alphabet.length)];
   return s;
+}
+// Backward-compat shim: old code paths that called generateSessionCode() now
+// receive the editor-mode code so existing wiring keeps working.
+function generateSessionCode() {
+  if (!sessionSuffix) sessionSuffix = generateSessionSuffix();
+  return 'E' + sessionSuffix;
+}
+function codeForMode(mode) {
+  if (!sessionSuffix) sessionSuffix = generateSessionSuffix();
+  if (mode === 'operator') return 'O' + sessionSuffix;
+  if (mode === 'viewer')   return 'V' + sessionSuffix;
+  return 'E' + sessionSuffix;
+}
+// Realtime channel name only depends on the suffix — all 3 mode codes share it
+function channelNameFor(codeOrSuffix) {
+  if (!codeOrSuffix) return null;
+  const first = codeOrSuffix[0]?.toUpperCase();
+  const suffix = (first === 'E' || first === 'O' || first === 'V') ? codeOrSuffix.slice(1) : codeOrSuffix;
+  return `lyric-slides:${suffix}`;
 }
 
 /**
@@ -3706,7 +3853,14 @@ function startRealtimeChannel(code) {
     try { realtimeChannel.unsubscribe(); } catch {}
     realtimeChannel = null;
   }
-  const channel = sb.channel(`lyric-slides:${code}`, {
+  const channelName = channelNameFor(code);
+  // Capture the channel suffix so future "Open new tab" calls can produce
+  // codes for the SAME session even on the joined-tab side.
+  if (!sessionSuffix) {
+    const first = code[0]?.toUpperCase();
+    sessionSuffix = (first === 'E' || first === 'O' || first === 'V') ? code.slice(1) : code;
+  }
+  const channel = sb.channel(channelName, {
     config: { broadcast: { self: false } }   // never receive my own messages
   });
 
@@ -3805,16 +3959,31 @@ function broadcastStateRealtime() {
   } catch {}
 }
 
+// Populate the Share popover with three mode-specific codes + their QR images.
+// `code` parameter is kept for backward-compat callers; it's only used to seed
+// the suffix when the suffix wasn't already known.
 function showSessionCodeUI(code) {
-  const wrap = $('op-session');
-  const codeEl = $('op-session-code');
-  const qrImg = $('op-qr-img');
-  if (!wrap || !codeEl) return;
-  codeEl.textContent = code;
-  wrap.style.display = 'inline-flex';
-  if (qrImg) {
-    const joinUrl = `${location.origin}${location.pathname}?join=${code}`;
-    qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=8&data=${encodeURIComponent(joinUrl)}`;
+  if (!sessionSuffix && code) {
+    const first = code[0]?.toUpperCase();
+    sessionSuffix = (first === 'E' || first === 'O' || first === 'V') ? code.slice(1) : code;
+  }
+  if (!sessionSuffix) sessionSuffix = generateSessionSuffix();
+
+  const modes = [
+    { key: 'editor',   pillId: 'share-code-editor',   qrId: 'share-qr-editor' },
+    { key: 'operator', pillId: 'share-code-operator', qrId: 'share-qr-operator' },
+    { key: 'viewer',   pillId: 'share-code-viewer',   qrId: 'share-qr-viewer' },
+  ];
+  for (const m of modes) {
+    const c = codeForMode(m.key);
+    const pill = document.getElementById(m.pillId);
+    if (pill) pill.textContent = c;
+    const img = document.getElementById(m.qrId);
+    if (img) {
+      const joinUrl = `${location.origin}${location.pathname}?join=${c}`;
+      img.src = `https://api.qrserver.com/v1/create-qr-code/?size=120x120&margin=6&data=${encodeURIComponent(joinUrl)}`;
+      img.title = joinUrl;
+    }
   }
 }
 
@@ -4223,12 +4392,10 @@ function clearEditor() {
 async function loadAndPresent(id, opts = {}) {
   loading.classList.add('visible');
   loadingText.textContent = 'Loading song…';
-  // If a song is already loaded (mid-set song change), snapshot its current
-  // displayed slide first so the broadcast keeps showing it until the user
-  // explicitly taps a new slide or hits "Update slide".
-  if (slides.length > 0 && currentSong?.id && currentSong.id !== id && !displayed) {
-    captureDisplay();
-  }
+  // Auto-update behavior: a new song's slide pushes to the broadcast immediately.
+  // (The previous "freeze on previous slide until Update Slide is clicked"
+  // mechanism has been removed in favor of always-live broadcasting.)
+  displayed = null;
   try {
     const song = await fetchSong(id);
     if (!song) throw new Error('song not found');
@@ -4971,9 +5138,13 @@ function maybeDoubleTapExit(e) {
 operatorView.addEventListener('click', maybeDoubleTapExit, true);
 operatorView.addEventListener('touchend', maybeDoubleTapExit, { passive: true });
 
-// QR popover toggle
+// Share popover toggle
 $('op-qr-toggle')?.addEventListener('click', (e) => {
   e.stopPropagation();
+  // Make sure the codes/QRs are populated (covers the case where the popover
+  // is opened before any host/join wiring has run)
+  if (!sessionSuffix) sessionSuffix = generateSessionSuffix();
+  showSessionCodeUI(sessionCode || codeForMode(APP_MODE));
   $('op-qr-popover')?.classList.toggle('visible');
 });
 document.addEventListener('click', (e) => {
@@ -4981,6 +5152,19 @@ document.addEventListener('click', (e) => {
   if (pop?.classList.contains('visible') && !pop.contains(e.target) && e.target.id !== 'op-qr-toggle') {
     pop.classList.remove('visible');
   }
+});
+
+// "Open new tab" buttons inside the share popover
+document.querySelectorAll('.share-row-open').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const mode = btn.dataset.mode;
+    if (!mode) return;
+    if (!sessionSuffix) sessionSuffix = generateSessionSuffix();
+    const code = codeForMode(mode);
+    const url = `${location.origin}${location.pathname}?join=${code}`;
+    // Use a unique target name per mode so repeat clicks reuse the same window
+    window.open(url, `lyric-slides-${mode}-tab`);
+  });
 });
 $('op-auto-advance')?.addEventListener('change', (e) => {
   autoAdvanceSec = parseInt(e.target.value, 10) || 0;
