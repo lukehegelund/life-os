@@ -332,8 +332,14 @@ function toMonotonic(s) {
   }
   return out.normalize('NFC');
 }
+function stripGreekPunct(s) {
+  // Strip modern editorial punctuation — original Koine had none (scriptio continua)
+  // Removes: period, comma, middle dot (ano teleia), elision apostrophe, Greek semicolon (;)
+  return s.replace(/[.,·’;;:]/g, '');
+}
 function greekText(tok) {
-  return state.display === 'monotonic' ? toMonotonic(tok.g) : tok.g;
+  const g = state.display === 'monotonic' ? toMonotonic(tok.g) : tok.g;
+  return stripGreekPunct(g);
 }
 
 function getTokenStage(tok) {
