@@ -1329,14 +1329,35 @@
   .chart-back:hover { border-color: var(--muted); }
 
   .chart-paper {
-    max-width: 780px;
+    max-width: 1100px;            /* widened to give two columns breathing room */
     margin: 24px auto;
-    padding: 56px 64px;
+    padding: 48px 56px;
     background: white;
     color: #1a1a1a;
     box-shadow: 0 8px 30px rgba(0,0,0,0.18);
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
     line-height: 1.2;
+  }
+  /* On screens wide enough to comfortably show two columns of music, lay
+     the chart out as a 2-column flow. Header spans both columns. Sections
+     don't split across the column break. Below this width (phones,
+     narrow tablets) we stay single-column for readability. */
+  @media (min-width: 760px) {
+    .chart-paper {
+      column-count: 2;
+      column-gap: 36px;
+      column-fill: balance;
+    }
+    .chart-paper > header {
+      column-span: all;
+      -webkit-column-span: all;
+    }
+    .chart-paper .chart-section,
+    .chart-paper .chart-section-ref {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .chart-paper .chart-section h2 { break-after: avoid; }
   }
   .chart-paper h1 {
     margin: 0 0 4px 0;
