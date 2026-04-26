@@ -1507,6 +1507,14 @@
   .chart-paper .chart-section-ref .ref-arrow { margin-right: 6px; opacity: 0.7; }
 
   @media print {
+    /* Force standard US Letter (8.5" x 11") regardless of locale defaults.
+       Without this, browsers in some locales default to A4, which crops or
+       rescales the chart awkwardly. The @page margin owns the physical paper
+       margins; .chart-paper drops its own padding so they don't double up. */
+    @page {
+      size: letter;
+      margin: 0.45in 0.5in;
+    }
     body { background: white !important; }
     .chart-view { position: static; background: white; overflow: visible; }
     .chart-toolbar, .no-print { display: none !important; }
@@ -1514,7 +1522,7 @@
       box-shadow: none;
       max-width: 100%;
       margin: 0;
-      padding: 0.5in 0.55in;
+      padding: 0;             /* @page margin handles physical paper margins */
       /* Two-column layout when printing so a chord sheet fits on one page
          far more often. column-fill: auto fills column 1 first, then 2,
          which feels more natural than balancing for music. */
