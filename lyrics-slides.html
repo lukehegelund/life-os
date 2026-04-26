@@ -306,6 +306,30 @@
 
   .lyrics-label-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
 
+  /* ---- Tutorial banner ---- */
+  .tutorial-banner {
+    display: flex; align-items: center; justify-content: center;
+    gap: 12px; padding: 9px 16px; margin: 0 0 14px 0;
+    background: linear-gradient(90deg, rgba(154,126,200,0.18), rgba(154,126,200,0.10));
+    border: 1px solid rgba(154,126,200,0.45);
+    border-radius: 10px;
+    font-size: 13px; color: var(--text);
+  }
+  .tutorial-banner a {
+    color: var(--accent); text-decoration: none; font-weight: 600;
+  }
+  .tutorial-banner a:hover { text-decoration: underline; }
+  .tutorial-banner .tutorial-banner-emoji { font-size: 16px; line-height: 1; }
+  .tutorial-banner .tutorial-banner-close {
+    background: none; border: none; color: var(--muted);
+    font-size: 18px; line-height: 1; cursor: pointer;
+    padding: 2px 6px; margin-left: 6px;
+    border-radius: 4px; transition: all 0.15s;
+  }
+  .tutorial-banner .tutorial-banner-close:hover {
+    background: rgba(255,255,255,0.08); color: var(--text);
+  }
+
   /* ---- Song versions ---- */
   .versions-row {
     display: flex; align-items: center; flex-wrap: wrap;
@@ -1661,6 +1685,13 @@
 
 <!-- ==================== SETUP VIEW ==================== -->
 <div class="setup" id="setup-view">
+  <!-- Dismissible tutorial banner. Hidden on load if the user previously
+       clicked the X (state in localStorage). Only shown on the setup view. -->
+  <div class="tutorial-banner" id="tutorial-banner" style="display:none;">
+    <span class="tutorial-banner-emoji">🎬</span>
+    <span>New to the app? <a href="https://youtu.be/2aDiH5iLtfw" target="_blank" rel="noopener noreferrer">Watch a tutorial!</a></span>
+    <button class="tutorial-banner-close" id="tutorial-banner-close" type="button" title="Don't show this again">✕</button>
+  </div>
   <div class="setup-header">
     <h1>🎤 Lyric Slides</h1>
     <a href="apps.html" class="back">← Apps</a>
@@ -7245,6 +7276,22 @@ operatorView.addEventListener('click', maybeDoubleTapExit, true);
 operatorView.addEventListener('touchend', maybeDoubleTapExit, { passive: true });
 
 // Share popover toggle
+// One-time wiring of the dismissible 'Watch a tutorial' banner.
+// Reads localStorage to skip showing if the user previously dismissed it.
+(function wireTutorialBanner() {
+  const LS_KEY = 'ls_tutorial_dismissed_v1';
+  const banner = document.getElementById('tutorial-banner');
+  const closeBtn = document.getElementById('tutorial-banner-close');
+  if (!banner || !closeBtn) return;
+  let dismissed = false;
+  try { dismissed = localStorage.getItem(LS_KEY) === '1'; } catch {}
+  if (!dismissed) banner.style.display = '';
+  closeBtn.addEventListener('click', () => {
+    banner.style.display = 'none';
+    try { localStorage.setItem(LS_KEY, '1'); } catch {}
+  });
+})();
+
 // One-time wiring of the editor versions row + chart version selector +
 // chart 'Edit source' button. Called once on script init.
 (function wireVersionsControls() {
