@@ -466,7 +466,7 @@
     color: white;
     font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'Inter', system-ui, sans-serif;
     opacity: 0;
-    transition: opacity 0.6s ease-in-out;   /* slower for a more visible cross-fade */
+    transition: opacity 0.3s ease-in-out;   /* per-direction; sequenced fade-out then fade-in in JS */
     background: rgba(0,0,0,0.5);
     padding: 0.6em 1.85em;
     border-radius: 14px;
@@ -3554,6 +3554,12 @@ function initAudioForSong(audioUrl, originalKey, youtubeUrl) {
         const optionVals = [...sel.options].map(o => o.value);
         if (optionVals.includes(initial)) sel.value = initial;
       }
+      // Sync the Display-settings Key dropdown to match the op-bar key on
+      // song load so they don't drift apart visually.
+      const dsKey = document.getElementById('ds-key-select');
+      if (dsKey) dsKey.value = sel.value;
+      deviceSettings.chordKey = sel.value;
+      try { saveDeviceSettings && saveDeviceSettings(); } catch {}
     } else {
       // Semitone-mode: default to 0.
       sel.value = '0';
@@ -4258,41 +4264,50 @@ function resolvePalette(selected) {
   return GRADIENTS[Math.floor(Math.random() * GRADIENTS.length)];
 }
 
+// When set, the next applyPaletteToStage call will cross-fade between the
+// two .bg-layer elements instead of snapping. Set by explicit user actions
+// (Color button, setlist bg-swatch click); reset on next microtask so it
+// only affects the immediate render.
+let _paletteAnimateNext = false;
+
 function applyPaletteToStage(stageEl, pal) {
-  // Strip any palette class on the stage itself \u2014 legacy behavior, kept
-  // for safety so stale classes don't interact with descendant selectors.
+  // Strip any palette class on the stage itself \u2014 legacy, kept for
+  // safety so stale classes don't interact with descendant selectors.
   GRADIENTS.forEach(g => stageEl.classList.remove(g));
 
-  // Cross-fade between the two stacked .bg-layer elements created by
-  // ensureStageScaffold. Each layer carries its own palette class; we swap
-  // which one is .bg-layer-active and let CSS opacity transition do the rest.
   const layers = Array.from(stageEl.querySelectorAll('.bg-layer'))
     .filter(l => !l.classList.contains('has-thumb'));
   if (layers.length === 0) return;
 
-  // Single-layer fallback (e.g. NEXT slot showing a thumbnail; we don't
-  // get here normally because of the .has-thumb filter above, but just in
-  // case): just set the class.
-  if (layers.length === 1) {
-    GRADIENTS.forEach(g => layers[0].classList.remove(g));
-    layers[0].classList.add(pal);
+  const animate = _paletteAnimateNext;
+
+  // SNAP path \u2014 default. Just set the new palette on the active layer
+  // and clear the inactive one. No transition. This is the right behavior
+  // for song loads (the change isn't user-initiated; cross-fading the
+  // gradient just makes a previously-invisible color shift visible).
+  if (!animate || layers.length < 2) {
+    const active = layers.find(l => l.classList.contains('bg-layer-active')) || layers[0];
+    if (!active.classList.contains(pal)) {
+      GRADIENTS.forEach(g => active.classList.remove(g));
+      active.classList.add(pal);
+    }
+    layers.filter(l => l !== active).forEach(l => {
+      GRADIENTS.forEach(g => l.classList.remove(g));
+      l.classList.remove('bg-layer-active');
+      l.classList.add('bg-layer-fade');
+    });
     return;
   }
 
+  // ANIMATE path \u2014 explicit user action. Cross-fade between the two
+  // .bg-layer elements.
   let active = layers.find(l => l.classList.contains('bg-layer-active')) || layers[0];
   let inactive = layers.find(l => l !== active) || layers[1];
-
-  // No-op if the palette already matches the visible layer.
   if (active.classList.contains(pal)) return;
 
-  // Paint new palette onto the inactive layer.
   GRADIENTS.forEach(g => inactive.classList.remove(g));
   inactive.classList.add(pal);
-
-  // Force a reflow so the next class change kicks off a transition.
   void inactive.offsetHeight;
-
-  // Swap which layer is active. CSS handles the opacity transition.
   inactive.classList.remove('bg-layer-fade');
   inactive.classList.add('bg-layer-active');
   active.classList.remove('bg-layer-active');
@@ -4499,21 +4514,23 @@ function renderSlideOnStage(stageEl, slide, palette, options = {}) {
         }
         contentEl.appendChild(el);
       });
-      // Auto-fit font, then trigger cross-fade
+      // Sequential fade: hide OLD now, fit while it fades out, then show NEW.
+      // The 0.3s CSS transition + 300ms gap = ~600ms total with NO overlap
+      // (previous simultaneous cross-fade made two different texts overlap
+      // at the same position, which read as jagged).
+      if (activeEl !== contentEl) activeEl.classList.remove('visible');
       requestAnimationFrame(() => {
         fitSlideContent(contentEl, stageEl);
-        requestAnimationFrame(() => {
-          // Cross-fade: hide current and show the new one in the same tick.
-          if (activeEl !== contentEl) activeEl.classList.remove('visible');
-          contentEl.classList.add('visible');
-        });
       });
-    } else {
-      // Blank — still cross-fade (empty content fades in over outgoing)
-      requestAnimationFrame(() => {
-        if (activeEl !== contentEl) activeEl.classList.remove('visible');
+      setTimeout(() => {
         contentEl.classList.add('visible');
-      });
+      }, 310);
+    } else {
+      // Blank slide — same sequential fade.
+      if (activeEl !== contentEl) activeEl.classList.remove('visible');
+      setTimeout(() => {
+        contentEl.classList.add('visible');
+      }, 310);
     }
   };
 
@@ -5666,7 +5683,10 @@ function renderSetlistPanel() {
       if (bgSong) {
         palette = resolvePalette(bgSong.palette || palette);
         selectedVideos = Array.isArray(bgSong.video_urls) ? bgSong.video_urls : [];
+        // Cross-fade for this explicit user action.
+        _paletteAnimateNext = true;
         try { renderCurrentPreview(); renderNextSlot && renderNextSlot(); renderStripContents && renderStripContents(); } catch {}
+        Promise.resolve().then(() => { _paletteAnimateNext = false; });
       }
       renderSetlistPanel(); // update active marker
     });
@@ -6400,14 +6420,21 @@ $('op-audio-play')?.addEventListener('click', () => toggleAudioPlayback());
 
 $('op-audio-key-select')?.addEventListener('change', async (e) => {
   await changeAudioKey(e.target.value);
-  // The performance key drives chord display too — re-render slides + strip
-  // and refresh the capo "effective key" hint in the settings popover
+  // Sync ds-key-select + device chord key (key-mode only). In semitone-mode
+  // the op-bar value is a number so it doesn't translate to a chord key;
+  // ds-key-select is left at whatever the user picked.
+  if (!_isSemitoneOpValue(e.target.value)) {
+    const dsKey = document.getElementById('ds-key-select');
+    if (dsKey) dsKey.value = e.target.value;
+    deviceSettings.chordKey = e.target.value;
+    try { saveDeviceSettings && saveDeviceSettings(); } catch {}
+  }
   if (slides && slides.length > 0) {
     try { renderCurrentPreview(); renderNextSlot && renderNextSlot(); renderStripContents && renderStripContents(); } catch {}
   }
   const ce = document.getElementById('ds-capo-effective');
   if (ce && (deviceSettings.capo || 0) > 0) {
-    ce.textContent = `→ chords shown in ${getEffectiveChordKey()}`;
+    ce.textContent = `\u2192 chords shown in ${getEffectiveChordKey()}`;
   }
 });
 
@@ -6671,6 +6698,18 @@ document.querySelectorAll('#ds-view .ds-opt').forEach(btn => {
 });
 $('ds-key-select')?.addEventListener('change', (e) => {
   deviceSettings.chordKey = e.target.value;
+  // If a song with audio is loaded in key-mode, also drive the op-bar key
+  // (and therefore the audio pitch) so the two stay synced.
+  const opSel = document.getElementById('op-audio-key-select');
+  const songHasAudio = !!(currentSong?.youtube_url || currentSong?.audio_url);
+  if (opSel && songHasAudio && currentSong?.original_key && !_isSemitoneOpValue(opSel.value)) {
+    const optionVals = [...opSel.options].map(o => o.value);
+    if (optionVals.includes(e.target.value) && opSel.value !== e.target.value) {
+      opSel.value = e.target.value;
+      // Fire the same code path the op-bar dropdown would
+      try { changeAudioKey(e.target.value); } catch {}
+    }
+  }
   saveDeviceSettings();
   applyDeviceSettings();
 });
@@ -6767,7 +6806,6 @@ operatorView.addEventListener('touchend', maybeDoubleTapExit, { passive: true })
 // when no video background is set (button is hidden otherwise).
 $('op-randomize-palette')?.addEventListener('click', () => {
   if (!GRADIENTS || GRADIENTS.length === 0) return;
-  // Pick a different palette than the current one when possible.
   let next = palette;
   if (GRADIENTS.length > 1) {
     let attempts = 0;
@@ -6777,13 +6815,15 @@ $('op-randomize-palette')?.addEventListener('click', () => {
     }
   }
   palette = next;
-  // Re-render preview / next / strip with the new palette.
+  // Cross-fade for this explicit user action.
+  _paletteAnimateNext = true;
   try { renderCurrentPreview(); } catch {}
   try { renderNextSlot && renderNextSlot(); } catch {}
   try { renderStripContents && renderStripContents(); } catch {}
-  // Push to broadcast + viewers.
   try { pushPaletteToBroadcast && pushPaletteToBroadcast(); } catch {}
   try { broadcastPaletteRealtime && broadcastPaletteRealtime(); } catch {}
+  // Reset on next microtask so subsequent (non-Color-button) renders snap.
+  Promise.resolve().then(() => { _paletteAnimateNext = false; });
 });
 
 $('op-qr-toggle')?.addEventListener('click', (e) => {
