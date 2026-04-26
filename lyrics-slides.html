@@ -306,6 +306,24 @@
 
   .lyrics-label-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
 
+  /* ---- Capo active highlight ----
+     When the capo is non-zero, both inputs (op-bar + display settings) glow
+     orange so the user notices that chord display is being transposed. */
+  #op-capo-input.capo-active,
+  #ds-capo-input.capo-active {
+    border-color: #f5a623 !important;
+    background: rgba(245, 166, 35, 0.18) !important;
+    color: #ffd24a !important;
+    font-weight: 700;
+    box-shadow: 0 0 0 2px rgba(245, 166, 35, 0.18);
+  }
+  /* Style the label next to each input via a sibling-relationship class on
+     the wrapping span. Set on the same syncCapoActive() pass. */
+  .capo-wrap-active .op-bar-key-label,
+  .ds-capo-row.capo-wrap-active label {
+    color: #f5a623 !important;
+  }
+
   /* ---- Tutorial banner ---- */
   .tutorial-banner {
     display: flex; align-items: center; justify-content: center;
@@ -6437,6 +6455,22 @@ let _chartActiveVerId   = null; // version id selected in chord chart toolbar
 
 function _genVerId() { return 'v_' + Math.random().toString(36).slice(2, 10); }
 
+// Apply / remove the .capo-active class on both capo inputs (and a wrap class
+// for label coloring) based on the current capo value. Called from every
+// place that mutates deviceSettings.capo.
+function syncCapoActive() {
+  const v = (deviceSettings.capo | 0) || 0;
+  const active = v !== 0;
+  const opCapo = document.getElementById('op-capo-input');
+  const dsCapo = document.getElementById('ds-capo-input');
+  const opWrap = document.getElementById('op-audio-key-wrap');
+  const dsRow  = document.getElementById('ds-capo-row');
+  if (opCapo) opCapo.classList.toggle('capo-active', active);
+  if (dsCapo) dsCapo.classList.toggle('capo-active', active);
+  if (opWrap) opWrap.classList.toggle('capo-wrap-active', active);
+  if (dsRow)  dsRow .classList.toggle('capo-wrap-active', active);
+}
+
 // Pick which version's lyrics to use when loading a song. Default = is_default
 // version, falling back to the first version, falling back to song.lyrics.
 function getEffectiveSongLyrics(song, preferredVersionId) {
@@ -6915,6 +6949,7 @@ $('op-capo-input')?.addEventListener('input', (e) => {
   // Mirror to ds-capo-input so both stay in sync.
   const ds = document.getElementById('ds-capo-input');
   if (ds && parseInt(ds.value, 10) !== v) ds.value = v;
+  syncCapoActive();
   try { saveDeviceSettings && saveDeviceSettings(); } catch {}
   try { applyDeviceSettings && applyDeviceSettings(); } catch {}
   if (slides && slides.length > 0) {
@@ -7140,6 +7175,8 @@ function applyDeviceSettings() {
   if (opCapo) opCapo.value = (deviceSettings.capo | 0) || 0;
   const dsCapo = document.getElementById('ds-capo-input');
   if (dsCapo) dsCapo.value = (deviceSettings.capo | 0) || 0;
+  // Refresh the capo-active highlight to match the current value.
+  if (typeof syncCapoActive === 'function') syncCapoActive();
   const ci = $('ds-capo-input'); if (ci) ci.value = deviceSettings.capo || 0;
   const ce = $('ds-capo-effective');
   if (ce) {
@@ -7241,6 +7278,7 @@ $('ds-capo-input')?.addEventListener('input', (e) => {
   // Mirror to op-bar capo input so the two stay in sync.
   const opCapo = document.getElementById('op-capo-input');
   if (opCapo && parseInt(opCapo.value, 10) !== v) opCapo.value = v;
+  syncCapoActive();
   saveDeviceSettings();
   applyDeviceSettings();
   if (slides && slides.length > 0) {
