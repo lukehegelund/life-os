@@ -306,6 +306,15 @@
 
   .lyrics-label-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
 
+  /* Anchor variant of .btn-ghost so <a id="open-operator-mode"> sits flush
+     with the other library-header buttons. */
+  a.btn-ghost {
+    display: inline-flex; align-items: center; gap: 4px;
+    text-decoration: none;
+    line-height: 1;
+  }
+  a.btn-ghost:hover { color: var(--accent); border-color: var(--accent); }
+
   /* ---- Capo active highlight ----
      When the capo is non-zero, both inputs (op-bar + display settings) glow
      orange so the user notices that chord display is being transposed. */
@@ -1213,10 +1222,18 @@
 
   /* =========== ACCESS MODES =========== */
   /* Operator mode: full slide nav + key control, but no editing or library exit */
-  body.mode-operator #op-back,
+  /* Operator mode keeps the library visible (read + control), but hides
+     anything that would let the user edit songs / setlists. The op-back
+     button is shown so operators can return to the library from a song. */
   body.mode-operator #op-edit { display: none !important; }
-  /* Hide setup/landing entirely — this tab is operator-only */
-  body.mode-operator #setup-view { display: none !important; }
+  /* Editing affordances hidden in operator mode: */
+  body.mode-operator #new-song-btn,
+  body.mode-operator #new-setlist-btn,
+  body.mode-operator .library-card-actions .edit,
+  body.mode-operator .library-card-actions .del,
+  body.mode-operator .setlist-card-actions .danger,
+  body.mode-operator .setlist-card-actions button:nth-child(2),  /* the ✎ Edit button */
+  body.mode-operator #tutorial-banner { display: none !important; }
 
   /* Viewer mode: fullscreen lyrics, no operator chrome at all (mirrors fullscreen) */
   body.mode-viewer #setup-view,
@@ -1815,8 +1832,9 @@
   <div class="library-wrap">
     <div class="library-header">
       <div class="library-title">Your library</div>
-      <div style="display:flex;gap:8px;align-items:center;">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <button class="btn-ghost" id="refresh-library">↻ Refresh</button>
+        <a class="btn-ghost" id="open-operator-mode" href="?mode=operator" title="Browse + operate songs without edit controls (great for performing or sharing with a teammate)">🎮 Operator mode</a>
         <button class="btn-secondary" id="new-song-btn" style="background:var(--accent);color:white;">+ New song</button>
       </div>
     </div>
@@ -2341,6 +2359,11 @@ if (EXPLICIT_MODE && ['editor', 'operator', 'viewer'].includes(EXPLICIT_MODE)) {
 document.documentElement.classList.add('mode-' + APP_MODE);
 if (document.body) document.body.classList.add('mode-' + APP_MODE);
 else document.addEventListener('DOMContentLoaded', () => document.body.classList.add('mode-' + APP_MODE));
+// Mode-tagged page title so the user can tell at a glance which mode a tab is in.
+try {
+  if (APP_MODE === 'operator') document.title = 'Lyric Slides \u00b7 Operator';
+  else if (APP_MODE === 'viewer') document.title = 'Lyric Slides \u00b7 Viewer';
+} catch {}
 
 // (Chord engine + device settings live further down in the file — see deviceSettings,
 //  parseChordedLine, translateChord, renderChord around line 1760+.)
