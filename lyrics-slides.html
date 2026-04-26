@@ -1697,6 +1697,38 @@
     display: flex; align-items: center; gap: 10px; padding: 8px 14px;
     background: var(--panel); border-top: 1px solid var(--border);
     flex-wrap: wrap; font-size: 12px; color: var(--muted);
+    /* width:100% + box-sizing make the wrap math reliable inside the
+       fixed-position .operator container. Without these, on phone-width
+       viewports the bar was overflowing horizontally instead of wrapping,
+       leaving only the right edge visible. */
+    width: 100%;
+    box-sizing: border-box;
+  }
+  /* Phone tweaks: tighter spacing, smaller buttons, allow the key+capo
+     wrap to break internally so it never forces horizontal overflow. */
+  @media (max-width: 600px) {
+    .op-bar {
+      padding: 6px 8px;
+      gap: 6px;
+    }
+    .op-bar-btn {
+      padding: 5px 8px;
+      font-size: 11px;
+    }
+    .op-bar-key-wrap {
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+    .op-bar-key-label {
+      font-size: 10px;
+    }
+    .op-audio-key-select {
+      font-size: 11px;
+      padding: 3px 6px;
+    }
+    /* Spacer collapses to nothing on phone so the items don't get pushed
+       into separate rows unnecessarily. */
+    .op-bar-spacer { flex: 0 0 0; }
   }
   .op-bar-info {
     font-size: 13px; color: var(--text);
@@ -2035,14 +2067,13 @@
     <div class="qr-focus-hint">Tap the QR to return</div>
   </div>
 
-  <!-- Consolidated bottom bar: audio (when present) + broadcast + share + display -->
+  <!-- Consolidated bottom bar: audio controls (left) + share/settings (right). -->
   <div class="op-bar" id="op-bar">
-    <span class="op-bar-info empty" id="op-audio-info"></span>
     <button class="op-bar-btn op-audio-play" id="op-audio-play" style="display:none;">▶ Play</button>
     <span class="op-bar-key-wrap" id="op-audio-key-wrap" style="display:none;">
       <span class="op-bar-key-label" id="op-audio-key-label">Key:</span>
       <select class="op-audio-key-select" id="op-audio-key-select"></select>
-      <span class="op-bar-key-label" style="margin-left:6px;" title="Capo fret \u2014 chord display drops by this many semitones for guitarists with a capo">Capo:</span>
+      <span class="op-bar-key-label" style="margin-left:6px;" title="Capo fret — chord display drops by this many semitones for guitarists with a capo">Capo:</span>
       <input type="number" id="op-capo-input" min="0" max="11" step="1" value="0"
              style="width:48px;background:var(--panel-2);border:1px solid var(--border);color:var(--text);padding:3px 6px;border-radius:5px;font-size:12px;">
     </span>
@@ -2053,14 +2084,13 @@
 
     <span class="op-bar-spacer"></span>
 
-    <span class="op-broadcast-indicator">
+    <!-- Broadcast indicator: dot only (status text removed to save space). -->
+    <span class="op-broadcast-indicator" title="Broadcast status">
       <span class="op-broadcast-dot" id="op-broadcast-dot"></span>
-      <span id="op-broadcast-status">Broadcast closed</span>
     </span>
     <button class="op-bar-btn" id="op-randomize-palette" title="Randomize the gradient color for this song" style="display:none;">🎨 Color</button>
     <button class="op-bar-btn" id="op-qr-toggle" title="Share with phones / second screen">📱 Share</button>
     <button class="op-bar-btn" id="op-settings-btn" title="Display settings">⚙</button>
-    <span class="op-bar-hint">← →·Swipe·F</span>
   </div>
 
   <!-- Display settings popover (per-device preferences) -->
@@ -3963,6 +3993,8 @@ function updateAudioBar() {
       playBtn.title       = loaded ? '' : 'Loading audio…';
     }
   }
+  // op-audio-info element was removed from the bar; if it ever returns
+  // (debug, user override) we still write to it gracefully.
   if (infoEl) {
     if (hasYoutube) {
       infoEl.textContent = `📺 ${currentSong.title || 'YouTube'}`;
@@ -3977,6 +4009,7 @@ function updateAudioBar() {
       infoEl.classList.add('empty');
     }
   }
+  // (End of legacy op-audio-info block. Element is normally absent now.)
   // Note: we no longer auto-reset the key dropdown here. The dropdown is set
   // once on song load (in initAudioForSong) to the song's default_key (or
   // original_key as fallback) and the user's overrides are sticky after that.
