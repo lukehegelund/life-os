@@ -305,6 +305,47 @@
   .lyrics-editor-wrap .lyrics-overlay .h-grey   { color: var(--muted); font-weight: 700; }
 
   .lyrics-label-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+
+  /* ---- Song versions ---- */
+  .versions-row {
+    display: flex; align-items: center; flex-wrap: wrap;
+    gap: 8px; margin-bottom: 12px;
+    padding: 10px 12px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .versions-row label.versions-label {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .versions-row select.versions-select {
+    background: var(--panel); color: var(--text); border: 1px solid var(--border);
+    padding: 5px 9px; border-radius: 6px; font-size: 13px; min-width: 160px;
+  }
+  .versions-row .versions-btn {
+    background: var(--panel); color: var(--text); border: 1px solid var(--border);
+    padding: 5px 10px; border-radius: 6px; font-size: 12px; cursor: pointer;
+  }
+  .versions-row .versions-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .versions-row .versions-btn.danger:hover { border-color: #c0392b; color: #c0392b; }
+  .versions-row .versions-default-pill {
+    font-size: 10px; padding: 2px 7px; border-radius: 99px;
+    background: rgba(154,126,200,0.18); color: var(--accent);
+    font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase;
+  }
+
+  /* Operator panel inline version dropdown */
+  .op-version-wrap {
+    display: inline-flex; align-items: center; gap: 6px;
+    margin-left: 12px;
+    font-size: 12px; color: var(--muted);
+  }
+  .op-version-wrap select {
+    background: var(--panel-2); color: var(--text);
+    border: 1px solid var(--border); padding: 3px 7px;
+    border-radius: 5px; font-size: 12px;
+  }
   .lyrics-strip-parens { font-size: 11px; padding: 4px 9px; }
   .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   @media (max-width: 520px) { .two-col { grid-template-columns: 1fr; } }
@@ -1707,6 +1748,17 @@
     </div>
   </div>
 
+  <!-- Song versions: multiple lyric arrangements per song. The dropdown
+       lists all versions; switching swaps the textarea content. -->
+  <div class="versions-row" id="editor-versions-row" style="display:none;">
+    <label class="versions-label" for="editor-versions-select">Version:</label>
+    <select id="editor-versions-select" class="versions-select"></select>
+    <span id="editor-versions-default-pill" class="versions-default-pill" style="display:none;">Default</span>
+    <button class="versions-btn" id="editor-versions-new"     type="button" title="Save current lyrics as a new version">+ New</button>
+    <button class="versions-btn" id="editor-versions-default" type="button" title="Make this the song's default version">⭐ Set as default</button>
+    <button class="versions-btn danger" id="editor-versions-delete" type="button" title="Delete this version">✕ Delete</button>
+  </div>
+
   <div class="field">
     <div class="lyrics-label-row">
       <label>Lyrics <span style="color:var(--muted); font-weight:500; text-transform:none; letter-spacing:0; font-size:11px; margin-left:6px;">— blank line = new slide</span></label>
@@ -1967,6 +2019,11 @@
       <label id="chart-key-wrap">Key:
         <select id="chart-key-select"></select>
       </label>
+      <span class="chart-toolbar-group" id="chart-version-wrap" style="display:none;">
+        <label for="chart-version-select">Version:</label>
+        <select id="chart-version-select"></select>
+      </span>
+      <button class="btn-secondary" id="chart-edit-source-btn" type="button" title="Open the song editor to adjust source text">✎ Edit source</button>
       <button class="btn-secondary" id="chart-print">🖨 Print / Save PDF</button>
     </div>
   </div>
@@ -2192,6 +2249,8 @@ async function saveSong({ id, title, artist, lyrics, palette, slides_data, video
   if (youtube_url !== undefined) body.youtube_url = youtube_url || null;
   if (default_key !== undefined) body.default_key = default_key || null;
   if (cent_offset !== undefined) body.cent_offset = (cent_offset === null || cent_offset === undefined || isNaN(cent_offset)) ? 0 : Math.round(cent_offset);
+  // Versions: only include if explicitly provided (so we don't overwrite to []).
+  if (arguments[0] && Array.isArray(arguments[0].versions)) body.versions = arguments[0].versions;
   if (id) {
     const r = await fetch(`${SONGS_URL}?id=eq.${id}`, {
       method: 'PATCH',
@@ -4624,6 +4683,9 @@ function renderOperator() {
   $('op-title-name').textContent = currentSong.title || 'Untitled';
   $('op-title-artist').textContent = currentSong.artist || '';
 
+  // Versions dropdown (inline next to title) — only shown when 2+ versions exist.
+  renderOperatorVersionsDropdown();
+
   // Operator palette dropdown was removed in the bottom-bar consolidation;
   // legacy code below silently no-ops if the element is gone.
   const paletteSel = $('op-palette-select');
@@ -5961,7 +6023,15 @@ async function loadIntoEditor(id) {
     $('current-song-id').value = song.id;
     $('song-title').value  = song.title || '';
     $('song-artist').value = song.artist || '';
-    $('lyrics-input').value = song.lyrics || '';
+    // Versions: load + show row. If the song has versions, the active
+    // one's lyrics drive the textarea; else the legacy lyrics field does.
+    loadEditorVersions(song);
+    if (_editorVersions.length > 0 && _activeEditorVerId) {
+      const v = _editorVersions.find(x => x.id === _activeEditorVerId);
+      $('lyrics-input').value = v?.lyrics || '';
+    } else {
+      $('lyrics-input').value = song.lyrics || '';
+    }
     $('palette-select').value = song.palette || 'random';
     showEditor();
     setEditorTitle(`Editing — ${song.title || 'Untitled'}`);
@@ -5988,6 +6058,7 @@ async function loadIntoEditor(id) {
 
 function clearEditor() {
   loadedSong = null;
+  clearEditorVersions();
   $('current-song-id').value = '';
   $('song-title').value  = '';
   $('song-artist').value = '';
@@ -6129,8 +6200,23 @@ async function generateFromLyrics({ id, title, artist, lyrics, palette: paletteC
     if (savePersisted) {
       loadingText.textContent = 'Saving…';
       // Always persist the slides_data cache so future loads skip Claude
+      // Capture textarea into the active version (if any) and include
+      // versions in the save payload so they persist with the song. If the
+      // user hasn't created any versions, we send no 'versions' field.
+      const _versionsForSave = (_editorVersions && _editorVersions.length > 0)
+        ? getEditorVersionsForSave()
+        : undefined;
+      // If the active version is the default one, mirror its lyrics into
+      // the legacy song.lyrics field for backward compat.
+      let _lyricsForSave = lyrics;
+      if (_versionsForSave) {
+        const def = _versionsForSave.find(v => v.is_default) || _versionsForSave[0];
+        if (def) _lyricsForSave = def.lyrics;
+      }
       const saved = await saveSong({
-        id, title, artist, lyrics,
+        id, title, artist,
+        lyrics: _lyricsForSave,
+        versions: _versionsForSave,
         palette: paletteChoice === 'random' ? null : paletteChoice,
         slides_data: slides,
         video_urls: selectedVideos,
@@ -6280,6 +6366,282 @@ $('setlist-modal-save')?.addEventListener('click', async () => {
     btn.textContent = 'Save setlist';
   }
 });
+
+// =========================================================================
+// Song versions
+// =========================================================================
+//
+// In-memory state during an editor session: which versions exist for the
+// loaded song, and which one is currently being edited. On save, the
+// active version's lyrics are captured from the textarea and the whole
+// versions array is persisted to the DB.
+//
+// Data shape per version: { id, name, lyrics, is_default }
+//
+let _editorVersions     = [];   // mirror of currentSong.versions during editing
+let _activeEditorVerId  = null; // id of the version currently shown in textarea
+let _operatorVerLyrics  = null; // lyrics of the version currently displayed in operator (null = default)
+let _operatorVerId      = null; // version id of operator's current selection
+let _chartActiveVerId   = null; // version id selected in chord chart toolbar
+
+function _genVerId() { return 'v_' + Math.random().toString(36).slice(2, 10); }
+
+// Pick which version's lyrics to use when loading a song. Default = is_default
+// version, falling back to the first version, falling back to song.lyrics.
+function getEffectiveSongLyrics(song, preferredVersionId) {
+  const versions = Array.isArray(song?.versions) ? song.versions : [];
+  if (preferredVersionId) {
+    const v = versions.find(x => x.id === preferredVersionId);
+    if (v) return v.lyrics || '';
+  }
+  if (versions.length === 0) return song?.lyrics || '';
+  const def = versions.find(v => v.is_default) || versions[0];
+  return def.lyrics || '';
+}
+
+// ---------- Editor: versions row ----------
+
+function refreshEditorVersionsUI() {
+  const row    = document.getElementById('editor-versions-row');
+  const select = document.getElementById('editor-versions-select');
+  const pill   = document.getElementById('editor-versions-default-pill');
+  const delBtn = document.getElementById('editor-versions-delete');
+  const defBtn = document.getElementById('editor-versions-default');
+  if (!row || !select) return;
+
+  // Hide the whole row if there are no versions yet \u2014 the legacy
+  // single-lyrics flow stays clean. The '+ New' button is still reachable
+  // via a small affordance: the row appears the moment a version is added.
+  if (!Array.isArray(_editorVersions) || _editorVersions.length === 0) {
+    row.style.display = 'none';
+    // BUT: keep '+ New version' available as a tiny floating affordance so
+    // legacy songs can opt in. Simplest: show the row with just the New button.
+    row.style.display = 'flex';
+    select.style.display = 'none';
+    pill.style.display = 'none';
+    delBtn.style.display = 'none';
+    defBtn.style.display = 'none';
+    return;
+  }
+
+  row.style.display = 'flex';
+  select.style.display = '';
+  delBtn.style.display = _editorVersions.length > 1 ? '' : 'none';
+  defBtn.style.display = '';
+
+  // Populate options.
+  select.innerHTML = '';
+  for (const v of _editorVersions) {
+    const opt = document.createElement('option');
+    opt.value = v.id;
+    opt.textContent = (v.name || 'Untitled') + (v.is_default ? '  \u2605' : '');
+    select.appendChild(opt);
+  }
+  if (_activeEditorVerId && _editorVersions.some(v => v.id === _activeEditorVerId)) {
+    select.value = _activeEditorVerId;
+  } else {
+    select.value = _editorVersions[0].id;
+    _activeEditorVerId = select.value;
+  }
+
+  // Default pill.
+  const active = _editorVersions.find(v => v.id === _activeEditorVerId);
+  pill.style.display = (active && active.is_default) ? '' : 'none';
+}
+
+// Capture whatever's in the textarea now into the active version's lyrics
+// (so switching versions doesn't lose unsaved typing).
+function captureActiveVersionLyrics() {
+  if (!_activeEditorVerId) return;
+  const v = _editorVersions.find(x => x.id === _activeEditorVerId);
+  if (!v) return;
+  const ta = document.getElementById('lyrics-input');
+  if (ta) v.lyrics = ta.value;
+}
+
+function loadEditorVersions(song) {
+  _editorVersions = Array.isArray(song?.versions)
+    ? song.versions.map(v => ({ ...v }))
+    : [];
+  // Pick active version: default if any, else first, else null.
+  const def = _editorVersions.find(v => v.is_default);
+  _activeEditorVerId = def ? def.id : (_editorVersions[0]?.id || null);
+  refreshEditorVersionsUI();
+}
+
+function clearEditorVersions() {
+  _editorVersions = [];
+  _activeEditorVerId = null;
+  refreshEditorVersionsUI();
+}
+
+// '+ New version' click. If there are no versions yet, snapshot the
+// existing textarea content as 'Original' first so the user doesn't lose
+// it, then create the requested new version.
+function handleEditorVersionsNew() {
+  const ta = document.getElementById('lyrics-input');
+  const currentText = ta ? ta.value : '';
+  if (_editorVersions.length === 0 && currentText.trim()) {
+    _editorVersions.push({
+      id: _genVerId(), name: 'Original', lyrics: currentText, is_default: true
+    });
+  }
+  const name = prompt('Name for the new version:', _editorVersions.length === 0 ? 'New version' : '');
+  if (name === null) return; // cancelled
+  const trimmed = name.trim() || ('Version ' + (_editorVersions.length + 1));
+  // Snapshot current textarea content into the new version (so user can
+  // immediately edit it). If versions already existed, capture into the
+  // currently active version first to avoid losing edits.
+  if (_editorVersions.length > 0) captureActiveVersionLyrics();
+  const newVer = {
+    id: _genVerId(),
+    name: trimmed,
+    lyrics: currentText,
+    is_default: _editorVersions.length === 0
+  };
+  _editorVersions.push(newVer);
+  _activeEditorVerId = newVer.id;
+  refreshEditorVersionsUI();
+}
+
+function handleEditorVersionsSetDefault() {
+  if (!_activeEditorVerId) return;
+  for (const v of _editorVersions) v.is_default = (v.id === _activeEditorVerId);
+  refreshEditorVersionsUI();
+}
+
+function handleEditorVersionsDelete() {
+  if (!_activeEditorVerId || _editorVersions.length <= 1) return;
+  if (!confirm('Delete this version? You can\u2019t undo it without re-creating it.')) return;
+  const wasDefault = _editorVersions.find(v => v.id === _activeEditorVerId)?.is_default;
+  _editorVersions = _editorVersions.filter(v => v.id !== _activeEditorVerId);
+  if (wasDefault && _editorVersions.length > 0) _editorVersions[0].is_default = true;
+  _activeEditorVerId = _editorVersions[0]?.id || null;
+  // Swap textarea to the now-active version's lyrics.
+  const ta = document.getElementById('lyrics-input');
+  if (ta && _activeEditorVerId) {
+    const v = _editorVersions.find(x => x.id === _activeEditorVerId);
+    ta.value = v?.lyrics || '';
+    ta.dispatchEvent(new Event('input'));
+  }
+  refreshEditorVersionsUI();
+}
+
+function handleEditorVersionsSwitch(newId) {
+  if (!newId || newId === _activeEditorVerId) return;
+  // Capture the OUTGOING version's textarea content first.
+  captureActiveVersionLyrics();
+  _activeEditorVerId = newId;
+  const v = _editorVersions.find(x => x.id === newId);
+  const ta = document.getElementById('lyrics-input');
+  if (ta && v) {
+    ta.value = v.lyrics || '';
+    ta.dispatchEvent(new Event('input'));
+  }
+  refreshEditorVersionsUI();
+}
+
+// Wire up editor version buttons (called once on page load).
+function wireEditorVersionsRow() {
+  document.getElementById('editor-versions-new')    ?.addEventListener('click', handleEditorVersionsNew);
+  document.getElementById('editor-versions-default')?.addEventListener('click', handleEditorVersionsSetDefault);
+  document.getElementById('editor-versions-delete') ?.addEventListener('click', handleEditorVersionsDelete);
+  document.getElementById('editor-versions-select') ?.addEventListener('change', (e) => handleEditorVersionsSwitch(e.target.value));
+  refreshEditorVersionsUI();
+}
+
+// Called from the Generate flow: capture current textarea into the active
+// version, then return the versions array suitable for persisting.
+function getEditorVersionsForSave() {
+  captureActiveVersionLyrics();
+  return _editorVersions.map(v => ({ ...v }));
+}
+
+// ---------- Operator: inline version dropdown ----------
+
+function renderOperatorVersionsDropdown() {
+  // Find or create the dropdown wrap inline with the title bar.
+  const titleEl = document.getElementById('op-title-name');
+  if (!titleEl) return;
+  const titleBar = titleEl.parentElement;
+  if (!titleBar) return;
+  let wrap = document.getElementById('op-version-wrap');
+  const versions = Array.isArray(currentSong?.versions) ? currentSong.versions : [];
+  if (versions.length < 2) {
+    if (wrap) wrap.style.display = 'none';
+    return;
+  }
+  if (!wrap) {
+    wrap = document.createElement('span');
+    wrap.id = 'op-version-wrap';
+    wrap.className = 'op-version-wrap';
+    wrap.innerHTML = '<span>Version:</span><select id="op-version-select"></select>';
+    titleBar.appendChild(wrap);
+    wrap.querySelector('select').addEventListener('change', (e) => handleOperatorVersionSwitch(e.target.value));
+  }
+  wrap.style.display = '';
+  const sel = wrap.querySelector('select');
+  sel.innerHTML = '';
+  for (const v of versions) {
+    const opt = document.createElement('option');
+    opt.value = v.id;
+    opt.textContent = (v.name || 'Untitled') + (v.is_default ? '  \u2605' : '');
+    sel.appendChild(opt);
+  }
+  // Default selection: whatever's currently active (or the song's default).
+  const desired = _operatorVerId || (versions.find(v => v.is_default)?.id) || versions[0].id;
+  if ([...sel.options].some(o => o.value === desired)) sel.value = desired;
+  _operatorVerId = sel.value;
+}
+
+async function handleOperatorVersionSwitch(verId) {
+  const versions = Array.isArray(currentSong?.versions) ? currentSong.versions : [];
+  const v = versions.find(x => x.id === verId);
+  if (!v) return;
+  _operatorVerId = verId;
+  // Regenerate slides from the new version's lyrics. Reuse generateFromLyrics
+  // with the song's other fields preserved.
+  try {
+    await generateFromLyrics({
+      id: currentSong.id,
+      title: currentSong.title,
+      artist: currentSong.artist,
+      lyrics: v.lyrics || '',
+      palette: currentSong.palette || 'random',
+      cachedSlides: null,         // force re-parse for this version
+      cachedLyrics: v.lyrics || '',
+      videoUrls: currentSong.video_urls || [],
+      audioUrl: currentSong.audio_url || null,
+      audioOriginalKey: currentSong.original_key || null,
+      youtubeUrl: currentSong.youtube_url || null,
+      defaultKey: currentSong.default_key || null,
+      centOffset: typeof currentSong.cent_offset === 'number' ? currentSong.cent_offset : 0
+    }, { savePersisted: false, silent: true });
+  } catch (e) {
+    console.warn('operator version switch failed', e);
+  }
+}
+
+// ---------- Chord chart: version dropdown + Edit Source ----------
+
+function populateChartVersionDropdown(song) {
+  const wrap = document.getElementById('chart-version-wrap');
+  const sel  = document.getElementById('chart-version-select');
+  if (!wrap || !sel) return;
+  const versions = Array.isArray(song?.versions) ? song.versions : [];
+  if (versions.length < 2) { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  sel.innerHTML = '';
+  for (const v of versions) {
+    const opt = document.createElement('option');
+    opt.value = v.id;
+    opt.textContent = (v.name || 'Untitled') + (v.is_default ? '  \u2605' : '');
+    sel.appendChild(opt);
+  }
+  const desired = _chartActiveVerId || (versions.find(v => v.is_default)?.id) || versions[0].id;
+  if ([...sel.options].some(o => o.value === desired)) sel.value = desired;
+  _chartActiveVerId = sel.value;
+}
 
 // =========================================================================
 // Auto-import panel
@@ -6883,6 +7245,39 @@ operatorView.addEventListener('click', maybeDoubleTapExit, true);
 operatorView.addEventListener('touchend', maybeDoubleTapExit, { passive: true });
 
 // Share popover toggle
+// One-time wiring of the editor versions row + chart version selector +
+// chart 'Edit source' button. Called once on script init.
+(function wireVersionsControls() {
+  // Wire the editor row buttons (defined further up in the versions module).
+  if (typeof wireEditorVersionsRow === 'function') wireEditorVersionsRow();
+
+  // Chart toolbar: version dropdown re-renders the chart from that version.
+  document.getElementById('chart-version-select')?.addEventListener('change', (e) => {
+    _chartActiveVerId = e.target.value;
+    // Re-render with the new selection. We need the song + mode + key from
+    // wherever renderChartView was last called; the chart view stores them
+    // as data-attrs on chart-paper for re-render purposes.
+    const paper = document.getElementById('chart-paper');
+    const songId = paper?.dataset?.songId;
+    const mode   = paper?.dataset?.mode;
+    const key    = paper?.dataset?.key;
+    if (songId && typeof fetchSong === 'function') {
+      fetchSong(songId).then(s => renderChartView(s, mode || 'numbers', key || 'C'));
+    }
+  });
+
+  // Chart toolbar: 'Edit source' opens the song editor for the current chart song.
+  document.getElementById('chart-edit-source-btn')?.addEventListener('click', () => {
+    const paper = document.getElementById('chart-paper');
+    const songId = paper?.dataset?.songId;
+    if (!songId) { alert('No song loaded.'); return; }
+    // Close the chart view and open the editor in the main app. We use
+    // location.search so the standard ?id= flow handles loading.
+    const url = `${location.pathname}?id=${encodeURIComponent(songId)}&mode=editor`;
+    location.href = url;
+  });
+})();
+
 // Randomize the gradient palette for the current song. Only meaningful
 // when no video background is set (button is hidden otherwise).
 $('op-randomize-palette')?.addEventListener('click', () => {
@@ -6961,9 +7356,25 @@ window.addEventListener('resize', () => {
  * sizes with ink-friendly colors.
  */
 function renderChartView(song, mode, key) {
+  // Populate the version dropdown for this song. If the user has selected a
+  // non-default version in the chart, swap which lyrics we render below.
+  populateChartVersionDropdown(song);
+  const renderSong = (() => {
+    const versions = Array.isArray(song?.versions) ? song.versions : [];
+    if (_chartActiveVerId && versions.length > 1) {
+      const v = versions.find(x => x.id === _chartActiveVerId);
+      if (v) return { ...song, lyrics: v.lyrics };
+    }
+    return song;
+  })();
+  song = renderSong;
   const paper = $('chart-paper');
   if (!paper) return;
   paper.innerHTML = '';
+  // Stash for re-render (when version dropdown changes).
+  if (song?.id) paper.dataset.songId = song.id;
+  paper.dataset.mode = mode || '';
+  paper.dataset.key  = key  || '';
 
   // Header
   const header = document.createElement('header');
