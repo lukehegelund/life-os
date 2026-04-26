@@ -1061,6 +1061,51 @@
   .share-row-qr img {
     width: 88px; height: 88px; background: white;
     border-radius: 6px;
+    cursor: pointer;
+    transition: transform 0.15s ease;
+  }
+  .share-row-qr img:hover { transform: scale(1.04); }
+
+  /* When one QR is clicked: popover collapses to that row only, with the
+     QR scaled up and centered so the camera has a single, unambiguous
+     target. Click the big QR to return to the 3-tier view. */
+  .op-share-popover.qr-focused .share-row { display: none; }
+  .op-share-popover.qr-focused .share-row.qr-focused-row {
+    display: grid;
+    grid-template-columns: 1fr;
+    text-align: center;
+    border-top: none;
+  }
+  .op-share-popover.qr-focused .share-row.qr-focused-row .share-row-info {
+    align-items: center;
+  }
+  .op-share-popover.qr-focused .share-row.qr-focused-row .share-row-mode-name {
+    justify-content: center;
+  }
+  .op-share-popover.qr-focused .share-row.qr-focused-row .share-row-actions {
+    display: none;
+  }
+  .op-share-popover.qr-focused .share-row.qr-focused-row .share-row-qr {
+    grid-column: 1;
+    justify-content: center;
+    margin-top: 12px;
+  }
+  .op-share-popover.qr-focused .share-row.qr-focused-row .share-row-qr img {
+    width: 280px; height: 280px;
+    transform: none;
+  }
+  .qr-focus-hint {
+    display: none;
+    margin-top: 10px; text-align: center;
+    font-size: 11px; color: var(--muted);
+  }
+  .op-share-popover.qr-focused .qr-focus-hint { display: block; }
+  /* Hide the share lead text in focus mode to keep things clean */
+  .op-share-popover.qr-focused h4,
+  .op-share-popover.qr-focused .share-lead { display: none; }
+  /* Make the popover wider when focused so the big QR fits comfortably */
+  .op-share-popover.qr-focused {
+    width: 340px;
   }
   .share-row-actions {
     grid-column: 2 / 3;
@@ -1987,6 +2032,7 @@
       </div>
       <div class="share-row-qr"><img id="share-qr-editor" alt="Editor code QR"></div>
     </div>
+    <div class="qr-focus-hint">Tap the QR to return</div>
   </div>
 
   <!-- Consolidated bottom bar: audio (when present) + broadcast + share + display -->
@@ -5095,11 +5141,57 @@ function showSessionCodeUI(code) {
     const img = document.getElementById(m.qrId);
     if (img) {
       const joinUrl = `${location.origin}${location.pathname}?join=${c}`;
-      img.src = `https://api.qrserver.com/v1/create-qr-code/?size=120x120&margin=6&data=${encodeURIComponent(joinUrl)}`;
+      const lowUrl  = `https://api.qrserver.com/v1/create-qr-code/?size=120x120&margin=6&data=${encodeURIComponent(joinUrl)}`;
+      const highUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&margin=10&data=${encodeURIComponent(joinUrl)}`;
+      img.src = lowUrl;
+      img.dataset.qrLow  = lowUrl;
+      img.dataset.qrHigh = highUrl;
       img.title = joinUrl;
     }
   }
 }
+
+// QR click-to-enlarge: when a QR is clicked, hide the other rows and scale
+// up the clicked one (with a sharper 400x400 fetch). Click the enlarged QR
+// to return to the 3-tier view. Idempotent — calling with no arg unfocuses.
+function setShareQrFocus(rowOrNull) {
+  const popover = document.getElementById('op-qr-popover');
+  if (!popover) return;
+  popover.querySelectorAll('.qr-focused-row').forEach(r => r.classList.remove('qr-focused-row'));
+  if (rowOrNull) {
+    popover.classList.add('qr-focused');
+    rowOrNull.classList.add('qr-focused-row');
+    // Swap to high-res so the larger QR is sharp and easy for cameras.
+    const img = rowOrNull.querySelector('.share-row-qr img');
+    if (img && img.dataset.qrHigh) img.src = img.dataset.qrHigh;
+  } else {
+    popover.classList.remove('qr-focused');
+    // Restore low-res for all images.
+    popover.querySelectorAll('.share-row-qr img').forEach(im => {
+      if (im.dataset.qrLow) im.src = im.dataset.qrLow;
+    });
+  }
+}
+
+// Wire up clicks on the QR images. Delegated handler on the popover so it
+// works regardless of when the popover opens.
+(function wireShareQrFocus() {
+  const popover = document.getElementById('op-qr-popover');
+  if (!popover) return;
+  popover.addEventListener('click', (e) => {
+    const img = e.target.closest && e.target.closest('.share-row-qr img');
+    if (!img) return;
+    const row = img.closest('.share-row');
+    if (!row) return;
+    e.stopPropagation();
+    if (popover.classList.contains('qr-focused') && row.classList.contains('qr-focused-row')) {
+      // Clicking the already-focused QR returns to 3-tier view.
+      setShareQrFocus(null);
+    } else {
+      setShareQrFocus(row);
+    }
+  });
+})();
 
 // ========================= BROADCAST CHANNEL =========================
 
@@ -7439,6 +7531,21 @@ $('op-randomize-palette')?.addEventListener('click', () => {
   // Reset on next microtask so subsequent (non-Color-button) renders snap.
   Promise.resolve().then(() => { _paletteAnimateNext = false; });
 });
+
+// When the share popover is closed (any way), reset any focused QR so the
+// next time it opens it shows all three tiers again.
+(function watchSharePopoverVisibility() {
+  const popover = document.getElementById('op-qr-popover');
+  if (!popover) return;
+  // Use MutationObserver so we don't have to find every place that toggles
+  // the .visible class.
+  const obs = new MutationObserver(() => {
+    if (!popover.classList.contains('visible') && popover.classList.contains('qr-focused')) {
+      setShareQrFocus(null);
+    }
+  });
+  obs.observe(popover, { attributes: true, attributeFilter: ['class'] });
+})();
 
 $('op-qr-toggle')?.addEventListener('click', (e) => {
   e.stopPropagation();
