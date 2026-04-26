@@ -341,6 +341,10 @@ function greekText(tok) {
   const g = state.display === 'monotonic' ? toMonotonic(tok.g) : tok.g;
   return stripGreekPunct(g);
 }
+function enText(tok) {
+  // Strip trailing punctuation from English renderings (hyphens are meaningful — keep them)
+  return tok.en.replace(/[.,;:]+/g, '');
+}
 
 function getTokenStage(tok) {
   const pos = tok.p;
@@ -369,10 +373,10 @@ function renderToken(span, tok) {
   if (stage === 0) {
     if (showPassiveTint) {
       span.classList.add('cased-flat', 'case-' + c);
-      span.textContent = tok.en;
+      span.textContent = enText(tok);
     } else {
       span.classList.add('english');
-      span.textContent = tok.en;
+      span.textContent = enText(tok);
     }
     return;
   }
@@ -387,7 +391,7 @@ function renderToken(span, tok) {
   };
   if (stage === 1) {
     span.classList.add('stacked');
-    span.appendChild(make('form-en', tok.en));
+    span.appendChild(make('form-en', enText(tok)));
     span.appendChild(make('form-tr', tok.tr));
   } else if (stage === 2) {
     span.classList.add('stacked');
