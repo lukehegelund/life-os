@@ -5084,6 +5084,13 @@ function startRealtimeChannel(code) {
     await loadAndPresent(payload.songId, { broadcastToPeers: false });
   });
 
+  // Cross-device key change: a peer changed the op-bar Key. Apply locally
+  // without re-broadcasting. Capo is NOT synced — it's per-device.
+  channel.on('broadcast', { event: 'key' }, ({ payload }) => {
+    if (!payload?.key) return;
+    applyKeyLocallyFromBroadcast(payload.key);
+  });
+
   channel.subscribe((status) => {
     if (status === 'SUBSCRIBED') {
       // If we're the joined client, ask the host for current state
@@ -5102,6 +5109,41 @@ function broadcastNavRealtime() {
   try {
     realtimeChannel.send({ type: 'broadcast', event: 'nav', payload: { idx: currentIdx } });
   } catch (e) { console.warn('rt nav send failed', e); }
+}
+
+// Send the current op-bar Key value to all peers on this session. The
+// receiver applies it locally without re-broadcasting (no change event
+// dispatched on the dropdown). Capo is intentionally NOT broadcast.
+function broadcastKeyRealtime(key) {
+  if (!realtimeChannel || !key) return;
+  try {
+    realtimeChannel.send({ type: 'broadcast', event: 'key', payload: { key } });
+  } catch (e) { console.warn('rt key send failed', e); }
+}
+
+// Apply a key value to the local operator UI as if the user had picked it
+// from the dropdown \u2014 without dispatching a change event, so this is
+// safe to call from realtime receivers without causing a broadcast loop.
+async function applyKeyLocallyFromBroadcast(newKey) {
+  if (!newKey) return;
+  const sel = document.getElementById('op-audio-key-select');
+  if (!sel) return;
+  // Only set if the option actually exists on this device's dropdown
+  // (the other peer might have a song loaded that this device doesn't).
+  const optionVals = [...sel.options].map(o => o.value);
+  if (!optionVals.includes(newKey)) return;
+  if (sel.value === newKey) return; // no-op
+  sel.value = newKey;
+  try { await changeAudioKey(newKey); } catch (e) { console.warn('rx changeAudioKey failed', e); }
+  if (typeof _isSemitoneOpValue === 'function' && !_isSemitoneOpValue(newKey)) {
+    const dsKey = document.getElementById('ds-key-select');
+    if (dsKey) dsKey.value = newKey;
+    deviceSettings.chordKey = newKey;
+    try { saveDeviceSettings && saveDeviceSettings(); } catch {}
+  }
+  if (typeof slides !== 'undefined' && slides && slides.length > 0) {
+    try { renderCurrentPreview(); renderNextSlot && renderNextSlot(); renderStripContents && renderStripContents(); } catch {}
+  }
 }
 function broadcastPaletteRealtime() {
   if (!realtimeChannel) return;
@@ -7066,6 +7108,9 @@ $('op-audio-key-select')?.addEventListener('change', async (e) => {
     deviceSettings.chordKey = e.target.value;
     try { saveDeviceSettings && saveDeviceSettings(); } catch {}
   }
+  // Broadcast the key change so peers on the same session match.
+  // (Capo is intentionally NOT broadcast — it's per-device.)
+  try { broadcastKeyRealtime(e.target.value); } catch {}
   if (slides && slides.length > 0) {
     try { renderCurrentPreview(); renderNextSlot && renderNextSlot(); renderStripContents && renderStripContents(); } catch {}
   }
