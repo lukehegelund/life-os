@@ -1520,15 +1520,24 @@
     .chart-toolbar, .no-print { display: none !important; }
     .chart-paper {
       box-shadow: none;
-      max-width: 100%;
-      margin: 0;
-      padding: 0;             /* @page margin handles physical paper margins */
+      /* The screen view sets max-width:1100px which bleeds into print and
+         makes Chrome/Arc scale the page down awkwardly. Force the chart to
+         the full printable area defined by the @page rule. !important is
+         used because the screen rule is later in the stylesheet. */
+      width: 100% !important;
+      max-width: 100% !important;
+      margin: 0 !important;
+      padding: 0 !important;             /* @page margin owns physical margins */
       /* Two-column layout when printing so a chord sheet fits on one page
-         far more often. column-fill: auto fills column 1 first, then 2,
-         which feels more natural than balancing for music. */
+         far more often. column-fill: auto fills column 1 first, then 2. */
       column-count: 2;
-      column-gap: 32px;
+      column-gap: 20px;                   /* tighter on Letter — was 32px */
       column-fill: auto;
+    }
+    /* Ensure the chart's full-viewport wrapper doesn't constrain the page. */
+    html, body, .chart-view {
+      width: auto !important;
+      height: auto !important;
     }
     /* Header (title + Key/Nashville/Lyrics meta) spans both columns. */
     .chart-paper > header {
@@ -1969,6 +1978,9 @@
     <span class="op-bar-key-wrap" id="op-audio-key-wrap" style="display:none;">
       <span class="op-bar-key-label" id="op-audio-key-label">Key:</span>
       <select class="op-audio-key-select" id="op-audio-key-select"></select>
+      <span class="op-bar-key-label" style="margin-left:6px;" title="Capo fret \u2014 chord display drops by this many semitones for guitarists with a capo">Capo:</span>
+      <input type="number" id="op-capo-input" min="0" max="11" step="1" value="0"
+             style="width:48px;background:var(--panel-2);border:1px solid var(--border);color:var(--text);padding:3px 6px;border-radius:5px;font-size:12px;">
     </span>
     <span class="op-bar-scrub-wrap" id="op-yt-scrub-wrap" style="display:none;">
       <input type="range" id="op-yt-scrub" min="0" max="100" value="0" step="0.1" title="Seek">
@@ -6894,6 +6906,28 @@ function populateChartVersionDropdown(song) {
 // =========================================================================
 $('op-audio-play')?.addEventListener('click', () => toggleAudioPlayback());
 
+// Capo input on the op-bar. Bidirectionally synced with the display-settings
+// capo input. Both write to deviceSettings.capo, save, and re-render.
+$('op-capo-input')?.addEventListener('input', (e) => {
+  let v = parseInt(e.target.value, 10) || 0;
+  v = Math.max(0, Math.min(11, v));
+  deviceSettings.capo = v;
+  // Mirror to ds-capo-input so both stay in sync.
+  const ds = document.getElementById('ds-capo-input');
+  if (ds && parseInt(ds.value, 10) !== v) ds.value = v;
+  try { saveDeviceSettings && saveDeviceSettings(); } catch {}
+  try { applyDeviceSettings && applyDeviceSettings(); } catch {}
+  if (slides && slides.length > 0) {
+    try { renderCurrentPreview(); renderNextSlot && renderNextSlot(); renderStripContents && renderStripContents(); } catch {}
+  }
+  const ce = document.getElementById('ds-capo-effective');
+  if (ce && (deviceSettings.capo || 0) > 0) {
+    ce.textContent = `\u2192 chords shown in ${getEffectiveChordKey()}`;
+  } else if (ce) {
+    ce.textContent = '';
+  }
+});
+
 $('op-audio-key-select')?.addEventListener('change', async (e) => {
   await changeAudioKey(e.target.value);
   // Sync ds-key-select + device chord key (key-mode only). In semitone-mode
@@ -7101,6 +7135,11 @@ function applyDeviceSettings() {
   const kr = $('ds-key-row'); if (kr) kr.style.display = deviceSettings.chords === 'key' ? 'flex' : 'none';
   const ks = $('ds-key-select'); if (ks) ks.value = deviceSettings.chordKey;
   const cr = $('ds-capo-row'); if (cr) cr.style.display = deviceSettings.chords === 'key' ? 'flex' : 'none';
+  // Sync op-bar capo input value to current device setting on every apply.
+  const opCapo = document.getElementById('op-capo-input');
+  if (opCapo) opCapo.value = (deviceSettings.capo | 0) || 0;
+  const dsCapo = document.getElementById('ds-capo-input');
+  if (dsCapo) dsCapo.value = (deviceSettings.capo | 0) || 0;
   const ci = $('ds-capo-input'); if (ci) ci.value = deviceSettings.capo || 0;
   const ce = $('ds-capo-effective');
   if (ce) {
@@ -7199,8 +7238,14 @@ $('ds-capo-input')?.addEventListener('input', (e) => {
   let v = parseInt(e.target.value, 10) || 0;
   v = Math.max(0, Math.min(11, v));
   deviceSettings.capo = v;
+  // Mirror to op-bar capo input so the two stay in sync.
+  const opCapo = document.getElementById('op-capo-input');
+  if (opCapo && parseInt(opCapo.value, 10) !== v) opCapo.value = v;
   saveDeviceSettings();
   applyDeviceSettings();
+  if (slides && slides.length > 0) {
+    try { renderCurrentPreview(); renderNextSlot && renderNextSlot(); renderStripContents && renderStripContents(); } catch {}
+  }
 });
 
 // Print as chord chart — opens a new tab in chart mode for the currently loaded song
