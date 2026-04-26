@@ -1405,6 +1405,21 @@
     vertical-align: 0.1em;
   }
 
+  /* Section-reference line: rendered when a section appears for the second
+     (or third, ...) time. Compact "\u2192 Chorus" style instead of repeating
+     the full chord+lyric block. Visible in both screen and print. */
+  .chart-paper .chart-section-ref {
+    margin: 18px 0 0 0;
+    font-size: 14px;
+    color: #888;
+    font-style: italic;
+    letter-spacing: 0.04em;
+    /* Don't split across columns when printing. */
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .chart-paper .chart-section-ref .ref-arrow { margin-right: 6px; opacity: 0.7; }
+
   @media print {
     body { background: white !important; }
     .chart-view { position: static; background: white; overflow: visible; }
@@ -1413,9 +1428,26 @@
       box-shadow: none;
       max-width: 100%;
       margin: 0;
-      padding: 0.6in 0.7in;
+      padding: 0.5in 0.55in;
+      /* Two-column layout when printing so a chord sheet fits on one page
+         far more often. column-fill: auto fills column 1 first, then 2,
+         which feels more natural than balancing for music. */
+      column-count: 2;
+      column-gap: 32px;
+      column-fill: auto;
     }
-    .chart-paper .chart-section { page-break-inside: avoid; }
+    /* Header (title + Key/Nashville/Lyrics meta) spans both columns. */
+    .chart-paper > header {
+      column-span: all;
+      -webkit-column-span: all;
+    }
+    .chart-paper .chart-section,
+    .chart-paper .chart-section-ref {
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    /* Avoid widow/orphan section headings hanging at the bottom of a column. */
+    .chart-paper .chart-section h2 { break-after: avoid; }
   }
 
   /* =========== MISC =========== */
@@ -6961,12 +6993,34 @@ function renderChartView(song, mode, key) {
     groups.push({ section: lastSection, chunks: currentChunks });
   }
 
-  // De-duplicate consecutive identical groups (e.g. "/Chorus x2" creates two
-  // identical groups in slides; for the chart we just want one definition).
-  const seenSections = new Set();
+  // Render each group in source order:
+  //   * Consecutive identical sections (e.g. /Chorus x2 generates two
+  //     groups back-to-back) collapse to a single full rendering — printing
+  //     the same chunk twice in a row would just be noise.
+  //   * The FIRST appearance of a section renders the full chord+lyric block.
+  //   * Subsequent appearances render a compact \u2192 reference line, so the
+  //     reader can see the song flow without re-reading the same chorus.
+  const fullyRendered = new Set();
+  let prevSection = null;
   for (const g of groups) {
-    if (seenSections.has(g.section)) continue;
-    seenSections.add(g.section);
+    // Collapse consecutive duplicates (x2 / x3 markers).
+    if (prevSection === g.section) continue;
+    prevSection = g.section;
+
+    if (fullyRendered.has(g.section)) {
+      // Compact reference. Just a labeled line; no body.
+      const ref = document.createElement('div');
+      ref.className = 'chart-section-ref';
+      const arrow = document.createElement('span');
+      arrow.className = 'ref-arrow';
+      arrow.textContent = '\u2192';
+      ref.appendChild(arrow);
+      ref.appendChild(document.createTextNode(g.section));
+      paper.appendChild(ref);
+      continue;
+    }
+    fullyRendered.add(g.section);
+
     const sec = document.createElement('section');
     sec.className = 'chart-section';
     const h2 = document.createElement('h2');
