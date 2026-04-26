@@ -3797,7 +3797,15 @@ async function changeAudioKey(newValue) {
 const CHORD_ROOT = '(?:[b#]?[1-7](?:#|b(?![a-z]))?)';
 const CHORD_RE = new RegExp(
   '^(' + CHORD_ROOT + ')' +
-  '((?:m|maj7?|maj9|sus[24]?|add9?|dim|aug|°)(?![a-z]))?' +
+  // Quality alternation. 'maj'/'maj7'/'maj9' and 'min'/'min7' do NOT require
+  // the (?![a-z]) lookahead — they're long/specific enough not to be
+  // confused with English words. Bare 'm' DOES still require it (so '3moon'
+  // stays as '3' + lyric 'moon'). Other qualities keep the lookahead too.
+  '(' +
+    '(?:maj9|maj7|maj|min7|min)' +
+    '|' +
+    '(?:m|sus[24]?|add9?|dim|aug|°)(?![a-z])' +
+  ')?' +
   '(7|9|11|13)?' +
   '(?:\\/(' + CHORD_ROOT + '))?'
 );
@@ -3877,7 +3885,9 @@ function preferFlatKey(key) {
 
 function transposeNashvilleToKey(chord, key, semitoneOffset = 0) {
   // Accept either accidental position: leading (b3, #4) or trailing (3b, 4#).
-  const m = chord.match(/^([b#]?)([1-7])([b#]?)(m|maj7?|maj9|sus[24]?|add9?|dim|aug|°)?(7|9|11|13)?(?:\/([b#]?)([1-7])([b#]?))?$/);
+  // Quality alternation puts longer alternatives first (maj9 / maj7 / min7)
+  // so the regex engine doesn't greedily match a shorter prefix.
+  const m = chord.match(/^([b#]?)([1-7])([b#]?)(maj9|maj7|maj|min7|min|m|sus[24]?|add9?|dim|aug|°)?(7|9|11|13)?(?:\/([b#]?)([1-7])([b#]?))?$/);
   if (!m) return chord;
   const accidental = m[1] || m[3] || '';      // pick whichever side has it
   const degree     = parseInt(m[2], 10);
@@ -3901,13 +3911,25 @@ function transposeNashvilleToKey(chord, key, semitoneOffset = 0) {
   const rootIdx = (keyIdx + baseDegreeShift(degree, accidental) + 12) % 12;
   const root = noteTable[rootIdx];
 
-  // Quality
+  // Quality. Mapping notes:
+  //   'maj'  -> ''     (major has no suffix)
+  //   'min'  -> 'm'    (display as standard minor)
+  //   'min7' -> 'm7'   (preserve the 7 extension on the rendered chord)
+  //   '°'    -> 'dim'
+  //   anything else (m, maj7, maj9, sus, add, dim, aug) passes through.
   let quality;
   if (qualityMod === undefined || qualityMod === null) {
     quality = DEFAULT_QUALITY[degree - 1];
+  } else if (qualityMod === 'maj') {
+    quality = '';
+  } else if (qualityMod === 'min') {
+    quality = 'm';
+  } else if (qualityMod === 'min7') {
+    quality = 'm7';
+  } else if (qualityMod === '°') {
+    quality = 'dim';
   } else {
-    quality = qualityMod === 'maj' ? '' : qualityMod;
-    if (quality === '°') quality = 'dim';
+    quality = qualityMod;
   }
 
   let out = root + quality + ext;
@@ -6451,7 +6473,13 @@ $('op-audio-key-select')?.addEventListener('change', async (e) => {
     s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 
   const highlightDigits = (s) =>
-    escapeHtml(s).replace(/(\d)/g, '<span class="num">$1</span>');
+    // Wrap each digit (and any directly-following 'maj'/'maj7'/'maj9'/'min'/'min7'
+    // chord-quality suffix) in a yellow .num span. The longer alternatives come
+    // first so the regex doesn't stop after the shorter prefix.
+    escapeHtml(s).replace(
+      /(\d(?:maj9|maj7|maj|min7|min)?)/g,
+      '<span class="num">$1</span>'
+    );
 
   // /heading lines get a single tint based on section type. Numbers in those
   // lines are part of the section name (V1, Chorus 2), not chord positions.
