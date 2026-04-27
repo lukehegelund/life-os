@@ -56,12 +56,26 @@
      reads as a separator between folder groups. */
   .library-folder-header {
     grid-column: 1 / -1;
-    display: flex; align-items: baseline; gap: 10px;
+    display: flex; align-items: center; gap: 10px;
     padding: 14px 4px 4px 4px;
     margin-top: 4px;
     border-top: 1px solid var(--border);
     font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
     color: var(--muted);
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.1s;
+  }
+  .library-folder-header:hover { color: var(--text); }
+  .library-folder-toggle {
+    display: inline-block;
+    width: 12px; text-align: center;
+    transition: transform 0.15s ease;
+    color: var(--muted);
+    font-size: 10px;
+  }
+  .library-folder-header.collapsed .library-folder-toggle {
+    transform: rotate(-90deg);
   }
   .library-folder-header:first-child { border-top: none; padding-top: 4px; }
   .library-folder-name { font-weight: 700; color: var(--text); letter-spacing: 0.04em; }
@@ -2458,7 +2472,7 @@ const pgHeaders = (extra = {}) => ({
 });
 
 async function loadLibrary() {
-  const r = await fetch(`${SONGS_URL}?select=id,title,artist,palette,updated_at&order=updated_at.desc`, {
+  const r = await fetch(`${SONGS_URL}?select=id,title,artist,palette,updated_at,folder&order=updated_at.desc`, {
     headers: pgHeaders()
   });
   if (!r.ok) throw new Error(`library load ${r.status}`);
@@ -5892,24 +5906,49 @@ async function renderLibrary() {
     }
     const folderKeys = [...groups.keys()].filter(k => k !== '\u0000__uncategorized__').sort((a, b) => a.localeCompare(b));
     if (groups.has('\u0000__uncategorized__')) folderKeys.push('\u0000__uncategorized__');
+    // Persisted collapsed state per folder.
+    let collapsedSet;
+    try { collapsedSet = new Set(JSON.parse(localStorage.getItem('ls_folders_collapsed_v1') || '[]')); }
+    catch { collapsedSet = new Set(); }
+    const persistCollapsed = () => {
+      try { localStorage.setItem('ls_folders_collapsed_v1', JSON.stringify([...collapsedSet])); } catch {}
+    };
     for (const key of folderKeys) {
       const isUncat = key === '\u0000__uncategorized__';
       const folderSongs = groups.get(key);
       // Section header (skip if there's only one folder AND it's uncategorized — keeps the
       // legacy single-list look for users who haven't started using folders yet).
       const onlyUncat = folderKeys.length === 1 && isUncat;
+      const isCollapsed = !onlyUncat && collapsedSet.has(key);
       if (!onlyUncat) {
         const header = document.createElement('div');
-        header.className = 'library-folder-header';
-        header.innerHTML = `<span class="library-folder-name">${
+        header.className = 'library-folder-header' + (isCollapsed ? ' collapsed' : '');
+        header.dataset.folderKey = key;
+        header.innerHTML = `<span class="library-folder-toggle">\u25BC</span><span class="library-folder-name">${
           isUncat ? '\ud83d\udcc2 Uncategorized'
                   : '\ud83d\udcc1 ' + key.replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]))
         }</span><span class="library-folder-count">${folderSongs.length}</span>`;
+        header.addEventListener('click', () => {
+          const willCollapse = !header.classList.contains('collapsed');
+          header.classList.toggle('collapsed', willCollapse);
+          if (willCollapse) collapsedSet.add(key); else collapsedSet.delete(key);
+          persistCollapsed();
+          // Show/hide all cards belonging to this folder.
+          [...grid.children].forEach(el => {
+            if (el === header) return;
+            // Cards belonging to this folder have a matching data-folder-key attribute.
+            if (el.dataset && el.dataset.folderKey === key) {
+              el.style.display = willCollapse ? 'none' : '';
+            }
+          });
+        });
         grid.appendChild(header);
       }
       folderSongs.forEach(song => {
       const card = document.createElement('div');
       card.className = 'library-card';
+      card.dataset.folderKey = key;
+      if (isCollapsed) card.style.display = 'none';
       card.innerHTML = `
         <div class="library-card-title"></div>
         <div class="library-card-artist"></div>
