@@ -2027,6 +2027,17 @@
       <button class="btn-audio-clear" id="audio-youtube-clear" type="button" title="Remove YouTube URL" style="display:none;">✕</button>
     </div>
   </div>
+  <!-- Inline YouTube preview. Plays whatever's in the URL field above so the
+       user can listen to the song while editing lyrics. Hidden when no URL
+       is set or the URL doesn't parse to a valid video ID. -->
+  <div id="editor-youtube-preview-wrap" style="display:none; margin-bottom:14px;">
+    <div style="position:relative; padding-top:56.25%; background:#000; border:1px solid var(--border); border-radius:10px; overflow:hidden;">
+      <iframe id="editor-youtube-preview"
+              style="position:absolute; inset:0; width:100%; height:100%; border:0;"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowfullscreen></iframe>
+    </div>
+  </div>
 
   <!-- Legacy MP3 upload (visible only when editing a song that has an uploaded audio file) -->
   <div class="audio-field" id="audio-mp3-field" style="display:none;">
@@ -2782,6 +2793,27 @@ async function runVideoSearch() {
   }
 }
 
+// Mirror the YouTube URL field into the editor's inline iframe preview.
+// Pulls the current URL from #audio-youtube-url, extracts a video ID via
+// _videoIdFromUrl, and sets the iframe src to the standard YouTube embed.
+// Hidden when no URL is set or the URL doesn't parse to a video ID.
+function refreshEditorYoutubePreview() {
+  const wrap   = document.getElementById('editor-youtube-preview-wrap');
+  const iframe = document.getElementById('editor-youtube-preview');
+  if (!wrap || !iframe) return;
+  const url = (document.getElementById('audio-youtube-url')?.value || '').trim();
+  const videoId = (typeof _videoIdFromUrl === 'function') ? _videoIdFromUrl(url) : null;
+  if (!videoId) {
+    wrap.style.display = 'none';
+    if (iframe.src) iframe.src = ''; // stop playback when cleared
+    return;
+  }
+  // Use youtube-nocookie + modestbranding for a cleaner editor preview.
+  const embedSrc = `https://www.youtube-nocookie.com/embed/${videoId}?modestbranding=1&rel=0`;
+  if (iframe.src !== embedSrc) iframe.src = embedSrc;
+  wrap.style.display = '';
+}
+
 // Mirror the currently-selected first video into the editor's inline
 // <video> preview. Idempotent — call after any change to selectedVideos
 // or after loadIntoEditor.
@@ -3516,6 +3548,8 @@ async function runAutoImport(mode) {
         updateYouTubeEditorUI(url, loadedSong?.audio_url || currentSong?.audio_url || null);
       }
     } catch {}
+    // Refresh the inline preview now that the URL field has a new value.
+    try { refreshEditorYoutubePreview(); } catch {}
     return true;
   }
 
@@ -6574,6 +6608,7 @@ async function loadIntoEditor(id) {
     const vcount = Array.isArray(song.video_urls) ? song.video_urls.length : 0;
     $('video-count-badge').textContent = vcount > 0 ? `${vcount} selected` : 'None yet';
     refreshEditorVideoPreview();
+    refreshEditorYoutubePreview();
     // Reflect audio in editor (YouTube URL + legacy MP3)
     const ytInput = $('audio-youtube-url');
     if (ytInput) ytInput.value = song.youtube_url || '';
@@ -6613,6 +6648,7 @@ function clearEditor() {
   updateYouTubeEditorUI(null, null);
   updateAudioEditorUI(null, null);
   refreshEditorVideoPreview();
+  refreshEditorYoutubePreview();
 }
 
 async function loadAndPresent(id, opts = {}) {
@@ -7356,6 +7392,15 @@ function populateChartVersionDropdown(song) {
   const ytInput  = $('audio-youtube-url');
   const clearBtn = $('audio-youtube-clear');
   if (!ytInput) return;
+
+  // Live-refresh the inline YouTube preview as the user pastes / edits.
+  // 'input' fires on every keystroke; we also catch 'change' (blur) for
+  // programmatic value sets (e.g. auto-import).
+  ['input', 'change'].forEach(evt => {
+    ytInput.addEventListener(evt, () => {
+      try { refreshEditorYoutubePreview(); } catch {}
+    });
+  });
 
   // Save URL on blur or Enter, with a small validation pass
   const saveYoutubeUrl = async () => {
