@@ -1964,7 +1964,11 @@
   <div class="field">
     <div class="lyrics-label-row">
       <label>Lyrics <span style="color:var(--muted); font-weight:500; text-transform:none; letter-spacing:0; font-size:11px; margin-left:6px;">— blank line = new slide</span></label>
-      <button class="btn-ghost lyrics-strip-parens" id="strip-parens-btn" type="button" title="Remove all text in (parentheses) from the lyrics">⌫ Remove (parens)</button>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <span id="format-ai-status" style="font-size:11px;color:var(--muted);min-width:0;"></span>
+        <button class="btn-ghost lyrics-strip-parens" id="format-ai-btn" type="button" title="Run Claude over the current lyrics and add /V1 /Chorus /Bridge /Instrumental markers + 2-line slide breaks">✨ Format with AI</button>
+        <button class="btn-ghost lyrics-strip-parens" id="strip-parens-btn" type="button" title="Remove all text in (parentheses) from the lyrics">⌫ Remove (parens)</button>
+      </div>
     </div>
     <div class="lyrics-editor-wrap">
       <pre class="lyrics-overlay" id="lyrics-overlay" aria-hidden="true"></pre>
@@ -3147,7 +3151,7 @@ function parseArtistAndTitle(youtubeTitle) {
 // chunk as /Chorus (auto-detected from inline label) or /V1, /V2, /V3...
 function formatLyricsHeuristic(rawLyrics) {
   if (!rawLyrics) return '';
-  const SECTION_RE = /\b(intro|verse|chorus|pre[\s\-]?chorus|bridge|outro|tag|refrain|hook|interlude)\b/i;
+  const SECTION_RE = /\b(intro|verse|chorus|pre[\s\-]?chorus|bridge|outro|tag|refrain|hook|interlude|instrumental|solo|break)\b/i;
   const chunks = String(rawLyrics)
     .replace(/\r/g, '')
     .split(/\n{2,}/)
@@ -3165,7 +3169,7 @@ function formatLyricsHeuristic(rawLyrics) {
     let sectionTag = null;
     let bodyLines = lines.slice();
     const first = lines[0];
-    const labelMatch = first.match(/^\[?\s*(intro|verse(?:\s*\d+)?|chorus|pre[\s\-]?chorus|bridge|outro|tag|refrain|hook|interlude)\b[^\]]*\]?\s*[:\-]?\s*$/i);
+    const labelMatch = first.match(/^\[?\s*(intro|verse(?:\s*\d+)?|chorus|pre[\s\-]?chorus|bridge|outro|tag|refrain|hook|interlude|instrumental|solo|break)\b[^\]]*\]?\s*[:\-]?\s*$/i);
     if (labelMatch) {
       const raw = labelMatch[1].toLowerCase();
       if (/^verse/.test(raw)) {
@@ -3184,8 +3188,10 @@ function formatLyricsHeuristic(rawLyrics) {
         sectionTag = '/Outro';
       } else if (raw === 'tag') {
         sectionTag = '/Tag';
-      } else if (/refrain|hook|interlude/.test(raw)) {
+      } else if (/refrain|hook/.test(raw)) {
         sectionTag = '/Chorus'; // collapse synonyms onto Chorus
+      } else if (/instrumental|solo|break|interlude/.test(raw)) {
+        sectionTag = '/Instrumental';
       }
       bodyLines = lines.slice(1);
     } else {
@@ -3215,7 +3221,7 @@ function _isLyricsFormatRefusal(text) {
   if (!text) return true;
   const t = text.trim();
   // Check for any Lyric Slides section marker.
-  const hasMarker = /\/(V\d+|Chorus|Pre-Chorus|Bridge|Intro|Outro|Tag)\b/.test(t);
+  const hasMarker = /\/(V\d+|Chorus|Pre-Chorus|Bridge|Intro|Outro|Tag|Instrumental)\b/.test(t);
   if (!hasMarker) return true;
   // Check for refusal openers (case-insensitive).
   const opener = t.slice(0, 200).toLowerCase();
@@ -3243,9 +3249,9 @@ async function formatLyricsWithClaude(rawLyrics, title, artist) {
   const prompt = `Restructure the following text by adding section markers and blank lines between paragraphs. Do NOT change the wording of any line. Only add section headers (single line, starts with /) and blank-line separators.
 
 SECTION MARKER VOCABULARY (use these EXACT tokens, no others):
-  /Intro     /V1   /V2   /V3   /V4
+  /Intro     /V1   /V2   /V3   /V4   /V5
   /Pre-Chorus  /Chorus
-  /Bridge    /Outro    /Tag
+  /Bridge    /Instrumental    /Outro    /Tag
 
 PARAGRAPH \u2192 SLIDE RULES:
   - Each section's body is the lines under it.
@@ -3256,9 +3262,56 @@ REPETITION RULE:
   - If the same section repeats word-for-word later, write ONLY the marker on its own line (no body).
 
 CLEANUP:
-  - Strip any pre-existing labels in the text like '[Verse 1]', '(Chorus)', 'Verse:', 'Bridge:'.
+  - Strip any pre-existing labels in the text like '[Verse 1]', '(Chorus)', 'Verse:', 'Bridge:', 'Instrumental:'.
   - Strip 'x2', '(2x)', 'repeat', and similar repetition annotations.
   - Do not add chord names or numbers.
+
+EXAMPLE (input \u2192 output):
+  Input:
+    [Verse 1]
+    Amazing grace, how sweet the sound
+    That saved a wretch like me
+
+    I once was lost, but now am found
+    Was blind but now I see
+
+    [Chorus]
+    My chains are gone
+    I've been set free
+
+    [Verse 2]
+    'Twas grace that taught my heart to fear
+    And grace my fears relieved
+
+    [Chorus]
+
+    [Instrumental]
+
+    [Bridge]
+    My God, my Saviour has ransomed me
+
+  Output:
+    /V1
+    Amazing grace, how sweet the sound
+    That saved a wretch like me
+
+    I once was lost, but now am found
+    Was blind but now I see
+
+    /Chorus
+    My chains are gone
+    I've been set free
+
+    /V2
+    'Twas grace that taught my heart to fear
+    And grace my fears relieved
+
+    /Chorus
+
+    /Instrumental
+
+    /Bridge
+    My God, my Saviour has ransomed me
 
 Output ONLY the restructured text starting with the first section marker. No explanation, no preface, no markdown fences.
 
@@ -7430,6 +7483,48 @@ $('op-audio-key-select')?.addEventListener('change', async (e) => {
 
   ta.addEventListener('input', render);
   ta.addEventListener('scroll', syncScroll);
+
+  // \u2728 Format with AI button. Sends the current textarea content
+  // through formatLyricsWithClaude and replaces it with the formatted
+  // version. Confirms before overwriting if the textarea already looks
+  // like it has slide markers in it.
+  const fmtBtn = document.getElementById('format-ai-btn');
+  const fmtStatus = document.getElementById('format-ai-status');
+  if (fmtBtn && ta) {
+    fmtBtn.addEventListener('click', async () => {
+      const raw = ta.value || '';
+      if (!raw.trim()) {
+        fmtStatus.textContent = 'Paste lyrics first.';
+        setTimeout(() => fmtStatus.textContent = '', 2500);
+        return;
+      }
+      // Heuristic check: does it already look formatted?
+      if (/^\s*\/(V\d+|Chorus|Pre-Chorus|Bridge|Intro|Outro|Tag|Instrumental)\b/m.test(raw)) {
+        if (!confirm('These lyrics already look formatted. Re-format anyway?')) return;
+      }
+      fmtBtn.disabled = true;
+      const origLabel = fmtBtn.textContent;
+      fmtBtn.textContent = '\u2728 Formatting\u2026';
+      fmtStatus.textContent = '';
+      try {
+        const formatted = await formatLyricsWithClaude(raw);
+        if (formatted && formatted.trim()) {
+          ta.value = formatted;
+          ta.dispatchEvent(new Event('input'));
+          fmtStatus.textContent = '\u2713 Formatted';
+          setTimeout(() => fmtStatus.textContent = '', 2500);
+        } else {
+          fmtStatus.textContent = 'Empty result \u2014 try again or edit manually';
+        }
+      } catch (e) {
+        console.error('format-ai failed', e);
+        fmtStatus.textContent = 'Failed: ' + (e.message || 'unknown error');
+      } finally {
+        fmtBtn.disabled = false;
+        fmtBtn.textContent = origLabel;
+      }
+    });
+  }
   ta.addEventListener('focus', render);   // covers programmatic .value changes
   // Programmatic value changes (loadIntoEditor sets ta.value directly) don't
   // fire 'input', so poll for value changes as a safety net.
