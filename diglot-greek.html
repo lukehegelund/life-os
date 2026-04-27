@@ -210,18 +210,19 @@
       background: white !important;
     }
 
-    /* Each chapter starts on a new page (except the first) */
+    /* Chapter divider — flows continuously, no forced page break.
+       (Page-break-after: avoid keeps the heading from being orphaned
+       at the bottom of a page.) */
     .chapter-heading {
-      page-break-before: always;
-      break-before: page;
-      margin: 0 0 14px 0;
-      padding-bottom: 4px;
-      font-size: 18pt;
-    }
-    .chapter-heading:first-of-type {
+      margin: 18pt 0 8pt 0;
+      padding-bottom: 3pt;
+      font-size: 16pt;
       page-break-before: auto;
       break-before: auto;
+      page-break-after: avoid;
+      break-after: avoid;
     }
+    .chapter-heading:first-of-type { margin-top: 0; }
 
     /* Verse layout — tighter for paper, but still readable */
     .verse-block { margin-bottom: 10pt; page-break-inside: avoid; break-inside: avoid; }
