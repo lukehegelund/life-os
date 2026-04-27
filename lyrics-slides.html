@@ -52,6 +52,24 @@
   .library-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
   .library-title { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; }
   .library-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+  /* Folder section header inside the library grid. Spans all columns so it
+     reads as a separator between folder groups. */
+  .library-folder-header {
+    grid-column: 1 / -1;
+    display: flex; align-items: baseline; gap: 10px;
+    padding: 14px 4px 4px 4px;
+    margin-top: 4px;
+    border-top: 1px solid var(--border);
+    font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--muted);
+  }
+  .library-folder-header:first-child { border-top: none; padding-top: 4px; }
+  .library-folder-name { font-weight: 700; color: var(--text); letter-spacing: 0.04em; }
+  .library-folder-count {
+    font-size: 10px; padding: 1px 7px; border-radius: 999px;
+    background: var(--panel-2); border: 1px solid var(--border);
+    color: var(--muted);
+  }
   .library-card {
     background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
     padding: 12px 14px; cursor: pointer; transition: border-color 0.15s, transform 0.1s;
@@ -333,15 +351,30 @@
     color: #f5a623 !important;
   }
 
-  /* ---- Tutorial banner ---- */
+  /* ---- Tutorial banner ----
+     Floats at the top of the viewport across all admin-facing modes
+     (editor + operator). Hidden in viewer mode (chord chart too). */
   .tutorial-banner {
     display: flex; align-items: center; justify-content: center;
-    gap: 12px; padding: 9px 16px; margin: 0 0 14px 0;
-    background: linear-gradient(90deg, rgba(154,126,200,0.18), rgba(154,126,200,0.10));
-    border: 1px solid rgba(154,126,200,0.45);
-    border-radius: 10px;
-    font-size: 13px; color: var(--text);
+    gap: 12px; padding: 8px 16px;
+    position: fixed;
+    top: 8px; left: 50%;
+    transform: translateX(-50%);
+    z-index: 200;
+    max-width: 460px; width: calc(100% - 24px);
+    background: linear-gradient(90deg, rgba(154,126,200,0.92), rgba(154,126,200,0.82));
+    border: 1px solid rgba(154,126,200,0.85);
+    border-radius: 999px;
+    backdrop-filter: blur(6px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+    font-size: 13px; color: #fff;
   }
+  .tutorial-banner a { color: #fff; }
+  /* Hide in viewer mode (already hidden via mode-operator rule was removed) */
+  body.mode-viewer .tutorial-banner { display: none !important; }
+  /* Hide on the chord chart view too — printing/preview shouldn't show it */
+  .chart-view.visible ~ .tutorial-banner,
+  body:has(.chart-view.visible) .tutorial-banner { display: none !important; }
   .tutorial-banner a {
     color: var(--accent); text-decoration: none; font-weight: 600;
   }
@@ -1233,7 +1266,8 @@
   body.mode-operator .library-card-actions .del,
   body.mode-operator .setlist-card-actions .danger,
   body.mode-operator .setlist-card-actions button:nth-child(2),  /* the ✎ Edit button */
-  body.mode-operator #tutorial-banner { display: none !important; }
+  body.mode-operator #open-operator-mode { display: none !important; }
+  /* (Tutorial banner intentionally REMAINS visible in operator mode.) */
 
   /* Viewer mode: fullscreen lyrics, no operator chrome at all (mirrors fullscreen) */
   body.mode-viewer #setup-view,
@@ -1812,15 +1846,17 @@
 </head>
 <body>
 
+<!-- Dismissible tutorial banner. Floats at the top of the viewport on
+     editor + operator modes (hidden on viewer). Once the X is clicked,
+     a localStorage flag keeps it dismissed across all screens forever. -->
+<div class="tutorial-banner" id="tutorial-banner" style="display:none;">
+  <span class="tutorial-banner-emoji">🎬</span>
+  <span>New to the app? <a href="https://youtu.be/2aDiH5iLtfw" target="_blank" rel="noopener noreferrer">Watch a tutorial!</a></span>
+  <button class="tutorial-banner-close" id="tutorial-banner-close" type="button" title="Don't show this again">✕</button>
+</div>
+
 <!-- ==================== SETUP VIEW ==================== -->
 <div class="setup" id="setup-view">
-  <!-- Dismissible tutorial banner. Hidden on load if the user previously
-       clicked the X (state in localStorage). Only shown on the setup view. -->
-  <div class="tutorial-banner" id="tutorial-banner" style="display:none;">
-    <span class="tutorial-banner-emoji">🎬</span>
-    <span>New to the app? <a href="https://youtu.be/2aDiH5iLtfw" target="_blank" rel="noopener noreferrer">Watch a tutorial!</a></span>
-    <button class="tutorial-banner-close" id="tutorial-banner-close" type="button" title="Don't show this again">✕</button>
-  </div>
   <div class="setup-header">
     <h1>🎤 Lyric Slides</h1>
     <a href="apps.html" class="back">← Apps</a>
@@ -1885,6 +1921,11 @@
       <label>Artist (optional)</label>
       <input type="text" id="song-artist" placeholder="John Newton">
     </div>
+  </div>
+  <div class="field">
+    <label>Folder (optional) <span style="color:var(--muted); font-weight:500; text-transform:none; letter-spacing:0; font-size:11px; margin-left:6px;">— pick an existing folder or type a new one</span></label>
+    <input type="text" id="song-folder" placeholder="e.g. Christmas, Worship — Easter, Personal" list="folder-suggestions" autocomplete="off">
+    <datalist id="folder-suggestions"></datalist>
   </div>
 
   <!-- Auto-import panel - always visible. Uses the Song title / Artist
@@ -2402,7 +2443,7 @@ async function loadLibrary() {
   return r.json();
 }
 
-async function saveSong({ id, title, artist, lyrics, palette, slides_data, video_urls, audio_url, original_key, youtube_url, default_key, cent_offset }) {
+async function saveSong({ id, title, artist, lyrics, palette, slides_data, video_urls, audio_url, original_key, youtube_url, default_key, cent_offset, folder }) {
   const body = {
     title,
     artist: artist || null,
@@ -2410,6 +2451,7 @@ async function saveSong({ id, title, artist, lyrics, palette, slides_data, video
     palette: palette || null,
     updated_at: new Date().toISOString()
   };
+  if (folder !== undefined) body.folder = (folder || '').trim() || null;
   if (slides_data !== undefined) body.slides_data = slides_data;
   if (video_urls !== undefined)  body.video_urls  = video_urls;
   if (audio_url  !== undefined)  body.audio_url   = audio_url  || null;
@@ -5610,8 +5652,35 @@ async function renderLibrary() {
       grid.innerHTML = '<div class="library-empty">No songs saved yet. Click <strong>+ New song</strong> above to add one.</div>';
       return;
     }
+    // Refresh the folder-suggestions datalist (used by the editor input).
+    refreshFolderSuggestions(songs);
     grid.innerHTML = '';
-    songs.forEach(song => {
+    // Group songs by folder. Songs without a folder go into Uncategorized,
+    // which renders LAST. Folders are sorted alphabetically.
+    const groups = new Map();
+    for (const s of songs) {
+      const key = (s.folder || '').trim() || '\u0000__uncategorized__';
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(s);
+    }
+    const folderKeys = [...groups.keys()].filter(k => k !== '\u0000__uncategorized__').sort((a, b) => a.localeCompare(b));
+    if (groups.has('\u0000__uncategorized__')) folderKeys.push('\u0000__uncategorized__');
+    for (const key of folderKeys) {
+      const isUncat = key === '\u0000__uncategorized__';
+      const folderSongs = groups.get(key);
+      // Section header (skip if there's only one folder AND it's uncategorized — keeps the
+      // legacy single-list look for users who haven't started using folders yet).
+      const onlyUncat = folderKeys.length === 1 && isUncat;
+      if (!onlyUncat) {
+        const header = document.createElement('div');
+        header.className = 'library-folder-header';
+        header.innerHTML = `<span class="library-folder-name">${
+          isUncat ? '\ud83d\udcc2 Uncategorized'
+                  : '\ud83d\udcc1 ' + key.replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]))
+        }</span><span class="library-folder-count">${folderSongs.length}</span>`;
+        grid.appendChild(header);
+      }
+      folderSongs.forEach(song => {
       const card = document.createElement('div');
       card.className = 'library-card';
       card.innerHTML = `
@@ -5647,11 +5716,22 @@ async function renderLibrary() {
         renderLibrary();
       });
       grid.appendChild(card);
-    });
+      });
+    }
   } catch (e) {
     console.error(e);
     grid.innerHTML = `<div class="library-empty" style="color:var(--danger);">Couldn't load library: ${e.message}</div>`;
   }
+}
+
+// Refresh the <datalist id="folder-suggestions"> with the unique set of
+// folder names currently in use across the library. Called whenever the
+// library list refreshes.
+function refreshFolderSuggestions(songs) {
+  const dl = document.getElementById('folder-suggestions');
+  if (!dl) return;
+  const names = [...new Set(songs.map(s => (s.folder || '').trim()).filter(Boolean))].sort();
+  dl.innerHTML = names.map(n => `<option value="${n.replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]))}">`).join('');
 }
 
 // ========================= PER-SONG SHARE LINK =========================
@@ -6282,6 +6362,8 @@ async function loadIntoEditor(id) {
     $('current-song-id').value = song.id;
     $('song-title').value  = song.title || '';
     $('song-artist').value = song.artist || '';
+    const folderInput = $('song-folder');
+    if (folderInput) folderInput.value = song.folder || '';
     // Versions: load + show row. If the song has versions, the active
     // one's lyrics drive the textarea; else the legacy lyrics field does.
     loadEditorVersions(song);
@@ -6321,6 +6403,8 @@ function clearEditor() {
   $('current-song-id').value = '';
   $('song-title').value  = '';
   $('song-artist').value = '';
+  const folderInputClear = $('song-folder');
+  if (folderInputClear) folderInputClear.value = '';
   $('lyrics-input').value = '';
   $('palette-select').value = 'random';
   const badge = $('video-count-badge');
@@ -6483,7 +6567,8 @@ async function generateFromLyrics({ id, title, artist, lyrics, palette: paletteC
         original_key: resolvedOriginalKey,
         youtube_url: resolvedYoutubeUrl,
         default_key: resolvedDefaultKey,
-        cent_offset: resolvedCentOffset
+        cent_offset: resolvedCentOffset,
+        folder: (document.getElementById('song-folder')?.value || '').trim() || null,
       });
       savedId = saved?.id || id;
       $('current-song-id').value = savedId || '';
