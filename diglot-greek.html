@@ -174,6 +174,111 @@
     #controls { padding: 8px 12px; gap: 7px 10px; }
     #reader-body { padding: 20px 16px 80px; }
   }
+
+  /* Print legend / meta — hidden on screen, populated dynamically and shown in @media print */
+  #printLegend, #printMeta { display: none; }
+
+  /* ── Chapter heading (visible on screen + print, page-break in print) ── */
+  .chapter-heading {
+    font-family: 'Theano Didot', Georgia, serif;
+    font-size: 1.6rem; font-weight: 700; color: #44403c;
+    margin: 36px 0 12px; padding-bottom: 6px;
+    border-bottom: 1px solid var(--reader-hr);
+  }
+  .chapter-heading:first-child { margin-top: 0; }
+
+  /* ── Print / PDF: US Letter, color preserved, controls hidden, chapters paginated ── */
+  @media print {
+    @page { size: letter; margin: 0.6in 0.55in 0.7in 0.55in; }
+
+    html, body {
+      background: white !important;
+      color: #1c1917 !important;
+      font-size: 10.5pt;
+      -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+    }
+
+    /* Hide everything that isn't the reader text */
+    #controls, .page-header, #popup, .pop-close { display: none !important; }
+
+    /* Reset reader chrome for paper */
+    #reader-body {
+      max-width: 100% !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      background: white !important;
+    }
+
+    /* Each chapter starts on a new page (except the first) */
+    .chapter-heading {
+      page-break-before: always;
+      break-before: page;
+      margin: 0 0 14px 0;
+      padding-bottom: 4px;
+      font-size: 18pt;
+    }
+    .chapter-heading:first-of-type {
+      page-break-before: auto;
+      break-before: auto;
+    }
+
+    /* Verse layout — tighter for paper, but still readable */
+    .verse-block { margin-bottom: 10pt; page-break-inside: avoid; break-inside: avoid; }
+    p.verse { font-size: 11pt; line-height: 1.7; margin: 0 0 2pt; }
+    p.greek-line { font-size: 9.5pt; line-height: 1.4; color: #6b7280 !important; margin-top: 1pt; }
+    .vnum { color: #6b7280 !important; }
+
+    /* Make sure colored tokens print with their color */
+    .tok, .tok.case-N, .tok.case-G, .tok.case-D, .tok.case-A, .tok.case-V,
+    .tok.cat-conj, .tok.cat-prep, .tok .form-en, .tok .form-tr, .tok .form-gr {
+      -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+    }
+    .tok.english { color: #4b5563 !important; }
+    .tok:hover { background: transparent !important; }
+
+    /* Stacked tokens stay stacked, slightly tightened */
+    .tok.stacked { padding: 1pt 3pt; }
+    .tok.stacked .form-en + .form-tr,
+    .tok.stacked .form-tr + .form-gr { border-top-color: #d6d3d1 !important; }
+
+    /* Print legend + meta line — hidden on screen, shown in print */
+    #printLegend, #printMeta { display: block !important; }
+    #printLegend {
+      margin: 0 0 14pt 0;
+      padding: 8pt 10pt;
+      border: 1pt solid #d6d3d1;
+      border-radius: 4pt;
+      background: #fafaf9 !important;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 9.5pt; line-height: 1.45;
+      page-break-after: avoid;
+      break-after: avoid;
+    }
+    #printLegend .legend-title {
+      font-weight: 700; color: #44403c; margin-bottom: 4pt; font-size: 9pt;
+      text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    #printLegend .legend-row { display: flex; flex-wrap: wrap; gap: 4pt 14pt; }
+    #printLegend .legend-item { white-space: nowrap; }
+    #printLegend .legend-swatch {
+      display: inline-block; width: 9pt; height: 9pt; border-radius: 2pt;
+      vertical-align: -1pt; margin-right: 4pt;
+    }
+    #printLegend .legend-name { font-weight: 600; }
+    #printLegend .legend-desc { color: #6b7280 !important; font-size: 8.5pt; }
+    #printMeta {
+      margin: 0 0 10pt 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 8.5pt; color: #57534e !important;
+      page-break-after: avoid;
+    }
+
+    /* Avoid orphaned single lines */
+    p, .verse-block { orphans: 3; widows: 3; }
+  }
+
 </style>
 </head>
 <body>
@@ -299,11 +404,27 @@
       font-family:inherit; transition:background .15s;">
       Save as default
     </button>
+    <button id="printChapterBtn" onclick="printChapter()" title="Print or save as PDF the chapter currently selected (or the whole book if 'All' is selected)" style="
+      margin-left:8px; padding:5px 11px; border-radius:6px; border:1px solid #bae6fd;
+      background:#f0f9ff; color:#0369a1; font-size:12px; cursor:pointer;
+      font-family:inherit; transition:background .15s;">
+      🖨 Print / PDF
+    </button>
+    <button id="printBookBtn" onclick="printBook()" title="Print or save as PDF the entire book" style="
+      margin-left:4px; padding:5px 11px; border-radius:6px; border:1px solid #bae6fd;
+      background:white; color:#0369a1; font-size:12px; cursor:pointer;
+      font-family:inherit; transition:background .15s;">
+      Whole book
+    </button>
   </div>
 </div>
 
 <!-- Reader content -->
 <div id="reader-body">
+  <!-- Legend rendered only on print/PDF — mirrors the dynamic on-screen color key -->
+  <div id="printLegend" aria-hidden="true"></div>
+  <!-- Print/PDF settings summary (rendered only on print/PDF) -->
+  <div id="printMeta" aria-hidden="true"></div>
   <div id="content"></div>
 </div>
 
@@ -464,7 +585,19 @@ function buildVerse(v) {
 
 function renderAll() {
   content.innerHTML = '';
-  for (const v of VERSES) content.appendChild(buildVerse(v));
+  let prevChapter = null;
+  for (const v of VERSES) {
+    const ch = parseInt(v.ref.split('.')[0]);
+    if (ch !== prevChapter) {
+      const h = document.createElement('h2');
+      h.className = 'chapter-heading';
+      h.dataset.chapter = ch;
+      h.textContent = (DATA.book || 'Book') + ' — Chapter ' + ch;
+      content.appendChild(h);
+      prevChapter = ch;
+    }
+    content.appendChild(buildVerse(v));
+  }
   applyState();
 }
 
@@ -479,14 +612,64 @@ const KEY_ENTRIES = [
 
 function updateColorKey() {
   const el = document.getElementById('colorKey');
-  if (!state.colorOn) { el.innerHTML = ''; return; }
-  const active = KEY_ENTRIES.filter(e => e.test());
-  if (!active.length) { el.innerHTML = ''; return; }
-  el.innerHTML = active.map((e, i) =>
-    (i > 0 ? '<span style="color:#d1d5db;">·</span>' : '') +
-    `<span style="color:${e.color};font-weight:600;">${e.label}</span>` +
-    `<span style="color:#9ca3af;"> ${e.desc}</span>`
-  ).join('');
+  const printEl = document.getElementById('printLegend');
+  const active = state.colorOn ? KEY_ENTRIES.filter(e => e.test()) : [];
+
+  // ── Sticky on-screen color key ────────────────────────────────────────────
+  if (!active.length) {
+    el.innerHTML = '';
+  } else {
+    el.innerHTML = active.map((e, i) =>
+      (i > 0 ? '<span style="color:#d1d5db;">·</span>' : '') +
+      `<span style="color:${e.color};font-weight:600;">${e.label}</span>` +
+      `<span style="color:#9ca3af;"> ${e.desc}</span>`
+    ).join('');
+  }
+
+  // ── Print-only color key (populated even when on-screen one is hidden) ────
+  if (printEl) {
+    if (!active.length) {
+      printEl.innerHTML = '';
+      printEl.style.display = 'none';
+    } else {
+      printEl.innerHTML =
+        '<div class="legend-title">Color key</div>' +
+        '<div class="legend-row">' +
+          active.map(e =>
+            `<span class="legend-item">` +
+              `<span class="legend-swatch" style="background:${e.color}"></span>` +
+              `<span class="legend-name" style="color:${e.color}">${e.label}</span> ` +
+              `<span class="legend-desc">${e.desc}</span>` +
+            `</span>`
+          ).join('') +
+        '</div>';
+      // The screen version stays hidden by the inline #printLegend CSS rule;
+      // @media print overrides display:block. We don't need to set inline style.
+    }
+  }
+}
+
+function updatePrintMeta() {
+  const el = document.getElementById('printMeta');
+  if (!el) return;
+  const tierName = { 1: 'Tier 1 · Articles', 2: 'Tier 2 · Conjunctions', 3: 'Tier 3 · Prepositions' }[state.tier] || '';
+  const stageName = n => ({0:'off', 1:'English / transliteration', 2:'transliteration / Greek', 3:'Greek only'})[n] || '';
+  const bits = [];
+  bits.push(`<strong>${(DATA.book || 'Book')}</strong>` +
+            (state.chapter ? ` · Chapter ${state.chapter}` : ' · Whole book'));
+  // Active stages
+  const stages = [];
+  for (const c of ['N','G','D','A']) {
+    const v = state.articleCases[c] || 0;
+    if (v > 0) stages.push({'N':'Nom','G':'Gen','D':'Dat','A':'Acc'}[c] + ' ' + v);
+  }
+  if (state.conjStage > 0) stages.push('Conj ' + state.conjStage);
+  if (state.prepStage > 0) stages.push('Prep ' + state.prepStage);
+  if (stages.length) bits.push('Active: ' + stages.join(', '));
+  if (state.display === 'monotonic') bits.push('Monotonic');
+  if (!state.showGreekLine) bits.push('Greek line off');
+  if (!state.colorOn) bits.push('Colors off');
+  el.innerHTML = bits.join(' &nbsp;·&nbsp; ');
 }
 
 function applyState() {
@@ -494,6 +677,12 @@ function applyState() {
     panel.classList.toggle('active', parseInt(panel.dataset.tier) === state.tier);
   });
   updateColorKey();
+  updatePrintMeta();
+  // Chapter heading visibility tracks the chapter filter
+  document.querySelectorAll('.chapter-heading').forEach(h => {
+    const headingChapter = parseInt(h.dataset.chapter);
+    h.style.display = (state.chapter !== 0 && headingChapter !== state.chapter) ? 'none' : '';
+  });
   const blocks = content.querySelectorAll('.verse-block');
   blocks.forEach(block => {
     const verse = VERSES.find(v => v.ref === block.dataset.ref);
@@ -705,6 +894,35 @@ function syncControlsToState() {
   document.getElementById('colorToggle').checked = state.colorOn;
   // Chapter selector
   document.getElementById('chapterSelect').value = state.chapter;
+}
+
+// ── Print / PDF helpers ─────────────────────────────────────────────────────
+// Both functions use the browser's native print dialog, which on every modern
+// platform offers "Save as PDF" as a destination — so this gives the user
+// printing AND PDF download in a single button.
+function printChapter() {
+  // Print whatever chapter is currently selected (state.chapter); if "All", do the whole book.
+  window.print();
+}
+function printBook() {
+  // Save current chapter, switch to "All", print, then restore.
+  const prev = state.chapter;
+  if (prev !== 0) {
+    state.chapter = 0;
+    document.getElementById('chapterSelect').value = 0;
+    applyState();
+  }
+  // Wait one frame so the DOM updates before the print dialog snapshots it.
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      window.print();
+      if (prev !== 0) {
+        state.chapter = prev;
+        document.getElementById('chapterSelect').value = prev;
+        applyState();
+      }
+    });
+  });
 }
 
 // Populate chapter dropdown from verse data
