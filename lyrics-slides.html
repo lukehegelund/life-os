@@ -7686,8 +7686,20 @@ $('op-audio-key-select')?.addEventListener('change', async (e) => {
 // =========================================================================
 // LIVE preview: tap zones + touch swipe for slide navigation
 // =========================================================================
-$('op-tap-prev')?.addEventListener('click', (e) => { e.stopPropagation(); prevSlide(); });
-$('op-tap-next')?.addEventListener('click', (e) => { e.stopPropagation(); nextSlide(); });
+// Set by the touchend swipe handler when it has already fired a nav,
+// so the click event that browsers also dispatch after a small-drift tap
+// can't double-fire the opposite nav and produce the 'rewind' glitch.
+let _slideTouchHandled = false;
+$('op-tap-prev')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (_slideTouchHandled) return;
+  prevSlide();
+});
+$('op-tap-next')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (_slideTouchHandled) return;
+  nextSlide();
+});
 
 // Touch swipe on the LIVE preview — left swipe = next, right swipe = prev
 (function attachSwipe() {
@@ -7707,9 +7719,14 @@ $('op-tap-next')?.addEventListener('click', (e) => { e.stopPropagation(); nextSl
     const dx = e.changedTouches[0].clientX - startX;
     const dy = e.changedTouches[0].clientY - startY;
     const dt = Date.now() - startT;
-    // Horizontal swipe: ≥40px and mostly horizontal and under 600ms
-    if (Math.abs(dx) >= 40 && Math.abs(dx) > Math.abs(dy) * 1.5 && dt < 600) {
+    // Horizontal swipe: \u226560px (was 40 \u2014 too easy to trigger by
+    // accidental finger drift during a tap), mostly horizontal, under 600ms.
+    if (Math.abs(dx) >= 60 && Math.abs(dx) > Math.abs(dy) * 1.5 && dt < 600) {
       if (dx < 0) nextSlide(); else prevSlide();
+      // Tell the tap-zone click handlers to skip the click that fires
+      // immediately after this touchend, so we don't double-nav.
+      _slideTouchHandled = true;
+      setTimeout(() => { _slideTouchHandled = false; }, 500);
     }
   }, { passive: true });
 })();
