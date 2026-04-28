@@ -93,7 +93,36 @@
   .library-card:active { transform: scale(0.98); }
   .library-card-title { font-size: 14px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 44px; }
   .library-card-artist { font-size: 12px; color: var(--muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 44px; }
-  .library-card-actions { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; }
+  .library-card-actions { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; z-index: 2; }
+  /* Quick 'Move to folder' popover \u2014 floats over the song card
+     when the user clicks the \U0001F4C1 action button. */
+  .move-folder-pop {
+    position: absolute; top: 100%; right: 0; z-index: 50;
+    min-width: 200px; max-width: 280px;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 8px;
+    box-shadow: 0 18px 40px rgba(0,0,0,0.55);
+    margin-top: 6px;
+    text-align: left;
+  }
+  .move-folder-pop .mfp-title {
+    font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--muted); padding: 4px 6px 6px 6px;
+  }
+  .move-folder-pop button.mfp-row {
+    display: block; width: 100%; text-align: left;
+    background: none; border: none; color: var(--text);
+    padding: 6px 8px; font-size: 13px; border-radius: 6px;
+    cursor: pointer;
+  }
+  .move-folder-pop button.mfp-row:hover { background: var(--panel-2); }
+  .move-folder-pop button.mfp-row.active { color: var(--accent); }
+  .move-folder-pop input.mfp-new {
+    width: 100%; box-sizing: border-box;
+    background: var(--panel-2); border: 1px solid var(--border);
+    color: var(--text); padding: 6px 8px; border-radius: 6px;
+    font-size: 13px; margin-top: 4px;
+  }
   .library-card-actions button {
     background: transparent; border: none; color: var(--muted); padding: 4px 6px;
     border-radius: 6px; font-size: 12px; cursor: pointer; transition: all 0.1s;
@@ -1277,6 +1306,7 @@
   body.mode-operator #new-song-btn,
   body.mode-operator #new-setlist-btn,
   body.mode-operator .library-card-actions .edit,
+  body.mode-operator .library-card-actions .folder,
   body.mode-operator .library-card-actions .del,
   body.mode-operator .setlist-card-actions .danger,
   body.mode-operator .setlist-card-actions button:nth-child(2),  /* the ✎ Edit button */
@@ -5953,9 +5983,10 @@ async function renderLibrary() {
         <div class="library-card-title"></div>
         <div class="library-card-artist"></div>
         <div class="library-card-actions">
-          <button class="share" title="Copy a share link to send a friend">🔗</button>
-          <button class="edit" title="Edit lyrics">✎</button>
-          <button class="del"  title="Delete">✕</button>
+          <button class="share"  title="Copy a share link to send a friend">🔗</button>
+          <button class="folder" title="Move to folder">📁</button>
+          <button class="edit"   title="Edit lyrics">✎</button>
+          <button class="del"    title="Delete">✕</button>
         </div>
       `;
       card.querySelector('.library-card-title').textContent = song.title;
@@ -5981,6 +6012,10 @@ async function renderLibrary() {
         await deleteSong(song.id);
         renderLibrary();
       });
+      card.querySelector('.folder').addEventListener('click', (e) => {
+        e.stopPropagation();
+        openMoveFolderPopover(song, e.currentTarget, songs);
+      });
       grid.appendChild(card);
       });
     }
@@ -5988,6 +6023,92 @@ async function renderLibrary() {
     console.error(e);
     grid.innerHTML = `<div class="library-empty" style="color:var(--danger);">Couldn't load library: ${e.message}</div>`;
   }
+}
+
+// Open a small inline popover anchored to the clicked button that lets
+// the user re-assign a song's folder without opening the full editor.
+// Picks include all existing folders, 'No folder', and a free-text input
+// to create a new one. Closing the popover patches the song and refreshes
+// the library so the card jumps to the right section.
+function openMoveFolderPopover(song, anchorBtn, allSongs) {
+  // Close any existing popover first.
+  document.querySelectorAll('.move-folder-pop').forEach(el => el.remove());
+
+  const pop = document.createElement('div');
+  pop.className = 'move-folder-pop';
+  // Build the list of existing folders (deduped, sorted).
+  const folders = [...new Set((allSongs || []).map(s => (s.folder || '').trim()).filter(Boolean))].sort();
+  const currentFolder = (song.folder || '').trim();
+
+  pop.innerHTML = '<div class="mfp-title">Move to folder</div>';
+
+  // No folder row
+  const noFolderBtn = document.createElement('button');
+  noFolderBtn.className = 'mfp-row' + (!currentFolder ? ' active' : '');
+  noFolderBtn.textContent = '\u2014 No folder \u2014';
+  pop.appendChild(noFolderBtn);
+
+  // Existing folder rows
+  for (const f of folders) {
+    const row = document.createElement('button');
+    row.className = 'mfp-row' + (f === currentFolder ? ' active' : '');
+    row.textContent = '\ud83d\udcc1 ' + f;
+    row.dataset.folder = f;
+    pop.appendChild(row);
+  }
+
+  // New folder input
+  const newInput = document.createElement('input');
+  newInput.type = 'text';
+  newInput.className = 'mfp-new';
+  newInput.placeholder = '+ New folder name, then press Enter';
+  pop.appendChild(newInput);
+
+  // Anchor the popover to the action button \u2014 popover is appended into
+  // the card so absolute positioning is relative to the card.
+  const card = anchorBtn.closest('.library-card');
+  if (!card) return;
+  card.style.position = card.style.position || 'relative';
+  card.appendChild(pop);
+
+  async function applyFolder(newFolder) {
+    pop.remove();
+    document.removeEventListener('click', dismiss, true);
+    if ((newFolder || null) === (currentFolder || null)) return;
+    try {
+      await patchSong(song.id, { folder: newFolder || null });
+      song.folder = newFolder || null;
+    } catch (e) {
+      alert('Move failed: ' + e.message);
+      return;
+    }
+    renderLibrary();
+  }
+
+  noFolderBtn.addEventListener('click', () => applyFolder(null));
+  for (const row of pop.querySelectorAll('.mfp-row[data-folder]')) {
+    row.addEventListener('click', () => applyFolder(row.dataset.folder));
+  }
+  newInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const v = (newInput.value || '').trim();
+      if (v) applyFolder(v);
+    } else if (e.key === 'Escape') {
+      pop.remove();
+      document.removeEventListener('click', dismiss, true);
+    }
+  });
+  // Click-outside dismiss.
+  function dismiss(e) {
+    if (!pop.contains(e.target) && e.target !== anchorBtn) {
+      pop.remove();
+      document.removeEventListener('click', dismiss, true);
+    }
+  }
+  setTimeout(() => {
+    document.addEventListener('click', dismiss, true);
+    newInput.focus();
+  }, 0);
 }
 
 // Refresh the <datalist id="folder-suggestions"> with the unique set of
