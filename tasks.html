@@ -4,9 +4,128 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tareas — Life OS</title>
-<link rel="stylesheet" href="css/main.css?v=2">
+<link rel="stylesheet" href="css/main.css?v=3">
+<!-- SortableJS for drag-and-drop (works on touch + desktop) -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
 <style>
 .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:500; align-items:flex-end; justify-content:center; }
+
+/* ── Drag-and-drop visuals ────────────────────────────────────────── */
+.task-swipe-row {
+  transition: background 0.15s, opacity 0.2s, transform 0.2s;
+  border-radius: 8px;
+  padding: 8px 6px;
+  margin: 0 -6px;
+}
+.task-swipe-row:hover { background: var(--gray-50); }
+.task-swipe-row.sortable-chosen { background: var(--blue-light) !important; box-shadow: 0 4px 12px rgba(37,99,235,0.18); }
+.task-swipe-row.sortable-ghost   { opacity: 0.35; background: var(--gray-100) !important; }
+.task-swipe-row.sortable-drag    { cursor: grabbing !important; }
+
+.task-group-body { min-height: 12px; transition: background 0.15s; border-radius: 8px; }
+.task-group-body.drag-target-active { background: rgba(37,99,235,0.06); outline: 2px dashed rgba(37,99,235,0.4); outline-offset: -2px; }
+
+.task-category-card.sortable-chosen { box-shadow: 0 8px 24px rgba(0,0,0,0.18); }
+.task-category-card.sortable-ghost   { opacity: 0.45; }
+
+.drag-handle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px;
+  font-size: 16px; color: var(--gray-300);
+  cursor: grab; flex-shrink: 0;
+  user-select: none; touch-action: none;
+  border-radius: 6px;
+}
+.drag-handle:hover { color: var(--gray-600); background: var(--gray-100); }
+.drag-handle:active { cursor: grabbing; color: var(--blue); }
+
+/* Action buttons row — bigger tap targets, smoother hover */
+.task-action-btn {
+  width: 32px; height: 32px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 7px; border: none;
+  background: transparent; color: var(--gray-400);
+  font-size: 14px; line-height: 1;
+  cursor: pointer; flex-shrink: 0;
+  transition: background 0.12s, color 0.12s;
+  -webkit-tap-highlight-color: transparent;
+}
+.task-action-btn:hover { background: var(--gray-100); color: var(--gray-800); }
+.task-action-btn:active { background: var(--gray-200); }
+.task-action-btn.danger:hover { background: #fee2e2; color: var(--red); }
+
+/* Module category card hover */
+.task-category-card { transition: transform 0.18s, box-shadow 0.18s; }
+.task-category-card:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(0,0,0,0.06); }
+
+/* Skeleton placeholder for first paint */
+.task-skeleton { animation: pulse 1.4s ease-in-out infinite; background: var(--gray-100); border-radius: 8px; height: 44px; margin-bottom: 8px; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
+
+/* FAB — quick add */
+.tasks-fab {
+  position: fixed; right: 18px; bottom: calc(var(--nav-height) + 18px);
+  width: 56px; height: 56px; border-radius: 50%;
+  background: var(--blue); color: white; border: none;
+  font-size: 28px; line-height: 56px; padding: 0;
+  box-shadow: 0 6px 16px rgba(37,99,235,0.35), 0 2px 4px rgba(0,0,0,0.1);
+  cursor: pointer; z-index: 150;
+  transition: transform 0.15s, box-shadow 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.tasks-fab:hover  { transform: scale(1.05); box-shadow: 0 8px 20px rgba(37,99,235,0.45); }
+.tasks-fab:active { transform: scale(0.95); }
+
+/* Inline category-add chip in tab bar */
+.cat-add-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  flex-shrink: 0; white-space: nowrap;
+  border: 1.5px dashed var(--gray-200);
+  background: transparent; color: var(--gray-400);
+  border-radius: 20px; padding: 5px 12px;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: all 0.12s; -webkit-tap-highlight-color: transparent;
+}
+.cat-add-chip:hover { color: var(--blue); border-color: var(--blue); background: var(--blue-light); }
+.cat-new-input {
+  flex-shrink: 0;
+  border: 1.5px solid var(--blue); background: var(--white);
+  border-radius: 20px; padding: 5px 12px;
+  font-size: 13px; font-weight: 600; outline: none;
+  width: 140px; min-width: 0;
+}
+
+/* Task row entry/exit animations */
+@keyframes taskAppear { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+.task-swipe-row { animation: taskAppear 0.18s ease-out; }
+.task-swipe-row.removing { animation: none; opacity: 0; transform: translateX(-30%); pointer-events: none; }
+
+/* Mobile: bigger tap targets, hide hover-only buttons */
+@media (max-width: 720px) {
+  .task-swipe-row { padding: 10px 8px; margin: 0 -8px; }
+  .task-action-btn { width: 36px; height: 36px; font-size: 15px; }
+  .drag-handle { width: 32px; height: 32px; font-size: 18px; }
+}
+
+/* Undo bar */
+.undo-toast {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(var(--nav-height) + 80px);
+  background: #1f2937; color: white;
+  padding: 10px 14px; border-radius: 999px;
+  display: flex; align-items: center; gap: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+  font-size: 13px; font-weight: 500;
+  z-index: 1100;
+  animation: undoEnter 0.2s ease-out;
+}
+.undo-toast button {
+  background: rgba(255,255,255,0.18); color: white; border: none;
+  border-radius: 999px; padding: 5px 12px; font-weight: 700;
+  cursor: pointer; font-size: 13px;
+}
+.undo-toast button:hover { background: rgba(255,255,255,0.28); }
+@keyframes undoEnter { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
 .modal-sheet { background:var(--white); border-radius:16px 16px 0 0; padding:20px; width:100%; max-width:600px; max-height:92vh; overflow-y:auto; }
 .modal-title { font-size:17px; font-weight:700; margin-bottom:16px; }
 .modal-textarea { width:100%; min-height:90px; resize:vertical; padding:10px 12px; border:1.5px solid var(--gray-200); border-radius:10px; font-size:14px; font-family:inherit; line-height:1.5; background:var(--white); color:var(--gray-900); box-sizing:border-box; }
@@ -431,8 +550,11 @@
   </div>
 </div>
 
+<!-- Quick-add Floating Action Button -->
+<button class="tasks-fab" onclick="window.fabQuickAdd && window.fabQuickAdd()" title="Add task" aria-label="Add task">+</button>
+
 <script type="module" src="js/auth-guard.js"></script>
-<script type="module" src="js/tasks.js?v=17"></script>
+<script type="module" src="js/tasks.js?v=18"></script>
 <script type="module" src="js/error-reporter.js?v=1"></script>
 <script type="module" src="js/topbar.js?v=7"></script>
 </body>

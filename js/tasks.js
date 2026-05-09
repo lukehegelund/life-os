@@ -14,22 +14,52 @@ let defaultViewCategories = JSON.parse(localStorage.getItem('tasks-default-cats'
 let taskOrderMap = JSON.parse(localStorage.getItem('tasks-item-order') || '{}');
 
 // ── Local task cache for optimistic UI (avoids re-fetch after mutations) ──────
+const _CACHE_KEY = 'tasks-cache-v2';
 let _taskCache = []; // full list from last loadTasks() fetch
+// Hydrate from localStorage so first paint is INSTANT (no network wait)
+try {
+  const raw = localStorage.getItem(_CACHE_KEY);
+  if (raw) _taskCache = JSON.parse(raw) || [];
+} catch { _taskCache = []; }
 
+function _persistCache() {
+  try { localStorage.setItem(_CACHE_KEY, JSON.stringify(_taskCache)); } catch {}
+}
 function _cacheUpdate(id, patch) {
   const idx = _taskCache.findIndex(t => t.id === id);
-  if (idx !== -1) Object.assign(_taskCache[idx], patch);
+  if (idx !== -1) { Object.assign(_taskCache[idx], patch); _persistCache(); }
 }
 function _cacheAdd(task) {
-  _taskCache.push(task);
+  _taskCache.push(task); _persistCache();
 }
 function _cacheRemove(id) {
   const idx = _taskCache.findIndex(t => t.id === id);
-  if (idx !== -1) _taskCache.splice(idx, 1);
+  if (idx !== -1) { _taskCache.splice(idx, 1); _persistCache(); }
 }
 // Re-render tasks from cache without hitting the network
 function renderFromCache() {
   _renderTaskList(_taskCache);
+}
+
+// ── Undo toast (snappy delete with safety net) ───────────────────────────────
+let _undoTimer = null;
+function showUndoToast(message, onUndo, ms = 4500) {
+  document.getElementById('lifeos-undo-toast')?.remove();
+  if (_undoTimer) { clearTimeout(_undoTimer); _undoTimer = null; }
+
+  const el = document.createElement('div');
+  el.id = 'lifeos-undo-toast';
+  el.className = 'undo-toast';
+  el.innerHTML = `<span>${message}</span><button type="button">Undo</button>`;
+  document.body.appendChild(el);
+
+  const dismiss = () => { el.remove(); _undoTimer = null; };
+  el.querySelector('button').addEventListener('click', () => {
+    if (_undoTimer) { clearTimeout(_undoTimer); _undoTimer = null; }
+    try { onUndo(); } catch (e) { console.error('Undo failed', e); }
+    dismiss();
+  });
+  _undoTimer = setTimeout(dismiss, ms);
 }
 
 const MODULE_ICONS   = { RT: '🏫', 'RT Admin': '🏛️', TOV: '💍', Personal: '👤', Health: '🏃', LifeOS: '🖥️' };
@@ -125,9 +155,8 @@ function renderModuleTabs() {
     { mod: 'Repeated', label: '🔄 Repeated' },
   ];
 
-  row.innerHTML = tabs.map(({ mod, label }) => {
+  const tabsHtml = tabs.map(({ mod, label }) => {
     const isActive = mod === activeModule;
-    // Default tab gets a small customize icon inline
     if (mod === 'Default') {
       return `<div style="display:inline-flex;align-items:center;gap:0;flex-shrink:0">
         <button class="btn btn-sm ${isActive ? 'btn-primary' : 'btn-ghost'} mod-btn"
@@ -140,6 +169,11 @@ function renderModuleTabs() {
           style="white-space:nowrap;border-radius:0 20px 20px 0;padding:0 8px;font-size:13px;${isActive ? '' : 'border-left:1px solid var(--gray-200)'}">✏️</button>
       </div>`;
     }
+    if (mod === 'All' || mod === 'Repeated') {
+      return `<button class="btn btn-sm ${isActive ? 'btn-primary' : 'btn-ghost'} mod-btn"
+        onclick="setModule('${mod.replace(/'/g, "\\'")}')"
+        style="white-space:nowrap;border-radius:20px;flex-shrink:0">${label}</button>`;
+    }
     // Custom categories: split button with label + × remove
     return `<div style="display:inline-flex;align-items:center;flex-shrink:0">
       <button class="btn btn-sm ${isActive ? 'btn-primary' : 'btn-ghost'} mod-btn"
@@ -151,7 +185,44 @@ function renderModuleTabs() {
         style="border-radius:0 20px 20px 0;padding:0 7px;font-size:12px;line-height:1;${isActive ? '' : 'border-left:1px solid var(--gray-200)'}">×</button>
     </div>`;
   }).join('');
+
+  // Inline "+ New" chip at the end
+  const addChip = `<button class="cat-add-chip" id="cat-add-chip" onclick="window.startInlineCatAdd()">+ New</button>`;
+  row.innerHTML = tabsHtml + addChip;
 }
+
+// Inline category add — type the name right in the tab bar (no modal hop)
+window.startInlineCatAdd = () => {
+  const chip = document.getElementById('cat-add-chip');
+  if (!chip) return;
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.placeholder = 'New category name';
+  input.className = 'cat-new-input';
+  const finish = (commit) => {
+    const name = (input.value || '').trim();
+    if (commit && name) {
+      if (categoryOrder.includes(name)) {
+        toast('Category already exists', 'error');
+      } else {
+        categoryOrder = [...categoryOrder, name];
+        localStorage.setItem('tasks-cat-order', JSON.stringify(categoryOrder));
+        renderModuleTabs();
+        setModule(name);
+        toast(`Added "${name}" ✓`, 'success');
+        return;
+      }
+    }
+    renderModuleTabs();
+  };
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+    else if (e.key === 'Escape') { finish(false); }
+  });
+  input.addEventListener('blur', () => setTimeout(() => finish(true), 50));
+  chip.replaceWith(input);
+  input.focus();
+};
 
 // ── Category Manager ──────────────────────────────────────────────────────────
 let _catDraft = []; // working copy while modal is open
@@ -175,14 +246,32 @@ function renderCatList() {
     return;
   }
   el.innerHTML = _catDraft.map((cat, i) => `
-    <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--gray-100)">
+    <div class="cat-row" data-idx="${i}" style="display:flex;align-items:center;gap:8px;padding:10px 4px;border-bottom:1px solid var(--gray-100);background:var(--white);border-radius:8px">
+      <span class="drag-handle" style="font-size:16px;cursor:grab" title="Drag to reorder">⠿</span>
       <span style="font-size:16px">${MODULE_ICONS[cat] || '📁'}</span>
       <input type="text" value="${cat.replace(/"/g,'&quot;')}"
         class="form-input" style="flex:1;font-size:14px;padding:6px 10px"
-        onchange="_catDraft[${i}]=this.value.trim()||_catDraft[${i}]"
         oninput="_catDraft[${i}]=this.value">
       <button class="btn btn-sm btn-ghost" onclick="_catDraft.splice(${i},1);renderCatList()" title="Remove" style="color:var(--coral);padding:4px 8px">✕</button>
     </div>`).join('');
+
+  // Init drag-to-reorder on the rows
+  if (typeof Sortable !== 'undefined') {
+    Sortable.create(el, {
+      animation: 160,
+      handle: '.drag-handle',
+      ghostClass: 'sortable-ghost',
+      onEnd: () => {
+        const rows = [...el.querySelectorAll('.cat-row')];
+        const newDraft = rows.map(r => {
+          const i = parseInt(r.dataset.idx, 10);
+          return _catDraft[i];
+        });
+        _catDraft = newDraft;
+        renderCatList();
+      },
+    });
+  }
 }
 
 window.addCategory = () => {
@@ -195,29 +284,42 @@ window.addCategory = () => {
   if (inp) inp.value = '';
 };
 
-// Quick-remove a category directly from the tab bar
+// Quick-remove a category directly from the tab bar (with Undo)
 window.removeCategory = (mod) => {
-  if (!confirm(`Remove "${mod}" category? Tasks in this category won't be deleted.`)) return;
+  const idx = categoryOrder.indexOf(mod);
+  if (idx === -1) return;
+  const wasActive = activeModule === mod;
+  const prevDefault = [...defaultViewCategories];
+
   categoryOrder = categoryOrder.filter(c => c !== mod);
+  defaultViewCategories = defaultViewCategories.filter(c => c !== mod);
   localStorage.setItem('tasks-cat-order', JSON.stringify(categoryOrder));
+  localStorage.setItem('tasks-default-cats', JSON.stringify(defaultViewCategories));
   renderModuleTabs();
-  if (activeModule === mod) setModule('Default');
+  if (wasActive) setModule('Default');
   else renderFromCache();
-  toast(`Removed "${mod}" ✓`, 'success');
+
+  showUndoToast(`Removed "${mod}"`, () => {
+    categoryOrder.splice(idx, 0, mod);
+    defaultViewCategories = prevDefault;
+    localStorage.setItem('tasks-cat-order', JSON.stringify(categoryOrder));
+    localStorage.setItem('tasks-default-cats', JSON.stringify(defaultViewCategories));
+    renderModuleTabs();
+    if (wasActive) setModule(mod);
+    else renderFromCache();
+  });
 };
 
 window.saveCategoryManager = () => {
-  // Clean: remove empties, deduplicate
   const cleaned = [...new Set(_catDraft.map(c => c.trim()).filter(Boolean))];
   categoryOrder = cleaned;
   localStorage.setItem('tasks-cat-order', JSON.stringify(categoryOrder));
   closeCategoryManager();
   renderModuleTabs();
-  // If activeModule no longer exists, reset to All
   if (activeModule !== 'All' && activeModule !== 'Repeated' && activeModule !== 'Default' && !categoryOrder.includes(activeModule)) {
     setModule('Default');
   } else {
-    loadTasks();
+    renderFromCache();
   }
   toast('Categories saved ✓', 'success');
 };
@@ -270,11 +372,9 @@ window.setModule = (mod) => {
   activeModule = mod;
   renderModuleTabs();
 
-  // Show/hide schedule filter row — not relevant for Repeated
   const schedRow = document.querySelector('.sched-filter-row');
   if (schedRow) schedRow.style.display = mod === 'Repeated' ? 'none' : '';
 
-  // Show/hide sections based on mode
   const tasksEl   = document.getElementById('tasks-section');
   const recurEl   = document.getElementById('recurring-section');
   const futureEl  = document.getElementById('future-projects-section');
@@ -287,6 +387,8 @@ window.setModule = (mod) => {
     if (tasksEl)  tasksEl.style.display  = '';
     if (recurEl)  recurEl.style.display  = 'none';
     if (futureEl) futureEl.style.display = '';
+    // Render from cache instantly (no spinner, no waiting), then refresh in background
+    renderFromCache();
     loadTasks();
     loadFutureProjects();
   }
@@ -308,7 +410,8 @@ window.setScheduleFilter = (filter) => {
     activeBtn.style.fontWeight = '600';
     activeBtn.style.borderColor = 'var(--blue)';
   }
-  loadTasks();
+  // Cache-only render — instant. Background refresh on next data change.
+  renderFromCache();
 };
 
 async function load() {
@@ -379,90 +482,42 @@ function applyTaskOrder(tasks, groupKey) {
   });
 }
 
-// Move a task up or down within its group
-window.moveTask = (taskId, groupKey, direction) => {
-  const order = taskOrderMap[groupKey] || [];
-  // Ensure all task IDs in the group are in the order array
-  // We rebuild from the current DOM order to capture IDs not yet in storage
-  const groupEl = document.getElementById(`task-group-${groupKey.replace(/\s+/g, '-')}`);
-  const currentIds = groupEl
-    ? [...groupEl.querySelectorAll('.task-swipe-row')].map(el => parseInt(el.dataset.id, 10))
-    : order.slice();
-
-  // Merge: start from current DOM order, fill in any missing from stored order
-  let merged = currentIds.length ? currentIds : (taskOrderMap[groupKey] || []);
-  taskOrderMap[groupKey] = merged;
-
-  const idx = merged.indexOf(taskId);
-  if (idx === -1) return;
-
-  if (direction === 'up' && idx > 0) {
-    [merged[idx - 1], merged[idx]] = [merged[idx], merged[idx - 1]];
-  } else if (direction === 'down' && idx < merged.length - 1) {
-    [merged[idx], merged[idx + 1]] = [merged[idx + 1], merged[idx]];
-  } else {
-    return; // already at edge
-  }
-
-  taskOrderMap[groupKey] = merged;
-  saveTaskOrder();
-
-  // Re-render just this group by re-ordering DOM nodes (fast, no network)
-  if (groupEl) {
-    const rows = [...groupEl.querySelectorAll('.task-swipe-row')];
-    const rowMap = {};
-    rows.forEach(r => { rowMap[parseInt(r.dataset.id, 10)] = r; });
-    merged.forEach(id => {
-      if (rowMap[id]) groupEl.appendChild(rowMap[id]);
-    });
-    // Update arrow button states
-    updateArrowStates(groupKey, merged);
-  }
-};
-
-function updateArrowStates(groupKey, order) {
-  order.forEach((id, idx) => {
-    const upBtn  = document.getElementById(`up-${id}`);
-    const downBtn = document.getElementById(`dn-${id}`);
-    if (upBtn)   upBtn.disabled  = idx === 0;
-    if (downBtn) downBtn.disabled = idx === order.length - 1;
-    if (upBtn)   upBtn.style.opacity  = idx === 0 ? '0.3' : '1';
-    if (downBtn) downBtn.style.opacity = idx === order.length - 1 ? '0.3' : '1';
-  });
-}
+// (Up/down arrow buttons replaced by SortableJS drag-and-drop — see initSortableForTasks)
 
 // ── Tasks ─────────────────────────────────────────────────────────────────────
 async function loadTasks() {
+  // 1) Render whatever is in the cache RIGHT NOW so the page feels instant.
+  if (_taskCache && _taskCache.length) _renderTaskList(_taskCache);
+
+  // 2) Fetch fresh data in the background and only re-render if it differs.
   const res = await supabase.from('tasks')
     .select('*')
     .in('status', ['open', 'in_progress'])
     .order('created_at');
+  const fresh = res.data || [];
 
-  _taskCache = res.data || [];
-  _renderTaskList(_taskCache);
+  // Quick fingerprint so we don't re-render needlessly (avoids drag-state loss)
+  const fp = arr => arr.length + ':' + arr.map(t => `${t.id}|${t.title}|${t.module}|${t.priority}|${t.notes||''}|${t.due_date||''}`).join(';');
+  const same = fp(fresh) === fp(_taskCache);
+  _taskCache = fresh;
+  _persistCache();
+  if (!same) _renderTaskList(_taskCache);
 }
 
 function _renderTaskList(allData) {
   let tasks = allData.slice();
   if (activeModule === 'Default') {
-    // Show tasks from selected default categories only
-    tasks = tasks.filter(t => {
-      const m = displayModule(t);
-      return defaultViewCategories.includes(m);
-    });
+    tasks = tasks.filter(t => defaultViewCategories.includes(displayModule(t)));
   } else if (activeModule === 'RT Admin') {
     tasks = tasks.filter(t => isRTAdmin(t));
   } else if (activeModule !== 'All') {
     tasks = tasks.filter(t => t.module === activeModule && !isRTAdmin(t));
   }
 
-  // Apply schedule filter
   if (activeScheduleFilter !== 'All') {
-    if (activeScheduleFilter === 'Unlabeled') {
-      tasks = tasks.filter(t => !getScheduleLabel(t));
-    } else {
-      tasks = tasks.filter(t => getScheduleLabel(t) === activeScheduleFilter);
-    }
+    tasks = activeScheduleFilter === 'Unlabeled'
+      ? tasks.filter(t => !getScheduleLabel(t))
+      : tasks.filter(t => getScheduleLabel(t) === activeScheduleFilter);
   }
 
   const summaryEl = document.getElementById('tasks-summary');
@@ -472,175 +527,66 @@ function _renderTaskList(allData) {
     summaryEl.textContent = `${tasks.length} open${todayTasks.length && activeScheduleFilter === 'All' ? ` · ${todayTasks.length} today` : ''}${filterLabel}`;
   }
 
-  // When a schedule filter is active, show all tasks in a flat Today section (or just grouped)
-  // Separate Today from the rest only when showing All schedules
-  const nonTodayTasks = activeScheduleFilter !== 'All'
-    ? tasks // all shown in modules when filtering
-    : tasks.filter(t => getScheduleLabel(t) !== 'Today');
-  const todayDisplay = activeScheduleFilter !== 'All' ? [] : todayTasks;
+  const nonTodayTasks = activeScheduleFilter !== 'All' ? tasks : tasks.filter(t => getScheduleLabel(t) !== 'Today');
+  const todayDisplay  = activeScheduleFilter !== 'All' ? [] : todayTasks;
 
   let html = '';
 
-  // ── Today section (only when showing All schedules) ──
+  // ── Today section (cross-category) ─────────────────────────────────────────
   if (todayDisplay.length || activeModule !== 'Default') {
-    const todayGroupKey = '__today__';
-    const orderedToday = applyTaskOrder(todayDisplay, todayGroupKey);
-    const schedSafeId = 'sched-Today';
-    html += `<div class="card" style="border-left:4px solid #f59e0b;padding:0;overflow:hidden;margin-bottom:12px">
+    const groupKey = '__today__';
+    const ordered  = applyTaskOrder(todayDisplay, groupKey);
+    html += `<div class="card" data-cat-card="__today__" style="border-left:4px solid #f59e0b;padding:0;overflow:hidden;margin-bottom:12px">
       <div style="padding:10px 16px;background:#fffbeb">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-          <div class="urgent-section-header" style="color:#92400e;margin-bottom:0">📅 Today (${orderedToday.length})</div>
+          <div class="urgent-section-header" style="color:#92400e;margin-bottom:0">📅 Today (${ordered.length})</div>
           <button class="btn btn-sm btn-ghost" style="font-size:11px;padding:2px 8px;line-height:1.4;color:#92400e"
             onclick="event.stopPropagation();showInlineAddSched('Today')">+ Add</button>
         </div>
-        <div id="task-group-${todayGroupKey.replace(/\s+/g, '-')}" class="task-group-body">
-          ${renderTaskGroup(orderedToday, true, todayGroupKey)}
+        <div id="task-group-${groupKey}" class="task-group-body"
+             data-group-key="${groupKey}" data-target-schedule="Today" data-cross="1">
+          ${renderTaskGroup(ordered, true, groupKey)}
         </div>
-        <div id="inline-add-${schedSafeId}" style="display:none;padding:8px 0 4px 0;border-top:1px solid rgba(245,158,11,0.2);margin-top:4px">
+        <div id="inline-add-sched-Today" style="display:none;padding:8px 0 4px 0;border-top:1px solid rgba(245,158,11,0.2);margin-top:4px">
           ${inlineAddSchedHTML('Today', '#92400e')}
         </div>
       </div>
     </div>`;
   }
 
-  // ── Schedule section headers (when All filter is active) ──
-  // Show "Next Up", "Later", "Down the Road" as labeled dividers
+  // ── Schedule sections (Next Up / Later / Down the Road) ────────────────────
   const SCHED_SECTIONS = ['Next Up', 'Later', 'Down the Road'];
   if (activeScheduleFilter === 'All' && nonTodayTasks.length) {
     const unlabeled = nonTodayTasks.filter(t => !getScheduleLabel(t) || !SCHED_SECTIONS.includes(getScheduleLabel(t)));
     for (const sched of SCHED_SECTIONS) {
       const schedTasks = nonTodayTasks.filter(t => getScheduleLabel(t) === sched);
-      const sc = SCHEDULE_COLORS[sched];
-      const schedKey = `__sched_${sched}__`;
-      const orderedSched = applyTaskOrder(schedTasks, schedKey);
-      const schedSafeId = `sched-${sched.replace(/\s+/g,'-')}`;
-      const emoji = sched === 'Next Up' ? '⏩' : sched === 'Later' ? '🔵' : '🔜';
-      // Always show schedule section when user is in a specific category (even if empty)
       if (!schedTasks.length && activeModule === 'Default') continue;
-      html += `<div class="card" style="border-left:4px solid ${sc.border};padding:0;overflow:hidden;margin-bottom:12px">
+      const sc = SCHEDULE_COLORS[sched];
+      const groupKey = `__sched_${sched}__`;
+      const ordered = applyTaskOrder(schedTasks, groupKey);
+      const safeId = `sched-${sched.replace(/\s+/g,'-')}`;
+      const emoji = sched === 'Next Up' ? '⏩' : sched === 'Later' ? '🔵' : '🔜';
+      html += `<div class="card" data-cat-card="${groupKey}" style="border-left:4px solid ${sc.border};padding:0;overflow:hidden;margin-bottom:12px">
         <div style="padding:8px 14px;background:${sc.bg}">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-            <div style="font-size:12px;font-weight:700;color:${sc.color};letter-spacing:0.3px">${emoji} ${sched.toUpperCase()} (${orderedSched.length})</div>
+            <div style="font-size:12px;font-weight:700;color:${sc.color};letter-spacing:0.3px">${emoji} ${sched.toUpperCase()} (${ordered.length})</div>
             <button class="btn btn-sm btn-ghost" style="font-size:11px;padding:2px 8px;line-height:1.4;color:${sc.color}"
               onclick="event.stopPropagation();showInlineAddSched('${sched}')">+ Add</button>
           </div>
-          <div id="task-group-${schedKey.replace(/\s+/g,'-')}" class="task-group-body">
-            ${renderTaskGroup(orderedSched, true, schedKey)}
+          <div id="task-group-${groupKey}" class="task-group-body"
+               data-group-key="${groupKey}" data-target-schedule="${sched}" data-cross="1">
+            ${renderTaskGroup(ordered, true, groupKey)}
           </div>
-          <div id="inline-add-${schedSafeId}" style="display:none;padding:8px 0 4px 0;border-top:1px solid ${sc.border};margin-top:4px">
+          <div id="inline-add-${safeId}" style="display:none;padding:8px 0 4px 0;border-top:1px solid ${sc.border};margin-top:4px">
             ${inlineAddSchedHTML(sched, sc.color)}
           </div>
         </div>
       </div>`;
     }
-    // Render unlabeled tasks in module groups below
-    if (unlabeled.length) {
-      const groups = {};
-      for (const t of unlabeled) {
-        const m = displayModule(t);
-        if (!groups[m]) groups[m] = [];
-        groups[m].push(t);
-      }
-      const sortedMods = Object.keys(groups).sort((a, b) => {
-        const ai = categoryOrder.indexOf(a); const bi = categoryOrder.indexOf(b);
-        return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
-      });
-      for (const mod of sortedMods) {
-        const color  = MODULE_COLORS[mod] || 'var(--blue)';
-        const icon   = MODULE_ICONS[mod] || '';
-        const safeId = mod.replace(/\s+/g, '-');
-        const groupKey = mod;
-        const orderedGroup = applyTaskOrder(groups[mod], groupKey);
-        html += `<div class="card task-category-card" data-module="${mod}"
-          draggable="true"
-          ondragstart="window.catDragStart(event)"
-          ondragover="window.catDragOver(event)"
-          ondrop="window.catDrop(event)"
-          ondragend="window.catDragEnd(event)"
-          style="border-top:3px solid ${color};margin-bottom:12px;cursor:grab">
-          <div class="task-group-header">
-            <div class="task-group-label" style="display:flex;align-items:center;gap:6px">
-              <span style="font-size:12px;color:var(--gray-300);cursor:grab" title="Drag to reorder">⠿</span>
-              ${icon} ${mod}
-            </div>
-            <div style="display:flex;align-items:center;gap:6px">
-              <span class="badge badge-gray">${groups[mod].length}</span>
-              <button class="btn btn-sm btn-ghost" style="font-size:11px;padding:2px 8px;line-height:1.4"
-                onclick="event.stopPropagation();showInlineAdd('${mod}')" title="Add task to ${mod}">+ Add</button>
-            </div>
-          </div>
-          <div id="task-group-${safeId}" class="task-group-body">
-            ${renderTaskGroup(orderedGroup, false, groupKey)}
-          </div>
-          <div id="inline-add-${safeId}" style="display:none;padding:8px 0 4px 0;border-top:1px solid var(--gray-100);margin-top:4px">
-            <div style="display:flex;gap:6px;align-items:center">
-              <input type="text" id="inline-title-${safeId}"
-                placeholder="New task…"
-                style="flex:1;border:1px solid var(--gray-200);border-radius:8px;padding:6px 10px;font-size:13px;outline:none"
-                onkeydown="if(event.key==='Enter'){submitInlineTask('${mod}')}else if(event.key==='Escape'){hideInlineAdd('${mod}')}">
-              <button class="btn btn-sm" style="background:${color};color:white;border:none;padding:6px 12px;flex-shrink:0"
-                onclick="submitInlineTask('${mod}')">Add</button>
-              <button class="btn btn-sm btn-ghost" style="padding:6px 8px;flex-shrink:0"
-                onclick="hideInlineAdd('${mod}')">✕</button>
-            </div>
-          </div>
-        </div>`;
-      }
-    }
+    // Unlabeled tasks → grouped by module
+    if (unlabeled.length) html += renderModuleGroups(unlabeled);
   } else if (nonTodayTasks.length) {
-  // ── Normal tasks grouped by module (filtered mode or unlabeled) ──
-    const groups = {};
-    for (const t of nonTodayTasks) {
-      const m = displayModule(t);
-      if (!groups[m]) groups[m] = [];
-      groups[m].push(t);
-    }
-    const sortedMods = Object.keys(groups).sort((a, b) => {
-      const ai = categoryOrder.indexOf(a); const bi = categoryOrder.indexOf(b);
-      return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
-    });
-
-    for (const mod of sortedMods) {
-      const color  = MODULE_COLORS[mod] || 'var(--blue)';
-      const icon   = MODULE_ICONS[mod] || '';
-      const safeId = mod.replace(/\s+/g, '-');
-      const groupKey = mod;
-      const orderedGroup = applyTaskOrder(groups[mod], groupKey);
-      html += `<div class="card task-category-card" data-module="${mod}"
-        draggable="true"
-        ondragstart="window.catDragStart(event)"
-        ondragover="window.catDragOver(event)"
-        ondrop="window.catDrop(event)"
-        ondragend="window.catDragEnd(event)"
-        style="border-top:3px solid ${color};margin-bottom:12px;cursor:grab">
-        <div class="task-group-header">
-          <div class="task-group-label" style="display:flex;align-items:center;gap:6px">
-            <span style="font-size:12px;color:var(--gray-300);cursor:grab" title="Drag to reorder">⠿</span>
-            ${icon} ${mod}
-          </div>
-          <div style="display:flex;align-items:center;gap:6px">
-            <span class="badge badge-gray">${groups[mod].length}</span>
-            <button class="btn btn-sm btn-ghost" style="font-size:11px;padding:2px 8px;line-height:1.4"
-              onclick="event.stopPropagation();showInlineAdd('${mod}')" title="Add task to ${mod}">+ Add</button>
-          </div>
-        </div>
-        <div id="task-group-${safeId}" class="task-group-body">
-          ${renderTaskGroup(orderedGroup, false, groupKey)}
-        </div>
-        <div id="inline-add-${safeId}" style="display:none;padding:8px 0 4px 0;border-top:1px solid var(--gray-100);margin-top:4px">
-          <div style="display:flex;gap:6px;align-items:center">
-            <input type="text" id="inline-title-${safeId}"
-              placeholder="New task…"
-              style="flex:1;border:1px solid var(--gray-200);border-radius:8px;padding:6px 10px;font-size:13px;outline:none"
-              onkeydown="if(event.key==='Enter'){submitInlineTask('${mod}')}else if(event.key==='Escape'){hideInlineAdd('${mod}')}">
-            <button class="btn btn-sm" style="background:${color};color:white;border:none;padding:6px 12px;flex-shrink:0"
-              onclick="submitInlineTask('${mod}')">Add</button>
-            <button class="btn btn-sm btn-ghost" style="padding:6px 8px;flex-shrink:0"
-              onclick="hideInlineAdd('${mod}')">✕</button>
-          </div>
-        </div>
-      </div>`;
-    }
+    html += renderModuleGroups(nonTodayTasks);
   }
 
   if (!tasks.length) {
@@ -649,58 +595,117 @@ function _renderTaskList(allData) {
 
   document.getElementById('tasks-section').innerHTML = html;
 
-  // ── Homework section (always shown, separate from module groups) ──
+  // Init drag-and-drop AFTER render
+  initSortableForTasks();
+
+  // Homework section (separate)
   loadHomework();
 
-  // Apply arrow button states for all groups
-  setTimeout(() => {
-    // Today group
-    const todayGroupKey = '__today__';
-    const todayOrder = taskOrderMap[todayGroupKey];
-    if (todayOrder) updateArrowStates(todayGroupKey, todayOrder);
-    // Module groups
-    for (const key of Object.keys(taskOrderMap)) {
-      if (key !== todayGroupKey) updateArrowStates(key, taskOrderMap[key]);
-    }
-  }, 0);
-
-  // Swipe gestures
+  // Swipe gestures (mobile) — left = delete, right = mark done
   document.querySelectorAll('.task-swipe-row').forEach(item => {
-    const taskId = item.dataset.id;
+    const taskId = parseInt(item.dataset.id, 10);
     initSwipe(item,
-      async () => { await supabase.from('tasks').update({ status: 'cancelled' }).eq('id', taskId); toast('Task removed', 'info'); load(); },
-      async () => {
-        const checkEl = item.querySelector('.task-check');
-        if (checkEl) { checkEl.style.background = 'var(--green)'; checkEl.style.borderColor = 'var(--green)'; }
-        item.style.opacity = '0.4';
-        await supabase.from('tasks').update({ status: 'done', completed_at: new Date().toISOString() }).eq('id', taskId);
-        toast('Task done! ✅', 'success');
-        setTimeout(() => load(), 400);
-      }
+      // Swipe LEFT = delete (with undo)
+      () => { _doDeleteTask(taskId); },
+      // Swipe RIGHT = mark done (with undo)
+      () => { _doMarkDone(taskId, item); }
     );
   });
 }
 
+function renderModuleGroups(tasksList) {
+  const groups = {};
+  for (const t of tasksList) {
+    const m = displayModule(t);
+    if (!groups[m]) groups[m] = [];
+    groups[m].push(t);
+  }
+  // Make sure every category in categoryOrder has a slot when in a single-cat or All view —
+  // gives users an empty drop zone to drag into. In Default, only show selected ones.
+  let visibleCats;
+  if (activeModule === 'Default') {
+    // Default view — show only selected categories, in the order they appear in categoryOrder
+    visibleCats = categoryOrder.filter(c => defaultViewCategories.includes(c));
+  } else if (activeModule === 'All') {
+    visibleCats = [...categoryOrder];
+  } else if (activeModule === 'RT Admin') {
+    visibleCats = ['RT Admin'];
+  } else {
+    visibleCats = [activeModule];
+  }
+
+  // Final ordering: visible cats first, then any unexpected ones (e.g. data with module not in categoryOrder)
+  const ordered = [...visibleCats];
+  for (const m of Object.keys(groups)) if (!ordered.includes(m)) ordered.push(m);
+
+  let html = '';
+  for (const mod of ordered) {
+    const tasks = groups[mod] || [];
+    const color  = MODULE_COLORS[mod] || 'var(--blue)';
+    const icon   = MODULE_ICONS[mod] || '📁';
+    const safeId = mod.replace(/\s+/g, '-');
+    const groupKey = mod;
+    const orderedGroup = applyTaskOrder(tasks, groupKey);
+    html += `<div class="card task-category-card" data-module="${mod}" data-cat-card="${mod}"
+      style="border-top:3px solid ${color};margin-bottom:12px">
+      <div class="task-group-header">
+        <div class="task-group-label" style="display:flex;align-items:center;gap:6px;flex:1">
+          <span class="drag-handle cat-drag-handle" title="Drag to reorder">⠿</span>
+          ${icon} ${mod}
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span class="badge badge-gray">${tasks.length}</span>
+          <button class="btn btn-sm btn-ghost" style="font-size:11px;padding:2px 8px;line-height:1.4"
+            onclick="event.stopPropagation();showInlineAdd('${mod.replace(/'/g, "\\'")}')" title="Add task to ${mod}">+ Add</button>
+        </div>
+      </div>
+      <div id="task-group-${safeId}" class="task-group-body"
+           data-group-key="${groupKey}" data-target-module="${mod}" data-cross="1">
+        ${orderedGroup.length
+          ? renderTaskGroup(orderedGroup, false, groupKey)
+          : `<div class="empty-drop-hint" style="font-size:12px;color:var(--gray-300);text-align:center;padding:14px 0;border:1.5px dashed var(--gray-200);border-radius:8px;margin:4px 0">Drop tasks here or click + Add</div>`}
+      </div>
+      <div id="inline-add-${safeId}" style="display:none;padding:8px 0 4px 0;border-top:1px solid var(--gray-100);margin-top:4px">
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="text" id="inline-title-${safeId}"
+            placeholder="New task…"
+            style="flex:1;border:1px solid var(--gray-200);border-radius:8px;padding:8px 12px;font-size:14px;outline:none"
+            onkeydown="if(event.key==='Enter'){submitInlineTask('${mod.replace(/'/g, "\\'")}')}else if(event.key==='Escape'){hideInlineAdd('${mod.replace(/'/g, "\\'")}')}">
+          <button class="btn btn-sm" style="background:${color};color:white;border:none;padding:8px 14px;flex-shrink:0"
+            onclick="submitInlineTask('${mod.replace(/'/g, "\\'")}')">Add</button>
+          <button class="btn btn-sm btn-ghost" style="padding:8px 10px;flex-shrink:0"
+            onclick="hideInlineAdd('${mod.replace(/'/g, "\\'")}')">✕</button>
+        </div>
+      </div>
+    </div>`;
+  }
+  return html;
+}
+
 function renderTaskGroup(tasks, inTodaySection, groupKey) {
-  return tasks.map((t, idx) => {
+  return tasks.map((t) => {
     const label = getScheduleLabel(t);
     const sc = label && SCHEDULE_COLORS[label] ? SCHEDULE_COLORS[label] : null;
     const labelBadge = label ? `<span style="font-size:10px;padding:1px 6px;border-radius:10px;background:${sc?.bg};color:${sc?.color};border:1px solid ${sc?.border};font-weight:600;white-space:nowrap">${label}</span>` : '';
     const modLabel = !inTodaySection ? '' : `<span style="font-size:11px;color:var(--gray-400)">${MODULE_ICONS[displayModule(t)] || ''} ${displayModule(t)}</span>`;
-    const isFirst = idx === 0;
-    const isLast  = idx === tasks.length - 1;
     const noteText = notesDisplay(t);
+    const safeTitle = (t.title || '').replace(/"/g,'&quot;');
+    const docOpen = parseNotes(t).doc_id ? '#dbeafe' : 'transparent';
+    const docColor = parseNotes(t).doc_id ? '#2563eb' : 'var(--gray-400)';
     return `
-    <div class="task-row task-swipe-row" id="task-${t.id}" data-id="${t.id}" style="touch-action:pan-y;overflow:hidden;position:relative;display:flex;align-items:center;gap:8px">
-      <div data-swipe-inner style="display:flex;align-items:flex-start;gap:10px;flex:1">
+    <div class="task-row task-swipe-row" id="task-${t.id}" data-id="${t.id}"
+         style="touch-action:pan-y;overflow:hidden;position:relative;display:flex;align-items:center;gap:6px">
+      <span class="drag-handle task-drag-handle" title="Drag to move"
+            ontouchstart="event.stopPropagation()" onmousedown="event.stopPropagation()">⠿</span>
+      <div data-swipe-inner style="display:flex;align-items:flex-start;gap:10px;flex:1;min-width:0">
         <div class="task-check ${t.priority === 'urgent' ? 'urgent-check' : ''}" onclick="markDone(${t.id}, this)"
-          style="width:28px;height:28px;border-radius:7px;flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid ${t.priority === 'urgent' ? 'var(--red)' : 'var(--gray-200)'};background:var(--white);transition:all 0.15s;-webkit-tap-highlight-color:transparent"
+          style="width:26px;height:26px;border-radius:7px;flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid ${t.priority === 'urgent' ? 'var(--red)' : 'var(--gray-200)'};background:var(--white);transition:all 0.15s;-webkit-tap-highlight-color:transparent"
           title="Mark done">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="display:none" id="check-${t.id}">
             <polyline points="2,7 6,11 12,3" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </div>
-        <div class="task-content" style="flex:1;min-width:0">
+        <div class="task-content" style="flex:1;min-width:0;cursor:pointer" onclick="openEditTaskModal(${t.id}, event)">
           <div class="task-title" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             ${t.title}
             ${labelBadge}
@@ -708,29 +713,187 @@ function renderTaskGroup(tasks, inTodaySection, groupKey) {
           <div class="task-meta" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:3px">
             ${t.due_date ? `<span>Due ${fmtDate(t.due_date)}</span>` : ''}
             ${modLabel}
-            ${noteText ? `<span style="color:var(--gray-500)">${noteText}</span>` : ''}
+            ${noteText ? `<span style="color:var(--gray-500)">${noteText.length > 60 ? noteText.slice(0,60)+'…' : noteText}</span>` : ''}
           </div>
         </div>
       </div>
-      <div style="display:flex;gap:3px;flex-shrink:0;align-items:center" ontouchstart="event.stopPropagation()" onclick="event.stopPropagation()">
-        <div style="display:flex;flex-direction:column;gap:1px">
-          <button id="up-${t.id}" class="btn btn-sm" style="background:var(--gray-100);color:var(--gray-500);border:none;font-size:10px;padding:2px 5px;line-height:1;${isFirst ? 'opacity:0.3' : ''}"
-            onclick="moveTask(${t.id}, '${groupKey}', 'up')" title="Move up" ${isFirst ? 'disabled' : ''}>▲</button>
-          <button id="dn-${t.id}" class="btn btn-sm" style="background:var(--gray-100);color:var(--gray-500);border:none;font-size:10px;padding:2px 5px;line-height:1;${isLast ? 'opacity:0.3' : ''}"
-            onclick="moveTask(${t.id}, '${groupKey}', 'down')" title="Move down" ${isLast ? 'disabled' : ''}>▼</button>
-        </div>
-        <button class="btn btn-sm task-doc-btn" id="docbtn-${t.id}"
-          style="background:${parseNotes(t).doc_id ? '#dbeafe' : '#f3f4f6'};color:${parseNotes(t).doc_id ? '#2563eb' : '#6b7280'};border:none;font-size:13px;padding:4px 6px;line-height:1"
-          onclick="event.stopPropagation();openTaskDoc(${t.id}, ${JSON.stringify(t.title)}, '${(displayModule(t)).replace(/'/g, "\'")}', this)" title="${parseNotes(t).doc_id ? 'Open Google Doc' : 'Create Google Doc'}">📄</button>
-        <button class="btn btn-sm" style="background:#f3f4f6;color:#6b7280;border:none;font-size:13px;padding:4px 6px;line-height:1"
-          onclick="openSchedulePicker(${t.id}, ${label ? `'${label}'` : 'null'}, event)" title="Schedule">📅</button>
-        <button class="btn btn-sm" style="background:#f3f4f6;color:#6b7280;border:none;font-size:11px;padding:4px 7px;line-height:1"
-          onclick="openEditTaskModal(${t.id}, event)" title="Edit task">✏️</button>
-        <button class="btn btn-sm" style="background:#f3f4f6;color:#6b7280;border:none;font-size:11px;padding:4px 6px;line-height:1;font-weight:600"
-          onclick="openCategoryPicker(${t.id}, '${(displayModule(t)).replace(/'/g, "\\'")}', event)" title="Change category">${MODULE_ICONS[displayModule(t)] || '📁'}</button>
+      <div style="display:flex;gap:1px;flex-shrink:0;align-items:center" ontouchstart="event.stopPropagation()" onclick="event.stopPropagation()">
+        <button class="task-action-btn" id="docbtn-${t.id}"
+          style="background:${docOpen};color:${docColor}"
+          onclick="event.stopPropagation();openTaskDoc(${t.id}, ${JSON.stringify(safeTitle)}, '${(displayModule(t)).replace(/'/g, "\\'")}', this)" title="${parseNotes(t).doc_id ? 'Open Google Doc' : 'Create Google Doc'}">📄</button>
+        <button class="task-action-btn"
+          onclick="event.stopPropagation();openSchedulePicker(${t.id}, ${label ? `'${label}'` : 'null'}, event)" title="Schedule">📅</button>
+        <button class="task-action-btn danger"
+          onclick="event.stopPropagation();deleteTask(${t.id}, event)" title="Delete task">✕</button>
       </div>
     </div>`;
   }).join('');
+}
+
+// ── SortableJS drag-and-drop init ─────────────────────────────────────────────
+let _sortableInstances = [];
+function initSortableForTasks() {
+  // Tear down existing instances first
+  _sortableInstances.forEach(s => { try { s.destroy(); } catch {} });
+  _sortableInstances = [];
+
+  if (typeof Sortable === 'undefined') return; // CDN not loaded yet — fail gracefully
+
+  // 1) Tasks within each group + cross-group drag (auto-changes module / schedule)
+  document.querySelectorAll('.task-group-body[data-cross="1"]').forEach(body => {
+    const inst = Sortable.create(body, {
+      group: 'tasks',
+      animation: 160,
+      handle: '.task-drag-handle',
+      forceFallback: false,
+      delay: 60,
+      delayOnTouchOnly: true,
+      touchStartThreshold: 4,
+      ghostClass: 'sortable-ghost',
+      chosenClass: 'sortable-chosen',
+      dragClass: 'sortable-drag',
+      onStart: () => { document.body.classList.add('is-dragging'); },
+      onEnd: async (evt) => {
+        document.body.classList.remove('is-dragging');
+        const item = evt.item;
+        const fromKey = evt.from.dataset.groupKey;
+        const toKey   = evt.to.dataset.groupKey;
+        const taskId  = parseInt(item.dataset.id, 10);
+
+        // Build the new ID order for both source + dest groups
+        const collectIds = (el) => [...el.querySelectorAll('.task-swipe-row')].map(r => parseInt(r.dataset.id, 10));
+        const newToOrder   = collectIds(evt.to);
+        taskOrderMap[toKey] = newToOrder;
+        if (fromKey !== toKey) {
+          const newFromOrder = collectIds(evt.from);
+          taskOrderMap[fromKey] = newFromOrder;
+        }
+        saveTaskOrder();
+
+        // If moved to a different group, update the task's module / schedule
+        if (fromKey !== toKey) {
+          const targetMod      = evt.to.dataset.targetModule || null;
+          const targetSchedule = evt.to.dataset.targetSchedule || null;
+
+          const cached = _taskCache.find(t => t.id === taskId);
+          if (cached) {
+            let parsed = {};
+            try { parsed = JSON.parse(cached.notes || '{}'); } catch {}
+
+            const updates = {};
+
+            // Schedule destination → set/clear schedule_label, keep module
+            if (targetSchedule) {
+              parsed.schedule_label = targetSchedule;
+            } else {
+              // Module destination → clear schedule_label, change module
+              if (parsed.schedule_label) delete parsed.schedule_label;
+              if (targetMod) {
+                if (targetMod === 'RT Admin') {
+                  parsed.rt_admin = true;
+                  updates.module = 'RT';
+                } else {
+                  delete parsed.rt_admin;
+                  updates.module = targetMod;
+                }
+              }
+            }
+
+            updates.notes = Object.keys(parsed).length ? JSON.stringify(parsed) : null;
+            _cacheUpdate(taskId, updates);
+
+            // Background save
+            const { error } = await supabase.from('tasks').update(updates).eq('id', taskId);
+            if (error) {
+              toast('Couldn\'t save move: ' + error.message, 'error');
+              loadTasks();
+              return;
+            }
+
+            // Subtle confirmation
+            if (targetSchedule) {
+              toast(`Scheduled: ${targetSchedule}`, 'success');
+            } else if (targetMod) {
+              toast(`Moved to ${targetMod}`, 'success');
+            }
+            // Re-render so badges/counts update
+            renderFromCache();
+          }
+        }
+      },
+    });
+    _sortableInstances.push(inst);
+  });
+
+  // 2) Category cards reorder (drag handle on the header)
+  const sec = document.getElementById('tasks-section');
+  if (sec) {
+    const inst = Sortable.create(sec, {
+      group: 'cat-cards',
+      animation: 180,
+      handle: '.cat-drag-handle',
+      draggable: '.task-category-card', // only category cards (not Today/sched cards)
+      ghostClass: 'sortable-ghost',
+      chosenClass: 'sortable-chosen',
+      onEnd: () => {
+        const newOrder = [...sec.querySelectorAll('.task-category-card')]
+          .map(c => c.dataset.module)
+          .filter(Boolean);
+        // Merge: keep any cats not currently visible at end of list (preserves ordering for hidden ones)
+        const merged = [...newOrder, ...categoryOrder.filter(c => !newOrder.includes(c))];
+        categoryOrder = merged;
+        localStorage.setItem('tasks-cat-order', JSON.stringify(categoryOrder));
+        renderModuleTabs();
+      },
+    });
+    _sortableInstances.push(inst);
+  }
+}
+
+// Internal helpers used by swipe + delete buttons
+async function _doDeleteTask(taskId) {
+  const cached = _taskCache.find(t => t.id === taskId);
+  if (!cached) return;
+  // Optimistic remove
+  _cacheRemove(taskId);
+  renderFromCache();
+
+  // Save with delete; offer Undo
+  const { error } = await supabase.from('tasks').update({ status: 'cancelled' }).eq('id', taskId);
+  if (error) {
+    toast('Error deleting: ' + error.message, 'error');
+    _cacheAdd(cached);
+    renderFromCache();
+    return;
+  }
+  showUndoToast('Task deleted', async () => {
+    // Restore in cache + DB
+    _cacheAdd(cached);
+    renderFromCache();
+    await supabase.from('tasks').update({ status: 'open' }).eq('id', taskId);
+  });
+}
+async function _doMarkDone(taskId, rowEl) {
+  const cached = _taskCache.find(t => t.id === taskId);
+  if (!cached) return;
+  if (rowEl) rowEl.classList.add('removing');
+  _cacheRemove(taskId);
+  setTimeout(() => renderFromCache(), 180);
+
+  const { error } = await supabase.from('tasks')
+    .update({ status: 'done', completed_at: new Date().toISOString() })
+    .eq('id', taskId);
+  if (error) {
+    toast('Error: ' + error.message, 'error');
+    _cacheAdd(cached);
+    renderFromCache();
+    return;
+  }
+  showUndoToast('Done ✅', async () => {
+    _cacheAdd({ ...cached });
+    renderFromCache();
+    await supabase.from('tasks').update({ status: 'open', completed_at: null }).eq('id', taskId);
+  });
 }
 
 // ── Inline task creation ──────────────────────────────────────────────────────
@@ -759,12 +922,14 @@ window.submitInlineTask = async (mod) => {
   const notes  = storageNotes(mod, '');
 
   // Optimistic: add temp task to cache and re-render immediately
-  const tempId = -(Date.now()); // negative temp ID
+  const tempId = -(Date.now());
   const tempTask = { id: tempId, title, module, notes: notes || null, priority: 'normal', status: 'open', created_at: new Date().toISOString(), due_date: null, linked_student_id: null, linked_client_id: null, time_estimate_minutes: null, completed_at: null };
   _cacheAdd(tempTask);
+  // Clear input + keep open for rapid entry (Todoist / Things 3 pattern)
+  if (input) { input.value = ''; }
   renderFromCache();
-  window.hideInlineAdd(mod);
-  toast('Task added! ✅', 'success');
+  // Re-focus the input after re-render
+  setTimeout(() => document.getElementById(`inline-title-${safeId}`)?.focus(), 30);
 
   // Background save
   const { data, error } = await supabase.from('tasks').insert({
@@ -778,7 +943,6 @@ window.submitInlineTask = async (mod) => {
   }
   // Replace temp with real ID in cache
   _cacheUpdate(tempId, { id: data.id });
-  // Also update taskOrderMap to use real ID
   for (const key of Object.keys(taskOrderMap)) {
     const arr = taskOrderMap[key];
     const ti = arr.indexOf(tempId);
@@ -832,7 +996,6 @@ window.submitInlineTaskSched = async (schedLabel) => {
   const title = input?.value.trim();
   if (!title) { input?.focus(); return; }
 
-  // Determine module
   let displayMod;
   if (activeModule === 'Default' || activeModule === 'All') {
     const sel = document.getElementById(`inline-mod-${safeId}`);
@@ -844,36 +1007,28 @@ window.submitInlineTaskSched = async (schedLabel) => {
   const module = storageModule(displayMod);
   const notes  = buildNotesJson(displayMod, '', schedLabel);
 
-  const { error } = await supabase.from('tasks').insert({
+  // Optimistic add
+  const tempId = -(Date.now());
+  const tempTask = { id: tempId, title, module, notes: notes || null, priority: 'normal', status: 'open', created_at: new Date().toISOString(), due_date: null, completed_at: null };
+  _cacheAdd(tempTask);
+  // Clear input but keep section open for fast multi-add
+  if (input) { input.value = ''; input.focus(); }
+  renderFromCache();
+  toast(`Added to ${schedLabel} ✅`, 'success');
+
+  const { data, error } = await supabase.from('tasks').insert({
     title, module, notes: notes || null, priority: 'normal', status: 'open'
-  });
-  if (error) { toast('Error: ' + error.message, 'error'); return; }
-  toast(`Task added to ${schedLabel} ✅`, 'success');
-  window.hideInlineAddSched(schedLabel);
-  loadTasks();
+  }).select('id').single();
+  if (error) {
+    toast('Error: ' + error.message, 'error');
+    _cacheRemove(tempId);
+    renderFromCache();
+    return;
+  }
+  _cacheUpdate(tempId, { id: data.id });
 };
 
-// ── Category drag-to-reorder ──────────────────────────────────────────────────
-let dragSrcModule = null;
-window.catDragStart = (e) => { const card = e.currentTarget; dragSrcModule = card.dataset.module; card.style.opacity = '0.5'; e.dataTransfer.effectAllowed = 'move'; };
-window.catDragOver  = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; e.currentTarget.style.outline = '2px dashed var(--blue)'; };
-window.catDrop = (e) => {
-  e.preventDefault();
-  const targetCard = e.currentTarget;
-  const targetModule = targetCard.dataset.module;
-  if (!dragSrcModule || dragSrcModule === targetModule) return;
-  const srcIdx = categoryOrder.indexOf(dragSrcModule);
-  const tgtIdx = categoryOrder.indexOf(targetModule);
-  if (srcIdx !== -1 && tgtIdx !== -1) {
-    [categoryOrder[srcIdx], categoryOrder[tgtIdx]] = [categoryOrder[tgtIdx], categoryOrder[srcIdx]];
-  } else if (srcIdx !== -1) {
-    categoryOrder.splice(srcIdx, 1); categoryOrder.splice(tgtIdx, 0, dragSrcModule);
-  }
-  localStorage.setItem('tasks-cat-order', JSON.stringify(categoryOrder));
-  targetCard.style.outline = '';
-  loadTasks();
-};
-window.catDragEnd = (e) => { e.currentTarget.style.opacity = ''; e.currentTarget.style.outline = ''; dragSrcModule = null; };
+// (Category card reorder is now handled via SortableJS — see initSortableForTasks)
 
 // ── Future Projects ───────────────────────────────────────────────────────────
 async function loadFutureProjects() {
@@ -951,19 +1106,12 @@ window.activateProject = async (id) => {
 window.markDoneById = async (id, e) => {
   e?.stopPropagation();
   const row = document.getElementById(`task-${id}`);
-  if (row) { row.style.opacity = '0.4'; row.style.transition = 'opacity 0.3s'; }
-  await supabase.from('tasks').update({ status: 'done', completed_at: new Date().toISOString() }).eq('id', id);
-  toast('Task done! ✅', 'success');
-  setTimeout(() => load(), 300);
+  _doMarkDone(parseInt(id, 10), row);
 };
 
 window.deleteTask = async (id, e) => {
   e?.stopPropagation();
-  const row = document.getElementById(`task-${id}`);
-  if (row) { row.style.opacity = '0.3'; row.style.transition = 'opacity 0.3s'; }
-  await supabase.from('tasks').update({ status: 'cancelled' }).eq('id', id);
-  toast('Task deleted', 'info');
-  setTimeout(() => load(), 300);
+  _doDeleteTask(parseInt(id, 10));
 };
 
 window.openCategoryPicker = (id, currentMod, e) => {
@@ -1030,24 +1178,14 @@ window.setCategoryForTask = async (id, newCat, el) => {
 };
 
 window.markDone = async (id, checkEl) => {
-  checkEl.style.background = 'var(--green)';
-  checkEl.style.borderColor = 'var(--green)';
-  const svg = document.getElementById(`check-${id}`);
-  if (svg) svg.style.display = 'block';
-  const row = document.getElementById(`task-${id}`);
-  if (row) { row.style.opacity = '0.4'; row.style.transition = 'opacity 0.3s'; }
-  // Optimistic: remove from cache immediately
-  _cacheRemove(id);
-  setTimeout(() => { if (row) row.remove(); }, 300);
-  toast('Task done! ✅', 'success');
-
-  // Background save
-  const { error } = await supabase.from('tasks').update({ status: 'done', completed_at: new Date().toISOString() }).eq('id', id);
-  if (error) {
-    toast('Error: ' + error.message, 'error');
-    // Revert UI — need a fresh load since we already removed from cache
-    loadTasks();
+  if (checkEl) {
+    checkEl.style.background = 'var(--green)';
+    checkEl.style.borderColor = 'var(--green)';
+    const svg = document.getElementById(`check-${id}`);
+    if (svg) svg.style.display = 'block';
   }
+  const row = document.getElementById(`task-${id}`);
+  _doMarkDone(parseInt(id, 10), row);
 };
 
 // ── Edit Task modal ───────────────────────────────────────────────────────────
@@ -1558,5 +1696,25 @@ window._selectLinkedNote = (noteId, noteTitle) => {
   if (window._noteLinkPickerCallback) window._noteLinkPickerCallback(noteId, noteTitle);
 };
 
+// ── Floating Action Button (FAB) — fast add to current view ───────────────────
+window.fabQuickAdd = () => {
+  // If a specific category tab is active, open inline-add right there.
+  if (activeModule && activeModule !== 'Default' && activeModule !== 'All' && activeModule !== 'Repeated') {
+    showInlineAdd(activeModule);
+    return;
+  }
+  // If on Repeated, open the recurring modal
+  if (activeModule === 'Repeated') {
+    showRecurringForm();
+    return;
+  }
+  // Otherwise open the full Add Task modal
+  document.getElementById('task-modal').style.display = 'flex';
+  setTimeout(() => document.getElementById('task-title')?.focus(), 50);
+};
+
+// ── Bootstrap ─────────────────────────────────────────────────────────────────
 renderModuleTabs();
+// If we have a cached snapshot, render INSTANTLY before any network call
+if (_taskCache && _taskCache.length) _renderTaskList(_taskCache);
 load();
