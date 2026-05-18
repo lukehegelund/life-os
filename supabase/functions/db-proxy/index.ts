@@ -19,7 +19,8 @@ const READABLE_TABLES = new Set([
   'student_pages', 'students', 'tasks', 'time_blocks', 'tov_clients',
   'tov_contracts', 'tov_expenses', 'tov_inquiries', 'tov_payments',
   'tov_transfers', 'vocab_words',
-  'language_placement_results', 'language_lesson_progress'
+  'language_placement_results', 'language_lesson_progress',
+  'films', 'film_ratings'
 ])
 
 const INSERT_UPDATE_TABLES = new Set([
@@ -31,7 +32,8 @@ const INSERT_UPDATE_TABLES = new Set([
   'srs_reviews', 'student_notes', 'student_pages', 'students', 'tasks', 'time_blocks',
   'tov_clients', 'tov_contracts', 'tov_expenses', 'tov_inquiries', 'tov_payments',
   'tov_transfers', 'vocab_words',
-  'language_placement_results', 'language_lesson_progress'
+  'language_placement_results', 'language_lesson_progress',
+  'films', 'film_ratings'
 ])
 
 const DELETABLE_TABLES = new Set([
@@ -40,7 +42,8 @@ const DELETABLE_TABLES = new Set([
   'health_notes', 'language_errors', 'lesson_plans', 'lifeos_feedback',
   'note_folders', 'pages_completed', 'parent_contacts', 'parent_crm', 'participation_scores', 'reminders',
   'spelling_tests', 'srs_reviews', 'student_notes', 'student_pages',
-  'tasks', 'time_blocks', 'vocab_words'
+  'tasks', 'time_blocks', 'vocab_words',
+  'films', 'film_ratings'
 ])
 
 const REQUIRE_FILTER_FOR_MUTATIONS = new Set([
