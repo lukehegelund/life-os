@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Family Films — Life OS</title>
+<link rel="stylesheet" href="css/main.css?v=2">
+<style>
+/* ───── Family-Films-specific styles ───── */
+.ff-toolbar {
+  display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px;
+}
+.ff-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.ff-pill {
+  font-size: 12px; font-weight: 700;
+  padding: 6px 12px; border-radius: 99px;
+  background: var(--white); color: var(--gray-600);
+  border: 1px solid var(--gray-200);
+  cursor: pointer; user-select: none;
+  transition: all 0.1s;
+}
+.ff-pill.active { background: var(--purple, #7e57c2); color: white; border-color: transparent; }
+.ff-pill.dim    { opacity: 0.55; }
+
+.ff-section-label {
+  font-size: 11px; font-weight: 700; color: var(--gray-400);
+  text-transform: uppercase; letter-spacing: 0.5px;
+  margin: 6px 0 4px;
+}
+
+.ff-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+}
+@media (min-width: 600px) { .ff-grid { grid-template-columns: 1fr 1fr 1fr; } }
+@media (min-width: 900px) { .ff-grid { grid-template-columns: 1fr 1fr 1fr 1fr; } }
+
+.ff-card {
+  background: var(--white); border-radius: var(--radius);
+  box-shadow: var(--shadow); overflow: hidden;
+  display: flex; flex-direction: column;
+  cursor: pointer; transition: transform 0.1s;
+}
+.ff-card:active { transform: scale(0.98); }
+.ff-poster {
+  width: 100%; aspect-ratio: 2/3;
+  background: linear-gradient(135deg, #d4b3ff 0%, #9a7ec8 100%);
+  background-size: cover; background-position: center;
+  position: relative;
+}
+.ff-poster-label {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  text-align: center; padding: 8px;
+  color: white; font-weight: 700; font-size: 13px;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+}
+.ff-card-type {
+  position: absolute; top: 6px; left: 6px;
+  font-size: 9px; font-weight: 800;
+  padding: 2px 6px; border-radius: 4px;
+  background: rgba(0,0,0,0.65); color: white;
+  text-transform: uppercase; letter-spacing: 0.3px;
+}
+.ff-card-watchlist {
+  position: absolute; top: 6px; right: 6px;
+  font-size: 16px;
+}
+.ff-card-body { padding: 8px 10px 10px; flex: 1; display: flex; flex-direction: column; }
+.ff-card-title { font-size: 13px; font-weight: 700; line-height: 1.25; }
+.ff-card-meta  { font-size: 11px; color: var(--gray-400); margin-top: 2px; }
+.ff-card-ratings {
+  display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap;
+}
+.ff-rating-chip {
+  font-size: 10px; padding: 2px 6px; border-radius: 99px;
+  background: var(--gray-100); color: var(--gray-700);
+}
+.ff-rating-chip.fav    { background: #fef3c7; color: #92400e; }
+.ff-rating-chip.like   { background: #dcfce7; color: #166534; }
+.ff-rating-chip.neutral{ background: #e0e7ff; color: #3730a3; }
+.ff-rating-chip.no     { background: #ffedd5; color: #9a3412; }
+.ff-rating-chip.hate   { background: #fee2e2; color: #991b1b; }
+.ff-rating-chip.unseen { background: var(--gray-100); color: var(--gray-400); }
+
+/* Modal */
+.ff-modal {
+  display:none; position:fixed; inset:0;
+  background:rgba(0,0,0,0.55); z-index:500;
+  align-items:flex-end; justify-content:center;
+}
+.ff-modal.open { display:flex; }
+.ff-modal-sheet {
+  background: var(--white); border-radius: 16px 16px 0 0;
+  padding: 18px; width: 100%; max-width: 640px;
+  max-height: 92vh; overflow-y: auto;
+}
+.ff-modal-title { font-size: 18px; font-weight: 700; margin-bottom: 12px; }
+.ff-poster-large {
+  width: 100%; max-width: 280px; aspect-ratio: 2/3;
+  border-radius: 8px; margin: 0 auto 12px; display: block;
+  background: linear-gradient(135deg, #d4b3ff 0%, #9a7ec8 100%);
+  background-size: cover; background-position: center;
+}
+.ff-synopsis { font-size: 13px; color: var(--gray-600); line-height: 1.4; margin-bottom: 12px; }
+
+.ff-rating-row {
+  display: grid; grid-template-columns: 90px 1fr auto; align-items: center;
+  gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--gray-100);
+}
+.ff-rating-row:last-child { border-bottom: none; }
+.ff-rating-name { font-size: 13px; font-weight: 700; }
+.ff-rating-buttons { display: flex; gap: 4px; }
+.ff-rating-btn {
+  font-size: 12px; padding: 4px 8px; border-radius: 6px;
+  border: 1px solid var(--gray-200); background: var(--white);
+  cursor: pointer; min-width: 30px;
+}
+.ff-rating-btn.active-2  { background: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 700; }
+.ff-rating-btn.active-1  { background: #dcfce7; border-color: #16a34a; color: #166534; font-weight: 700; }
+.ff-rating-btn.active0   { background: #e0e7ff; border-color: #6366f1; color: #3730a3; font-weight: 700; }
+.ff-rating-btn.active-n1 { background: #ffedd5; border-color: #ea580c; color: #9a3412; font-weight: 700; }
+.ff-rating-btn.active-n2 { background: #fee2e2; border-color: #dc2626; color: #991b1b; font-weight: 700; }
+
+.ff-watched-toggle {
+  font-size: 11px; padding: 3px 8px; border-radius: 6px;
+  border: 1px solid var(--gray-200); background: var(--white);
+  cursor: pointer; white-space: nowrap;
+}
+.ff-watched-toggle.on { background: #dcfce7; border-color: #16a34a; color: #166534; font-weight: 700; }
+
+.ff-search-results {
+  max-height: 320px; overflow-y: auto;
+  border: 1px solid var(--gray-200); border-radius: 8px;
+}
+.ff-search-item {
+  display: flex; gap: 10px; padding: 8px; cursor: pointer;
+  border-bottom: 1px solid var(--gray-100);
+}
+.ff-search-item:hover { background: var(--gray-50); }
+.ff-search-item:last-child { border-bottom: none; }
+.ff-search-poster {
+  width: 50px; aspect-ratio: 2/3;
+  background: var(--gray-100); border-radius: 4px;
+  background-size: cover; background-position: center;
+  flex-shrink: 0;
+}
+.ff-search-info { flex: 1; min-width: 0; }
+.ff-search-title { font-size: 13px; font-weight: 700; }
+.ff-search-meta  { font-size: 11px; color: var(--gray-400); }
+
+.ff-tonight-result {
+  background: linear-gradient(135deg, #6d4dc2 0%, #4a90e2 100%);
+  color: white; padding: 14px; border-radius: 12px;
+  margin-bottom: 12px; cursor: pointer;
+}
+.ff-tonight-title { font-size: 18px; font-weight: 800; }
+.ff-tonight-sub   { font-size: 12px; opacity: 0.9; margin-top: 2px; }
+
+.ff-empty { text-align: center; padding: 40px 20px; color: var(--gray-400); }
+.ff-empty-icon { font-size: 40px; margin-bottom: 8px; }
+
+.ff-count { font-size: 12px; color: var(--gray-400); }
+</style>
+</head>
+<body>
+
+<header class="page-header">
+  <div class="header-row">
+    <div>
+      <h1>🎬 Family Films</h1>
+      <div class="subtitle"><span id="ff-count" class="ff-count">Cargando…</span></div>
+    </div>
+    <div style="display:flex;gap:6px">
+      <button class="btn btn-ghost btn-sm" onclick="openTonight()">🎲 Tonight</button>
+      <button class="btn btn-primary btn-sm" onclick="openAdd()">+ Add</button>
+    </div>
+  </div>
+</header>
+
+<main class="content">
+
+  <!-- ── Filter toolbar ────────────────────────────────── -->
+  <div class="ff-toolbar">
+
+    <div>
+      <div class="ff-section-label">Type</div>
+      <div class="ff-row" id="ff-type-row">
+        <span class="ff-pill active" data-type="all">All</span>
+        <span class="ff-pill" data-type="movie">🎥 Films</span>
+        <span class="ff-pill" data-type="tv">📺 TV</span>
+        <span class="ff-pill" data-type="watchlist">⭐ Watchlist</span>
+      </div>
+    </div>
+
+    <div>
+      <div class="ff-section-label">Who's watching</div>
+      <div class="ff-row" id="ff-who-row"></div>
+    </div>
+
+    <div>
+      <div class="ff-section-label">Seen-status (for selected people)</div>
+      <div class="ff-row" id="ff-seen-row">
+        <span class="ff-pill active" data-seen="any">Any</span>
+        <span class="ff-pill" data-seen="all-seen">All have seen</span>
+        <span class="ff-pill" data-seen="none-seen">None have seen</span>
+        <span class="ff-pill" data-seen="some-unseen">Someone hasn't seen</span>
+      </div>
+    </div>
+
+    <div>
+      <div class="ff-section-label">Minimum rating (for selected people)</div>
+      <div class="ff-row" id="ff-rating-row">
+        <span class="ff-pill active" data-min="any">Any</span>
+        <span class="ff-pill" data-min="-1">≥ -1 (don't hate it)</span>
+        <span class="ff-pill" data-min="0">≥ 0 (neutral+)</span>
+        <span class="ff-pill" data-min="1">≥ 1 (like+)</span>
+        <span class="ff-pill" data-min="2">2 (favorite)</span>
+      </div>
+    </div>
+
+    <div>
+      <div class="ff-section-label">Genre</div>
+      <div class="ff-row" id="ff-genre-row">
+        <span class="ff-pill active" data-genre="all">All</span>
+      </div>
+    </div>
+
+    <div>
+      <div class="ff-section-label">Max age rating</div>
+      <div class="ff-row" id="ff-age-row">
+        <span class="ff-pill active" data-age="any">Any</span>
+        <span class="ff-pill" data-age="G">G / TV-Y</span>
+        <span class="ff-pill" data-age="PG">PG / TV-PG</span>
+        <span class="ff-pill" data-age="PG-13">PG-13 / TV-14</span>
+        <span class="ff-pill" data-age="R">R / TV-MA</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Grid ────────────────────────────────── -->
+  <div id="ff-grid" class="ff-grid"></div>
+
+  <div id="ff-empty" class="ff-empty" style="display:none">
+    <div class="ff-empty-icon">🎞️</div>
+    <div>No titles match your filters yet.</div>
+  </div>
+
+</main>
+
+<!-- ───── Modal: Detail / Add / Tonight ───── -->
+<div class="ff-modal" id="ff-modal">
+  <div class="ff-modal-sheet" id="ff-modal-body"></div>
+</div>
+
+<nav class="bottom-nav">
+  <a href="dashboard.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+    Inicio
+  </a>
+  <a href="school.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>
+    Escuela
+  </a>
+  <a href="apps.html" class="nav-item active">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+    Apps
+  </a>
+  <a href="languages.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+    Idiomas
+  </a>
+  <a href="calendar.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><circle cx="8" cy="16" r="1" fill="currentColor"/><circle cx="12" cy="16" r="1" fill="currentColor"/></svg>
+    Calendario
+  </a>
+  <a href="notes.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+    Notas
+  </a>
+  <a href="tasks.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+    Tareas
+  </a>
+  <a href="reminders.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+    Recordatorios
+  </a>
+  <a href="projects.html" class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+    Proyectos
+  </a>
+</nav>
+
+<script type="module" src="js/auth-guard.js"></script>
+<script type="module">
+import { supabase } from './js/supabase.js';
+import { today } from './js/utils.js';
+
+// ──────────────────────────────────────────────────────────────────────
+// State
+// ──────────────────────────────────────────────────────────────────────
+const FAMILY = ['Dan', 'Mary', 'Evelyn', 'Luke', 'Daeny'];
+
+const state = {
+  films: [],            // [{...film, ratings:[{family_member, rating, watched}]}]
+  filterType: 'all',    // all | movie | tv | watchlist
+  whoWatching: new Set(FAMILY),   // selected = "this group is watching"
+  seenFilter: 'any',    // any | all-seen | none-seen | some-unseen
+  minRating: 'any',     // any | -1 | 0 | 1 | 2
+  genre: 'all',
+  maxAge: 'any',        // any | G | PG | PG-13 | R
+};
+
+// TMDB key — auto-loaded from app_secrets (same pattern as lyrics-slides)
+let _tmdbKey = null;
+let _tmdbKeyLoadPromise = null;
+async function loadTmdbKey() {
+  if (_tmdbKey !== null) return _tmdbKey;
+  if (_tmdbKeyLoadPromise) return _tmdbKeyLoadPromise;
+  _tmdbKeyLoadPromise = (async () => {
+    const { data } = await supabase.from('app_secrets').select('value').eq('key', 'tmdb_api_key').maybeSingle();
+    _tmdbKey = data?.value || '';
+    return _tmdbKey;
+  })();
+  return _tmdbKeyLoadPromise;
+}
+
+// Age rating ordering (max-age filter)
+const AGE_ORDER = { 'G':1, 'TV-Y':1, 'TV-G':1, 'TV-Y7':1,
+                    'PG':2, 'TV-PG':2,
+                    'PG-13':3, 'TV-14':3,
+                    'R':4, 'TV-MA':4, 'NC-17':4 };
+const AGE_MAX = { 'any':99, 'G':1, 'PG':2, 'PG-13':3, 'R':4 };
+
+// ──────────────────────────────────────────────────────────────────────
+// Data load
+// ──────────────────────────────────────────────────────────────────────
+async function loadFilms() {
+  const [{ data: films }, { data: ratings }] = await Promise.all([
+    supabase.from('films').select('*').order('title', { ascending: true }),
+    supabase.from('film_ratings').select('*'),
+  ]);
+  const byFilm = {};
+  (ratings || []).forEach(r => { (byFilm[r.film_id] ||= []).push(r); });
+  state.films = (films || []).map(f => ({ ...f, ratings: byFilm[f.id] || [] }));
+  buildGenrePills();
+  renderCount();
+  renderGrid();
+}
+
+function buildGenrePills() {
+  const all = new Set();
+  state.films.forEach(f => (f.genres || []).forEach(g => all.add(g)));
+  const row = document.getElementById('ff-genre-row');
+  row.innerHTML = '<span class="ff-pill active" data-genre="all">All</span>';
+  Array.from(all).sort().forEach(g => {
+    const pill = document.createElement('span');
+    pill.className = 'ff-pill'; pill.dataset.genre = g; pill.textContent = g;
+    row.appendChild(pill);
+  });
+  attachPillHandlers();
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Filtering
+// ──────────────────────────────────────────────────────────────────────
+function filteredFilms() {
+  return state.films.filter(f => {
+    if (state.filterType === 'movie' && f.type !== 'movie') return false;
+    if (state.filterType === 'tv'    && f.type !== 'tv')    return false;
+    if (state.filterType === 'watchlist' && !f.watchlist)   return false;
+
+    if (state.genre !== 'all' && !(f.genres || []).includes(state.genre)) return false;
+
+    if (state.maxAge !== 'any') {
+      const rank = AGE_ORDER[f.age_rating] ?? 99;
+      if (rank > AGE_MAX[state.maxAge]) return false;
+    }
+
+    const who = Array.from(state.whoWatching);
+    if (who.length === 0) return true;
+
+    const personRatings = who.map(p => f.ratings.find(r => r.family_member === p));
+
+    if (state.seenFilter === 'all-seen'    && !personRatings.every(r => r?.watched))   return false;
+    if (state.seenFilter === 'none-seen'   &&  personRatings.some(r => r?.watched))    return false;
+    if (state.seenFilter === 'some-unseen' &&  personRatings.every(r => r?.watched))   return false;
+
+    if (state.minRating !== 'any') {
+      const min = parseInt(state.minRating, 10);
+      const allMeet = personRatings.every(r => r?.rating != null && r.rating >= min);
+      if (!allMeet) return false;
+    }
+
+    return true;
+  });
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Render
+// ──────────────────────────────────────────────────────────────────────
+function renderCount() {
+  const total = state.films.length;
+  const filmCount = state.films.filter(f => f.type === 'movie').length;
+  const tvCount   = state.films.filter(f => f.type === 'tv').length;
+  document.getElementById('ff-count').textContent =
+    `${total} titles · ${filmCount} films · ${tvCount} TV`;
+}
+
+function ratingChipClass(r) {
+  if (r == null) return 'unseen';
+  if (r === 2)  return 'fav';
+  if (r === 1)  return 'like';
+  if (r === 0)  return 'neutral';
+  if (r === -1) return 'no';
+  return 'hate';
+}
+function ratingEmoji(r, watched) {
+  if (!watched && r == null) return '–';
+  if (r == null) return '👀';
+  if (r === 2)  return '⭐';
+  if (r === 1)  return '👍';
+  if (r === 0)  return '😐';
+  if (r === -1) return '👎';
+  return '❌';
+}
+
+function renderGrid() {
+  const grid = document.getElementById('ff-grid');
+  const empty = document.getElementById('ff-empty');
+  const list = filteredFilms();
+  if (!list.length) { grid.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+
+  grid.innerHTML = list.map(f => {
+    const poster = f.poster_url
+      ? `style="background-image:url('${escapeAttr(f.poster_url)}')"`
+      : '';
+    const posterLabel = f.poster_url ? '' : `<div class="ff-poster-label">${escapeHtml(f.title)}</div>`;
+    const typeTag = f.type === 'tv' ? 'TV' : 'FILM';
+    const watchlistTag = f.watchlist ? '<div class="ff-card-watchlist">⭐</div>' : '';
+
+    const chips = FAMILY.map(member => {
+      const r = f.ratings.find(x => x.family_member === member);
+      const watched = r?.watched; const rating = r?.rating;
+      const cls = ratingChipClass(rating);
+      const emoji = ratingEmoji(rating, watched);
+      return `<span class="ff-rating-chip ${cls}" title="${member}: ${emoji}">${member[0]}${emoji}</span>`;
+    }).join('');
+
+    const yr = f.release_year ? `· ${f.release_year}` : '';
+    const age = f.age_rating ? `· ${f.age_rating}` : '';
+
+    return `
+      <div class="ff-card" data-id="${f.id}" onclick="window._ffOpenDetail('${f.id}')">
+        <div class="ff-poster" ${poster}>
+          ${posterLabel}
+          <div class="ff-card-type">${typeTag}</div>
+          ${watchlistTag}
+        </div>
+        <div class="ff-card-body">
+          <div class="ff-card-title">${escapeHtml(f.title)}</div>
+          <div class="ff-card-meta">${yr} ${age}</div>
+          <div class="ff-card-ratings">${chips}</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function escapeAttr(s) { return escapeHtml(s).replace(/"/g, '&quot;'); }
+
+// ──────────────────────────────────────────────────────────────────────
+// "Who's watching" pills (multi-select)
+// ──────────────────────────────────────────────────────────────────────
+function buildWhoPills() {
+  const row = document.getElementById('ff-who-row');
+  row.innerHTML = FAMILY.map(m => `<span class="ff-pill active" data-who="${m}">${m}</span>`).join('');
+  row.querySelectorAll('.ff-pill').forEach(p => {
+    p.addEventListener('click', () => {
+      const m = p.dataset.who;
+      if (state.whoWatching.has(m)) { state.whoWatching.delete(m); p.classList.remove('active'); }
+      else { state.whoWatching.add(m); p.classList.add('active'); }
+      renderGrid();
+    });
+  });
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Single-select pill rows
+// ──────────────────────────────────────────────────────────────────────
+function attachPillHandlers() {
+  const cfg = [
+    { rowId: 'ff-type-row',   attr: 'data-type',   field: 'filterType' },
+    { rowId: 'ff-seen-row',   attr: 'data-seen',   field: 'seenFilter' },
+    { rowId: 'ff-rating-row', attr: 'data-min',    field: 'minRating'  },
+    { rowId: 'ff-genre-row',  attr: 'data-genre',  field: 'genre'      },
+    { rowId: 'ff-age-row',    attr: 'data-age',    field: 'maxAge'     },
+  ];
+  cfg.forEach(({ rowId, attr, field }) => {
+    const row = document.getElementById(rowId);
+    row.querySelectorAll('.ff-pill').forEach(p => {
+      if (p._wired) return; p._wired = true;
+      p.addEventListener('click', () => {
+        row.querySelectorAll('.ff-pill').forEach(x => x.classList.remove('active'));
+        p.classList.add('active');
+        state[field] = p.getAttribute(attr);
+        renderGrid();
+      });
+    });
+  });
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Detail modal
+// ──────────────────────────────────────────────────────────────────────
+window._ffOpenDetail = openDetail;
+function openDetail(filmId) {
+  const f = state.films.find(x => x.id === filmId);
+  if (!f) return;
+  const body = document.getElementById('ff-modal-body');
+
+  const posterStyle = f.poster_url
+    ? `style="background-image:url('${escapeAttr(f.poster_url)}')"`
+    : '';
+  const meta = [ f.release_year, f.age_rating,
+    (f.runtime ? `${f.runtime} min` : ''),
+    (f.genres || []).join(', ')
+  ].filter(Boolean).join(' · ');
+
+  const ratingRows = FAMILY.map(m => {
+    const r = f.ratings.find(x => x.family_member === m);
+    const cur = r?.rating;
+    const watched = r?.watched;
+    const btn = (v, label, cls) =>
+      `<button class="ff-rating-btn ${cur===v?`active${cls}`:''}"
+        onclick="window._ffSetRating('${f.id}','${m}',${v})">${label}</button>`;
+    return `
+      <div class="ff-rating-row">
+        <div class="ff-rating-name">${m}</div>
+        <div class="ff-rating-buttons">
+          ${btn(-2,'❌','-n2')} ${btn(-1,'👎','-n1')}
+          ${btn(0,'😐','0')}   ${btn(1,'👍','-1')}
+          ${btn(2,'⭐','-2')}
+        </div>
+        <button class="ff-watched-toggle ${watched?'on':''}"
+          onclick="window._ffToggleWatched('${f.id}','${m}')">${watched?'✓ Seen':'Not seen'}</button>
+      </div>`;
+  }).join('');
+
+  body.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
+      <div class="ff-modal-title">${escapeHtml(f.title)}</div>
+      <button class="btn btn-ghost btn-sm" onclick="window._ffCloseModal()">✕</button>
+    </div>
+    <div class="ff-poster-large" ${posterStyle}></div>
+    <div style="text-align:center;color:var(--gray-500);font-size:12px;margin-bottom:10px">${meta || ''}</div>
+    ${f.synopsis ? `<div class="ff-synopsis">${escapeHtml(f.synopsis)}</div>` : ''}
+
+    <div class="ff-section-label">Ratings & Seen-status</div>
+    ${ratingRows}
+
+    <div class="ff-section-label" style="margin-top:14px">Notes</div>
+    <textarea id="ff-notes" class="form-input" rows="2" style="width:100%"
+      placeholder="Notas familiares (ej. 'perfecta para domingo lluvioso')"
+      onchange="window._ffSaveNotes('${f.id}', this.value)">${escapeHtml(f.notes || '')}</textarea>
+
+    <div style="display:flex;gap:8px;align-items:center;margin-top:14px;flex-wrap:wrap">
+      <label style="font-size:12px;color:var(--gray-500)">Last seen:</label>
+      <input type="date" class="form-input" id="ff-lastseen" value="${f.last_watched || ''}"
+        onchange="window._ffSaveLastSeen('${f.id}', this.value)" style="flex:1;min-width:140px">
+      <button class="ff-watched-toggle ${f.watchlist?'on':''}" id="ff-watchlist-btn"
+        onclick="window._ffToggleWatchlist('${f.id}')">${f.watchlist?'⭐ In Watchlist':'+ Watchlist'}</button>
+    </div>
+
+    <div style="margin-top:18px;display:flex;gap:8px">
+      <button class="btn btn-ghost btn-sm" onclick="window._ffRefreshTmdb('${f.id}')">↻ Refresh from TMDB</button>
+      <button class="btn btn-ghost btn-sm" style="color:#dc2626" onclick="window._ffDelete('${f.id}')">🗑 Delete</button>
+    </div>
+  `;
+  document.getElementById('ff-modal').classList.add('open');
+}
+
+window._ffCloseModal = () => document.getElementById('ff-modal').classList.remove('open');
+
+// ──────────────────────────────────────────────────────────────────────
+// Mutations
+// ──────────────────────────────────────────────────────────────────────
+async function upsertPersonRow(filmId, member, patch) {
+  const existing = await supabase.from('film_ratings').select('*').eq('film_id', filmId).eq('family_member', member).maybeSingle();
+  if (existing.data) {
+    await supabase.from('film_ratings').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', existing.data.id);
+  } else {
+    await supabase.from('film_ratings').insert({ film_id: filmId, family_member: member, ...patch });
+  }
+  const filmIdx = state.films.findIndex(f => f.id === filmId);
+  if (filmIdx >= 0) {
+    const { data } = await supabase.from('film_ratings').select('*').eq('film_id', filmId);
+    state.films[filmIdx].ratings = data || [];
+  }
+}
+
+window._ffSetRating = async (filmId, member, value) => {
+  const f = state.films.find(x => x.id === filmId);
+  const cur = f.ratings.find(r => r.family_member === member);
+  const newRating = (cur?.rating === value) ? null : value;
+  await upsertPersonRow(filmId, member, {
+    rating: newRating,
+    watched: newRating != null ? true : (cur?.watched ?? false),
+  });
+  renderGrid(); openDetail(filmId);
+};
+
+window._ffToggleWatched = async (filmId, member) => {
+  const f = state.films.find(x => x.id === filmId);
+  const cur = f.ratings.find(r => r.family_member === member);
+  const newW = !cur?.watched;
+  await upsertPersonRow(filmId, member, {
+    watched: newW,
+    watched_at: newW ? today() : null,
+  });
+  renderGrid(); openDetail(filmId);
+};
+
+window._ffSaveNotes = async (filmId, notes) => {
+  await supabase.from('films').update({ notes, updated_at: new Date().toISOString() }).eq('id', filmId);
+  const f = state.films.find(x => x.id === filmId); if (f) f.notes = notes;
+};
+
+window._ffSaveLastSeen = async (filmId, dateStr) => {
+  await supabase.from('films').update({ last_watched: dateStr || null, updated_at: new Date().toISOString() }).eq('id', filmId);
+  const f = state.films.find(x => x.id === filmId); if (f) f.last_watched = dateStr || null;
+};
+
+window._ffToggleWatchlist = async (filmId) => {
+  const f = state.films.find(x => x.id === filmId);
+  const newW = !f.watchlist;
+  await supabase.from('films').update({ watchlist: newW, updated_at: new Date().toISOString() }).eq('id', filmId);
+  f.watchlist = newW;
+  renderGrid(); openDetail(filmId);
+};
+
+window._ffDelete = async (filmId) => {
+  if (!confirm('Delete this title from the family list?')) return;
+  await supabase.from('film_ratings').delete().eq('film_id', filmId);
+  await supabase.from('films').delete().eq('id', filmId);
+  state.films = state.films.filter(x => x.id !== filmId);
+  document.getElementById('ff-modal').classList.remove('open');
+  renderGrid(); renderCount();
+};
+
+// ──────────────────────────────────────────────────────────────────────
+// Add (TMDB search)
+// ──────────────────────────────────────────────────────────────────────
+function openAdd() {
+  const body = document.getElementById('ff-modal-body');
+  body.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
+      <div class="ff-modal-title">+ Add a title</div>
+      <button class="btn btn-ghost btn-sm" onclick="window._ffCloseModal()">✕</button>
+    </div>
+    <div class="form-group">
+      <input type="text" class="form-input" id="ff-search" placeholder="Search title… (TMDB)"
+        oninput="window._ffSearchDebounced(this.value)" autofocus>
+    </div>
+    <div id="ff-search-results" class="ff-search-results" style="display:none"></div>
+    <div id="ff-search-empty" style="text-align:center;color:var(--gray-400);padding:20px;font-size:12px">
+      Type a film or TV show name to search TMDB.
+    </div>
+    <div id="ff-search-nokey" style="display:none;text-align:center;padding:20px;color:var(--coral)">
+      ⚠️ TMDB API key not configured. Add it to Supabase <code>app_secrets</code> as <code>tmdb_api_key</code>.
+    </div>
+  `;
+  document.getElementById('ff-modal').classList.add('open');
+}
+
+let _searchTimer = null;
+window._ffSearchDebounced = (q) => {
+  clearTimeout(_searchTimer);
+  _searchTimer = setTimeout(() => doSearch(q), 250);
+};
+
+async function doSearch(q) {
+  const results = document.getElementById('ff-search-results');
+  const empty = document.getElementById('ff-search-empty');
+  const nokey = document.getElementById('ff-search-nokey');
+  if (!q || q.length < 2) { results.style.display = 'none'; empty.style.display = 'block'; return; }
+  const key = await loadTmdbKey();
+  if (!key) { results.style.display = 'none'; empty.style.display = 'none'; nokey.style.display = 'block'; return; }
+  nokey.style.display = 'none'; empty.style.display = 'none';
+
+  const url = `https://api.themoviedb.org/3/search/multi?query=${encodeURIComponent(q)}&include_adult=false&language=en-US`;
+  const r = await fetch(url, { headers: { Authorization: `Bearer ${key}`, accept: 'application/json' } });
+  if (!r.ok) { results.innerHTML = `<div class="ff-search-item">TMDB error ${r.status}</div>`; results.style.display = 'block'; return; }
+  const j = await r.json();
+  const items = (j.results || []).filter(x => x.media_type === 'movie' || x.media_type === 'tv').slice(0, 12);
+
+  if (!items.length) { results.style.display = 'none'; empty.style.display = 'block'; empty.textContent = 'No results.'; return; }
+
+  results.innerHTML = items.map(x => {
+    const t = x.title || x.name || '(untitled)';
+    const yr = (x.release_date || x.first_air_date || '').slice(0, 4);
+    const tag = x.media_type === 'tv' ? '📺 TV' : '🎥 Film';
+    const poster = x.poster_path
+      ? `style="background-image:url('https://image.tmdb.org/t/p/w154${x.poster_path}')"` : '';
+    return `
+      <div class="ff-search-item" onclick="window._ffAddFromTmdb(${x.id}, '${x.media_type}')">
+        <div class="ff-search-poster" ${poster}></div>
+        <div class="ff-search-info">
+          <div class="ff-search-title">${escapeHtml(t)}</div>
+          <div class="ff-search-meta">${tag} · ${yr}</div>
+        </div>
+      </div>`;
+  }).join('');
+  results.style.display = 'block';
+}
+
+window._ffAddFromTmdb = async (tmdbId, mediaType) => {
+  const film = await fetchTmdbDetails(tmdbId, mediaType);
+  if (!film) { alert('Could not fetch from TMDB.'); return; }
+  const { data, error } = await supabase.from('films').insert(film).select().single();
+  if (error) { alert('Save error: ' + error.message); return; }
+  state.films.push({ ...data, ratings: [] });
+  state.films.sort((a,b) => a.title.localeCompare(b.title));
+  renderCount(); renderGrid();
+  openDetail(data.id);
+};
+
+async function fetchTmdbDetails(tmdbId, mediaType) {
+  const key = await loadTmdbKey();
+  if (!key) return null;
+  const base = `https://api.themoviedb.org/3/${mediaType}/${tmdbId}`;
+  const append = mediaType === 'movie' ? 'release_dates' : 'content_ratings';
+  const r = await fetch(`${base}?append_to_response=${append}&language=en-US`,
+    { headers: { Authorization: `Bearer ${key}`, accept: 'application/json' } });
+  if (!r.ok) return null;
+  const x = await r.json();
+
+  const title = x.title || x.name || '(untitled)';
+  const date  = x.release_date || x.first_air_date || '';
+  const year  = date ? parseInt(date.slice(0,4),10) : null;
+  const runtime = mediaType === 'movie'
+    ? (x.runtime || null)
+    : (Array.isArray(x.episode_run_time) && x.episode_run_time[0]) || null;
+
+  let ageRating = null;
+  if (mediaType === 'movie') {
+    const us = (x.release_dates?.results || []).find(z => z.iso_3166_1 === 'US');
+    ageRating = us?.release_dates?.[0]?.certification || null;
+  } else {
+    const us = (x.content_ratings?.results || []).find(z => z.iso_3166_1 === 'US');
+    ageRating = us?.rating || null;
+  }
+
+  let streaming = [];
+  try {
+    const provR = await fetch(`https://api.themoviedb.org/3/${mediaType}/${tmdbId}/watch/providers`,
+      { headers: { Authorization: `Bearer ${key}`, accept: 'application/json' } });
+    if (provR.ok) {
+      const pj = await provR.json();
+      const us = pj.results?.US;
+      streaming = (us?.flatrate || []).map(p => p.provider_name);
+    }
+  } catch(_) {}
+
+  return {
+    title,
+    type: mediaType === 'tv' ? 'tv' : 'movie',
+    tmdb_id: x.id,
+    tmdb_type: mediaType,
+    poster_url:   x.poster_path   ? `https://image.tmdb.org/t/p/w500${x.poster_path}`   : null,
+    backdrop_url: x.backdrop_path ? `https://image.tmdb.org/t/p/w780${x.backdrop_path}` : null,
+    release_year: year,
+    genres: (x.genres || []).map(g => g.name),
+    age_rating: ageRating || null,
+    synopsis: x.overview || null,
+    runtime,
+    streaming,
+  };
+}
+
+window._ffRefreshTmdb = async (filmId) => {
+  const f = state.films.find(x => x.id === filmId);
+  if (!f?.tmdb_id) { alert('No TMDB id stored on this title — search and re-add it.'); return; }
+  const fresh = await fetchTmdbDetails(f.tmdb_id, f.tmdb_type || f.type);
+  if (!fresh) { alert('TMDB refresh failed (check API key).'); return; }
+  await supabase.from('films').update({ ...fresh, updated_at: new Date().toISOString() }).eq('id', filmId);
+  Object.assign(f, fresh);
+  renderGrid(); openDetail(filmId);
+};
+
+// ──────────────────────────────────────────────────────────────────────
+// "Tonight" — random pick based on filters + who's watching
+// ──────────────────────────────────────────────────────────────────────
+function openTonight() {
+  const candidates = filteredFilms();
+  const body = document.getElementById('ff-modal-body');
+  if (!candidates.length) {
+    body.innerHTML = `
+      <div class="ff-modal-title">🎲 What should we watch tonight?</div>
+      <p>No titles match the current filters. Loosen something and try again.</p>
+      <button class="btn btn-primary" onclick="window._ffCloseModal()">Got it</button>`;
+    document.getElementById('ff-modal').classList.add('open');
+    return;
+  }
+  const who = Array.from(state.whoWatching);
+  const scored = candidates.map(f => {
+    let score = 0;
+    who.forEach(m => {
+      const r = f.ratings.find(x => x.family_member === m);
+      if (r?.rating != null) score += r.rating;
+    });
+    if (f.last_watched) {
+      const days = (Date.now() - new Date(f.last_watched).getTime()) / 86400000;
+      if (days < 90) score -= (90 - days) / 30;
+    }
+    score += Math.random() * 0.8;
+    return { f, score };
+  });
+  scored.sort((a, b) => b.score - a.score);
+  const top3 = scored.slice(0, 3);
+
+  body.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
+      <div class="ff-modal-title">🎲 Tonight</div>
+      <button class="btn btn-ghost btn-sm" onclick="window._ffCloseModal()">✕</button>
+    </div>
+    <div style="font-size:12px;color:var(--gray-500);margin-bottom:10px">
+      Based on who's watching (${who.join(', ') || 'everyone'}) + your filters.
+    </div>
+    ${top3.map(({ f, score }) => `
+      <div class="ff-tonight-result" onclick="window._ffCloseModal();window._ffOpenDetail('${f.id}')">
+        <div class="ff-tonight-title">${escapeHtml(f.title)}</div>
+        <div class="ff-tonight-sub">
+          ${f.type === 'tv' ? '📺 TV' : '🎥 Film'}
+          ${f.release_year ? '· ' + f.release_year : ''}
+          ${f.age_rating ? '· ' + f.age_rating : ''}
+          · score ${score.toFixed(1)}
+        </div>
+      </div>
+    `).join('')}
+    <button class="btn btn-ghost" style="width:100%;margin-top:8px" onclick="window._ffReroll()">🎲 Roll again</button>
+  `;
+  document.getElementById('ff-modal').classList.add('open');
+}
+window._ffReroll = openTonight;
+
+// ──────────────────────────────────────────────────────────────────────
+// Init
+// ──────────────────────────────────────────────────────────────────────
+buildWhoPills();
+attachPillHandlers();
+loadFilms().catch(e => {
+  document.getElementById('ff-count').textContent = 'Error loading: ' + e.message;
+});
+
+window.openAdd = openAdd;
+window.openTonight = openTonight;
+</script>
+<script type="module" src="js/error-reporter.js?v=1"></script>
+<script type="module" src="js/topbar.js?v=6"></script>
+</body>
+</html>
