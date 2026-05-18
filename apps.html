@@ -104,6 +104,11 @@
       <div class="app-card-label">Lyric Slides</div>
       <div class="app-card-sub">Lyrics → slideshow</div>
     </a>
+    <a href="family-films.html" class="app-card" style="border-top:3px solid #7e57c2">
+      <div class="app-card-icon">🎬</div>
+      <div class="app-card-label">Family Films</div>
+      <div class="app-card-sub" id="films-sub">Películas y series</div>
+    </a>
     <a href="reminders.html" class="app-card" style="border-top:3px solid #f59e0b">
       <div class="app-card-icon">🔔</div>
       <div class="app-card-label">Recordatorios</div>
@@ -193,12 +198,13 @@ import { today } from './js/utils.js';
 const T = today();
 
 async function loadStats() {
-  const [tovRes, langRes, studRes, clsRes, exRes] = await Promise.all([
+  const [tovRes, langRes, studRes, clsRes, exRes, filmsRes] = await Promise.all([
     supabase.from('tov_clients').select('id, wedding_date').gte('wedding_date', T).order('wedding_date').limit(1),
     supabase.from('vocab_words').select('id', { count: 'exact' }).lte('next_review', T),
     supabase.from('students').select('id', { count: 'exact' }).eq('status', 'Active'),
     supabase.from('classes').select('id', { count: 'exact' }),
     supabase.from('exercise_log').select('date').order('date', { ascending: false }).limit(1),
+    supabase.from('films').select('id', { count: 'exact' }).eq('watchlist', true),
   ]);
 
   const tov = document.getElementById('tov-sub');
@@ -219,6 +225,9 @@ async function loadStats() {
   if (cls) cls.textContent = `${clsRes.count ?? 0} classes`;
 
   const health = document.getElementById('health-sub');
+  const films = document.getElementById('films-sub');
+  if (films) films.textContent = `${filmsRes.count ?? 0} on watchlist`;
+
   if (health) {
     const lastEx = exRes.data?.[0]?.date;
     const daysSince = lastEx ? Math.floor((new Date(T) - new Date(lastEx)) / 86400000) : null;
